@@ -1,40 +1,29 @@
-"""Charter rule 3, by hand, for the reactor: the process ladder, one written recipe.
+"""Charter rule 3, by hand, for the reactor: the process ladder as EDF runs Mode A.
 
-The pairing comes from how Mode A runs (OAPS, ICAPP 2025, section 2.1): rods hold
-Tavg, and boron brings the rods back so they do not stay in the core. Gains come from
-bump tests on nominal seeds 100 to 109, with no noise and a flat load, read as first
-order plus delay, then SIMC with tc = theta. Nothing here looks at a cost.
+The pairing is the plant's (docs/proposals/reactor-plant-check.md, item 4). The black
+rods hold Tavg automatically, moving only past 1.6 C off program (IAEA NP-T-3.23,
+annex II-5.1). The operator steers the axial offset with boron, which reaches it
+through the rods: boron moves Tavg, the rods follow, and the rods move the offset
+(OAPS, section 2.2). The operator has the day's plan (OAPS, section 1), so boron can
+lead its delay.
+
+Gains come from bump tests with no noise and a flat load, read as first order plus
+delay or as an integrator, then SIMC with tc = theta. Every loop is tested at each
+operating point the day holds, full power and the half-power hold, and keeps the
+design asking the least controller gain (``most_sensitive``, PR 170). Nothing here
+looks at a cost.
 
 Rungs, each adding to the last:
 
-1. PI: rods on Tavg, boron on the rod position, target parked.
-2. Steady-state feedforward: boron for the power defect, from the plant's balance.
-3. Cascade: delta I sets the rods' target, boron still carries it there.
-4. Override: past 4 % of delta I, the rods may not move the way that widens it.
+1. PI: rods on Tavg with the dead band, boron on the offset through the rods.
+2. Feedforward from the plan: boron for the power defect of the planned load change,
+   led by the boron line's expected delay.
+3. Cascade: the offset sets the rods' target position, and boron carries the rods
+   there, read as an integrator.
+4. Override: past 0.04 of offset, boron runs at full flow the way that closes it.
 
-Those four came first, and none of them ran a clean day: the boron loop chases the
-rods through its delay. Boron's gain onto delta I is zero, so that pairing has a
-relative gain of 0, and the only well-posed one is the other. So a second set of
-rungs follows, written from the gain matrix and tuned the same way, after the first
-set's results were seen. The report says so, and keeps both:
-
-5. PI: rods on delta I, boron on Tavg.
-6. Steady-state feedforward, as rung 2.
-7. Cascade: Tavg sets a boron concentration, and boron holds it, read as a sample.
-8. Static decoupler: boron takes back the reactivity the rods' loop puts in.
-
-The rods' gain on delta I is not one number. A bank near the top barely tilts the
-flux, and at half power a weak feedback lets the same tilt move the offset further.
-The first tune read the gain at full power from the top, and in the half-power hold
-the gain ran 2.7 to 4 times higher, past the rod loop's margin, where it locked into a
-cycle of two steps. So the rods' gain is read at each point the day holds: full power
-with the rods out, and half power with the rods where they centre delta I, by a small
-bump, and the tune takes the largest (``hold_bump``). SIMC's margin (about 3 in gain,
-Skogestad 2003, table 2) is a margin on the gain it is tuned for, so it is tuned for
-the largest. This was a fix after results, for a bug the owner approved fixing.
-
-The script keeps the best rung that trips no seed. The published rod program with
-rung 1's boron loop is a row beside it, as rule 3 allows.
+The published rod program with rung 1's boron loop is a row beside them, as rule 3
+allows. The script keeps the best rung that trips no seed.
 
     uv run python scripts/reactor_ladder.py
 """
@@ -52,6 +41,8 @@ from target_gym.reactor.env import (
     rod_balance,
     rod_tilt,
     rod_worth,
+    scheduled_load,
+    steady_state_precursors,
     steady_state_temperatures,
     tavg_program,
 )
@@ -64,23 +55,22 @@ from target_gym.reactor.experts import (
 SEEDS = tuple(range(100, 110))
 DT = 30.0
 PARK = 1.0 - 2.0 * 3.0 / 228.0  # the rod position at 225 steps, on the action's scale
-BAND_OVERRIDE = 0.04
+DEAD_BAND = 1.6  # K, IAEA NP-T-3.23 annex II-5.1
+BAND_OVERRIDE = 0.04  # of offset, inside the 0.05 band
 STEPS_PER_MOVE = DT * 72.0 / 60.0 / 228.0 * 2.0  # the rods' reach in a step
-
-
-def reset_flat(env, p, seed):
-    _, s = env.reset_env(jax.random.PRNGKey(seed), p)
-    far = jnp.asarray(1e8, s.n.dtype)
-    return s.replace(ramp_down_at=far, ramp_up_at=far)
+HOLD_LOAD = 0.5  # the day's low point
+ROD_BUMP = 30.0  # rod steps, the same at every point, ours
+BORON_BUMP = (
+    -0.2
+)  # of full flow, dilution: it drives the rods in, away from their top stop
+#: The boron line's delay the operator plans with: the middle of its drawn range,
+#: 10 to 30 steps, ours, since an operator knows the line, not today's draw.
+LEAD_STEPS = 20
 
 
 def simc(K, tau, theta):
     """``(Kc, Ti)``: SIMC PI at tc = theta. A process that settles inside a step is
-    static, and SIMC's answer to that is a pure integral, gain 1 / (2 K theta). Read
-    as a step of lag and a step of delay, that is a quarter of 1 / K a step, which
-    is how ``null_policies._tavg_integrator`` read its hand bump. ``Ti`` of one step
-    with this ``Kc`` adds the same again as proportional action, so the loop's
-    integral is ``Kc * DT / Ti``."""
+    static: a pure integral read as a step of lag and a step of delay."""
     theta = max(theta, DT)
     if tau <= DT:
         return 1.0 / (2.0 * K * 2.0 * DT) * DT, DT
@@ -90,6 +80,12 @@ def simc(K, tau, theta):
 def simc_integrating(k, theta):
     theta = max(theta, DT)
     return 1.0 / (k * 2.0 * theta), 8.0 * theta
+
+
+def most_sensitive(designs):
+    """PR 170's rule: of one loop's designs at several points, the one asking the
+    smallest controller gain."""
+    return min(designs, key=lambda d: abs(d[0]))
 
 
 def fopdt(y, base, dt=DT):
@@ -103,86 +99,260 @@ def fopdt(y, base, dt=DT):
     return final, max(t63 - theta, dt), theta
 
 
+def integrator(y, dt=DT, limit=np.inf):
+    """Slope over the 40 samples before the response first passes ``limit`` (its
+    last 40 if it never does), and the delay to 2 % of its change by then."""
+    y = np.asarray(y) - y[0]
+    end = int(np.argmax(np.abs(y) > limit)) if np.any(np.abs(y) > limit) else len(y)
+    end = max(end, 41)
+    slope = (y[end - 1] - y[end - 41]) / (40.0 * dt)
+    theta = np.argmax(np.abs(y) > 0.02 * abs(y[end - 1])) * dt
+    return slope, theta
+
+
+# ---------------------------------------------------------------------------
+# Operating points
+# ---------------------------------------------------------------------------
+
+
+def point(env, p, seed, load):
+    """Lined out at ``load`` with no schedule: xenon balanced there, the rods where
+    their tilt cancels the coolant's so the offset sits at 0, boron critical."""
+    q = p.replace(initial_xenon_power_range=(load, load))
+    _, s = env.reset_env(jax.random.PRNGKey(seed), q)
+    d, far = s.n.dtype, jnp.asarray(1e8, s.n.dtype)
+    T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, q)
+    lo, hi = 3.0 / 228.0, 0.5
+    target = -moderator_tilt(T_hot, T_cold, q)
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if rod_tilt(mid, q) < target else (lo, mid)
+    y = max(0.5 * (lo + hi), q.rod_park)
+    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, q)
+    needed = needed - (rod_worth(y, q) - rod_worth(q.rod_park, q))
+    level = jnp.asarray(load, d)
+    return q, s.replace(
+        n=level, C=steady_state_precursors(level, q), T_fuel=jnp.asarray(T_fuel, d),
+        T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
+        T_sg=jnp.asarray(T_sg, d), target_n=level, T_ref=jnp.asarray(tavg_program(level, q), d),
+        boron=jnp.asarray(q.boron_ref + needed / q.boron_worth, d),
+        rod_in=jnp.asarray(y, d), ramp_up_at=far,
+        # Below full load the ramp down is long past, so the turbine sits at load_min.
+        ramp_down_at=jnp.where(load < 1.0, -far, far),
+    )  # fmt: skip
+
+
+def points(env, p, seed):
+    return [point(env, p, seed, 1.0), point(env, p, seed, HOLD_LOAD)]
+
+
+# ---------------------------------------------------------------------------
+# The rungs
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class Tune:
     rod_Kc: float
     rod_Ti: float
-    boron_Kc: float
+    boron_Kc: float  # rung 1: boron on the offset
     boron_Ti: float
-    ff: float  # boron action per unit of load rate per step
-    di_Kc: float
-    di_Ti: float
+    ff: float  # boron action per unit of planned load change per step
+    ao_Kc: float  # rung 3, outer: rod target per unit of offset
+    ao_Ti: float
+    inner_Kc: float  # rung 3, inner: boron per unit of rod position off target
+    inner_Ti: float
 
 
-def policy_step(tune, rung, memory, obs):
-    """One step of ``rung``. ``memory`` is (rods PI output, boron PI output, rod
-    target, last Tavg error, last rod error, last delta I, last load)."""
-    u, b, target, last_e, last_r, last_di, last_load = memory
-    rod, load, T_avg, T_ref, di = obs[2], obs[3], obs[4], obs[5], obs[6]
-
-    if rung >= 3:
-        d_target = -tune.di_Kc * ((di - last_di) + DT / tune.di_Ti * di)
-        target = jnp.clip(target + d_target, -1.0, PARK)
-
-    e = T_ref - T_avg
-    du = tune.rod_Kc * ((e - last_e) + DT / tune.rod_Ti * e)
-    if rung >= 4:
-        # Withdrawing raises delta I, inserting lowers it.
-        wrong = ((di > BAND_OVERRIDE) & (du > 0)) | ((di < -BAND_OVERRIDE) & (du < 0))
-        du = jnp.where(wrong, 0.0, du)
-    u = jnp.clip(u + du, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
-    u = jnp.clip(u, -1.0, 1.0)
-
-    # Boron adds where the rods sit too far out, so rods in means dilute.
-    r = target - rod
-    db = tune.boron_Kc * ((r - last_r) + DT / tune.boron_Ti * r)
-    b = jnp.clip(b + db, -1.0, 1.0)
-    ff = tune.ff * (load - last_load) if rung >= 2 else 0.0
-    return (
-        jnp.stack([u, jnp.clip(b + ff, -1.0, 1.0)]),
-        (u, b, target, e, r, di, load),
-    )
+def dead(e):
+    return jnp.sign(e) * jnp.maximum(jnp.abs(e) - DEAD_BAND, 0.0)
 
 
-@dataclass
-class Tune2:
-    rod_Kc: float
-    rod_Ti: float
-    boron_Kc: float
-    boron_Ti: float
-    ff: float
-    ppm_Kc: float  # outer: ppm of target per K, per sample of Tavg
-    ppm_Ti: float
-    inner_Kc: float  # inner: boron flow per ppm off target
-    decouple: float  # boron action per unit of rod move, to cancel its worth
+def make_policy(tune, rung, p):
+    """``(act(memory, obs), memory0)`` for ``rung``. ``memory`` holds the two loops'
+    outputs and last errors, the rods' target, the clock and the planned ramps."""
 
+    def planned_step(clock, down, up):
+        t = clock + LEAD_STEPS * DT
+        return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
-def policy_step2(tune, rung, memory, obs):
-    """One step of rungs 5 to 8. ``memory`` is (rod demand, boron PI output, ppm
-    target, last delta I, last Tavg error, last load, last rod)."""
-    u, b, target, last_di, last_e, last_load, last_rod = memory
-    rod, load, T_avg, T_ref, di, ppm = obs[2], obs[3], obs[4], obs[5], obs[6], obs[7]
+    def act(m, obs):
+        u, b, target, last_e, last_ao, last_r, clock, down, up = m
+        n, rod, T_avg, T_ref = obs[0], obs[2], obs[4], obs[5]
+        di, to_down, to_up = obs[6], obs[8], obs[9]
+        # The plan, read once at the start: absolute times on the policy's clock.
+        down = jnp.where(clock == 0.0, to_down * 3600.0, down)
+        up = jnp.where(clock == 0.0, to_up * 3600.0, up)
 
-    e_di = -di
-    du = tune.rod_Kc * ((e_di + last_di) + DT / tune.rod_Ti * e_di)
-    u = jnp.clip(u + du, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
-    u = jnp.clip(u, -1.0, 1.0)
+        e = dead(T_ref - T_avg)
+        u = u + tune.rod_Kc * ((e - last_e) + DT / tune.rod_Ti * e)
+        u = jnp.clip(jnp.clip(u, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE), -1.0, 1.0)
 
-    e = T_ref - T_avg
-    if rung >= 7:
-        target = target + tune.ppm_Kc * ((e - last_e) + DT / tune.ppm_Ti * e)
-        out = jnp.clip(tune.inner_Kc * (target - ppm), -1.0, 1.0)
-    else:
-        b = jnp.clip(b + tune.boron_Kc * ((e - last_e) + DT / tune.boron_Ti * e), -1, 1)
+        # Reference minus offset: positive when the offset is low.
+        ao = p.ao_ref - di / jnp.maximum(n, 0.05)
+        r = last_r
+        if rung >= 3:
+            target = target + tune.ao_Kc * ((ao - last_ao) + DT / tune.ao_Ti * ao)
+            target = jnp.clip(target, -1.0, PARK)
+            r = target - rod
+            b = b + tune.inner_Kc * ((r - last_r) + DT / tune.inner_Ti * r)
+        else:
+            b = b + tune.boron_Kc * ((ao - last_ao) + DT / tune.boron_Ti * ao)
+        b = jnp.clip(b, -1.0, 1.0)
         out = b
-    if rung >= 6:
-        out = out + tune.ff * (load - last_load)
-    if rung >= 8:
-        out = out + tune.decouple * (rod - last_rod)
-    return (
-        jnp.stack([u, jnp.clip(out, -1.0, 1.0)]),
-        (u, b, target, di, e, load, rod),
+        if rung >= 2:
+            out = out + tune.ff * planned_step(clock, down, up)
+        if rung >= 4:
+            # Borating lets the rods out, which raises the offset.
+            out = jnp.where(ao > BAND_OVERRIDE, 1.0, out)
+            out = jnp.where(ao < -BAND_OVERRIDE, -1.0, out)
+        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
+        return a, (u, b, target, e, ao, r, clock + DT, down, up)
+
+    zero = jnp.asarray(0.0)
+    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 6
+    return act, memory
+
+
+def published(p, tune):
+    """The published rod program on Tavg with rung 1's boron loop on the offset."""
+    rc = RodControlParams()
+
+    def act(memory, obs):
+        state, last_ao, b = memory
+        a, state = rod_control_step(rc, state, obs[:6])
+        ao = p.ao_ref - obs[6] / jnp.maximum(obs[0], 0.05)
+        b = b + tune.boron_Kc * ((ao - last_ao) + DT / tune.boron_Ti * ao)
+        b = jnp.clip(b, -1.0, 1.0)
+        return jnp.stack([a[0], b]), (state, ao, b)
+
+    zero = jnp.asarray(0.0)
+    return act, (RodControlState(zero, zero, zero), zero, zero)
+
+
+# ---------------------------------------------------------------------------
+# Bump tests
+# ---------------------------------------------------------------------------
+
+
+def closed(env, q, s, act, memory, n):
+    """``n`` steps of ``act`` on ``q`` from ``s``; the states."""
+
+    def step(carry, _):
+        s, m = carry
+        a, m = act(m, env.get_obs(s, q))
+        _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, q)
+        return (s, m), s
+
+    return jax.lax.scan(step, (s, memory), None, length=n)[1]
+
+
+def offset(tr):
+    return np.asarray(tr.delta_I) / np.asarray(tr.n)
+
+
+def tavg(s):
+    return np.asarray(0.5 * (s.T_coolant + s.T_cold))
+
+
+def design(fits, rule):
+    """The median fit over seeds at each point, and the design asking the least gain
+    over the points."""
+    per_point = []
+    for k in range(len(fits[0])):
+        fit = [
+            float(np.median([f[k][i] for f in fits])) for i in range(len(fits[0][k]))
+        ]
+        per_point.append((rule(*fit), fit))
+    return most_sensitive([d for d, _ in per_point]), [fit for _, fit in per_point]
+
+
+#: Where the offset's response stops being read as a line: four times the band, ours.
+#: At half power a few rod steps move it by tenths, and past this it bends to its clip.
+LINEAR_OFFSET = 0.2
+
+
+def boron_bump(env, base, read, limit=np.inf):
+    """A step of dilution with rung 1's rods closed, at every point and seed."""
+
+    def run(q, s):
+        act0, m0 = make_policy(base, 1, q)
+        m0 = (jnp.asarray(1.0 - 2.0 * s.rod_in),) + m0[1:]
+
+        def bump(m, o):
+            a, m = act0(m, o)
+            return a.at[1].set(BORON_BUMP), m
+
+        tr = closed(env, q, s, bump, m0, 240)
+        slope, delay = integrator(read(tr), limit=limit)
+        return slope / BORON_BUMP, max(delay, float(s.boron_delay) * DT)
+
+    return run
+
+
+def bumps(env, params):
+    """The recipe's bump tests, without noise or wobble."""
+    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
+    every = [points(env, p, seed) for seed in SEEDS]
+    report = {}
+
+    # Rods on Tavg: ROD_BUMP steps in from where the rods sit, an hour, open loop.
+    def rods(q, s):
+        du = -2.0 * ROD_BUMP / 228.0
+        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0])
+        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+        k, lag, delay = fopdt(tavg(tr), float(tavg(s)))
+        return k / du, lag, delay
+
+    fits = [[rods(q, s) for q, s in pts] for pts in every]
+    (rod_Kc, rod_Ti), report["rods_on_Tavg"] = design(fits, simc)
+    base = Tune(rod_Kc, rod_Ti, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0)
+
+    # Boron on the offset, through the rods: diluting drives them in, the offset falls.
+    run = boron_bump(env, base, offset, LINEAR_OFFSET)
+    fits = [[run(q, s) for q, s in pts] for pts in every]
+    (boron_Kc, boron_Ti), report["boron_on_offset"] = design(fits, simc_integrating)
+
+    # The cascade's inner loop: boron on the rods' position.
+    run = boron_bump(env, base, lambda tr: 1.0 - 2.0 * np.asarray(tr.rod_in))
+    fits = [[run(q, s) for q, s in pts] for pts in every]
+    (inner_Kc, inner_Ti), report["boron_on_rods"] = design(fits, simc_integrating)
+
+    # The outer loop: the inner closed, a step of the rods' target, on the offset.
+    inner = Tune(rod_Kc, rod_Ti, 0.0, 1.0, 0.0, 0.0, 1.0, inner_Kc, inner_Ti)
+    step_target = -2.0 * ROD_BUMP / 228.0
+
+    def outer(q, s):
+        act3, m0 = make_policy(inner, 3, q)
+        here = jnp.asarray(1.0 - 2.0 * s.rod_in)
+        tr = closed(env, q, s, act3, (here, m0[1], here + step_target) + m0[3:], 360)
+        k, lag, delay = fopdt(offset(tr), float(s.delta_I / s.n))
+        return k / step_target, lag, delay
+
+    fits = [[outer(q, s) for q, s in pts] for pts in every]
+    (ao_Kc, ao_Ti), report["offset_on_rod_target"] = design(fits, simc)
+
+    # Feedforward from the balance: ppm for each unit of load, as action per load per
+    # step, at the mean of the two flow rates at the reference boron.
+    def needed(load):
+        T_fuel, T_hot, T_cold, _ = steady_state_temperatures(load, p)
+        return float(rod_balance(T_fuel, 0.5 * (T_hot + T_cold), 1.0, p))
+
+    ppm_per_load = (needed(1.0) - needed(HOLD_LOAD)) / (1.0 - HOLD_LOAD) / p.boron_worth
+    rate = 0.5 * (
+        p.dilution_flow * p.boron_ref
+        + p.boration_flow * (p.boric_acid_ppm - p.boron_ref)
+    ) / p.primary_mass  # fmt: skip
+    ff = ppm_per_load / (rate * DT)
+    tune = Tune(
+        rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ao_Kc, ao_Ti, inner_Kc, inner_Ti
     )
+    return tune, report
+
+
+# ---------------------------------------------------------------------------
+# Scoring the rungs
+# ---------------------------------------------------------------------------
 
 
 def episode(env, p, seed, act, memory):
@@ -195,15 +365,19 @@ def episode(env, p, seed, act, memory):
         obs, s, r, _, info = env.step_env(key, s, a, p)
         t = info["reward_terms"]
         return (s, obs, memory), (
-            -r, t["tracking"], t["running"], info["tripped"], s.delta_I, s.rod_in, s.boron
+            -r, t["tracking"], t["running"], info["tripped"], s.delta_I / s.n,
+            s.rod_in, s.boron, 0.5 * (s.T_coolant + s.T_cold) - s.T_ref,
         )  # fmt: skip
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
-    _, (c, tr, ru, trip, di, rod, boron) = jax.lax.scan(step, (s, obs, memory), keys)
+    _, (c, tr, ru, trip, ao, rod, boron, e) = jax.lax.scan(step, (s, obs, memory), keys)
     return {
         "cost": jnp.sum(c), "tracking": jnp.sum(tr), "running": jnp.sum(ru),
-        "trips": jnp.sum(trip), "past_band_steps": jnp.sum(jnp.abs(di) > p.delta_I_band),
-        "max_abs_delta_I": jnp.max(jnp.abs(di)), "deepest_rods": jnp.max(rod) * 228.0,
+        "trips": jnp.sum(trip),
+        "past_band_steps": jnp.sum(jnp.abs(ao - p.ao_ref) > p.ao_band),
+        "max_abs_offset": jnp.max(jnp.abs(ao - p.ao_ref)),
+        "past_dead_band_steps": jnp.sum(jnp.abs(e) > p.e_tol),
+        "deepest_rods": jnp.max(rod) * 228.0,
         "boron_span": jnp.max(boron) - jnp.min(boron),
     }  # fmt: skip
 
@@ -218,257 +392,30 @@ def rows(env, p, act, memory):
         "running": float(out["running"].mean()),
         "seeds_tripped": int(np.sum(out["trips"] > 0)),
         "past_band_steps": float(out["past_band_steps"].mean()),
-        "max_abs_delta_I": float(out["max_abs_delta_I"].max()),
+        "max_abs_offset": float(out["max_abs_offset"].max()),
+        "past_dead_band_steps": float(out["past_dead_band_steps"].mean()),
         "deepest_rods_steps": float(out["deepest_rods"].max()),
         "boron_span_ppm": float(out["boron_span"].max()),
     }
-
-
-def bumps(env, params):
-    """The recipe's bump tests, seed by seed, without noise or wobble; the median."""
-    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
-
-    def rollout(s, action, n):
-        def step(s, a):
-            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
-            return s, s
-
-        return jax.lax.scan(step, s, jnp.tile(action, (n, 1)))[1]
-
-    tavg = lambda tr: np.asarray(0.5 * (tr.T_coolant + tr.T_cold))  # noqa: E731
-
-    # Rods on Tavg: 60 steps in, an hour.
-    K, tau, theta = [], [], []
-    du = -2.0 * 60.0 / 228.0
-    for seed in SEEDS:
-        s = reset_flat(env, p, seed)
-        base = tavg(rollout(s, jnp.array([PARK, 0.0]), 2))[-1]
-        tr = rollout(s, jnp.array([PARK + du, 0.0]), 120)
-        k, l, d = fopdt(tavg(tr), base)
-        K.append(k / du), tau.append(l), theta.append(d)
-    rod = (float(np.median(K)), float(np.median(tau)), float(np.median(theta)))
-    rod_Kc, rod_Ti = simc(*rod)
-
-    # Boron on the rods, the rods' loop closed: the slope and delay of the rod
-    # position under a step of dilution, which drives the rods in, away from their
-    # top stop.
-    slope, delay = [], []
-    tune = Tune(rod_Kc, rod_Ti, 0.0, 1.0, 0.0, 0.0, 1.0)
-    for seed in SEEDS:
-        s = reset_flat(env, p, seed)
-
-        def step(carry, _):
-            s, u, last_e = carry
-            obs = env.get_obs(s, p)
-            e = obs[5] - obs[4]
-            u = u + tune.rod_Kc * ((e - last_e) + DT / tune.rod_Ti * e)
-            u = jnp.clip(u, obs[2] - STEPS_PER_MOVE, obs[2] + STEPS_PER_MOVE)
-            a = jnp.stack([jnp.clip(u, -1.0, 1.0), jnp.asarray(-0.2)])
-            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
-            return (s, u, e), 1.0 - 2.0 * s.rod_in
-
-        init = (s, jnp.asarray(PARK), jnp.asarray(0.0))
-        _, y = jax.lax.scan(step, init, None, length=120)
-        y = np.asarray(y)
-        delay.append(float(s.boron_delay) * DT)
-        slope.append(float((y[-1] - y[-41]) / (40.0 * DT)) / -0.2)
-    boron = (float(np.median(slope)), float(np.median(delay)))
-    boron_Kc, boron_Ti = simc_integrating(*boron)
-
-    # Feedforward from the balance: ppm for each unit of load, as action per
-    # load per step, at the mean of the two flow rates at the reference boron.
-    def needed(load):
-        T_fuel, T_hot, T_cold, _ = steady_state_temperatures(load, p)
-        return float(rod_balance(T_fuel, 0.5 * (T_hot + T_cold), 1.0, p))
-
-    ppm_per_load = (needed(1.0) - needed(0.5)) / 0.5 / p.boron_worth
-    rate = 0.5 * (
-        p.dilution_flow * p.boron_ref
-        + p.boration_flow * (p.boric_acid_ppm - p.boron_ref)
-    ) / p.primary_mass  # fmt: skip
-    ff = ppm_per_load / (rate * DT)
-
-    # The cascade's outer loop: rung 1 closed, a step of the rods' target, on delta I.
-    base_tune = Tune(rod_Kc, rod_Ti, boron_Kc, boron_Ti, 0.0, 0.0, 1.0)
-    K, tau, theta = [], [], []
-    d_target = -2.0 * 30.0 / 228.0
-    for seed in SEEDS:
-        s = reset_flat(env, p, seed)
-
-        def step(carry, _):
-            s, memory = carry
-            a, memory = policy_step(base_tune, 1, memory, env.get_obs(s, p))
-            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
-            return (s, memory), s.delta_I
-
-        zero = jnp.asarray(0.0)
-        memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK + d_target), zero,
-                  jnp.asarray(d_target), zero, jnp.asarray(1.0))  # fmt: skip
-        _, y = jax.lax.scan(step, (s, memory), None, length=240)
-        k, l, d = fopdt(y, 0.0)
-        K.append(k / d_target), tau.append(l), theta.append(d)
-    outer = (float(np.median(K)), float(np.median(tau)), float(np.median(theta)))
-    di_Kc, di_Ti = simc(*outer)
-
-    return Tune(rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, di_Kc, di_Ti), {
-        "rods_on_Tavg": rod, "boron_on_rods": boron, "dI_on_rod_target": outer,
-    }  # fmt: skip
-
-
-HOLD_LOAD = 0.5  # the day's low point, ``scheduled_load``
-HOLD_BUMP = 10.0  # rod steps in, small: the gain is read where the rods sit
-
-
-def hold_point(env, p, seed, load):
-    """Lined out at ``load`` with no schedule: xenon balanced there, the rods where
-    their tilt cancels the coolant's so delta I sits at 0, boron critical."""
-    q = p.replace(initial_xenon_power_range=(load, load))
-    _, s = env.reset_env(jax.random.PRNGKey(seed), q)
-    d, far = s.n.dtype, jnp.asarray(1e8, s.n.dtype)
-    T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, q)
-    lo, hi = 3.0 / 228.0, 0.5
-    target = -moderator_tilt(T_hot, T_cold, q)
-    for _ in range(50):
-        mid = 0.5 * (lo + hi)
-        lo, hi = (mid, hi) if rod_tilt(mid, q) < target else (lo, mid)
-    y = 0.5 * (lo + hi)
-    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, q)
-    needed = needed - (rod_worth(y, q) - rod_worth(q.rod_park, q))
-    level = jnp.asarray(load, d)
-    from target_gym.reactor.env import steady_state_precursors
-
-    s = s.replace(
-        n=level, C=steady_state_precursors(level, q), T_fuel=jnp.asarray(T_fuel, d),
-        T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
-        T_sg=jnp.asarray(T_sg, d), target_n=level, T_ref=jnp.asarray(tavg_program(level, q), d),
-        boron=jnp.asarray(q.boron_ref + needed / q.boron_worth, d),
-        rod_in=jnp.asarray(y, d), ramp_down_at=jnp.asarray(-1e8, d), ramp_up_at=far,
-    )  # fmt: skip
-    return q, s, y
-
-
-def hold_bump(env, params):
-    """The rods' gain on delta I at the half-power hold, per unit of demand: a bump of
-    ``HOLD_BUMP`` steps in from where the rods centre delta I, read as for the others.
-    """
-    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
-    du = -2.0 * HOLD_BUMP / 228.0
-    K = []
-    for seed in SEEDS:
-        q, s, y = hold_point(env, p, seed, HOLD_LOAD)
-
-        def step(s, a, q=q):
-            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, q)
-            return s, s
-
-        a = jnp.array([1.0 - 2.0 * y + du, 0.0])
-        run = jax.lax.scan(step, s, jnp.tile(a, (120, 1)))[1]
-        K.append(fopdt(np.asarray(run.delta_I), float(s.delta_I))[0] / du)
-    return float(np.median(K))
-
-
-def bumps_rod_on_delta_I(env, params, ff):
-    """Rungs 5 to 8: the same bumps on the other pairing."""
-    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
-
-    def rollout(s, action, n):
-        def step(s, a):
-            _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
-            return s, s
-
-        return jax.lax.scan(step, s, jnp.tile(action, (n, 1)))[1]
-
-    tavg = lambda tr: np.asarray(0.5 * (tr.T_coolant + tr.T_cold))  # noqa: E731
-    du = -2.0 * 60.0 / 228.0
-    K, tau, theta, k_b, delay, k_ppm, K_rT = [], [], [], [], [], [], []
-    for seed in SEEDS:
-        s = reset_flat(env, p, seed)
-        rods = rollout(s, jnp.array([PARK + du, 0.0]), 120)
-        k, l, d = fopdt(np.asarray(rods.delta_I), float(s.delta_I))
-        K.append(k / du), tau.append(l), theta.append(d)
-        K_rT.append(float(tavg(rods)[60:].mean() - tavg(rods)[0]) / du)
-        # Boron at a fifth of full flow, rods parked: Tavg's slope past the delay.
-        run = rollout(s, jnp.array([PARK, 0.2]), 120)
-        y = tavg(run)
-        k_b.append(float((y[-1] - y[-41]) / (40.0 * DT)) / 0.2)
-        delay.append(float(s.boron_delay) * DT)
-        ppm = np.asarray(run.boron)
-        k_ppm.append(float((ppm[-1] - ppm[-41]) / (40.0 * DT)) / 0.2)
-    held = hold_bump(env, params)
-    full = float(np.median(K))
-    rod = (max(full, held), float(np.median(tau)), float(np.median(theta)))
-    boron = (float(np.median(k_b)), float(np.median(delay)))
-    inner = (float(np.median(k_ppm)), float(np.median(delay)))
-    rod_Kc, rod_Ti = simc(*rod)
-    boron_Kc, boron_Ti = simc_integrating(*boron)
-    inner_Kc, _ = simc_integrating(*inner)
-    # The outer loop's model comes from the two above: Tavg per ppm as a static
-    # gain, the rods' lag in the plant and the delay of the inner loop.
-    K_ppm = boron[0] / inner[0]
-    ppm_Kc, ppm_Ti = simc(K_ppm, 600.0, 2.0 * inner[1])
-    decouple = float(np.median(K_rT)) / boron[0] / DT
-    tune = Tune2(
-        rod_Kc, rod_Ti, boron_Kc, boron_Ti, ff, ppm_Kc, ppm_Ti, inner_Kc, decouple
-    )
-    return tune, {
-        "rods_on_delta_I": rod, "rods_on_delta_I_full_power": full,
-        "rods_on_delta_I_half_power_hold": held, "boron_on_Tavg": boron,
-        "boron_on_ppm": inner,
-    }  # fmt: skip
-
-
-def published(p, tune):
-    """The rod program with rung 1's boron loop, sharing rung 1's memory."""
-    rc = RodControlParams()
-
-    def act(memory, obs):
-        state, last_r, b = memory
-        a, state = rod_control_step(rc, state, obs[:6])
-        r = PARK - obs[2]
-        b = b + tune.boron_Kc * ((r - last_r) + DT / tune.boron_Ti * r)
-        b = jnp.clip(b, -1.0, 1.0)
-        return jnp.stack([a[0], b]), (state, r, b)
-
-    zero = jnp.asarray(0.0)
-    return act, (RodControlState(zero, zero, zero), zero, zero)
 
 
 def main():
     env = Reactor()
     p = ReactorParams()
     tune, models = bumps(env, p)
-    zero = jnp.asarray(0.0)
-    memory = (
-        jnp.asarray(PARK),
-        zero,
-        jnp.asarray(PARK),
-        zero,
-        zero,
-        zero,
-        jnp.asarray(1.0),
-    )
     table = {}
     for rung in (1, 2, 3, 4):
-        act = lambda m, o, rung=rung: policy_step(tune, rung, m, o)  # noqa: E731
+        act, memory = make_policy(tune, rung, p)
         table[f"rung {rung}"] = rows(env, p, act, memory)
-    tune2, models2 = bumps_rod_on_delta_I(env, p, tune.ff)
-    models.update(models2)
-    for rung in (5, 6, 7, 8):
-        s = env.reset_env(jax.random.PRNGKey(SEEDS[0]), p)[1]
-        memory2 = (
-            jnp.asarray(PARK), zero, s.boron, zero, zero, jnp.asarray(1.0), jnp.asarray(PARK),
-        )  # fmt: skip
-        act = lambda m, o, rung=rung: policy_step2(tune2, rung, m, o)  # noqa: E731
-        table[f"rung {rung}"] = rows(env, p, act, memory2)
-    act, mem = published(p, tune)
-    table["rod program + boron trim"] = rows(env, p, act, mem)
+    act, memory = published(p, tune)
+    table["rod program + boron on offset"] = rows(env, p, act, memory)
     hold = lambda m, o: (jnp.array([PARK, 0.0]), m)  # noqa: E731
-    table["null: rods parked, no boron"] = rows(env, p, hold, zero)
+    table["null: rods parked, no boron"] = rows(env, p, hold, jnp.asarray(0.0))
     rung_names = [k for k in table if k.startswith("rung")]
     clean = [k for k in rung_names if table[k]["seeds_tripped"] == 0]
     best = min(clean, key=lambda k: table[k]["cost_mean"]) if clean else None
     print(json.dumps({
-        "bump_models_K_tau_theta": models, "tune": tune.__dict__, "tune2": tune2.__dict__, "best_rung": best, "table": table,
+        "bump_models": models, "tune": tune.__dict__, "best_rung": best, "table": table,
     }, indent=1))  # fmt: skip
 
 

@@ -65,7 +65,7 @@ class Reactor(
     # ``delta_t * control_period`` seconds).
     control_period: int = CONTROL_PERIOD
 
-    # obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]
+    # obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron, to_down, to_up]
     obs_value_index: int = 4  # Tavg (K)
     tracked_names: tuple = ("Tavg (K)",)
     obs_target_index: int = 5  # Tref, the program at this load (K)
@@ -81,7 +81,7 @@ class Reactor(
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (8,)
+        self.obs_shape = (10,)
         self.integration_method = integration_method
 
     @property

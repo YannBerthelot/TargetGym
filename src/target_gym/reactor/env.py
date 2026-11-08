@@ -164,7 +164,13 @@ class ReactorParams(EnvParams):
     T_fuel_max: float = 1473.0  # K, well below UO2 melting (~3120 K)
     T_fuel_min: float = 500.0
     T_coolant_max: float = 620.0  # K, the hot leg's saturation margin
-    T_avg_min: float = 556.0  # K, 541 F, the minimum temperature for criticality
+    # The minimum temperature for criticality, 541 F at Salem. It is a limit with
+    # a time to act, not a trip: restore it or go to hot standby. No EDF figure is
+    # public, so the Westinghouse-family value is kept (the EDF units are of that
+    # family), and so is Salem's 15 min, both ours and unconfirmed: the NRC copies
+    # could not be opened (docs/proposals/reactor-plant-check.md, item 2).
+    T_avg_min: float = 556.0  # K
+    floor_allowed: float = 900.0  # s below T_avg_min before hot standby, a trip
 
     # ---- Reward shaping ----
     rod_motion_weight: float = 0.02
@@ -219,13 +225,20 @@ class ReactorParams(EnvParams):
     # twice the dearest surviving step.
     reward_version: int = 2
     e_floor: float = 0.05  # K, the RTD reading's resolution
-    e_tol: float = 0.0
+    # The black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA
+    # NP-T-3.23, annex II-5.1), so Tavg costs nothing inside it.
+    e_tol: float = 1.6
     tracking_exponent: float = 1.0
     imbalance_multiple: float = 1.25 * 0.0023  # of spot, per K
     rod_step_price: float = 1.0  # $ per rod step, ours
-    # The band: +-5 % of rated, Krsko section 2. Past it, each 1 % is priced as 1 %
-    # of rated output derated, $1000/h on 1 GWe at $100/MWh, ours.
-    delta_I_band: float = 0.05
+    # The band, EDF's: during load follow the axial offset stays within 0.05 of its
+    # reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full
+    # power, xenon balanced and rods out, which this core puts at 0 by construction
+    # (the tilts start at 0 and the coolant's tilt is measured from full power).
+    # Past it, each 1 % of rated delta I is priced as 1 % of rated output derated,
+    # $1000/h on 1 GWe at $100/MWh, ours.
+    ao_band: float = 0.05
+    ao_ref: float = 0.0
     delta_I_price: float = 1000.0  # $/h per 1 % past the band
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
@@ -269,7 +282,9 @@ PARAM_UNITS = {
     "gamma_I": "-",
     "H_core": "cm",
     "Phi_full": "1/cm^2/s",
-    "delta_I_band": "-",
+    "ao_band": "-",
+    "ao_ref": "-",
+    "floor_allowed": "s",
     "delta_I_price": "$/h/%",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
@@ -356,6 +371,7 @@ class ReactorState(EnvState):
     boron_delay: int = 20  # control steps from the command to the core
     rod_moved: float = 0.0  # fraction of the stroke the rods travelled last sub-step
     effluent: float = 0.0  # kg/s the last sub-step's command injected
+    below_floor: float = 0.0  # s Tavg has been under T_avg_min without a break
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -757,6 +773,9 @@ def compute_next_state(
             rho_ext_cmd=rod_worth(wanted, p),
             rod_moved=jnp.abs(rod_in - state.rod_in),
             effluent=injected,
+            below_floor=jnp.where(
+                0.5 * (T_hot + T_cold) < p.T_avg_min, state.below_floor + p.delta_t, 0.0
+            ),
             physics_time=new_physics_time,
         ),
         metrics,
@@ -773,12 +792,16 @@ def get_obs(state: ReactorState, params: ReactorParams):
     """
     Partially observable: the agent sees only measurable quantities.
 
-    ``obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]``, the rod
-    position in [-1, 1] with +1 fully out, as the demand is.
+    ``obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron, to_down,
+    to_up]``, the rod position in [-1, 1] with +1 fully out, as the demand is.
+    ``to_down`` and ``to_up`` are the hours until the planned ramps start, 0 once
+    they have: the dispatch an operator gets in advance (OAPS, section 1), so boron
+    can lead its delay.
 
     Hidden: C_i, T_fuel, T_sg, iodine, xenon, and the boron on its way.
     """
     T_avg = 0.5 * (state.T_coolant + state.T_cold)
+    now = state.physics_time * params.delta_t
     return jnp.array(
         [
             state.n,
@@ -789,6 +812,8 @@ def get_obs(state: ReactorState, params: ReactorParams):
             state.T_ref,
             state.delta_I,
             state.boron,
+            jnp.maximum(state.ramp_down_at - now, 0.0) / 3600.0,
+            jnp.maximum(state.ramp_up_at - now, 0.0) / 3600.0,
         ]
     )
 
@@ -802,8 +827,10 @@ def check_is_terminal(state: ReactorState, params: ReactorParams, xp=jnp):
     T_fuel_out = xp.logical_or(
         state.T_fuel <= params.T_fuel_min, state.T_fuel >= params.T_fuel_max
     )
+    # Tavg under the floor is a limit with a time to act, not a trip: it ends the
+    # run only once it has lasted ``floor_allowed``.
     T_coolant_out = xp.logical_or(
-        0.5 * (state.T_coolant + state.T_cold) <= params.T_avg_min,
+        state.below_floor >= params.floor_allowed,
         state.T_coolant >= params.T_coolant_max,
     )
     terminated = xp.logical_or(xp.logical_or(n_out, T_fuel_out), T_coolant_out)
@@ -832,7 +859,8 @@ def compute_reward_terms(
         * p.e_floor
         * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
     )
-    past_band = xp.maximum(xp.abs(state.delta_I) - p.delta_I_band, 0.0)
+    off = xp.abs(state.delta_I - state.n * p.ao_ref)
+    past_band = xp.maximum(off - p.ao_band * state.n, 0.0)
     tracking = tracking + p.delta_I_price * 100.0 * past_band * p.delta_t / 3600.0
     rod_wear = p.rod_step_price * p.rod_stroke_steps * state.rod_moved
     treatment = p.effluent_price * state.effluent * p.delta_t
