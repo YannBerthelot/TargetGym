@@ -7,21 +7,19 @@ tool; Shinskey's bumpless transfer for the override):
   power. Started in balance, it follows the plant's mean xenon through a load
   cut (the plant's means add only the tilt's small burn term), and while xenon
   builds it asks for dilution, since xenon's poison must be met by less boron.
-- When the saturation override hands Tavg back to the cascade, the boron it built
-  is not dropped: the boron command does not step back by the override's size.
+- The reference, bank D on the offset, never sits deeper than the rod insertion
+  limit (the owner's condition for adopting it, 2026-11-08). The saturation
+  override's handback test went with the Mode A reference it tested.
 """
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.experts import (
-    ReferenceParams,
-    ReferenceState,
-    reference_step,
-    xenon_feedforward,
-)
+from target_gym.reactor.env import rod_insertion_limit
+from target_gym.reactor.experts import make_reactor_pid_controller, xenon_feedforward
 
 
 def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
@@ -46,14 +44,21 @@ def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     assert np.all(flow[120:300] < 0.0)  # building, 1 to 2.5 h in: dilute
 
 
-def test_the_overrides_handback_keeps_the_boron_it_built():
-    p = ReferenceParams()
-    built = 0.3
-    state = ReferenceState(boron=0.1, override=built, clock=3600.0, last_e=0.0)
-    state = state.replace(I_hat=1.0, Xe_hat=1.0)
-    # Rods off their top stop, at full power, Tavg on program, offset 0.
-    rod = p.park - 0.2
-    obs = jnp.array([1.0, 600.0, rod, 1.0, 580.0, 580.0, 0.0, 1690.0, 0.0, 0.0, 1.0])
-    action, after = reference_step(p, state, obs)
-    assert float(after.override) == 0.0
-    assert float(action[1]) > 0.1 + built - 0.05
+@pytest.mark.parametrize("seed", [100, 104, 108])
+def test_the_reference_keeps_the_rods_inside_their_insertion_limit(seed):
+    """The owner's condition for the procedure (2026-11-08): bank D holds the offset
+    only from above its insertion limit, on the EDF day."""
+    env, p = Reactor(), ReactorParams()
+    expert = make_reactor_pid_controller()
+    obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+    keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
+
+    def step(c, k):
+        s, obs, m = c
+        a, m = expert.step(expert.params, m, obs)
+        obs, s, _, _, _ = env.step_env(k, s, a, p)
+        return (s, obs, m), (s.rod_in - rod_insertion_limit(s.n, p), s.time)
+
+    _, (past, t) = jax.lax.scan(step, (s, obs, expert.init_state), keys)
+    assert float(np.max(np.asarray(past))) <= 1e-6
+    assert int(np.sum(np.asarray(t) == 0)) == 0  # no trip

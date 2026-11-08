@@ -257,6 +257,7 @@ class ReactorParams(EnvParams):
     # the day at 0: the window is the episode, ours.
     ao_allowed: float = 3600.0  # s in 24 h
     derate_to: float = 0.5  # of rated power
+    derate_price_per_MWh: float = 80.0  # the derate's lost output, spot as for trips
     # The rod insertion limit, the family's shape: a straight line in power, 22 %
     # of the stroke in at full power to 78 % at half (KAIST's lead), 2 h to restore
     # (STS 3.1.6), then hot standby.
@@ -315,6 +316,7 @@ PARAM_UNITS = {
     "floor_allowed": "s",
     "ao_allowed": "s",
     "derate_to": "",
+    "derate_price_per_MWh": "$/MWh",
     "ril_full": "",
     "ril_half": "",
     "ril_allowed": "s",
@@ -925,7 +927,7 @@ def compute_reward_terms(
         * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
     )
     # Past the offset's allowed hour, the derate's lost output.
-    per_GW_s = p.P_electric_GW * 1000.0 * p.spot_price_per_MWh / 3600.0
+    per_GW_s = p.P_electric_GW * 1000.0 * p.derate_price_per_MWh / 3600.0
     derated = xp.where(
         state.ao_outside >= p.ao_allowed, xp.maximum(state.n - p.derate_to, 0.0), 0.0
     )

@@ -518,6 +518,7 @@ def rows(env, p, act, memory):
         "past_dead_band_steps": float(out["past_dead_band_steps"].mean()),
         "deepest_rods_steps": float(out["deepest_rods"].max()),
         "boron_span_ppm": float(out["boron_span"].max()),
+        "past_ril_steps": float(out["past_ril_steps"].max()),
     }
 
 
