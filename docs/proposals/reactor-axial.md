@@ -421,7 +421,8 @@ Three tests fail and were left failing, as findings:
 - `test_peak_xenon_worth_is_in_the_published_band`: 1419 pcm against 1800, above.
 - `test_a_day_has_two_moves_for_the_scorer[100]` and `[101]`: the shared eval does not read
   the slower ramp. The charter drops that scorer, and `eval.py` is shared, so it was not
-  touched.
+  touched. Retired by the owner on 2026-11-08: the weighted-saving headline does not use
+  the move detector it checked.
 
 Rewritten around the two inputs: the reactor's env, expert, oracle and physics tests, and
 `tests/test_industrial_readings.py`. Four tests that only made sense for rods alone were

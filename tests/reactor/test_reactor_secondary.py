@@ -170,19 +170,9 @@ def test_the_load_ramps_at_two_percent_a_minute():
     assert load(up + 1500.0) == pytest.approx(1.0, abs=1e-3)
 
 
-@pytest.mark.parametrize("seed", [100, 101, 103])
-def test_a_day_has_two_moves_for_the_scorer(seed):
-    """A ramp down and a ramp back, so three cycles. The wobble has to stay
-    two-sided at full load: held flat there, it shrinks the median step until
-    ordinary wobble at half load reads as a move."""
-    from target_gym import eval as E
-    from target_gym.registry import REGISTRY
-    from target_gym.runners.runners import baseline_policy
-
-    spec = REGISTRY["reactor"]
-    params = spec.make_test_params()
-    ep = E.run_episode(spec, params, baseline_policy(spec, "pid", params), seed=seed)
-    assert len(np.flatnonzero(ep.target_change)) == 2
+# test_a_day_has_two_moves_for_the_scorer (seeds 100, 101, 103) was retired by the
+# owner on 2026-11-08 (TESTING.md section 10): it checked the old scorer's move
+# detector, which the weighted-saving headline does not use.
 
 
 def test_reset_starts_on_program_at_full_load():

@@ -254,6 +254,14 @@ none of the patent's 7 % noise.
 
 **D5: no decay heat.** A scram removes all heat at once.
 
+**Retired tests (owner, 2026-11-08, TESTING.md section 10).**
+`test_peak_xenon_worth_is_in_the_published_band` (the task has no scram; the load cut's
+swing is tested against Krsko instead), `test_the_reactors_winning_null_has_a_written_exception`
+(the old plant's written exception is gone; acceptance, J2, still checks the nulls) and
+`test_a_day_has_two_moves_for_the_scorer` (the old scorer's move detector, which the
+weighted-saving headline does not use).
+
+
 ---
 
 ## 6. The expert
