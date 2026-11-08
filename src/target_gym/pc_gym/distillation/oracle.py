@@ -54,3 +54,21 @@ def make_distillation_mpc(
         lr=lr,
         lr_end=lr_end,
     )
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the boilup; ``off_spec`` is the margins.
+CEILING_TERMS = ("boilup",)
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): each product inside its
+    zone, where ``off_spec`` charges nothing (``yD >= yD_spec``, ``xB <=
+    xB_spec``), in the analyser's resolution (``e_floor_top``,
+    ``e_floor_bottom``), backed off a hundredth of it; the price is the
+    reprocessing of one kmol."""
+    import jax.numpy as jnp
+
+    top = (state.x[-1] - p.yD_spec) / p.e_floor_top
+    bottom = (p.xB_spec - state.x[0]) / p.e_floor_bottom
+    return jnp.stack([top, bottom]) - 0.01, p.reprocess_price * p.delta_t

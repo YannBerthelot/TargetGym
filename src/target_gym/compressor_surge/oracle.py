@@ -36,6 +36,7 @@ from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
     compute_velocity,
+    live_target,
     recycle_flow,
     scheduled_setpoint,
     suction_density,
@@ -144,3 +145,24 @@ def compressor_model(env, p) -> TaskModel:
 def make_compressor_surge_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``compressor_model``."""
     return Oracle(env, params, "compressor_surge", compressor_model)
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the recycle energy; ``zone``, ``surge`` and the trip are the margins.
+CEILING_TERMS = ("energy",)
+
+#: The ceiling's margins' units: 0.1 kPa of header pressure, 0.01 of Phi.
+ZONE_UNIT, PHI_UNIT = 0.1 * KPA, 0.01
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): the header inside its zone,
+    where ``zone`` charges nothing (``|target - dp| <= header_band``), in tenths
+    of a kPa, backed off a tenth of one; and the flow forward on every substep,
+    where no surge is counted (a surge is a reversal), as the step's soft
+    minimum of Phi, which is below every substep's, in hundredths, backed off
+    one. The price is a step outside the zone."""
+    e = live_target(state, p) - state.dp
+    zone = jnp.stack([p.header_band - e, p.header_band + e]) / ZONE_UNIT - 0.1
+    surge = state.phi_min / PHI_UNIT - 1.0
+    return jnp.concatenate([zone, surge[None]]), p.zone_price * p.delta_t

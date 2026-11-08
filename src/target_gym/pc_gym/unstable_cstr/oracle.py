@@ -58,3 +58,21 @@ def autoclave_model(env, p) -> TaskModel:
 def make_unstable_cstr_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``autoclave_model``."""
     return Oracle(env, params, "unstable_cstr", autoclave_model)
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the tracking term; the trip is the margin.
+CEILING_TERMS = ("tracking",)
+
+#: The ceiling's stretches (``foresight.solve``'s ``window``): 160 steps
+#: planned, twice the horizon P = 80 of ``data/oracle_horizons``, the first 20
+#: kept. The autoclave is open-loop unstable, so float32 rounding grows along a
+#: plan; over the whole 1800 s episode it swamps the plan's gradient.
+CEILING_WINDOW = (160, 20)
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): the trip temperature,
+    ``T_trip - T`` in kelvin (``e_floor``), backed off one; the price is the
+    trip's cost."""
+    return jnp.stack([(p.T_trip - state.T) / p.e_floor - 1.0]), trip_cost(p)

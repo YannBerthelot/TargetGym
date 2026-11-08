@@ -70,3 +70,24 @@ def make_ph_mpc(env, params, horizon: int = 20, n_iter: int = 10):
     return NewtonMPC(
         env, params, action_dim=2, horizon=horizon, n_iter=n_iter, stage_fn=ph_stage
     )
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the reagent; ``excursion``, ``diversion`` and the trip are the margins.
+CEILING_TERMS = ("reagent",)
+
+#: The permit margins' unit, pH (a probe's 0.01).
+PH_UNIT = 0.01
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): the discharge inside the
+    permit, where neither ``excursion`` nor ``diversion`` charges (the sewer
+    floor is below the permit), on the pH ``planner_pH`` gives with its slope,
+    in hundredths of a pH, backed off a tenth of one; the price is a step
+    outside the permit."""
+    import jax.numpy as jnp
+
+    pH = planner_pH(state.Wa, state.Wb, p)
+    m = jnp.stack([pH - p.permit_low, p.permit_high - pH]) / PH_UNIT - 0.1
+    return m, p.excursion_price * p.delta_t
