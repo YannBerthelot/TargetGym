@@ -235,20 +235,9 @@ def test_10_the_step_resolves_the_service():
     assert PARAMS.delta_t <= 1.0
 
 
-def test_11_contingency_droop_answers_a_frequency_step():
-    """AUR-Y1, AEMO-HPR sec. 2.2: deadband 50 +- 0.15 Hz, 1.72 % droop, about
-    100 ms. A step from 50.00 to 49.77 Hz with regulation held gives
-    (49.85 - 49.77) / 50 / 0.0172 = 0.093 p.u. more power, +-10 %, by the first
-    sample. The task must expose a grid frequency to run this."""
-    _, state = ENV.reset_env(jax.random.PRNGKey(0), PARAMS)
-    assert hasattr(state, "grid_frequency"), "the task has no grid frequency"
-    key = jax.random.PRNGKey(1)
-    _, held, _, _, _ = ENV.step_env(key, state, jnp.zeros(1), PARAMS)
-    _, dipped, _, _, _ = ENV.step_env(
-        key, state.replace(grid_frequency=jnp.float32(49.77)), jnp.zeros(1), PARAMS
-    )
-    extra = float(dipped.power - held.power) / PARAMS.power_max
-    assert extra == pytest.approx(0.093, rel=0.1)
+# Test 11 (Hornsdale's contingency droop, AUR-Y1) was dropped on the owner's
+# decision, 2026-11-08: it tests a service this task does not model
+# (PHYSICS.md sec. 8).
 
 
 def test_12_cycle_life_is_at_least_the_datasheets():

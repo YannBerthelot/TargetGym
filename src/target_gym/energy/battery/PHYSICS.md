@@ -217,7 +217,7 @@ did the true charge reach empty or full.
 | 8 | Exact follower returns less the losses | +-20 % | 0.01996 against 0.02001 | Pass |
 | 9 | Energy rule timed and priced, not a trip | exact | 48/50, then 50/50; 0.7 then 0.9 | Pass |
 | 10 | Step resolves the service | <= 1 s | 1 s | Pass |
-| 11 | Hornsdale contingency droop | 0.093 p.u. +-10 % | no grid frequency | **Fail** |
+| 11 | Hornsdale contingency droop | dropped | - | Removed (owner, 2026-11-08) |
 | 12 | Cycle life | <= 3.33e-5 per cycle | 0 | Pass, because fade is not modelled |
 | 13 | PJM score on a normal day | >= 0.75 | 0.885 | Pass |
 | 14 | Gate-closure delay, the named property | 3600 to 5400 s | 5399, 4800 and 3601 s, decided at 1, 600 and 1799 s into a period | Pass |
@@ -228,9 +228,10 @@ first rerun failed by 9.7e-5 on one seed: the model summed the drift in float32
 step by step. The drift is now computed from the clock, which is the same
 physics without the rounding.
 
-**Test 11** checks Hornsdale's FCAS contingency droop (AUR-Y1), another
+**Test 11** checked Hornsdale's FCAS contingency droop (AUR-Y1), another
 market's service: GB's DR reaches full delivery at 0.2 Hz, so it would give 1.0
-p.u. here, not 0.093. It is kept failing and is a question for the owner.
+p.u. here, not 0.093. The owner dropped it on 2026-11-08, since the task does not
+model that service (section 8).
 
 **Test 12** passes only because capacity fade is not modelled (section 8).
 
@@ -240,8 +241,10 @@ Amendment 3 and pass.
 
 ## 8. Deviations still in the model
 
-- **No grid frequency, no droop, no contingency duty** (test 11). The long
-  deviation is put into the response directly, through DR's curve.
+- **No grid frequency, no droop, no contingency duty.** The long deviation is
+  put into the response directly, through DR's curve. Test 11, which checked
+  Hornsdale's contingency droop (AUR-Y1), was dropped by the owner on
+  2026-11-08 for that reason: it tests a service the task does not model.
 - **The signal's shape is ours**, inside the family range above. It is
   PJM-style regulation under GB rules.
 - **No BMS recalibration** at the voltage knees; the temperature shift applies
