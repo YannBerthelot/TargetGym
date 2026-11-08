@@ -163,6 +163,10 @@ class EnvSpec:
         Parameters that scale process noise. A planner's copy of the params
         has them zeroed, so it plans on the mean disturbance
         (``experts.mpc.plan_params``).
+    scenarios:
+        Zero-argument callable returning the task's scenario suite
+        (``target_gym.scenarios``), kept in the task's own package so the
+        fingerprints cover it. ``None`` is one ``normal`` scenario.
     fingerprint_sources:
         Source files outside the task's own package that its physics imports,
         relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
@@ -203,6 +207,7 @@ class EnvSpec:
     #: Parameters that scale *process* noise, zeroed in the copy of the params
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
+    scenarios: Callable[[], tuple] | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
 

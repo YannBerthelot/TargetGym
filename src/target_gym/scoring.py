@@ -45,6 +45,11 @@ Score a policy of your own::
 before each episode. The expert is the environment's shipped ``"pid"`` slot, run on
 the same seeds.
 
+The charter's Amendment 3 (rule 21) adds the headline that replaces these as tasks
+are rebuilt. ``gap_closed`` is the share of the reference-to-ceiling cost gap a
+policy closes, per seed, and ``headline`` averages it over a task's scenarios
+(``target_gym.scenarios``) with equal weight.
+
 ``seed_scores`` is a different number for a different job: one score per
 training seed, on the whole episode with no burn-in, from costs measured
 elsewhere, for a statistical test across trained agents.
@@ -66,6 +71,7 @@ __all__ = ["CONSUMPTION", "JOB_SCORED", "SPEC_BAND", "TRACKED_TERMS", "ceiling"]
 __all__ += ["compare"]
 __all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
 __all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
+__all__ += ["gap_closed", "headline"]
 
 #: How far one episode can move a seed's score, either way (``seed_scores``).
 _CLIP_DECADES = 3.0
@@ -269,6 +275,48 @@ def s_max(b: float, c: float, bound: float) -> float:
 def headroom(b: float, c: float) -> float:
     """Decades between a cost ``b`` and the ceiling ``c``; 0 within it."""
     return float(math.log10(b / c)) if b > c else 0.0
+
+
+def gap_closed(policy_cost, reference_cost, ceiling_cost) -> np.ndarray:
+    """Per seed, the share of the reference-to-ceiling gap the policy closes:
+    ``(b - x) / (b - c)``. 0 at the reference, 1 at the ceiling, above 1 past it
+    (a ceiling is a local optimum), negative above the reference. NaN where
+    ``b <= c``, with no gap to close. Charter Amendment 3, rule 21."""
+    x, b, c = np.broadcast_arrays(
+        *(
+            np.asarray(v, dtype=float)
+            for v in (policy_cost, reference_cost, ceiling_cost)
+        )
+    )
+    if np.isnan(x).any() or np.isnan(b).any() or np.isnan(c).any():
+        raise ValueError("a cost is NaN")
+    if (x < 0).any() or (b < 0).any() or (c < 0).any():
+        raise ValueError("costs must be non-negative")
+    gap = b - c
+    has_gap = gap > 0
+    with np.errstate(invalid="ignore"):
+        return np.where(has_gap, (b - x) / np.where(has_gap, gap, 1.0), np.nan)
+
+
+def headline(costs) -> dict:
+    """A task's headline from ``{scenario: {"policy", "reference", "ceiling"}}``,
+    each a cost per step per seed (or one value for all seeds).
+
+    Each scenario scores the IQM of its seeds' ``gap_closed``, leaving out seeds
+    with no gap. ``headline`` is the plain mean over scenarios, so a rare upset
+    counts as much as a normal day. A scenario with no gap on any seed is listed in
+    ``solved`` and left out; with every scenario solved the headline is NaN.
+    """
+    per, solved = {}, []
+    for name, c in costs.items():
+        g = gap_closed(c["policy"], c["reference"], c["ceiling"]).ravel()
+        g = g[~np.isnan(g)]
+        if g.size == 0:
+            solved.append(name)
+        else:
+            per[name] = _iqm(g)
+    mean = float(np.mean(list(per.values()))) if per else float("nan")
+    return {"per_scenario": per, "headline": mean, "solved": solved}
 
 
 def _iqm(x: np.ndarray) -> float:
