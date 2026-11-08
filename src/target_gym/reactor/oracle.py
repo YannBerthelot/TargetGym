@@ -38,6 +38,7 @@ from target_gym.reactor.env import (
     rod_tilt,
     rod_worth,
     scheduled_load,
+    tavg_dnb_limit,
     tavg_program,
 )
 from target_gym.reward import trip_cost
@@ -146,7 +147,7 @@ def reactor_model(env, p) -> TaskModel:
         y = jnp.concatenate([
             rows[:, 0] / p.e_floor, off - p.ao_band * rows[:, 1],
             -off - p.ao_band * rows[:, 1], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
-            -u[1:], u[1:], rows[:, 1:4].ravel(),
+            -u[1:], u[1:], rows[:, 1:5].ravel(),
         ])  # fmt: skip
         return x1, jnp.zeros((), x.dtype), y, rows[-1:, 4], ()
 
@@ -155,6 +156,9 @@ def reactor_model(env, p) -> TaskModel:
         Limit(p.n_min, p.n_max, price),
         Limit(p.T_fuel_min, p.T_fuel_max, price),
         Limit(hi=p.T_coolant_max, price=price),
+        # Tavg's DNB limit is timed (2 h), planned as a hard bound: a plan that
+        # used the allowance could be cheaper, so the ceiling stays an upper bound.
+        Limit(hi=float(tavg_dnb_limit(p)), price=price),
     )  # Tavg's floor is a limit with time to act, charged on replay, not planned
     rod_raw = lambda s: 1.0 - 2.0 * s.rod_in  # noqa: E731
     return TaskModel(
