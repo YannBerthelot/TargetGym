@@ -27,18 +27,21 @@ from typing import Any, Mapping
 
 import numpy as np
 
-__all__ = ["NORMAL", "Scenario", "costs", "params_for", "run", "suite"]
+__all__ = ["NORMAL", "Scenario", "costs", "params_for", "run", "suite", "weights"]
 
 
 @dataclasses.dataclass(frozen=True)
 class Scenario:
-    """One operating window: ``overrides`` on the scored configuration, and the
-    ``source`` (a ``REALITY.md`` reference) that shows this event happening."""
+    """One operating window: ``overrides`` on the scored configuration, the
+    ``source`` (a ``REALITY.md`` reference) that shows this event happening, and its
+    ``weight``, its share of real operating time (any positive scale; ``weights``
+    turns them into shares). The headline weighs scenarios by it (charter J4)."""
 
     name: str
     overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     source: str = ""
     description: str = ""
+    weight: float = 1.0
 
 
 NORMAL = Scenario("normal", {}, description="the scored configuration as it is")
@@ -58,7 +61,16 @@ def suite(spec) -> tuple[Scenario, ...]:
         unknown = sorted(set(s.overrides) - fields)
         if unknown:
             raise ValueError(f"{spec.name}: scenario {s.name!r} sets no such {unknown}")
+        if not (np.isfinite(s.weight) and s.weight > 0):
+            raise ValueError(f"{spec.name}: scenario {s.name!r} weight {s.weight}")
     return declared
+
+
+def weights(spec) -> dict[str, float]:
+    """Each scenario's share of operating time, summing to 1."""
+    declared = suite(spec)
+    total = sum(s.weight for s in declared)
+    return {s.name: s.weight / total for s in declared}
 
 
 def params_for(spec, scenario: Scenario, **extra):
