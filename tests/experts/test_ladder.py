@@ -9,6 +9,12 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
 - ``most_sensitive``: of one loop's SIMC designs at several operating points, the
   one asking the smallest controller gain, so the loop stays stable where the plant
   is most sensitive. A tie keeps the earlier point.
+- ``zone_setpoint`` (Amendment 3, rule 22): on a zone, the reference's setpoint is
+  the cheap edge moved ``k = 2`` standard deviations inside, never past the zone's
+  centre. With no cheap side it is the centre. An infinite edge can't be backed off
+  from, and an infinite zone has no centre.
+- ``cv_sigma``: the sample standard deviation of the controlled variable, pooled over
+  seeds after the burn-in.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
   trip. A tie goes to the lower rung, the simpler controller.
 - ``ladder_controller``: position-form PI around a bias. The integral holds while
@@ -27,10 +33,12 @@ from target_gym.experts.ladder import (
     Pi,
     Rung,
     best_rung,
+    cv_sigma,
     decoupler,
     ladder_controller,
     most_sensitive,
     pi_gains,
+    zone_setpoint,
 )
 
 
@@ -107,6 +115,42 @@ def test_most_sensitive_compares_magnitudes_whatever_the_sign():
 def test_most_sensitive_keeps_the_earlier_point_on_a_tie():
     designs = [{"Kc": 1.0, "Ti": 4.0}, {"Kc": 1.0, "Ti": 9.0}]
     assert most_sensitive(designs) is designs[0]
+
+
+@pytest.mark.parametrize(
+    "cheap, expected",
+    # Zone 6 to 8, sigma 0.25: 2 sigma is 0.5 inside the cheap edge.
+    [("low", 6.5), ("high", 7.5)],
+)
+def test_zone_setpoint_sits_two_sigma_inside_the_cheap_edge(cheap, expected):
+    assert zone_setpoint(6.0, 8.0, 0.25, cheap) == pytest.approx(expected)
+
+
+def test_zone_setpoint_never_crosses_the_centre():
+    # sigma 0.75: 8 - 1.5 = 6.5 is past the centre 7, so the centre.
+    assert zone_setpoint(6.0, 8.0, 0.75, "high") == pytest.approx(7.0)
+
+
+def test_zone_setpoint_with_no_cheap_side_is_the_centre():
+    assert zone_setpoint(6.0, 8.0, 0.25, None) == pytest.approx(7.0)
+
+
+def test_a_one_sided_zone_backs_off_its_finite_edge():
+    # A product spec x <= 0.01, sigma 0.001: 0.01 - 0.002 = 0.008.
+    assert zone_setpoint(-np.inf, 0.01, 0.001, "high") == pytest.approx(0.008)
+
+
+@pytest.mark.parametrize("cheap", ["low", None])
+def test_an_infinite_edge_or_centre_is_an_error(cheap):
+    with pytest.raises(ValueError):
+        zone_setpoint(-np.inf, 0.01, 0.001, cheap)
+
+
+def test_cv_sigma_pools_seeds_after_the_burn_in():
+    # Samples 1, 3, 1, 3 once the 100s are dropped: mean 2, squared deviations
+    # sum to 4, over n - 1 = 3, so sigma = sqrt(4 / 3).
+    traces = [[100.0, 1.0, 3.0], [100.0, 1.0, 3.0]]
+    assert cv_sigma(traces, burn_in=1) == pytest.approx((4 / 3) ** 0.5)
 
 
 def test_best_rung_is_the_cheapest_that_trips_no_seed():

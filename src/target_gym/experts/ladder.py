@@ -20,6 +20,40 @@ from target_gym.identification import simc
 
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
+__all__ += ["K_BACKOFF", "cv_sigma", "zone_setpoint"]
+
+#: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
+#: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
+#: room is seen.
+K_BACKOFF = 2.0
+
+
+def cv_sigma(traces, burn_in: int = 0) -> float:
+    """The controlled variable's sample standard deviation, pooled over the seeds'
+    ``traces`` after ``burn_in`` steps each."""
+    samples = np.concatenate([np.asarray(t, float)[burn_in:] for t in traces])
+    return float(np.std(samples, ddof=1))
+
+
+def zone_setpoint(low: float, high: float, sigma: float, cheap, k: float = K_BACKOFF):
+    """The reference's setpoint on the zone ``[low, high]``: ``k`` sigma inside the
+    ``cheap`` edge (``"low"`` or ``"high"``), never past the centre; the centre when
+    ``cheap`` is None. An infinite edge can't be backed off from, and a zone with an
+    infinite edge has no centre."""
+    bounded = bool(np.isfinite(low) and np.isfinite(high))
+    centre = 0.5 * (low + high) if bounded else None
+    if cheap is None:
+        if not bounded:
+            raise ValueError("a zone with an infinite edge has no centre")
+        return float(centre)
+    edge = {"low": low, "high": high}[cheap]
+    if not np.isfinite(edge):
+        raise ValueError(f"the cheap edge {cheap!r} is infinite")
+    inward = 1.0 if cheap == "low" else -1.0
+    point = edge + inward * k * sigma
+    if bounded and (point - centre) * inward > 0:
+        point = centre
+    return float(point)
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:
