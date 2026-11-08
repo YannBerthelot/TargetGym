@@ -474,7 +474,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 5,
+    "version": 6,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",

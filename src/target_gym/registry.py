@@ -841,7 +841,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
         # jacket in code, cooling water as the move, a high-temperature
         # interlock, temperature as the job, scenarios.
-        version=5,
+        # v6: cooling water enters at 29.9 C and runs to 136 g/s, so the design
+        # point takes S1's 120 g/s [S1, p. 6, Fig. 2].
+        version=6,
         scenarios=_scenarios(
             "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
         ),

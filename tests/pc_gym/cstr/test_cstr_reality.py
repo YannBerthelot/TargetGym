@@ -4,7 +4,8 @@ T8, Amendment 3).
 Contract, from the sources and the audit's tolerances, not from the code:
 - the design point is PARSEX's: at 58 C with feed at 24 C it converts 74 to 79 %
   (CA about 0.31 to 0.39 mol/L [S1, Tables 3, 4]) with a cooler near 47 C, on
-  cooling water inside 40 to 110 g/s [S1, Table 1];
+  fresh water "around 120 g/s" [S1, p. 6]: from 10 % under that to the 136 g/s
+  Figure 2 logs [S1, Fig. 2], and inside the valve's range;
 - T1: the rate doubles per about 10 C: a ratio 1.5 to 3.0 [S5, p. 1];
 - T2: a 40 % loss of activity cools the reactor by at least 1.7 K, open loop
   [S1, Fig. 3];
@@ -67,7 +68,8 @@ def test_the_design_point_is_parsexs():
     C_a, T_j, F_w = (float(v) for v in steady_state(331.15, 297.15, p))
     assert 1.0 - 0.79 - 0.01 <= C_a / p.Caf <= 1.0 - 0.74 + 0.01
     assert T_j - 273.15 == pytest.approx(47.0, abs=1.0)
-    assert 40.0 <= F_w / 60.0 <= 110.0
+    assert 0.9 * 120.0 <= F_w / 60.0 <= 136.0
+    assert p.Fw_min <= F_w <= p.Fw_max
 
 
 def test_the_rate_doubles_per_ten_kelvin():

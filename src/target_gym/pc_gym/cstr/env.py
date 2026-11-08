@@ -54,13 +54,15 @@ class CSTRParams(EnvParams):
     #: Derived from S1's design point (T 58 C, cooler 47 C, CA 0.31 mol/L, feed
     #: 24 C): the heat the balance leaves, 8.56 kW, over 11 K.
     UA: float = 46717.0  # J/(min K)
-    #: Fresh cooling water, the move: 40 to 110 g/s [S1, Table 1].
+    #: Fresh cooling water, the move. The floor is S1's 40 g/s [S1, Table 1];
+    #: the top is the 136 g/s S1's Figure 2 logs, since the plant ran above
+    #: Table 1's 110 g/s: "around 120 g/s" at the design point [S1, p. 6].
     Fw_min: float = 40.0 * 60.0  # g/min
-    Fw_max: float = 110.0 * 60.0  # g/min
-    #: Fresh water inlet temperature. Ours: mains at room temperature, the
-    #: feed's 24 C [S1, Tables 3, 4]; with it the design point needs 89 g/s,
-    #: inside S1's range.
-    Tw_in: float = 297.15  # K
+    Fw_max: float = 136.0 * 60.0  # g/min
+    #: Fresh water inlet temperature, derived: the 8.56 kW the design point
+    #: leaves (UA's row) at S1's 120 g/s with the cooler at 47 C [S1, p. 6;
+    #: Tables 3, 4] is 17.1 K of rise, so water enters at 29.9 C.
+    Tw_in: float = 303.08  # K
     #: The jacket's water holdup. Ours, family: a jacket holds a fraction of
     #: its vessel; 20 % of the reactor's mass, which puts its time constant at
     #: 2.2 min (derived), the scale of the 2 min jacket dead time one plant
