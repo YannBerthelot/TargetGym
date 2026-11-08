@@ -592,16 +592,27 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
+        version=6,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -629,15 +640,26 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
+        version=6,
     ),
     EnvSpec(
         name="plane3d_figure8",

@@ -184,7 +184,8 @@ def plane3d_racetrack_step(params, state, obs, xp=jnp):
     """L1 on the holding pattern, whose guidance the observation gives."""
     cross, tangent, curvature = obs[..., 18], obs[..., 19], obs[..., 20]
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
-    target = _turn_speed(params, obs[..., 13], obs, xp)
+    # The assigned holding speed the observation gives (Amendment 2).
+    target = obs[..., 22]
     return _fly(params, state, obs, xp, obs[..., 10], accel, target)
 
 

@@ -223,10 +223,10 @@ before reading any result from it.
 | plane | 1800 | 23 | 115 | 0.99944 |
 | plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
-| plane3d_heading | 300 | 14 | 70 | 0.99667 |
+| plane3d_heading | 600 | 14 | 70 | 0.99833 |
 | plane3d_circle | 300 | 14 | 70 | 0.99667 |
 | plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
-| plane3d_racetrack | 650 | 14 | 70 | 0.99846 |
+| plane3d_racetrack | 1200 | 14 | 70 | 0.99917 |
 | patrol | 200 | 13 | 65 | 0.99500 |
 | patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 400 | 8 | 40 | 0.99750 |

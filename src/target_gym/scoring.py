@@ -84,7 +84,7 @@ TRACKED_TERMS = {
     "plane_sine": _ONE,
     "plane3d_heading": (_ALTITUDE, _HEADING),
     "plane3d_circle": (_ALTITUDE, _PATH),
-    "plane3d_racetrack": (_ALTITUDE, _PATH),
+    "plane3d_racetrack": (_ALTITUDE, _PATH, _HEADING),
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
     "patrol_range_bearing": (_SLOT, _HEADING),

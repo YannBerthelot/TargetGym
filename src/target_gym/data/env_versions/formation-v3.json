@@ -1,5 +1,5 @@
 {
-  "fingerprint": "dc57de204ad75b35",
-  "note": "re-stamped without a note",
-  "stamped": "2026-11-08T13:24:36+00:00"
+  "fingerprint": "1a2cae6318791339",
+  "note": "re-stamped in place: plane/dynamics.py, plane/env.py and plane3d gained Amendment 2 code that this task does not run (PlaneParams3D.amended off, target_pattern not 5) and functions it does not call; behaviour unchanged",
+  "stamped": "2026-11-08T13:49:10+00:00"
 }

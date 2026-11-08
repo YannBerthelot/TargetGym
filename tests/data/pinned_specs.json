@@ -162,7 +162,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -178,28 +178,37 @@
       "target_gym.plane3d.experts",
       "make_plane3d_heading_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane3d.oracle",
-      "make_plane3d_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 300,
-      "e_floor_altitude": 1.0,
-      "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.34421933365173735,
-      "rho_floor": 0.34421933365173735
+      "max_steps_in_episode": 600,
+      "e_floor_altitude": 19.812,
+      "e_tol_altitude": 19.812,
+      "e_floor_heading": 0.17453292519943295,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "initial_altitude_offset_range": [
+        0.0,
+        0.0
+      ],
+      "turbulence_sigma": 0.55,
+      "amended": true,
+      "e_tol_heading": 0.17453292519943295
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -260,7 +269,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -276,28 +285,44 @@
       "target_gym.plane3d.experts",
       "make_plane3d_racetrack_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane3d.oracle",
-      "make_plane3d_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 650,
-      "e_floor_altitude": 1.0,
-      "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.48693653444444446,
-      "rho_floor": 0.48693653444444446
+      "max_steps_in_episode": 1200,
+      "e_floor_altitude": 19.812,
+      "e_tol_altitude": 19.812,
+      "e_floor_heading": 0.17453292519943295,
+      "e_floor_path": 1389.0,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "initial_altitude_offset_range": [
+        0.0,
+        0.0
+      ],
+      "turbulence_sigma": 0.55,
+      "amended": true,
+      "e_tol_heading": 0.17453292519943295,
+      "e_tol_path": 1389.0,
+      "zone_onset_range": [
+        0.0,
+        1200.0
+      ],
+      "assigned_speed_mode": 1
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,

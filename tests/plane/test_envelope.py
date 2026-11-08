@@ -31,7 +31,7 @@ from target_gym.plane.dynamics import (
 from target_gym.plane.env import PlaneParams, airspeed, check_is_terminal
 from target_gym.plane.env_jax import Airplane2D
 from target_gym.plane3d.env import check_is_terminal_3d
-from target_gym.plane3d.env_jax import Plane3DHeading
+from target_gym.plane3d.env_jax import Plane3DCircle
 
 KEY = jax.random.PRNGKey(0)
 KT = 1852.0 / 3600.0
@@ -50,7 +50,9 @@ def _state_2d(z, speed, load_factor=1.0):
 
 
 def _state_3d(z, speed, phi_deg=0.0, load_factor=1.0):
-    env = Plane3DHeading()
+    # The unamended 3D plant (plane3d_circle, Extra); the heading and racetrack
+    # tasks protect these limits (tests/plane3d/test_plane3d_reality.py).
+    env = Plane3DCircle()
     params = env.default_params.replace(turbulence_sigma=0.0)
     _, state = env.reset_env(KEY, params)
     return params, state.replace(

@@ -48,7 +48,12 @@ class TestHeadingReset:
         _, state = env.reset(key)
         assert float(state.x) == 0.0
         assert float(state.y) == 0.0
-        assert float(state.x_dot) == 200.0
+        # Established at the assigned speed on heading 0 (Amendment 2).
+        from target_gym.plane.dynamics import scheduled_airspeed
+
+        p = env.default_params
+        tas = scheduled_airspeed(state.target_altitude, p.target_cas, p.target_mach)
+        assert float(state.x_dot) == pytest.approx(float(tas), rel=1e-5)
         assert float(state.y_dot) == 0.0
         assert float(state.phi) == 0.0
         assert float(state.phi_dot) == 0.0
@@ -601,7 +606,7 @@ class TestRacetrackGuidance:
 
         env = Plane3DRacetrack()
         _, state = env.reset_env(jax.random.PRNGKey(0), env.default_params)
-        r, half = float(state.target_radius), 2.0 * float(state.target_radius)
+        r, half = float(state.target_radius), float(state.target_half_leg)
         legs = np.linspace(-half, half, 40)
         caps = np.linspace(np.pi / 2, -np.pi / 2, 40)
         pts = np.concatenate(

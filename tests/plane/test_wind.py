@@ -113,14 +113,14 @@ class TestObservability:
             **FIXED,
         )
         obs, _ = env.reset_env(jax.random.PRNGKey(0), params)
-        assert obs.shape == (18,)
+        assert obs.shape == (21,)
         assert np.allclose(np.array(obs[-3:]), [-20.0, 10.0, 3.0])
 
     def test_hidden_is_prefix_of_observable(self):
         params = PlaneParams3D(wind_x=5.0, target_heading_range=(0.0, 0.0), **FIXED)
         oh, _ = Plane3D(observe_wind=False).reset_env(jax.random.PRNGKey(0), params)
         oo, _ = Plane3D(observe_wind=True).reset_env(jax.random.PRNGKey(0), params)
-        assert np.allclose(np.array(oh), np.array(oo[:15]))
+        assert np.allclose(np.array(oh), np.array(oo[:18]))
 
 
 class TestTurbulence:
