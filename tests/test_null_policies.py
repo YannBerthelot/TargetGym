@@ -173,16 +173,9 @@ def test_a_task_has_a_figure_or_a_written_exception():
         assert credibility_row(name, {})["exception"] is None
 
 
-def test_the_reactors_winning_null_has_a_written_exception():
-    """The plan lets a task in with a null winning only on an exception the owner
-    accepted, written in its ``PHYSICS.md``. The owner kept the $1 rod step on
-    2026-11-07. Its check 2 exception stands beside the new one."""
-    exception = credibility_row("reactor", {})["exception"]
-    assert "check 1" in exception and "2026-11-07" in exception
-    assert "no published figure" in exception
-    root = pathlib.Path(__file__).parent.parent
-    physics = root / "src" / "target_gym" / "reactor" / "PHYSICS.md"
-    assert "## Written exception to check 1" in physics.read_text()
+# test_the_reactors_winning_null_has_a_written_exception was retired by the owner on
+# 2026-11-08 (TESTING.md section 10): its subject, the old plant's written exception,
+# is gone, and acceptance (charter J2) still checks whether a null wins.
 
 
 def test_a_figure_says_what_kind_of_number_it_is():
