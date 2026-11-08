@@ -9,40 +9,44 @@ each window occurs, so each is ours: the normal day in the family range 0.5 to
 0.9, the rest split among the upsets.
 """
 
-from target_gym.scenarios import Scenario
+
+def _row(name, overrides, **kw):
+    """One scenario as a plain row: the package imports nothing outside its
+    fingerprint, and the registry builds the ``Scenario``."""
+    return dict(name=name, overrides=overrides, **kw)
 
 
-def scenarios() -> tuple[Scenario, ...]:
+def cstr_scenarios() -> tuple[dict, ...]:
     return (
-        Scenario(
+        _row(
             "normal",
             {},
             source="[S1, Tables 3, 4]",
             description="the setpoint held; the feed at 23 to 25 C by the day",
             weight=0.7,
         ),
-        Scenario(
+        _row(
             "setpoint_step",
             {"setpoint_step": 2.0},
             source="[S1, Fig. 2]",
             description="the reactor's setpoint moved up 2 K",
             weight=0.1,
         ),
-        Scenario(
+        _row(
             "catalyst_loss",
             {"k0_drop": 0.4},
             source="[S1, Fig. 3]",
             description="a 40 % loss of activity",
             weight=0.1,
         ),
-        Scenario(
+        _row(
             "feed_buildup",
             {"feed_rise": 0.1},
             source="[S3, PDF pp. 36-37, 46]",
             description="the feed's reactant rises 10 % (size ours)",
             weight=0.05,
         ),
-        Scenario(
+        _row(
             "cooling_loss",
             {"cooling_loss": 5.0},
             source="[S2, PDF p. 17]; [S3, Fig. 11]",

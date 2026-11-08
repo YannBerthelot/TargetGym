@@ -217,7 +217,7 @@ before reading any result from it.
 
 | environment | N | tau (steps) | 5·tau | gamma |
 | --- | --- | --- | --- | --- |
-| cstr | 150 | 5 | 25 | 0.99333 |
+| cstr | 960 | 5 | 25 | 0.99896 |
 | first_order | 150 | 10 | 50 | 0.99333 |
 | hvac | 720 | 62 | 310 | 0.99861 |
 | plane | 280 | 23 | 115 | 0.99643 |
@@ -238,7 +238,7 @@ before reading any result from it.
 | four_tank | 3300 | 38 | 190 | 0.99970 |
 | ph_neutralization | 1440 | 14 | 70 | 0.99931 |
 | reactor | 1440 | 1 | 5 | 0.99931 |
-| unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
+| unstable_cstr | 1800 | 6.3 to 14.4 | 32 to 72 | 0.99944 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 | formation | 200 | 36 | 180 | 0.99500 |
 

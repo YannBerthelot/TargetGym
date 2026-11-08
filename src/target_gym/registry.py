@@ -25,7 +25,6 @@ observation and one action per aircraft, in the JaxMARL style.
 
 from __future__ import annotations
 
-import importlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, cast
 
@@ -503,13 +502,20 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
-def _scenarios(module: str) -> Callable[[], tuple]:
-    """A task's scenario suite, imported when asked for (``EnvSpec.scenarios``)."""
+def _scenarios(factory_name: str, module: str) -> Callable[[], tuple]:
+    # A task's scenario suite lives in its own package, so its fingerprint
+    # covers it, as plain dicts: the package does not import
+    # ``target_gym.scenarios``, which would need declaring in its fingerprint.
+    def suite():
+        from importlib import import_module
 
-    def load() -> tuple:
-        return importlib.import_module(module).scenarios()
+        from target_gym.scenarios import Scenario
 
-    return load
+        return tuple(
+            Scenario(**s) for s in getattr(import_module(module), factory_name)()
+        )
+
+    return suite
 
 
 def _shared_oracle(name: str) -> tuple[str, ...]:
@@ -729,7 +735,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # jacket in code, cooling water as the move, a high-temperature
         # interlock, temperature as the job, scenarios.
         version=5,
-        scenarios=_scenarios("target_gym.pc_gym.cstr.scenarios"),
+        scenarios=_scenarios(
+            "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
+        ),
     ),
     EnvSpec(
         name="first_order",
@@ -797,7 +805,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # (Amendment 3): two 10 min stages with a valve each, a finite
         # diversion basin pumped back, influent flow swings, scenarios.
         version=5,
-        scenarios=_scenarios("target_gym.pc_gym.ph_neutralization.scenarios"),
+        scenarios=_scenarios(
+            "ph_neutralization_scenarios",
+            module="target_gym.pc_gym.ph_neutralization.scenarios",
+        ),
     ),
     EnvSpec(
         name="distillation",
@@ -825,7 +836,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
         # drums, specs at the family's give-away margin, scenario suite.
         version=6,
-        scenarios=_scenarios("target_gym.pc_gym.distillation.scenarios"),
+        scenarios=_scenarios(
+            "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
+        ),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
@@ -980,7 +993,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         version=5,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
-        scenarios=_scenarios("target_gym.pc_gym.unstable_cstr.scenarios"),
+        scenarios=_scenarios(
+            "unstable_cstr_scenarios",
+            module="target_gym.pc_gym.unstable_cstr.scenarios",
+        ),
     ),
     EnvSpec(
         name="compressor_surge",
@@ -1009,7 +1025,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # the valve's positioner lag, a constant header setpoint, a recycle
         # energy score inside a header zone, scenarios.
         version=4,
-        scenarios=_scenarios("target_gym.compressor_surge.scenarios"),
+        scenarios=_scenarios(
+            "compressor_surge_scenarios", module="target_gym.compressor_surge.scenarios"
+        ),
     ),
     EnvSpec(
         name="formation",

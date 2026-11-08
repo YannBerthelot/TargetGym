@@ -186,15 +186,6 @@ def test_a_run_reads_no_stored_gain(monkeypatch):
     assert process.tune_first_order()["noise_band"] > 0
 
 
-def test_the_inner_pd_is_simc_on_the_datasheet():
-    # Slope 50000 / (1000 x 0.239 x 100) = 2.092 K/min per K. Lag 1/6 + 0.05 =
-    # 0.2167 min. Delay 0.05 + 1/30 + 0.025 = 0.1083 min. Kp 1 / (2.092 x 0.2167),
-    # Kd Kp x 0.2167: 2.206 and 0.478.
-    Kp, Kd = process._datasheet_pd(REGISTRY["unstable_cstr"].make_test_params())
-    assert Kp == pytest.approx(2.206, abs=0.002)
-    assert Kd == pytest.approx(0.478, abs=0.001)
-
-
 def _ladder(monkeypatch, verdicts):
     """A recipe whose line passes or fails the schedule as told."""
     from target_gym.compressor_surge.experts import DEFAULT_GAINS

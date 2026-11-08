@@ -37,7 +37,6 @@ and the schedule)
 ``block_clock``      steps since the schedule started, hidden
 ``valve_cmds``       the recent valve commands, behind the positioner's dead time
 ``surge_times``      the last surges' times, read as the surge count
-``valve_travel``     how far the recycle valve moved over the last step, hidden
 """
 
 from typing import Tuple
@@ -265,8 +264,6 @@ class CompressorSurgeState(EnvState):
     #: Steps since the schedule started. Hidden. ``reset_env`` sets it to 0, so
     #: a trip's fresh draw restarts the schedule while ``time`` runs on.
     block_clock: int
-    #: How far the valve moved over the last step.
-    valve_travel: float = 0.0
     #: The valve command through the positioner's dead time [C7]: the recent
     #: commands with the time (s) each was issued, newest first.
     valve_cmds: jax.Array = struct.field(
@@ -638,7 +635,6 @@ def compute_next_state(
             demand_dev=demand_dev,
             phi_min=phi_min,
             block_clock=state.block_clock + 1,
-            valve_travel=jnp.abs(x - state.x),
             valve_cmds=cmds,
             valve_cmd_times=issued,
             surge_times=surge_times,

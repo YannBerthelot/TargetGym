@@ -309,6 +309,9 @@ def test_action_noise_reaches_the_actuators_inside_their_rate_limit():
         jnp.float32,
     )
     key = jax.random.PRNGKey(0)
+    # The valve's positioner dead time (version 4) would hold the step's move
+    # back; this checks the scatter's path to the actuators.
+    params = params.replace(valve_lag=0.0)
     noisy = env.step_env(key, state, action, params.replace(action_noise=0.05))[1]
     clean = env.step_env(key, state, action, params)[1]
     assert float(noisy.N_ramp) != float(clean.N_ramp)

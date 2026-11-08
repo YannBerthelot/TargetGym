@@ -1,4 +1,5 @@
 {
-  "fingerprint": "512c3af5b788faa1",
-  "stamped": "2026-11-08T16:33:26+00:00"
+  "fingerprint": "5c3a53aecef1c998",
+  "note": "the scenario suites become plain rows built in the registry; behaviour unchanged",
+  "stamped": "2026-11-08T17:53:45+00:00"
 }
