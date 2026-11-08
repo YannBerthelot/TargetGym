@@ -15,6 +15,8 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 - limits: the level between the two trips on every visited state, elastic at
   the trip cost per unit (T3). The trip's 10 s delay is not used: the plan
   never leaves the band, which is stricter than the plant;
+- rest (G12): feedwater is a spare move, the level being limited but not
+  priced, so it rests at normal water level;
 - dropped guards (T4): the void, circulation, pressure and volume clips,
   which the level limits keep off their edges.
 
@@ -76,6 +78,11 @@ def boiler_model(env, p) -> TaskModel:
             float(p.level_precision_floor), float(p.pressure_precision_floor)
         ),
         limits=(Limit(p.level_trip_low, p.level_trip_high, price),),
+        # G12: feedwater is a spare move, since the level is limited and not
+        # priced; it rests at normal water level, 1 at the high trip.
+        rest=lambda x: drum_level(
+            x[1], x[2], x[3], p.A_d * p.normal_level_height, x[0], p
+        ) / p.level_trip_high,
     )  # fmt: skip
 
 

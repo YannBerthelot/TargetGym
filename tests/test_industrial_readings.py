@@ -48,12 +48,9 @@ SCATTER = {
     "glass_furnace": {0: 0.36, 1: 0.32, 2: 100.0 * 3e-4 / 0.698},  # fuel_max
     # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
     "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0)},
-    "hvac": {
-        0: 0.023,
-        1: 0.023,
-        2: 100.0 * 27.0 / 7200.0,  # Q_heat_max
-        3: 1.0 / 175.0,  # 1 W/m2 of solar_peak
-    },
+    # Room, outdoor, slab core and return water; the 24 h mean (channel 2) is
+    # computed from the true outdoor history, and the supply is the valve's.
+    "hvac": {0: 0.023, 1: 0.023, 3: 0.023, 4: 0.023},
     "boiler_drum": {0: 5e-4, 1: 0.022, 2: 0.047},
     "cement_kiln": {1: 1.6, 2: 0.33, 3: 1.2, 4: 0.13},
     "wind_turbine": {
@@ -75,6 +72,8 @@ HELD = {"cement_kiln": {0: (100.0 * 1.8e-4, 120)}}
 STEPS = {
     ("hvac", 0): 0.1,
     ("hvac", 1): 0.1,
+    ("hvac", 3): 0.1,
+    ("hvac", 4): 0.1,
     ("cement_kiln", 0): 0.01,  # 1e-4 mass fraction, in percent
     ("cement_kiln", 1): 0.1,
     ("cement_kiln", 3): 0.1,
@@ -85,7 +84,6 @@ STEPS = {
 OUTSIDE = {
     "glass_furnace": lambda s: s.replace(T_crown=jnp.float32(2000.0)),
     "reactor": lambda s: s.replace(n=jnp.float32(2.0)),
-    "hvac": lambda s: s.replace(T_air=jnp.float32(50.0)),
     # Past the high trip for 12 s, more than its 10 s delay (boiler_drum/env.py).
     "boiler_drum": lambda s: s.replace(
         level=jnp.float32(1.0), time_high=jnp.float32(12.0)
@@ -237,7 +235,7 @@ def test_noise_never_reaches_the_plant_or_the_reward(name):
         jax.tree_util.tree_map(np.testing.assert_array_equal, a, b)
 
 
-@pytest.mark.parametrize("name", TASKS)
+@pytest.mark.parametrize("name", [t for t in TASKS if t in OUTSIDE])
 def test_the_measured_trip_is_the_one_it_is_given(name):
     """A measured copy can sit outside the envelope when the plant is not, and
     the other way round, so the check must not run on it."""

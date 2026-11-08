@@ -321,8 +321,9 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         ("wind_turbine", 850.0e-6 * 100.0 * 0.25 / 3600.0),
         # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
         ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
-        # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
-        ("hvac", 0.03 * 0.25 * 0.05**2),
+        # p = 1, in euros: 0.03 EUR per K h for 0.25 h at half the 0.1 K
+        # resolution.
+        ("hvac", 0.03 * 0.25 * 0.05),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -337,7 +338,7 @@ PRICED = {
     "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
-    "boiler_drum": 3,  # level, pressure, fuel
+    "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
     "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel

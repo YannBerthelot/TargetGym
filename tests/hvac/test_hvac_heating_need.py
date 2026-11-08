@@ -41,10 +41,15 @@ def test_a_days_free_gains_leave_a_third_of_the_loss_to_the_heater():
     assert loss == pytest.approx(57.4, abs=0.1)
 
 
+STEPS = 34 * STEPS_PER_DAY
+
+
 def test_a_building_left_unheated_settles_at_its_free_running_mean():
-    """The last of 7.5 days, 174 h in and four 43 h time constants from the
-    start, so 2 % of the 5 K start is left, and the 0.5 % of the gain the
-    standard sends back through the glazing takes 0.05 K. The weather is off."""
+    """The last of 34 days. The slab adds 9e7 J/K to the 2.5e7 J/K of the
+    5R1C mass, so the building's time constant is 1.15e8 / 159.4 = 200 h, and
+    34 days is four of them: 2 % of the 5 K start is left, and the 0.5 % of
+    the gain the standard sends back through the glazing takes 0.05 K. The
+    weather is off."""
     params, env = (
         HVACParams(T_out_noise_std=0.0, sensor_noise_scale=0.0),
         BuildingHVAC(),
@@ -55,5 +60,5 @@ def test_a_building_left_unheated_settles_at_its_free_running_mean():
         _, s, _, _, _ = env.step_env(jax.random.PRNGKey(1), s, -jnp.ones(1), params)
         return s, s.T_air
 
-    _, air = jax.lax.scan(body, state, None, length=720)
+    _, air = jax.lax.scan(body, state, None, length=STEPS)
     assert float(np.mean(air[-STEPS_PER_DAY:])) == pytest.approx(15.2, abs=0.3)

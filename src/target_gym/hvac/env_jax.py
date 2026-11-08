@@ -6,7 +6,6 @@ import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
 from target_gym.base import (
-    ChannelReading,
     FieldReading,
     actuate,
     canonical_reset,
@@ -15,19 +14,23 @@ from target_gym.base import (
 )
 from target_gym.expert_access import RegistryExperts
 from target_gym.hvac.env import (
+    DAY_STEPS,
     HVACParams,
     HVACState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    floor_surface_temperature,
     get_obs,
     internal_gain,
     outdoor_temperature,
-    scheduled_setpoint,
+    return_temperature,
+    slab_heat,
     solar_gain,
     solve_air_and_surface,
     split_gains,
+    steady_state,
 )
 from target_gym.hvac.rendering import _render
 from target_gym.video import SavesVideo
@@ -36,10 +39,12 @@ from target_gym.video import SavesVideo
 class BuildingHVAC(
     RegistryExperts, SavesVideo, environment.Environment[HVACState, HVACParams]
 ):
-    """Single-zone building HVAC (ISO 13790 5R1C).
+    """Single-zone building heated by a TABS slab (ISO 13790 5R1C plus [9]'s slab).
 
-    Observation (7,): [T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]
-    Action      (1,): commanded heating power, raw in [-1, 1] -> [0, Q_heat_max]
+    Observation (9,): [T_air, T_out, T_out_24h, T_core, T_return, T_supply,
+                       sin_h, cos_h, band_centre]
+    Action      (1,): supply water temperature, raw in [-1, 1] ->
+                      [T_supply_min, T_supply_max]
     """
 
     registry_name: str = "hvac"
@@ -50,20 +55,18 @@ class BuildingHVAC(
 
     obs_value_index: int = 0  # T_air
     tracked_names: tuple = ("zone air temperature (deg C)",)
-    obs_target_index: int = 6  # target_T
+    obs_target_index: int = 8  # the band's centre; comfort_tolerance is its half
 
-    # Two temperature sensors, a heat meter and a pyranometer (PHYSICS.md,
-    # Readings). Solar gain comes from the clock, which stays exact, so its
-    # reading goes on channel 3: 1 W/m2 of the 175 W/m2 peak.
+    # Four temperature sensors of one class (PHYSICS.md, Readings).
     readings: tuple = (
         FieldReading("T_air", sigma=0.023, step=0.1),
         FieldReading("T_out", sigma=0.023, step=0.1),
-        FieldReading("Q_emitter", sigma=27.0),
-        ChannelReading(3, sigma=1.0 / 175.0),
+        FieldReading("T_core", sigma=0.023, step=0.1),
+        FieldReading("T_return", sigma=0.023, step=0.1),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (7,)
+        self.obs_shape = (9,)
         self.integration_method = integration_method
 
     @property
@@ -121,45 +124,46 @@ class BuildingHVAC(
         if params is None:
             params = self.default_params
 
-        key, temp_key, sp_key, weather_key = jax.random.split(key, 4)
-
-        # The zone starts thermally settled: mass and air at the same
-        # temperature. A building whose mass disagreed with its air by several
-        # degrees at t=0 would spend the first day of every episode relaxing,
-        # which is an artefact rather than a control problem.
-        T_initial = jax.random.uniform(
-            temp_key,
-            minval=params.initial_T_range[0],
-            maxval=params.initial_T_range[1],
+        # Established operation (rule 17): the building has run on its slab
+        # for days, settled at the band's heating edge [9, p. 5] for the last
+        # day's mean weather and gains, as a heating curve holds it [7, p. 7].
+        weather_dev = params.T_out_noise_std * jax.random.normal(key)
+        past = jnp.arange(-DAY_STEPS + 1, 1)
+        history = outdoor_temperature(past, weather_dev, params)
+        day_int = jnp.mean(internal_gain(past, params))
+        day_sol = jnp.mean(solar_gain(past, params))
+        T_mass, T_core, _, T_supply = steady_state(
+            params, jnp.mean(history), params.band_low, day_int, day_sol
         )
-        setpoint_occupied = jax.random.uniform(
-            sp_key,
-            minval=params.setpoint_occupied_range[0],
-            maxval=params.setpoint_occupied_range[1],
-        )
-        weather_dev = params.T_out_noise_std * jax.random.normal(weather_key)
-
-        T_out = outdoor_temperature(0, weather_dev, params)
+        T_out = history[-1]
         phi_ia, phi_st, _ = split_gains(
             internal_gain(0, params), solar_gain(0, params), params
         )
         T_air, T_surface = solve_air_and_surface(
-            T_initial, T_out, 0.0, phi_st, phi_ia, params
+            T_mass, T_core, T_out, phi_st, phi_ia, params
         )
-
+        T_supply = jnp.clip(T_supply, params.T_supply_min, params.T_supply_max)
         state = HVACState(
             time=0,
-            T_mass=T_initial,
-            Q_emitter=jnp.zeros(()),
+            T_mass=T_mass,
+            T_core=T_core,
             T_air=T_air,
             T_surface=T_surface,
             T_out=T_out,
+            T_out_hist=history,
             weather_dev=weather_dev,
-            target_T=scheduled_setpoint(0, setpoint_occupied, params),
-            setpoint_occupied=setpoint_occupied,
-            Q_command=jnp.zeros(()),
+            T_supply=T_supply,
+            Q_slab=slab_heat(T_supply, T_core, params),
+            T_return=return_temperature(T_supply, T_core, params),
+            T_floor=floor_surface_temperature(T_core, T_air, params),
+            frost=jnp.zeros(()),
         )
         return self.get_obs(state), state
+
+    def initial_action(self, state: HVACState, params: HVACParams):
+        """The raw action that keeps the reset's supply water."""
+        span = params.T_supply_max - params.T_supply_min
+        return jnp.atleast_1d(2.0 * (state.T_supply - params.T_supply_min) / span - 1.0)
 
     def action_space(self, params: HVACParams | None = None) -> spaces.Box:
         return spaces.Box(

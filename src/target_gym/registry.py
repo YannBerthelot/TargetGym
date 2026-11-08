@@ -846,14 +846,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.oracle"),
-        # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
-        # and as many solar cycles, which is what distinguishes controllers
-        # here.
+        # v4 (charter Amendments 1 and 2): a TABS concrete slab between the
+        # supply water and the room ([9]'s first-order model), supply water
+        # as the action, the 21 to 26 C band at all hours with no setback,
+        # two-week episodes from established operation, a score in euros of
+        # heat and kelvin-hours of discomfort (hvac/PHYSICS.md).
         tuned_gains_key="hvac",
         oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="cement_kiln",

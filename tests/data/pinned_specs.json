@@ -692,7 +692,7 @@
   {
     "name": "hvac",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Building HVAC",
     "params_cls": [
       "target_gym.hvac.env",

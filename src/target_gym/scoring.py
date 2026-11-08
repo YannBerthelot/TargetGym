@@ -217,7 +217,7 @@ def _currency_per_floor(name: str, p, step_seconds: float) -> float:
 #: Tasks scored on the operator's job (charter rule 15): the cost of keeping
 #: inside the plant's limits, with no tracking term. They have no resolution
 #: ceiling or settle band, which are NaN; rule 9's room comes from an oracle.
-JOB_SCORED = frozenset({"boiler_drum"})
+JOB_SCORED = frozenset({"boiler_drum", "hvac"})
 
 
 def _per_step(name: str, params, env, at_resolution: bool) -> float:

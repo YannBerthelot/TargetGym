@@ -97,7 +97,9 @@ def _draw_zone(ax, state, params):
     rk.label(ax, 0.93, win_y + 0.255, f"SOLAR {s * 100:.0f}%", color=rk.AMBER, size=7)
 
     # Emitter.
-    q = float(state.Q_emitter) / max(params.Q_heat_max, 1e-9)
+    q = (float(state.T_supply) - params.T_supply_min) / (
+        params.T_supply_max - params.T_supply_min
+    )
     ex, ey = wx + tw + 0.03, wy + tw + 0.03
     ax.add_patch(
         rk.patches.Rectangle(
@@ -170,11 +172,13 @@ def render_hvac(state, params, step, history):
     history["T_air"].append(float(state.T_air))
     history["T_mass"].append(float(state.T_mass))
     history["T_out"].append(float(state.T_out))
-    history["target"].append(float(state.target_T))
-    history["heat"].append(100.0 * float(state.Q_emitter) / params.Q_heat_max)
+    history["target"].append(params.band_low)
+    history["heat"].append(float(state.T_supply))
     history["reward"].append(float(compute_reward(state, params)))
 
-    err = abs(float(state.T_air) - float(state.target_T))
+    err = max(
+        params.band_low - float(state.T_air), float(state.T_air) - params.band_high, 0.0
+    )
     status = (
         rk.NOMINAL
         if err < params.comfort_band
@@ -189,11 +193,9 @@ def render_hvac(state, params, step, history):
             f"{float(state.T_air):.2f} C",
             f(state.T_air),
             rk.CYAN,
-            target_frac=f(state.target_T),
+            target_frac=f(params.band_low),
         ),
-        rk.Gauge(
-            "SETPOINT", f"{float(state.target_T):.2f} C", f(state.target_T), rk.DIM
-        ),
+        rk.Gauge("BAND LOW", f"{params.band_low:.2f} C", f(params.band_low), rk.DIM),
         rk.Gauge(
             "T MASS",
             f"{float(state.T_mass):.2f} C",

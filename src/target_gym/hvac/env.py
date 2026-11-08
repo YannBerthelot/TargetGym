@@ -1,44 +1,25 @@
 """
-Building HVAC — single thermal zone, ISO 13790 5R1C reduced-order model.
+Building heating with a thermally activated concrete slab (TABS).
 
-See ``PHYSICS.md`` in this directory for provenance, the sourced parameter
-table and the validation targets. Method: ``docs/PHYSICS_METHODOLOGY.md``.
+See ``PHYSICS.md`` for the model, the numbers and the deviations, and
+``REALITY.md`` for how slab-heated buildings are read, moved and protected.
+Every design choice below cites ``REALITY.md`` [n] (charter rules 11 to 18).
 
-Topology (EN ISO 13790 "simple hourly method"), three nodes and five
-conductances::
+The zone is ISO 13790's 5R1C network (air, surface and mass nodes) with a
+concrete core slab between the heating water and the room, the first-order
+TABS model of Gwerder et al. [9, Fig. 3]::
 
-              Phi_ia + Phi_HC          Phi_st              Phi_m
-                    |                    |                   |
-     T_sup --H_ve-- T_air --H_tr_is-- T_surface --H_tr_ms-- T_mass
-                                         |                   |
-                                      H_tr_w              H_tr_em
-                                         |                   |
-                                       T_out               T_out
+    T_supply --Rt-- T_core (C_slab) --floor and ceiling faces-- T_air
 
-Only ``T_mass`` carries capacitance (``C_m``); ``T_air`` and ``T_surface``
-are solved algebraically from it each step, which is what makes the model both
-faithful and cheap. The building's entire thermal memory therefore lives in a
-single **hidden** state -- the agent measures air temperature, never the mass
-it is really fighting.
+    T_out --H_ve-- T_air --H_tr_is-- T_surface --H_tr_ms-- T_mass --H_tr_em-- T_out
+                                         |
+                                       H_tr_w -- T_out
 
-Control problem
----------------
-Track a *scheduled* comfort setpoint (occupied 21 C, night setback 17 C)
-against weather and occupancy, trading comfort against energy. The structure
-that makes it interesting:
-
-* **The thermal mass is hidden and slow** (tau ~43 h). Air temperature responds
-  in minutes but is anchored by a mass the controller cannot see.
-* **Setbacks reward anticipation.** Recovering from a night setback takes
-  hours, so a controller that waits for the setpoint step is already late --
-  the gap MPC should exploit over PID.
-* **Solar and occupancy gains are free heat** arriving on a schedule, and
-  over-heating is penalised, so the controller must anticipate them too.
-* **Weather is a genuine disturbance**: a daily temperature cycle plus a
-  mean-reverting stochastic deviation.
+The job (REALITY.md sec. 6): choose the water temperature about a day ahead
+from the weather, so the room stays inside its comfort band without heating
+and cooling on the same day, because the slab cannot correct within the day.
+The action is the supply water temperature from the mixing valve [11, 14].
 """
-
-from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -48,15 +29,17 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import convert_raw_action_to_range
 
 SECONDS_PER_DAY = 86_400.0
 SECONDS_PER_HOUR = 3_600.0
 
 # Ornstein-Uhlenbeck weather deviation: mean-reversion rate (1/s). 1/theta is
-# about 12 h, so a warm or cold spell persists across a day rather than
-# flickering step to step.
+# about 12 h, so a warm or cold spell persists across a day. Ours (PHYSICS.md).
 WEATHER_OU_THETA = 2.3e-5
+
+#: Steps in the outdoor temperature's 24 h mean, at 15 min steps [9, 13].
+DAY_STEPS = 96
 
 
 @struct.dataclass
@@ -82,92 +65,78 @@ class HVACParams(EnvParams):
     air_changes_per_hour: float = 0.5
     room_height: float = 2.6  # m
 
-    # ---- Heating system ----
-    Q_heat_max: float = 7200.0  # W (~1.5x the design load)
-    emitter_tau: float = 900.0  # s, radiator thermal lag (15 min)
+    # ---- The TABS slab [9, Table 2] ----
+    slab_thickness: float = 0.25  # m
+    tabs_covering: float = 0.80  # share of the floor with pipes
+    R_t: float = 0.08  # m^2 K/W, supply water to core, per covered m^2
+    water_flow: float = 15.0  # kg/(h m^2) per covered m^2
+    R_flooring: float = 0.125  # m^2 K/W, carpet
+    # Ours: concrete as commonly quoted from ISO 10456 (not read).
+    concrete_density: float = 2400.0  # kg/m^3
+    concrete_heat_capacity: float = 1000.0  # J/(kg K)
+    concrete_conductivity: float = 2.0  # W/(m K)
+    #: Floor surface to room, from EN 1264's characteristic in [5]: 100 W/m^2
+    #: at 9 K and 50 W/m^2 at 4.8 K over a 20 C room, the mean of 11.1 and 10.4.
+    h_floor: float = 10.8  # W/(m^2 K)
+    #: Ceiling surface to room in heating. Ours: EN 1264-5 Table A.1 as
+    #: commonly quoted (not read).
+    h_ceiling: float = 6.5  # W/(m^2 K)
+    c_water: float = 4186.0  # J/(kg K)
 
-    # ---- Weather ----
+    # ---- Supply water (rule 14) ----
+    #: Hard limit at the heating elements, cut by a safety device even without
+    #: power, for cement screed [17]: the mixing valve cannot exceed it.
+    T_supply_max: float = 55.0  # C
+    #: Ours: the valve's lowest setting, below any core temperature here, so
+    #: the slab gets no heat.
+    T_supply_min: float = 15.0  # C
+
+    # ---- Frost protection, a protected limit [1] ----
+    frost_on: float = 4.4  # C, any zone below 40 F
+    frost_off: float = 7.2  # C, until all zones exceed 45 F
+
+    # ---- Weather (ours, PHYSICS.md) ----
     T_out_mean: float = 5.0  # C, seasonal mean (heating season)
     T_out_amplitude: float = 5.0  # C, half daily swing
     T_out_noise_std: float = 3.0  # C, OU deviation std
-    # W/m^2 on the glazing at noon, a heating season's mean over four facades
-    # with the cloud in it, not a clear-sky peak: PHYSICS.md, Solar gain.
-    solar_peak: float = 175.0
+    solar_peak: float = 175.0  # W/m^2 on the glazing at noon
 
-    # ---- Internal gains ----
+    # ---- Internal gains (ours, PHYSICS.md) ----
     gain_occupied: float = 8.0  # W/m^2 (people, lighting, equipment)
     gain_unoccupied: float = 2.0  # W/m^2
     occupied_start_h: float = 7.0
     occupied_end_h: float = 22.0
 
-    # ---- Setpoint schedule ----
-    setpoint_occupied: float = 21.0  # C
-    setpoint_setback: float = 17.0  # C
-    # Sampled per episode so the task is not a single fixed schedule.
-    setpoint_occupied_range: Tuple[float, float] = (20.0, 22.5)
-
-    # ---- Comfort / termination bounds ----
-    T_air_min: float = 5.0  # C, building left to freeze
+    # ---- Comfort band, all hours (rule 14, zone) ----
+    #: Room setpoints 21 C heating and 26 C cooling, "used all year" [9, p. 5];
+    #: no night setback, as slab buildings run [7, p. 7], [15].
+    band_low: float = 21.0  # C
+    band_high: float = 26.0  # C
+    #: Floor surface, occupied area: 29 C (EN 1264, [5, p. 23]); ASHRAE 55's
+    #: comfort range for feet on the floor tops out there too [4].
+    floor_surface_max: float = 29.0  # C
+    #: Half the band, for the time-in-band KPI tables (benchmark._OUTPUT_FLOORS).
+    comfort_tolerance: float = 2.5  # K
     precision_floor: float = 0.1  # K, room temperature sensor resolution
-    T_air_max: float = 35.0  # C, grossly overheated
-
-    # ---- Reward shaping ----
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md.
-    comfort_band: float = 1.0  # C
-    # Zeroed for the 0.6 line: this phase scores setpoint tracking alone.
-    # A running cost is a real part of every one of these plants, but its
-    # weight against tracking accuracy is a design decision this library has
-    # not earned yet, and an arbitrary one turns a tracking benchmark into a
-    # multi-objective problem whose Pareto point nobody chose. The glass
-    # furnace showed the cost of getting it wrong: its MPC sat 6 K cold with
-    # fuel at minimum 80% of the time, because a 0.1 fuel weight against a
-    # quadratic tracking surrogate made that the optimum of the objective it
-    # was given. The field and the term stay, so a weight can be restored
-    # once there is a defensible way to set it. See docs/roadmap.md.
-    energy_weight: float = 0.0  # was 0.15, against the [0, 1] comfort term
-
-    # ---- Initial conditions ----
-    initial_T_range: Tuple[float, float] = (18.0, 22.0)
 
     # ---- Time discretization ----
-    delta_t: float = 900.0  # s (15 min) -- standard building-simulation step
-    max_steps_in_episode: int = 720  # 7.5 days at dt = 900 s
+    delta_t: float = 900.0  # s (15 min)
+    #: Two weeks: a heating curve change is judged over two weeks [11, p. 1].
+    max_steps_in_episode: int = 1344
 
-    # ---- Reward (docs/reward-shaping.md; version 2), in euros per step ----
-    # Comfort: while occupied, a quadratic penalty on the air temperature
-    # outside a +-``comfort_tolerance`` band about the setpoint; during the
-    # setback, on the shortfall below ``setpoint_setback`` only: this plant
-    # cannot cool, so a symmetric night target would score the weather. Priced at
-    # ``comfort_price`` per K^2 per hour (provisional; sweep 0.1 / 0.2 / 0.4).
-    # Energy: the emitter's heat at ``gas_price`` per kWh, charged in full --
-    # it is the bill this plant exists to trade against comfort. Floor:
-    # overheating sets it; the shipped MPC's long-run cost is the reference
-    # (an upper bound; the certified reduced-model optimum for this cost is
-    # not yet computed). Freezing or gross overheating (the termination
-    # bounds) costs, per step, twice a 14 K excursion for an hour.
-    reward_version: int = 2
-    comfort_tolerance: float = 0.5  # K, occupied
-    comfort_price: float = (
-        0.03  # EUR per K^2 per hour, provisional: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016)
-    )
-    gas_price: float = 0.10  # EUR per kWh
-    setback_lower_bound_only: bool = True  # provisional design choice
-    tracking_exponent: float = 2.0
-    failure_cost: float = (
-        2.0 * 0.03 * 17.0**2 * 0.25
-    )  # twice the reachable 17.5 K excursion (22.5 C setpoint -> 5 C trip) less the band, for one 15 min step
-    #: A building does not restart cold: outside the envelope every step is charged the trip cost and the plant keeps evolving under control.
-    restart_in_place: bool = True
-    #: Restart time priced into a trip (``reward.trip_cost``; 1 h at 15 min steps: reset after a freeze or overheat alarm, provisional).
-    restart_steps: int = 4
-    #: The shipped MPC's lowest per-seed hold cost on the test episode (EUR
-    #: per step, five seeds, `scripts/hvac_floor.py`): the oracle's best hold, an
-    #: upper bound on the floor -- overheating sets it, and the weather moves
-    #: it 2x between seeds, hence the minimum.
-    rho_floor_tracking: float = 0.0010
-    rho_floor: float = 0.0010
-    floor_is_documented_minimum: bool = False
+    # ---- Score (rule 15), euros per step ----
+    # Energy: the heat into the slab's water at ``heat_price``. Comfort: each
+    # kelvin-hour outside the band, and of floor surface above 29 C, as [9]
+    # counts discomfort (Kh), at ``comfort_price``. Both prices are ours.
+    reward_version: int = 3
+    #: Ours: a heat price; REALITY.md names energy as the cost but no tariff.
+    heat_price: float = 0.10  # EUR per kWh
+    #: Ours: twice the heat it takes to hold this building 1 K warmer for 1 h
+    #: (159 W/K at EUR 0.10/kWh is EUR 0.016).
+    comfort_price: float = 0.03  # EUR per K h
+    #: No limit trips this plant (``check_is_terminal``), so a trip costs 0.
+    restart_steps: int = 0
+    failure_cost: float = 0.0
 
 
 #: Units of the HVACParams fields, for the generated environment pages.
@@ -187,8 +156,21 @@ PARAM_UNITS = {
     "g_window": "-",
     "air_changes_per_hour": "1/h",
     "room_height": "m",
-    "Q_heat_max": "W",
-    "emitter_tau": "s",
+    "slab_thickness": "m",
+    "tabs_covering": "-",
+    "R_t": "m^2 K/W",
+    "water_flow": "kg/(h m^2)",
+    "R_flooring": "m^2 K/W",
+    "concrete_density": "kg/m^3",
+    "concrete_heat_capacity": "J/(kg K)",
+    "concrete_conductivity": "W/(m K)",
+    "h_floor": "W/(m^2 K)",
+    "h_ceiling": "W/(m^2 K)",
+    "c_water": "J/(kg K)",
+    "T_supply_max": "degC",
+    "T_supply_min": "degC",
+    "frost_on": "degC",
+    "frost_off": "degC",
     "T_out_mean": "degC",
     "T_out_amplitude": "K",
     "T_out_noise_std": "K",
@@ -197,44 +179,17 @@ PARAM_UNITS = {
     "gain_unoccupied": "W/m^2",
     "occupied_start_h": "h",
     "occupied_end_h": "h",
-    "setpoint_occupied": "degC",
-    "setpoint_setback": "degC",
-    "T_air_min": "degC",
-    "precision_floor": "K",
-    "T_air_max": "degC",
-    "comfort_band": "K",
-    "energy_weight": "-",
-    "reward_version": "-",
+    "band_low": "degC",
+    "band_high": "degC",
+    "floor_surface_max": "degC",
     "comfort_tolerance": "K",
-    "comfort_price": "EUR/(K^2 h)",
-    "gas_price": "EUR/kWh",
-    "tracking_exponent": "-",
-    "failure_cost": "reward",
+    "precision_floor": "K",
+    "reward_version": "-",
+    "heat_price": "EUR/kWh",
+    "comfort_price": "EUR/(K h)",
     "restart_steps": "steps",
-    "rho_floor_tracking": "reward",
-    "rho_floor": "reward",
+    "failure_cost": "EUR per step",
 }
-
-
-@struct.dataclass
-class HVACState(EnvState):
-    T_mass: float  # thermal mass node -- HIDDEN, holds the building's memory
-    Q_emitter: float  # delivered heating power (W), lags the command
-
-    T_air: float  # algebraic, measured
-    T_surface: float  # algebraic, hidden
-    T_out: float  # outdoor air temperature (C), measured
-    weather_dev: float  # OU deviation from the daily cycle (C), hidden
-
-    target_T: float  # active comfort setpoint
-    setpoint_occupied: float  # this episode's occupied setpoint
-    Q_command: float  # commanded heating power (W)
-
-    actuator_held: jax.Array = actuator_field(1)
-
-    # ---------------------------------------------------------------------------
-    # Derived conductances (ISO 13790 §7). Pure functions of params.
-    # ---------------------------------------------------------------------------
 
 
 def zone_conductances(params: HVACParams):
@@ -322,49 +277,6 @@ def internal_gain(time, params: HVACParams):
     return per_area * params.A_floor
 
 
-def scheduled_setpoint(time, setpoint_occupied, params: HVACParams):
-    """Occupied setpoint during the day, night setback otherwise."""
-    return jnp.where(
-        is_occupied(time, params), setpoint_occupied, params.setpoint_setback
-    )
-
-
-# ---------------------------------------------------------------------------
-# Node solution
-# ---------------------------------------------------------------------------
-
-
-def solve_air_and_surface(T_mass, T_out, Q_heat, phi_st, phi_ia, params: HVACParams):
-    """Algebraic air and surface temperatures given the mass node.
-
-    Neither node has capacitance, so their balances are two linear equations::
-
-        air:     H_tr_is*(T_s - T_air) + H_ve*(T_out - T_air) + phi_ia + Q = 0
-        surface: H_tr_ms*(T_m - T_s) + H_tr_w*(T_out - T_s)
-                 + H_tr_is*(T_air - T_s) + phi_st = 0
-
-    Substituting the first into the second gives a closed form -- no solver,
-    no stiffness, and exactly the reduction that makes 5R1C cheap.
-    """
-    c = zone_conductances(params)
-    H_tr_is, H_tr_ms, H_tr_w, H_ve = (
-        c["H_tr_is"],
-        c["H_tr_ms"],
-        c["H_tr_w"],
-        c["H_ve"],
-    )
-
-    denom_air = H_tr_is + H_ve
-    a = H_tr_is / denom_air
-    b = (H_ve * T_out + phi_ia + Q_heat) / denom_air
-
-    T_surface = (H_tr_ms * T_mass + H_tr_w * T_out + phi_st + H_tr_is * b) / (
-        H_tr_ms + H_tr_w + H_tr_is * (1.0 - a)
-    )
-    T_air = a * T_surface + b
-    return T_air, T_surface
-
-
 def split_gains(phi_int, phi_sol, params: HVACParams):
     """Distribute internal and solar gains across the three nodes (ISO 13790).
 
@@ -387,52 +299,119 @@ def split_gains(phi_int, phi_sol, params: HVACParams):
     return phi_ia, phi_st, phi_m
 
 
-def compute_velocity(position, action, time, weather_dev, params: HVACParams):
-    """RHS for ``[T_mass, Q_emitter]``.
+def scheduled_band(params: HVACParams):
+    """The comfort band, the same at every hour [9, p. 5]."""
+    return params.band_low, params.band_high
 
-    ``action`` is the commanded heating power in W. The emitter lags it with a
-    first-order time constant, representing radiator/water thermal inertia --
-    a real heating system cannot deliver a step change in output.
+
+def band_centre(params: HVACParams):
+    return 0.5 * (params.band_low + params.band_high)
+
+
+def slab_conductances(params: HVACParams):
+    """The slab's capacity and its three couplings, W/K and J/K.
+
+    ``H_water``: supply water to core over the covered area, ``1 / R_t`` [9].
+    ``H_slab``: core to room through the floor face (half the slab, the
+    carpet, the floor's coefficient) and the ceiling face (half the slab, the
+    ceiling's coefficient): the zone is one storey of a stack, so both faces
+    of a TABS slab heat it, as in [9]'s simulated room.
+    ``m_c``: the water flow's heat capacity rate.
     """
     p = params
-    T_mass, Q_emitter = position[0], position[1]
-    Q_command = action
-
-    c = zone_conductances(p)
-    T_out = outdoor_temperature(time, weather_dev, p)
-    phi_int = internal_gain(time, p)
-    phi_sol = solar_gain(time, p)
-    phi_ia, phi_st, phi_m = split_gains(phi_int, phi_sol, p)
-
-    T_air, T_surface = solve_air_and_surface(
-        T_mass, T_out, Q_emitter, phi_st, phi_ia, p
+    half = p.slab_thickness / 2.0 / p.concrete_conductivity
+    R_up = half + p.R_flooring + 1.0 / p.h_floor
+    R_down = half + 1.0 / p.h_ceiling
+    covered = p.tabs_covering * p.A_floor
+    return dict(
+        C_slab=p.concrete_density
+        * p.concrete_heat_capacity
+        * p.slab_thickness
+        * p.A_floor,
+        H_water=covered / p.R_t,
+        H_up=p.A_floor / R_up,
+        H_down=p.A_floor / R_down,
+        H_slab=p.A_floor / R_up + p.A_floor / R_down,
+        m_c=p.water_flow * covered / 3600.0 * p.c_water,
+        floor_share=(1.0 / p.h_floor) / R_up,
     )
 
+
+def solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, params: HVACParams):
+    """Air and surface temperatures given the mass and core nodes.
+
+    Neither node has capacitance, so their balances are two linear equations::
+
+        air:     H_tr_is (T_s - T_a) + H_ve (T_out - T_a)
+                 + H_slab (T_core - T_a) + phi_ia = 0
+        surface: H_tr_ms (T_m - T_s) + H_tr_w (T_out - T_s)
+                 + H_tr_is (T_a - T_s) + phi_st = 0
+    """
+    c = zone_conductances(params)
+    H_is, H_ms, H_w, H_ve = c["H_tr_is"], c["H_tr_ms"], c["H_tr_w"], c["H_ve"]
+    H_sl = slab_conductances(params)["H_slab"]
+    a11 = H_is + H_ve + H_sl
+    b1 = H_ve * T_out + phi_ia + H_sl * T_core
+    a22 = H_ms + H_w + H_is
+    b2 = H_ms * T_mass + H_w * T_out + phi_st
+    T_air = (b1 * a22 + H_is * b2) / (a11 * a22 - H_is * H_is)
+    T_surface = (b2 + H_is * T_air) / a22
+    return T_air, T_surface
+
+
+def slab_heat(T_supply, T_core, params: HVACParams):
+    """Heat from the water into the core, W. Heating only: water below the
+    core gives none, since the plant has no chiller (PHYSICS.md)."""
+    H_water = slab_conductances(params)["H_water"]
+    return H_water * jnp.maximum(T_supply - T_core, 0.0)
+
+
+def return_temperature(T_supply, T_core, params: HVACParams):
+    """Return water, from the heat the flow gave up [12, p. 12]."""
+    s = slab_conductances(params)
+    return T_supply - slab_heat(T_supply, T_core, params) / s["m_c"]
+
+
+def floor_surface_temperature(T_core, T_air, params: HVACParams):
+    """The floor's surface, on the floor face's resistance chain."""
+    s = slab_conductances(params)
+    return T_air + (T_core - T_air) * s["floor_share"]
+
+
+def compute_velocity(position, action, time, weather_dev, params: HVACParams):
+    """RHS for ``[T_mass, T_core]``. ``action`` is the supply water temperature."""
+    p = params
+    T_mass, T_core = position[0], position[1]
+    c = zone_conductances(p)
+    s = slab_conductances(p)
+    T_out = outdoor_temperature(time, weather_dev, p)
+    phi_ia, phi_st, phi_m = split_gains(internal_gain(time, p), solar_gain(time, p), p)
+    T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
     dT_mass = (
         c["H_tr_ms"] * (T_surface - T_mass) + c["H_tr_em"] * (T_out - T_mass) + phi_m
     ) / c["C_m"]
-    dQ_emitter = (Q_command - Q_emitter) / p.emitter_tau
-
-    return jnp.array([dT_mass, dQ_emitter]), None
+    dT_core = (slab_heat(action, T_core, p) + s["H_slab"] * (T_air - T_core)) / s[
+        "C_slab"
+    ]
+    return jnp.array([dT_mass, dT_core]), None
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
     action_raw: float,
-    state: HVACState,
+    state: "HVACState",
     params: HVACParams,
     key: jax.Array,
     integration_method: str = "rk4_2",
 ):
-    """``action_raw`` in [-1, 1] maps to heating power in [0, Q_heat_max]."""
+    """``action_raw`` in [-1, 1] maps to supply water in [T_supply_min,
+    T_supply_max]. Frost protection overrides it with full supply [1]."""
     p = params
-    Q_command = convert_raw_action_to_range(
-        action_raw, min_action=0.0, max_action=p.Q_heat_max
+    commanded = convert_raw_action_to_range(
+        action_raw, min_action=p.T_supply_min, max_action=p.T_supply_max
     )
+    T_supply = jnp.where(state.frost > 0.5, p.T_supply_max, commanded)
 
-    # OU weather deviation. The innovation is drawn from a key folded with
-    # ``state.time`` so a caller passing a constant key still gets a genuine
-    # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     sigma = p.T_out_noise_std * jnp.sqrt(2.0 * WEATHER_OU_THETA * p.delta_t)
     weather_dev = (
@@ -440,150 +419,175 @@ def compute_next_state(
         - WEATHER_OU_THETA * state.weather_dev * p.delta_t
         + sigma * noise
     )
-
     _compute_velocity = partial(
         compute_velocity,
-        action=Q_command,
+        action=T_supply,
         time=state.time,
         weather_dev=weather_dev,
         params=p,
     )
     new_positions, _ = integrate_dynamics(
-        positions=jnp.array([state.T_mass, state.Q_emitter]),
+        positions=jnp.array([state.T_mass, state.T_core]),
         delta_t=p.delta_t,
         compute_velocity=_compute_velocity,
         method=integration_method,
     )
-    T_mass, Q_emitter = new_positions[0], new_positions[1]
+    T_mass, T_core = new_positions[0], new_positions[1]
 
     new_time = state.time + 1
     T_out = outdoor_temperature(new_time, weather_dev, p)
     phi_ia, phi_st, _ = split_gains(
         internal_gain(new_time, p), solar_gain(new_time, p), p
     )
-    T_air, T_surface = solve_air_and_surface(
-        T_mass, T_out, Q_emitter, phi_st, phi_ia, p
+    T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
+    frost = jnp.where(
+        T_air < p.frost_on, 1.0, jnp.where(T_air > p.frost_off, 0.0, state.frost)
     )
-
+    history = jnp.concatenate([state.T_out_hist[1:], jnp.atleast_1d(T_out)])
     return (
         state.replace(
             T_mass=T_mass,
-            Q_emitter=Q_emitter,
+            T_core=T_core,
             T_air=T_air,
             T_surface=T_surface,
             T_out=T_out,
+            T_out_hist=history,
             weather_dev=weather_dev,
-            target_T=scheduled_setpoint(new_time, state.setpoint_occupied, p),
-            Q_command=Q_command,
+            T_supply=T_supply,
+            Q_slab=slab_heat(T_supply, T_core, p),
+            T_return=return_temperature(T_supply, T_core, p),
+            T_floor=floor_surface_temperature(T_core, T_air, p),
+            frost=frost,
             time=new_time,
         ),
         None,
     )
 
 
-# Deliberately not jitted. It was decorated with
-# ``@partial(jax.jit, static_argnames=["params"])``, which keys the compilation
-# cache on the params object: a fresh ``Params(...)`` -- what every sweep, tuner
-# and MPC builds -- was a cache miss and a full recompile, measured at ~1600x the
-# cost of a cached call. Callers that want it fused already jit ``step_env``,
-# which traces this inline.
-def get_obs(state: HVACState, params: HVACParams):
-    """Plant instrumentation only.
+def get_obs(state: "HVACState", params: HVACParams):
+    """What the building's controller reads (rule 16, REALITY.md sec. 1).
 
-    ``[T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]``
+    ``[T_air, T_out, T_out_24h, T_core, T_return, T_supply, sin_h, cos_h,
+    band_centre]``
 
-    A building management system measures zone air temperature, outdoor
-    temperature, its own heat output and (usually) a rooftop pyranometer, and
-    knows the time of day. It does **not** measure the structural thermal mass
-    or the weather deviation -- so ``T_mass``, ``T_surface`` and
-    ``weather_dev`` are hidden, and the mass is precisely the state that
-    governs the building's multi-hour response.
-
-    Time of day is given as sin/cos so it is continuous across midnight.
+    The room sensor [6, 14]; the outdoor sensor and its mean over the last 24 h,
+    which TABS controllers use [9, 13]; the slab's core sensor, which all
+    eleven designers fit [7, p. 8], [12, p. 12]; the return water [12, 14]; the
+    supply the valve gives; the clock; the band's centre (the band is 21 to 26
+    C [9]). The building's other mass is hidden.
     """
     h = hour_of_day(state.time, params)
     angle = 2.0 * jnp.pi * h / 24.0
-    heat_pct = 100.0 * state.Q_emitter / params.Q_heat_max
-    solar_norm = solar_gain(state.time, params) / (
-        params.solar_peak * params.A_window * params.g_window + 1e-9
-    )
     return jnp.array(
         [
             state.T_air,
             state.T_out,
-            heat_pct,
-            solar_norm,
+            jnp.mean(state.T_out_hist),
+            state.T_core,
+            state.T_return,
+            state.T_supply,
             jnp.sin(angle),
             jnp.cos(angle),
-            state.target_T,
+            band_centre(params) + 0.0 * state.T_air,
         ]
     )
 
 
-def check_is_terminal(state: HVACState, params: HVACParams, xp=jnp):
-    terminated = xp.logical_or(
-        state.T_air <= params.T_air_min, state.T_air >= params.T_air_max
-    )
+def check_is_terminal(state: "HVACState", params: HVACParams, xp=jnp):
+    """No trip: frost is a mode change the plant makes itself [1], and the
+    supply limit is a safety cut-off [17]. Both are protected limits."""
+    terminated = xp.zeros_like(state.T_air, dtype=bool)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 
-def compute_reward_terms(state: HVACState, params: HVACParams, xp=jnp, tripped=None):
-    """The reward's additive cost terms in EUR per step (``target_gym.reward``).
-
-    ``tripped`` overrides the trip check on ``state``, for a measured copy,
-    whose noise must not fire or hide a trip (``base.measured_reward``).
-    """
+def comfort_kelvin_hours(state: "HVACState", params: HVACParams, xp=jnp):
+    """Kelvin-hours outside the band and of floor above its limit, one step."""
     p = params
     hours = p.delta_t / 3600.0
-    occupied = is_occupied(state.time, p)
-    err = state.T_air - state.target_T
-    excess_occ = xp.maximum(xp.abs(err) - p.comfort_tolerance, 0.0)
-    shortfall = xp.maximum(-err, 0.0)  # below the setback target
-    excess_setback = xp.where(p.setback_lower_bound_only, shortfall, xp.abs(err))
-    excess = xp.where(occupied, excess_occ, excess_setback)
-    comfort = p.comfort_price * hours * excess**p.tracking_exponent
-    energy = p.gas_price * state.Q_emitter / 1000.0 * hours
+    outside = xp.maximum(p.band_low - state.T_air, 0.0) + xp.maximum(
+        state.T_air - p.band_high, 0.0
+    )
+    floor = xp.maximum(state.T_floor - p.floor_surface_max, 0.0)
+    return (outside + floor) * hours
+
+
+def compute_reward_terms(state: "HVACState", params: HVACParams, xp=jnp, tripped=None):
+    """The score's terms in euros per step: comfort and heat."""
+    p = params
+    hours = p.delta_t / 3600.0
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
     terms = {
-        "tracking": comfort,
-        "running": energy,
+        "comfort": p.comfort_price * comfort_kelvin_hours(state, p, xp),
+        "heat": p.heat_price * state.Q_slab / 1000.0 * hours,
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
-def compute_reward_v1(state: HVACState, params: HVACParams, xp=jnp):
-    """Comfort tracking minus energy use.
+def compute_reward(state: "HVACState", params: HVACParams, xp=jnp):
+    return R.total(compute_reward_terms(state, params, xp), xp)
 
-    Tracking is log-scaled (``utils.log_scaled_reward``): every halving of the
-    error is worth the same increment, from the plant's operating envelope down
-    to ``precision_floor``, the finest error its instrument can resolve. Below
-    that the reward stops paying, because further "improvement" is noise.
 
-    This replaced a clipped squared band, which was flat -- exactly zero, no
-    gradient -- for any error outside the band, and which stopped
-    discriminating just where a good controller operates. See
-    docs/reward-shaping.md.
+def energy_use_kwh(state: "HVACState", params: HVACParams):
+    """Heat into the slab in the last step, in kWh."""
+    return state.Q_slab * params.delta_t / 3.6e6
 
+
+def steady_state(params: HVACParams, T_out, T_air, phi_int=None, phi_sol=0.0):
+    """The settled building holding ``T_air`` at constant ``T_out`` and gains.
+
+    Returns ``(T_mass, T_core, T_surface, T_supply)``: the four node balances,
+    solved as one linear system with the water heating the core.
     """
-    err = xp.abs(state.target_T - state.T_air)
-    comfort = log_scaled_reward(
-        err, params.precision_floor, params.T_air_max - params.T_air_min, xp
+    p = params
+    c = zone_conductances(p)
+    s = slab_conductances(p)
+    if phi_int is None:
+        phi_int = p.gain_unoccupied * p.A_floor
+    phi_ia, phi_st, phi_m = split_gains(phi_int, phi_sol, p)
+    H_is, H_ms, H_w, H_ve, H_em = (
+        c["H_tr_is"],
+        c["H_tr_ms"],
+        c["H_tr_w"],
+        c["H_ve"],
+        c["H_tr_em"],
     )
-    energy = state.Q_emitter / params.Q_heat_max
-    return comfort * (1.0 - params.energy_weight * energy)
-
-
-def compute_reward(state: HVACState, params: HVACParams, xp=jnp):
-    return R.select(
-        params.reward_version,
-        compute_reward_v1(state, params, xp),
-        R.total(compute_reward_terms(state, params, xp), xp),
-        xp,
+    H_sl, H_wat = s["H_slab"], s["H_water"]
+    # Unknowns [T_s, T_m, T_c, T_sup].
+    A = jnp.array(
+        [
+            [H_is, 0.0, H_sl, 0.0],
+            [-(H_ms + H_w + H_is), H_ms, 0.0, 0.0],
+            [H_ms, -(H_ms + H_em), 0.0, 0.0],
+            [0.0, 0.0, -(H_wat + H_sl), H_wat],
+        ]
     )
+    b = jnp.array(
+        [
+            (H_is + H_ve + H_sl) * T_air - H_ve * T_out - phi_ia,
+            -H_w * T_out - H_is * T_air - phi_st,
+            -H_em * T_out - phi_m,
+            -H_sl * T_air,
+        ]
+    )
+    T_s, T_m, T_c, T_sup = jnp.linalg.solve(A, b)
+    return T_m, T_c, T_s, T_sup
 
 
-def energy_use_kwh(state: HVACState, params: HVACParams):
-    """Energy delivered in the last step, in kWh -- for reporting and validation."""
-    return state.Q_emitter * params.delta_t / 3.6e6
+@struct.dataclass
+class HVACState(EnvState):
+    T_mass: float  # building mass node, hidden
+    T_core: float  # slab core, measured [7]
+    T_air: float  # room air, measured
+    T_surface: float  # star node, hidden
+    T_out: float  # outdoor air, measured
+    T_out_hist: jax.Array  # the last 24 h of outdoor readings, oldest first
+    weather_dev: float  # OU deviation from the daily cycle, hidden
+    T_supply: float  # supply water the valve gave, C
+    Q_slab: float  # heat into the slab from the water, W
+    T_return: float  # return water, measured [12]
+    T_floor: float  # floor surface, C
+    frost: float  # 1 while frost protection holds the supply at its maximum
+
+    actuator_held: jax.Array = actuator_field(1)
