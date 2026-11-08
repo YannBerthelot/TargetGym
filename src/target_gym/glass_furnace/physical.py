@@ -251,9 +251,13 @@ def column_flow(grad, mu, dz, Q, cover, v_top, g_rho_beta):
 
 
 def foam_thickness(j, mu, sigma, r0, rho, g):
-    """Pilon, Fedorov, Viskanta 2001 eq 19, m, with no onset velocity (none found)."""
+    """Pilon, Fedorov, Viskanta 2001 eq 19, m, with no onset velocity (none found). The
+    power is taken only where the flux is positive, so its slope stays finite at zero.
+    """
+    x = mu * jnp.maximum(j, 0.0)
+    safe = jnp.where(x > 0.0, x, 1.0)
     return (
-        2905.0 * sigma * (mu * jnp.maximum(j, 0.0)) ** 0.8
+        2905.0 * sigma * jnp.where(x > 0.0, safe**0.8, 0.0)
         / (r0**2.6 * (rho * g) ** 1.8)
     )  # fmt: skip
 

@@ -9,8 +9,8 @@ trims the valve so the hottest face stays under it, and the agent sees the valve
 The refiner's cooling loop holds the canal just above its target, as a plant's local loop
 does, and the agent sees how hard it works.
 
-The agent reads what operators read: crown and bottom couples, the canal, the fining
-share only at the cold end a transit later, the cullet ratio the batch plant holds, the
+The agent reads what operators read (REALITY.md, section 1): crown and bottom couples, the
+canal, the fining share only at the cold end a transit later, the cullet ratio the batch plant holds, the
 batch line on its camera's cadence, and the pull plan as far ahead as its notice. Gas
 quality, blanket thickness and sulfate stay hidden. The episode is established operation:
 the walks start where the seed puts them, and a planned pull change or a gas swing comes
@@ -31,15 +31,13 @@ OBS_NAMES = (
     "canal, K",
     "fining share read at the cold end",
     "refiner cooling, share of its capacity",
-    "air preheat, C",
-    "stack, C",
     "fuel, kg/s",
     "pull, kg/s",
     "pull planned, kg/s",
     "cullet ratio",
     "batch line, m",
 )
-TEMPERATURES = (0, 1, 2, 3, 6, 7)  # the readings that carry the couples' noise
+TEMPERATURES = (0, 1, 2, 3)  # the readings that carry the couples' noise
 
 
 @struct.dataclass
@@ -173,10 +171,6 @@ def observe(state, ep):
     """The readings, noise-free. Nothing hidden: no walk, no glass inside the tank."""
     p, s = ep.plant, state.fields
     read = P.sensors(s, ep.grid, p)
-    fired = state.fuel * P.mean_firing(p)
-    m_air = p.AFR * (1.0 + p.excess_air) * fired
-    flue = jnp.mean(s.T_gas) - P.KELVIN_OFFSET
-    _, air, stack = P.averaged_stack(s.T_r, flue, m_air, fired + m_air, p)
     hours = state.time * p.delta_t / 3600.0
     return jnp.stack(
         [
@@ -186,8 +180,6 @@ def observe(state, ep):
             read["canal"],
             state.quality[0],
             state.cooling / ep.cooling_max,
-            air,
-            stack,
             state.fuel,
             state.pull,
             planned_pull(hours + ep.pull_notice_h, state.events, ep),
