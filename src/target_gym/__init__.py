@@ -21,8 +21,7 @@ from target_gym.energy.wind_turbine.env_jax import WindTurbine
 from target_gym.formation.env import FormationParams
 from target_gym.formation.env_jax import Formation
 from target_gym.formation.marl import FormationMARL
-from target_gym.glass_furnace.env import GlassFurnaceParams
-from target_gym.glass_furnace.env_jax import GlassFurnace
+from target_gym.glass_furnace.env_jax import GlassFurnace, GlassFurnaceParams
 from target_gym.hvac.env import HVACParams
 from target_gym.hvac.env_jax import BuildingHVAC
 from target_gym.patrol.env import PatrolParams

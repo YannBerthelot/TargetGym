@@ -653,10 +653,10 @@
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Glass Furnace",
     "params_cls": [
-      "target_gym.glass_furnace.env",
+      "target_gym.glass_furnace.env_jax",
       "GlassFurnaceParams"
     ],
     "env_factory": "_glass_furnace",
@@ -669,27 +669,19 @@
       "target_gym.glass_furnace.experts",
       "make_glass_furnace_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.glass_furnace.oracle",
-      "make_glass_furnace_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {},
     "tuned_gains_key": "glass_furnace",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The old MPC read the retired plant's params, so the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, not yet converged (PHYSICS.md, section 2).",
     "disturbance_fields": [
-      "m_pull_disturbance",
-      "lhv_deviation"
+      "walk"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
-    "expert_degraded": null,
+    "expert_degraded": "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance test's two seeds, against 242,995 for the best constant valve (raw 0.0, 0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward prices as a step, so it loses glass where a wide constant margin does not: full back-off is what this reward pays for (PHYSICS.md, cold review item 4). A finding for the reference ladder; not tuned.",
     "mpc_degraded": null,
-    "noise_fields": [
-      "m_pull_noise_std",
-      "lhv_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "reactor",

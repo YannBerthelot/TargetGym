@@ -46,7 +46,6 @@ C2 = (
     "hvac",
     "boiler_drum",
     "wind_turbine",
-    "glass_furnace",
     "cement_kiln",
     "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
@@ -317,7 +316,7 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 @pytest.mark.parametrize(
     "name, budget",
     [(name, 0.25) for name in FIVE + AIRCRAFT]
-    + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
+    + [(name, 0.25) for name in ("boiler_drum", "cement_kiln")]
     + [
         # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
         # step at 60 $/MWh.
@@ -343,7 +342,6 @@ PRICED = {
     "hvac": 2,  # comfort, energy
     "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
-    "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
     "reactor": 1,  # Tavg: the rods' travel stops at a steady state
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed

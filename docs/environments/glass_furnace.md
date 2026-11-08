@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/glass_furnace/pid_output.gif" width="480px"/></p>
 
-Hold the crown temperature of a regenerative float-glass furnace on a slowly walking setpoint by setting the fuel flow. The crown is read through a lagging thermocouple, the glass and regenerator temperatures are hidden, the firing side reverses on a fixed cycle, and the furnace responds over hours, so a few instruments have to steer a large, slow plant.
+Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end, about 18 minutes after the glass leaves; the melt answers a valve move over about two days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far from the defect limit costs fuel, too little loses glass.
 
 ```python
 import target_gym as tg
@@ -13,10 +13,10 @@ env, params = tg.make("glass_furnace")
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
-| Observation space | `Box((6,))` |
-| Tracked variable(s) | crown temperature (K) |
-| Episode length | 1600 steps of 30 s (13.3 h) |
-| Cite as | `glass_furnace-v3` |
+| Observation space | `Box((12,))` |
+| Tracked variable(s) | fining share read at the cold end |
+| Episode length | 5040 steps of 120 s (7 days) |
+| Cite as | `glass_furnace-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space
@@ -26,20 +26,26 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | fuel rate | -1 | 1 |
+| 0 | fuel valve | -1 | 1 |
 
 ## Observation space
 
-6 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
+12 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
-| 0 | crown temperature as the thermocouple reads it (°C); it lags the true crown temperature the reward scores |
-| 1 | combustion air preheat temperature (°C) |
-| 2 | fuel flow, percent of maximum |
-| 3 | regenerator phase: 0 while regenerator A preheats the air, 1 while B does |
-| 4 | target crown temperature (°C) |
-| 5 | pull, the glass leaving the furnace (kg/s) |
+| 0 | crown couple in bay 3, K |
+| 1 | floor couple under bay 3, K |
+| 2 | floor couple at the melter's end, K |
+| 3 | canal, K |
+| 4 | fining share read at the cold end, 0.3 h late |
+| 5 | fining pass mark, 0.5 |
+| 6 | refiner cooling, share of its capacity |
+| 7 | valve after the crown override, kg/s |
+| 8 | pull charged, kg/s |
+| 9 | pull planned `pull_notice_h` ahead, kg/s |
+| 10 | cullet ratio charged |
+| 11 | batch line, m, every 30 min |
 
 ## Rewards
 
@@ -57,24 +63,20 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 20 fields.
+`reset` samples the initial condition and the target; state has 13 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None: nothing trips this plant. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 1600 steps.
+**Truncation.** After 5040 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1600-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
+No MPC ships with this environment, so there is no recorded comparison. The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The old MPC read the retired plant's params, so the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, not yet converged (PHYSICS.md, section 2).
 
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1878 | 1.174 |
-| MPC | -902.8 | 0.5643 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+!!! warning "The shipped expert is weak here"
+    The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance test's two seeds, against 242,995 for the best constant valve (raw 0.0, 0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward prices as a step, so it loses glass where a wide constant margin does not: full back-off is what this reward pays for (PHYSICS.md, cold review item 4). A finding for the reference ladder; not tuned.
 
 ## Arguments
 
@@ -82,77 +84,39 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 
 | parameter | value | unit |
 |---|---|---|
-| `delta_t` | 30 | s |
-| `max_steps_in_episode` | 1600 | steps |
+| `delta_t` | 120 | s |
+| `max_steps_in_episode` | 5040 | steps |
 | `sensor_noise_scale` | 1 | - |
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
 | `action_noise` | 0 | fraction of span |
-| `actuator_rate` | 0.000555556 | fraction of span per delta_t unit |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
 | `actuator_lag` | 0 | delta_t units |
-| `LHV` | 5e+07 | J/kg |
-| `AFR` | 17 | - |
-| `excess_air` | 0.1 | - |
-| `c_p_air` | 1150 | J/(kg K) |
-| `c_p_gas` | 1200 | J/(kg K) |
-| `fuel_min` | 0.513 | kg/s |
-| `fuel_max` | 0.698 | kg/s |
-| `flame_rad_fraction` | 0.55 | - |
-| `C_regen_node` | 3e+07 | J/K |
-| `eps_regen_node` | 0.8 | - |
-| `reversal_period` | 1500 | s |
-| `reversal_dead_time` | 40 | s |
-| `reversal_firing_floor` | 0.05 | - |
-| `tau_thermocouple` | 120 | s |
-| `charge_period` | 300 | s |
-| `charge_duty` | 0.3 | - |
-| `charge_mass_jitter` | 0.15 | - |
-| `U_regen` | 0.3 | W/(m^2 K) |
-| `A_regen` | 300 | m^2 |
-| `m_pull` | 5.79 | kg/s |
-| `batch_yield` | 0.83 | - |
-| `T_batch_in` | 25 | degC |
-| `dH_fusion` | 800000 | J/kg |
-| `m_batch_full` | 39000 | kg |
-| `batch_shield` | 0.85 | - |
-| `m_pull_noise_std` | 0.4 | kg/s |
-| `lhv_noise_std` | 0.01 | - |
-| `C_gas` | 240000 | J/K |
-| `C_crown` | 2.5e+08 | J/K |
-| `C_melt` | 7.8e+08 | J/K |
-| `C_work` | 7.8e+08 | J/K |
-| `c_p_glass_a` | 900 | J/(kg K) |
-| `c_p_glass_b` | 0.35 | J/(kg K^2) |
-| `eps_rad` | 0.8 | - |
-| `A_crown` | 200 | m^2 |
-| `A_melt` | 200 | m^2 |
-| `A_work` | 10 | m^2 |
-| `h_conv` | 30 | W/(m^2 K) |
-| `U_wall` | 1 | W/(m^2 K) |
-| `A_wall_crown` | 200 | m^2 |
-| `A_wall_melt` | 200 | m^2 |
-| `A_wall_work` | 200 | m^2 |
-| `UA_work_cooling` | 3000 | W/K |
-| `T_ambient` | 25 | degC |
-| `T_crown_min` | 1427 | degC |
-| `tracking_band` | 10 | K |
-| `precision_floor` | 1 | K |
-| `T_crown_max` | 1677 | degC |
-| `T_glass_min` | 900 | degC |
-| `T_glass_max` | 1727 | degC |
-| `fuel_cost_weight` | 0 | - |
-| `target_T_crown_trim` | 6 | K |
-| `initial_T_crown_offset` | 4 | K |
-| `initial_T_gas_offset` | 33 | K |
-| `initial_T_meas_offset` | 1.35 | K |
+| `gas_price` | 60.5 | EUR/MWh |
+| `lost_glass_price` | 600 | EUR/t |
+| `pull` | 5.79 | kg/s |
+| `cullet` | 0.25 | - |
+| `thickness` | 0.2 | m |
+| `sulfate` | 0.01 | - |
+| `canal_target` | 1373.15 | K |
+| `fining_pass` | 0.5 | - |
+| `e_floor` | 0.005 | - |
+| `crown_high` | 1893.15 | K |
+| `fuel_min` | 0.25 | kg/s |
+| `fuel_max` | 0.75 | kg/s |
+| `override_margin` | 5 | K |
+| `override_gain` | 0.0101 | kg/s per K |
+| `override_ti` | 7200 | s |
+| `cooling_max` | 1.54e+06 | W |
+| `cooling_above` | 1 | K |
+| `cooling_gain` | 261900 | W/K |
+| `cooling_ti` | 7680 | s |
+| `pull_change` | 0 | - |
+| `pull_ramp_h` | 2 | h |
+| `pull_notice_h` | 8 | h |
+| `gas_swing` | 0 | - |
+| `gas_swing_h` | 6 | h |
 | `reward_version` | 2 | - |
-| `e_floor` | 1 | K |
-| `e_tol` | 0 | K |
-| `tracking_exponent` | 2 | - |
-| `c_hold` | 0.59 | kg/s |
-| `running_weight` | 1 | - |
-| `failure_cost` | 66978 | reward |
-| `restart_steps` | 40320 | steps |
-| `rho_floor_tracking` | 0.00376996 | reward |
-| `rho_floor` | 0.00376996 | reward |
+| `failure_cost` | 0 | reward |
+| `restart_steps` | 0 | steps |
 

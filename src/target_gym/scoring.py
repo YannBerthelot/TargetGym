@@ -109,7 +109,8 @@ JOB_SCORED = frozenset(
 
 #: Per environment, the terms its reward tracks: ``(resolution field, e_floor
 #: field, count)`` on its params. ``count`` is ``"wingmen"`` for a term charged
-#: once per wingman. hvac prices comfort directly and has no ``e_floor``.
+#: once per wingman. hvac prices comfort directly and has no ``e_floor``;
+#: glass_furnace prices lost glass directly and has none either.
 TRACKED_TERMS = {
     "plane": _ONE,
     "plane_energy": _ONE,
@@ -130,7 +131,6 @@ TRACKED_TERMS = {
     "cstr": _ONE,
     "unstable_cstr": _ONE,
     "four_tank": (("precision_floor", "e_floor", 2),),
-    "glass_furnace": _ONE,
     "cement_kiln": _ONE,
     "boiler_drum": (
         ("level_precision_floor", "e_floor_level", 1),
@@ -153,9 +153,9 @@ def _recycle_power(state, params, tripped):
 
 #: Per environment, what its reward's ``running_cost`` charges, as ``fn(state,
 #: params, tripped)``, so ``consumption_ratio`` reads the quantity itself. The
-#: other running terms are not consumption.
+#: other running terms are not consumption. glass_furnace's running term is its
+#: fuel bill, so the ratio reads that term itself.
 CONSUMPTION = {
-    "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
 }
 
@@ -186,11 +186,7 @@ SPEC_BAND = {
         "the permit range pH 7 +-1, the example spec of Faanes and Skogestad "
         "2000 (ph_neutralization/REALITY.md [P7])",
     ),
-    "glass_furnace": (
-        (10.0,),
-        "secondary: a float furnace's melting section, 1550 C +-10 C, a vendor's "
-        "blog naming no original; the crown has no figure of its own",
-    ),
+    "glass_furnace": None,  # a zone, fining and canal, that the reward prices
     "reactor": (
         (1.5 / 1.8,),
         "ours: the rod controller's +-1.5 F dead band, as reactor/PHYSICS.md cites "
@@ -238,6 +234,10 @@ def _per_step(name: str, params, env, at_resolution: bool) -> float:
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
     env = env if env is not None else spec.make_env()
+    if name == "glass_furnace":
+        # Any shortfall under the pass mark loses the step's whole pull to cullet.
+        seconds = control_step_seconds(env, p)
+        return float(p.lost_glass_price * p.pull * seconds / 1000.0)
     exponent = float(p.tracking_exponent)
     if name == "hvac":
         hours = p.delta_t / 3600.0
@@ -263,7 +263,7 @@ def settle_band(name: str, params=None, env=None) -> float:
     """The tracking cost per step a move has settled within: every tracked
     error at its floor beyond its tolerance, 1 per term, in the plant's
     currency where the reward prices tracking. hvac has no floor, so its band
-    is its ceiling."""
+    is its ceiling, and glass_furnace's, whose reward is a step, too."""
     return _per_step(name, params, env, at_resolution=False)
 
 

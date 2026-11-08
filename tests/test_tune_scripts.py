@@ -114,34 +114,10 @@ def test_every_energy_recipe_fixes_its_own_tests_length(name):
     assert industrial._params(name).max_steps_in_episode == industrial.TEST_STEPS[name]
 
 
-def test_a_cycle_read_leaves_the_crowns_own_swing_out():
-    # A step of nothing, noise off: the crown moves about 2.5 K through a reversal
-    # by itself, and against the same phase three reversals back only 0.2 K.
-    from target_gym.glass_furnace.env import settled_point
-
-    spec = REGISTRY["glass_furnace"]
-    p = spec.make_test_params(
-        sensor_noise_scale=0.0,
-        max_steps_in_episode=400,
-        m_pull_noise_std=0.0,
-        lhv_noise_std=0.0,
-        target_T_crown_trim=0.0,
-    )
-    rest = process.manual(lambda o, xp: xp.reshape(settled_point(o[4])[0], (1,)))
-    plant = process.Plant(
-        spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest
-    )
-    inst = process.Instrument.of(spec.make_env(), p, "T_crown_meas")
-    held = plant.bump(0, 0, 0, 0.0, 40, inst)
-    cycled = plant.bump(0, 0, 0, 0.0, 40, inst, at=(150, 2))
-    assert np.abs(held.dy).max() > 1.0
-    assert np.abs(cycled.dy).max() < 0.25
-
-
 @pytest.mark.medium
 # battery left with v4: its expert plans a baseline from the reported energy
 # and has no tuned gains (energy/battery/PHYSICS.md, section 9).
-@pytest.mark.parametrize("name", ["boiler_drum", "glass_furnace", "hvac"])
+@pytest.mark.parametrize("name", ["boiler_drum", "hvac"])
 def test_an_energy_recipe_reproduces_what_is_stored(name):
     stored = json.loads(provenance.GAINS_PATH.read_text())[name]
     out = industrial.TUNERS[name]()

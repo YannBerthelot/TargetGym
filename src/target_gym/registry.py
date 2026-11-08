@@ -375,6 +375,12 @@ def _glass_furnace():
     return GlassFurnace()
 
 
+def _glass_furnace_scenarios():
+    from target_gym.glass_furnace.physical_scenarios import suite
+
+    return suite()
+
+
 def _reactor():
     from target_gym.reactor.env_jax import Reactor
 
@@ -948,23 +954,37 @@ _SPECS: tuple[EnvSpec, ...] = (
         name="glass_furnace",
         group="industrial",
         env_factory=_glass_furnace,
-        params_cls=_LazyParams("target_gym.glass_furnace.env", "GlassFurnaceParams"),
+        params_cls=_LazyParams(
+            "target_gym.glass_furnace.env_jax", "GlassFurnaceParams"
+        ),
         make_pid=_pid(
             "make_glass_furnace_pid_controller",
             module="target_gym.glass_furnace.experts",
         ),
-        # 13.3 h at dt=30 s, 12.1 tau
-        make_mpc=_mpc(
-            "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
+        # Attempt 3 (2026-11-08) replaced the plant. The old MPC planned on the old
+        # plant's params, so its slot is retired; the task's ceiling is the
+        # foresight oracle in scripts/glass_slow_oracle.py.
+        make_mpc=None,
+        baselines_note=(
+            "The plant was rebuilt (attempt 3: a float melter in two dimensions, "
+            "scored in money on fuel and lost glass). The PID is the reference "
+            "ladder's first rung, a PI on the cold-end fining reading two sigma "
+            "above its pass mark. The old MPC read the retired plant's params, so "
+            "the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, "
+            "not yet converged (PHYSICS.md, section 2)."
+        ),
+        expert_degraded=(
+            "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance "
+            "test's two seeds, against 242,995 for the best constant valve (raw 0.0, "
+            "0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward "
+            "prices as a step, so it loses glass where a wide constant margin does "
+            "not: full back-off is what this reward pays for (PHYSICS.md, cold "
+            "review item 4). A finding for the reference ladder; not tuned."
         ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
-        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
-        # which rolls the simulator and so plans their conditional means from
-        # the state.
-        oracle_data=_shared_oracle("glass_furnace"),
-        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
-        version=3,
+        disturbance_fields=("walk",),
+        scenarios=_glass_furnace_scenarios,
+        version=4,
     ),
     EnvSpec(
         name="reactor",
