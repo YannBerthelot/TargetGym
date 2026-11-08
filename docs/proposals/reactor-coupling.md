@@ -72,3 +72,35 @@ derived from that separation.
 - The EDF rebuild's ladder is then rerun before any oracle.
 
 The owner decides whether to make this change.
+
+## Done, 2026-11-08
+
+The owner chose 283 pcm. D is now derived from it in `env.py` (4.99 cm). The thesis
+cross-checks run on the thesis's own D. Two new tests pin the separation and a damped
+half-power mode. Remeasured with `scripts/reactor_properties.py`:
+
+| Load | Period | Decay |
+|---|---:|---:|
+| full | 32.7 h | -0.070 /h |
+| 75 % | 33.7 h | -0.050 /h |
+| half | 34.3 h | -0.057 /h |
+
+At full power, 60 rod steps move delta I by -0.34 (it was -0.47), and the same worth in
+boron by about 3e-6.
+
+The EDF ladder on this core: rung 3, the cascade, is the best clean rung at $103,386,
+with no trip. It is still weak:
+
+- **Offset:** past the band on 863 of 2880 steps, peaking at 0.90.
+- **Tavg:** past the dead band on 2090 steps.
+- **Null:** rods parked with no boron costs $161,561.
+
+The trace shows two causes:
+
+- **Half-power hold:** rods, boron and offset cycle with about a 2 h period.
+- **Back at full power:** the rods sit on their top stop for hours with Tavg 10 K low.
+  They are parked at the top, so they cannot withdraw, and boron is slow to make up.
+
+EDF's temperature group sits in a manoeuvring band inside the core, so it can move both
+ways. No public figure was found for it. A US NRC document says the lead bank at full
+power stays more than 190 of 228 steps withdrawn; it was not opened.

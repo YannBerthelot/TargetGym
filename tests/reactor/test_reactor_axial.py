@@ -52,10 +52,12 @@ def thesis_mode(sigma_x, flux=2.02e13):
     return root.real * 3600, 2 * np.pi / abs(root.imag) / 3600
 
 
-def env_mode(n, sigma_x=2.72e-18):
+def env_mode(n, sigma_x=2.72e-18, **changes):
     """Growth (1/h) and period (h) of the env's xenon tilt at a level ``n``, read off
     its rates by a finite difference around the balanced core."""
-    p = ReactorParams(sigma_x=sigma_x, sigma_phi0=sigma_x * 2.02e13 / 0.75 * np.pi / 4)
+    p = ReactorParams(
+        sigma_x=sigma_x, sigma_phi0=sigma_x * 2.02e13 / 0.75 * np.pi / 4, **changes
+    )
     lam = LAMBDA_XENON + p.sigma_phi0
     mean_xe = float(lam * n / (LAMBDA_XENON + p.sigma_phi0 * n))
 
@@ -81,25 +83,47 @@ def test_thesis_equations_reproduce_the_oconee_period_and_the_printed_boundary()
     assert sigmas[np.argmin(np.abs(growth))] == pytest.approx(3.02e-18, rel=0.04)
 
 
+THESIS = {"D_diffusion": 0.405}  # Table III-1; the env now couples the halves harder
+
+
 def test_env_tilt_matches_the_thesis_at_its_own_flux():
-    # Same flux as the test: 75 % of full. The env's two nodes conserve the mean,
-    # which the thesis fixes by hand, so the decay is checked by its sign and the
-    # period to 3 %.
-    growth, period = env_mode(0.75)
+    # Same flux as the test: 75 % of full, on the thesis's own constants. The env's
+    # two nodes conserve the mean, which the thesis fixes by hand, so the decay is
+    # checked by its sign and the period to 3 %.
+    growth, period = env_mode(0.75, **THESIS)
     want_growth, want_period = thesis_mode(2.72e-18)
     assert period == pytest.approx(want_period, rel=0.03)
     assert growth < 0 and want_growth < 0
 
 
 def test_full_power_mode_is_a_damped_oscillation_near_the_published_figures():
+    # Owner's decision of 2026-11-08 (docs/proposals/reactor-coupling.md): with the
+    # halves coupled as Ringhals-4's 283 pcm, the period moves from the measured 28.3 h
+    # into the range the Chalmers models give, 31.5 to 39.3 h.
     growth, period = env_mode(1.0)
-    assert 26.0 < period < 32.0  # 28.3 h, Ringhals-4; 28.5 h, Oconee II
+    assert 28.3 < period < 39.3
     assert -0.08 < growth < -0.02  # 0.05 per hour, Ringhals-4
+
+
+def test_the_halves_are_coupled_as_ringhals_4():
+    """The first axial harmonic's eigenvalue separation, one group, cosine modes:
+    D x 3 pi^2 / (H^2 nu Sigma_f), 283 pcm in Pedersen et al.'s homogeneous model
+    (Progress in Nuclear Energy 202, table 3)."""
+    p = ReactorParams()
+    evs = p.D_diffusion * 3.0 * np.pi**2 / (p.H_core**2 * p.nu_Sigma_f)
+    assert evs * 1e5 == pytest.approx(283.0, rel=1e-3)
+
+
+def test_half_power_mode_is_damped():
+    """Lowering the power weakens the feedback that holds the mode (DP-1239). With
+    the halves coupled as Ringhals-4 the half-power mode still decays."""
+    growth, _ = env_mode(0.5)
+    assert growth < 0
 
 
 def test_flux_tilt_matches_the_printed_root():
     """A = v - sqrt(v^2 + 1), v = stiffness / (8 S B): eq 2.17 at no disturbance."""
-    p = ReactorParams()
+    p = ReactorParams(**THESIS)
     n, mean_xe, B = 0.8, 0.95, 0.07
     S = xenon_stiffness(p)
     N = 45 * np.pi**3 / (8 * 365.8**2) * 0.405 - S * mean_xe
@@ -114,7 +138,7 @@ def test_oconee_pulse_leaves_the_plants_tilt():
     """The test at 75 % power: a 0.25 % change of absorption, up in one half and
     down in the other, for 2.5 h, standing in for the rod move. Once it is off, the
     flux amplitude read 1.19 (fig. III-1), so a tilt of 0.19 either way."""
-    p = ReactorParams()
+    p = ReactorParams(**THESIS)
     n, mean_xe = 0.75, 0.918  # the balanced xenon at 75 %
     eps = 0.0025 * p.nu_Sigma_f
     c, b = 0.0, 0.0

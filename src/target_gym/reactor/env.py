@@ -126,7 +126,12 @@ class ReactorParams(EnvParams):
 
     # ---- Two-point core: Mastroianni (1979), Table III-1 ----
     sigma_x: float = _SIGMA_X  # cm2
-    D_diffusion: float = 0.405  # cm
+    # The coupling between the halves, set by the first axial harmonic's eigenvalue
+    # separation: 283 pcm for Ringhals-4 in Pedersen et al.'s homogeneous model
+    # (Progress in Nuclear Energy 202, table 3), so D = 283e-5 x nu Sigma_f x H^2 /
+    # (3 pi^2), derived. The thesis's own 0.405 cm is a thermal-group figure that
+    # couples them 12 times too weakly, 23 pcm (docs/proposals/reactor-coupling.md).
+    D_diffusion: float = 283e-5 * _NU_SIGMA_F * 365.8**2 / (3.0 * math.pi**2)  # cm
     alpha_power: float = 3.64e-16  # cm2 s, prompt power feedback
     Sigma_f: float = _SIGMA_F  # 1/cm
     nu_Sigma_f: float = _NU_SIGMA_F  # 1/cm, Sigma_a equals it at criticality
