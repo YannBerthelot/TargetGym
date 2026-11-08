@@ -278,3 +278,10 @@ All were fetched twice and the cited phrases found both times, except where mark
 - [S18 family] ROSCO's Cp tables at the same commit for the IEA 15 MW, BAR 10 and NREL 2.8 MW
   rotors: peak Cp 0.470 at a tip speed ratio of 8.5, 0.454 at 10.0 and 0.477 at 8.2; every
   table, the NREL 5 MW's included, stops at 30 deg of pitch.
+
+## How often each window occurs
+
+Added 2026-11-08 for the frequency-weighted headline. The extreme operating
+gust is a one-year event [S13]. No source in this record gives the hours a
+year near rated, near cut-out, at a class A site or under curtailment; the
+weights are ours (PHYSICS.md).

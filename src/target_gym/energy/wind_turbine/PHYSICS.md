@@ -231,3 +231,11 @@ the history, which the smooth planner has not got. Before its room means anythin
 needs a smooth stand-in for the damage (for example the squared tower-base moment rate,
 scaled to the m = 4 damage on the design runs) and a re-measured widths file (the
 current one predates the feather extension).
+
+## Weights (charter J4)
+
+Each scenario's real operating time, in hours a year (`scenarios.py`): normal
+1800, near rated 1050, gusty class A 400, curtailment 260, near cut-out 130,
+extreme gust 0.17 (one 10 min window a year, the gust being a one-year event
+[S13]). The rest are ours, from a Rayleigh wind of mean 8.5 to 10 m/s, with the
+family ranges in `scenarios.py`.
