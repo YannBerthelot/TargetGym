@@ -201,3 +201,6 @@ the flight controls, not the pilot, keep load factor, bank and AOA inside their 
   Honeywell FMGS excerpt).
 - FAA AC 120-5 (1963): turn altitude hold off in severe turbulence (search snippet).
 - ICAO Doc 8168: 25 deg bank or 3 deg/s, whichever is less (search snippet of an AIP).
+- Thrust-limited maximum altitude: where residual climb at max climb thrust falls to 100
+  to 300 fpm (training slides and a forum post, per the 2026-11-08 review; not found in
+  an Airbus manual).

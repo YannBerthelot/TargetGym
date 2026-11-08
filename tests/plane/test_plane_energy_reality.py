@@ -208,3 +208,46 @@ def test_the_reference_flies_the_clearances_inside_the_rules_in_still_air():
         cost -= float(reward)
     assert not tripped
     print(f"reference cost on the calm schedule: {cost:.1f}")
+
+
+# Rule 18 (charter Amendment 3, the owner's criterion, 2026-11-08): the
+# speed-against-height trade exists only where thrust runs out. A heavy family
+# member, 78 t (the owner's pick, up to the A320's 78 t), at FL330 to 370 on the
+# 290 kt / M0.78 schedule. Residual climb at full thrust and constant true
+# airspeed is V (T_max - D) / W, with D the level-trim thrust: the definition,
+# no source value. The owner's rule: Extra if it stays well above 500 fpm, the
+# AIM's minimum rate [AIM 4-4-10]; "well above" is taken here as 1.5 times
+# (ours). The plant gives 909 to 1 163 fpm, and a full-thrust climb at held
+# airspeed in the plant 879 to 1 123 fpm, so plane_energy is Extra
+# (plane/EXTRA.md). This test is the evidence: it fails the day the plant's
+# thrust lapse brings the trade into play.
+@pytest.mark.parametrize("flight_level", [330, 350, 370])
+def test_thrust_does_not_run_out_at_heavy_cruise_levels(flight_level):
+    from target_gym.plane.dynamics import (
+        compute_air_density_from_altitude,
+        compute_speed_of_sound_from_altitude,
+        compute_thrust_output,
+        scheduled_airspeed,
+        trim_level,
+    )
+    from target_gym.plane.env import PlaneParams
+
+    p, mass = PlaneParams(), 78_000.0
+    z = flight_level * 100 * FT
+    v = float(scheduled_airspeed(z, p.target_cas, p.target_mach, jnp))
+    _, _, trim_power = trim_level(v, z, mass, p)
+    rho = compute_air_density_from_altitude(z)
+    mach = v / compute_speed_of_sound_from_altitude(z)
+
+    def thrust(power):
+        return float(
+            compute_thrust_output(
+                power=power,
+                thrust_output_at_sea_level=p.thrust_output_at_sea_level,
+                rho=rho,
+                M=mach,
+            )
+        )
+
+    residual = v * (thrust(1.0) - thrust(float(trim_power))) / (mass * p.gravity)
+    assert residual > 1.5 * 500.0 * FPM

@@ -536,8 +536,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # data read, established start, a turbulence zone, band costs.
         version=4,
     ),
-    # The same aircraft on ATC's level and speed clearances (plane_energy), and
-    # on a sinusoid (plane_sine, Extra: no real duty, plane/EXTRA.md).
+    # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
+    # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid
+    # (plane_sine, Extra: no real duty, plane/EXTRA.md).
     EnvSpec(
         name="plane_energy",
         group="aircraft",
