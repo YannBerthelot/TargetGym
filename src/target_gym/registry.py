@@ -682,7 +682,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
-        version=6,
+        scenarios=_scenarios("target_gym.plane3d.scenarios", "racetrack_suite"),
+        # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank and
+        # a scenario suite with steady winds.
+        version=7,
     ),
     EnvSpec(
         name="plane3d_figure8",

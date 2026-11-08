@@ -483,7 +483,7 @@ terminal CDI scale, 1 389 m [ACS IR.III.B.S4, AIM 1-1-17].
 | heading-change size | uniform in +-180 deg | ours: ATC vectors of any size; no source for a distribution |
 | episodes | 600 s heading, 1 200 s racetrack | ours: the longest turn then a held heading; three laps of the slowest hold |
 | `turbulence_sigma`, zone | 0.55 m/s, 3 to 30 min | as the 2D aircraft (derived; BEA447) |
-| steady wind | none | known deviation: holds correct for wind [IFH ch. 10], but no source gives a wind to model (H4) |
+| steady wind | none in the scored configuration | Amendment 3: wind comes in the scenarios (below) |
 
 **What the reference does on it.** Heading: TECS and the course hold turn at their
 45 deg limit, faster than the 30 deg the score asks, and cost 0 on seeds 100 to
@@ -501,6 +501,92 @@ roll loop then swings to about -3.5 deg and settles in about 20 s, and the
 half-bank lead, a standard-rate rule, stops the turn about 11 deg short at this
 slower rate. Turn rate and load factor follow the coordinated-turn kinematics
 within 3 % and 0.02 g (A1, A2).
+
+## Amendment 3: `plane3d_heading` and `plane3d_racetrack` (2026-11-08)
+
+The owner's ruling: a task represents its family, the A320 family; a number not
+sourced is allowed inside the family's documented range, labelled "ours, family
+range". Tests: `tests/plane3d/test_plane3d_reality.py`,
+`tests/plane/test_aircraft_scenarios.py`.
+
+**Protected bank (rule 14).** The plant clips the bank demand at `protected_bank`,
+30 deg, for agent and reference alike: an airliner autopilot's bank is a protected
+limit of 25 to 30 deg (the IFH's 30 deg holding bank [IFH ch. 10]; ICAO Doc 8168's
+and the A320 HDG mode's 25 deg, unconfirmed). Before, the agent could demand 45 deg
+for free. The limit sits on the demand, as the autopilot's own does; the roll loop
+then overshoots to about 33 deg and settles 1.2 deg high (the B4 swing again).
+
+**The reference (rule 3).** TECS reads airspeed, the amended air data, not the
+ground speed it read before, which any wind broke. Its slowest speed is 1.2 times
+the model's clean 1 g stall, 96 m/s EAS, "20% higher than level flight stall speed"
+(ARSPD_FBW_MIN [P409]), raised by the load factor of the bank it demands, as
+STALL_PREVENTION's "roll limits based on aerodynamic load factor in turns" [P409],
+not of the full limit on every leg. Its bank limit is the plant's 30 deg. Starting
+established, it engages bumpless: on its first step TECS's integrators take up the
+trim it finds. The patrol's lead keeps the earlier course hold. B1 now passes on
+the racetrack (largest altitude error 4 m), and a low hold flies 220 KIAS inside
++-10 kt in still air and in a 30 kt wind.
+
+**`plane3d_heading`: vectors (rule 17).** A new heading every
+`heading_clearance_period`, 150 s, over the whole compass, so the 600 s episode is
+four clearances, not one turn and a long straight hold. Each clearance's band
+travels from the heading flown then, so a new clearance costs nothing when given.
+
+**Scenarios (rule 20)**, `plane3d/scenarios.py`. Both: normal (one light zone),
+calm, the worst recorded zone (2.5 times the light sigma, 0.5 g [BEA447 Figure
+24]), a steady 30 kt and a 50 kt wind [IFH ch. 10: tracks and holds are flown
+correcting for wind]. The wind blows along x; the heading's clearances and the
+hold's orientation are drawn per seed, so it meets each from its own side. Heading
+adds a zone over the whole window. The racetrack adds a low hold in its design
+wind, 67 kt at 10 000 ft (2h + 47 kt, PANS-OPS as quoted by secondary sources),
+and splits the 50 kt wind into a low hold (1 min legs, 230 KIAS cap) and a high
+hold (1.5 min legs, 265 KIAS cap) [IFH ch. 10].
+
+| Number | Value | Status |
+|---|---|---|
+| `protected_bank` | 30 deg | ours, family range 25 to 30 deg (above) |
+| reference `v_min_eas` | 96 m/s | cited: 1.2 x the model's 80 m/s stall [P409 ARSPD_FBW_MIN] |
+| `heading_clearance_period` | 150 s | ours: vectors one after another; the longest turn, 180 deg at a holding turn's rate, takes under 110 s. No source gives their spacing |
+| heading-change size | uniform over the compass | ours: vectors of any size |
+| steady winds | 30, 50, 67 kt | ours, family range calm to the holding area's design wind 2h + 47 kt (secondary, REALITY.md) |
+| worst zone | 1.375 m/s | derived: 2.5 x 0.55 m/s, the load linear in the gust |
+
+**What the reference does on it**, whole-episode cost on seeds 0 to 4:
+
+| Scenario | `plane3d_heading` | `plane3d_racetrack` |
+|---|---|---|
+| normal | 0 on all | 0 on all |
+| calm | 0 | 0 |
+| worst zone | 0 | 0 |
+| 30 kt wind | 0 | 11 to 132 |
+| 50 kt wind | 0 | |
+| zone over the window | 0 | |
+| low hold, 50 kt | | 400 to 834 |
+| low hold, 67 kt | | 1 113 to 2 201 |
+| high hold, 50 kt | | 166 to 665 |
+
+`plane3d_heading` costs 0 on every scenario: no family cost was found that the
+reference pays (rule 23: fuel in a cruise hold gives about 1.02, as on `plane`),
+so it is listed as solved and stays in the core pool. The racetrack's cost is all
+wind: in still air the fixed reference is solved. Room is not measured: no oracle
+ships for either task until the 3D oracle is rebuilt for the band score.
+
+**Reference ladder row (for `scripts/reference_ladder.py`, not edited here).** Both
+tasks need a row with three loops on the 3D plant: altitude (CV `z`, MV pitch
+demand), airspeed (CV `airspeed`, MV throttle) and the lateral loop (heading: CV
+`psi` against `target_heading`; racetrack: CV `cross_track`, with `curvature` as a
+feedforward), bump-tested at the corners of `target_altitude_range` and, on the
+racetrack, of the wind scenarios' speeds; the bank MV is bounded by
+`protected_bank`; the zones for rule 22's back-off are the +-65 ft, +-10 kt, +-10
+deg and 1 389 m bands. Until then TECS with course hold or L1 is the reference.
+
+**Known deviation: the `amended` flag (rule 13).** The Extra 3D tasks
+(`plane3d_circle`, `plane3d_figure8`), patrol, `patrol_range_bearing` and
+formation fly the unamended plant, which trips at 60 deg of bank and at VMO, which
+REALITY.md contradicts, and lets the bank demand reach 45 deg. Extra tasks are
+exempt, so this breaks no rule, but it keeps two plants. The owner's decision
+(2026-11-08): flip the flag on each of them the next time it is touched, and
+re-record its baselines then.
 
 ## Reward (version 2)
 

@@ -279,7 +279,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 6,
+    "version": 7,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
