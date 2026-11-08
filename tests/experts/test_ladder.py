@@ -6,6 +6,9 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   ``Kc = tau / (k * 2 * theta)``, ``Ti = min(tau, 8 * theta)``. Integrating
   ``Kc = 1 / (k * 2 * theta)``, ``Ti = 8 * theta``.
 - ``decoupler``: ``G @ D`` is diagonal, each loop keeping the gain it was tuned on.
+- ``most_sensitive``: of one loop's SIMC designs at several operating points, the
+  one asking the smallest controller gain, so the loop stays stable where the plant
+  is most sensitive. A tie keeps the earlier point.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
   trip. A tie goes to the lower rung, the simpler controller.
 - ``ladder_controller``: position-form PI around a bias. The integral holds while
@@ -26,6 +29,7 @@ from target_gym.experts.ladder import (
     best_rung,
     decoupler,
     ladder_controller,
+    most_sensitive,
     pi_gains,
 )
 
@@ -87,6 +91,22 @@ def test_decoupler_diagonalises_the_gains_and_keeps_each_paired_gain():
     D = decoupler(G, pairs)
     # D's columns are loops, so the plant seen by the loops is G @ D, loop on loop.
     np.testing.assert_allclose(G @ D, np.diag([3.0, 4.0]), atol=1e-12)
+
+
+def test_most_sensitive_point_is_the_one_asking_the_least_gain():
+    # Same lags, gains 1 and 3: SIMC asks Kc 2.5 and 2.5 / 3, so the second.
+    designs = [{"Kc": 2.5, "Ti": 8.0}, {"Kc": 2.5 / 3, "Ti": 8.0}]
+    assert most_sensitive(designs) is designs[1]
+
+
+def test_most_sensitive_compares_magnitudes_whatever_the_sign():
+    designs = [{"Kc": -0.5}, {"Kc": 0.8}]
+    assert most_sensitive(designs) is designs[0]
+
+
+def test_most_sensitive_keeps_the_earlier_point_on_a_tie():
+    designs = [{"Kc": 1.0, "Ti": 4.0}, {"Kc": 1.0, "Ti": 9.0}]
+    assert most_sensitive(designs) is designs[0]
 
 
 def test_best_rung_is_the_cheapest_that_trips_no_seed():

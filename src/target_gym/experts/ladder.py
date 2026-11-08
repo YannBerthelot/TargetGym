@@ -19,7 +19,7 @@ from target_gym.experts.pid import Controller
 from target_gym.identification import simc
 
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
-__all__ += ["ladder_controller", "pi_gains"]
+__all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:
@@ -33,6 +33,14 @@ def decoupler(G, pairs) -> np.ndarray:
     was tuned on. ``G`` is CVs by MVs, ``pairs[i]`` the MV of the loop on CV ``i``."""
     G = np.asarray(G, float)
     return np.linalg.inv(G) @ np.diag([G[i, j] for i, j in enumerate(pairs)])
+
+
+def most_sensitive(designs: list) -> dict:
+    """Of one loop's designs at several operating points, the one asking the smallest
+    controller gain ``Kc``: where the plant is most sensitive, so the loop is stable
+    at every point. With equal lags it is the point of largest plant gain, as C5 keeps
+    the highest gain across seeds. A tie keeps the earlier point."""
+    return min(designs, key=lambda d: abs(d["Kc"]))
 
 
 def best_rung(results: dict):

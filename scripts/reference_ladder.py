@@ -39,6 +39,7 @@ from target_gym.experts.ladder import (  # noqa: E402
     best_rung,
     decoupler,
     ladder_controller,
+    most_sensitive,
 )
 from target_gym.experts.pid import Controller  # noqa: E402
 from target_gym.identification import (  # noqa: E402
@@ -116,13 +117,19 @@ class Limit:
 @dataclasses.dataclass
 class Row:
     """What the ladder needs of one task. ``rest`` holds the plant for its tests, on
-    the ``test`` parameters. ``balance`` is rung 2's bias, None without one. ``why``
-    gives the reason for each rung left out."""
+    the ``test`` parameters. ``points`` are the other operating points the episode
+    visits, each a change to ``test``: the ends of its drawn targets and loads. Every
+    loop is bump-tested at each and tuned where the plant is most sensitive.
+    ``balance`` is rung 2's bias, None without one. ``why`` gives the reason for each
+    rung left out, and ``points`` for a task with one operating point. ``rest_at``
+    gives the rest at a point's parameters where ``rest`` can't read it."""
 
     steps: int
     rest: object
     loops: tuple = ()
     test: dict = dataclasses.field(default_factory=dict)
+    points: tuple = ()
+    rest_at: object = None
     score: dict = dataclasses.field(default_factory=dict)
     balance: object = None
     cascades: tuple = ()
@@ -132,6 +139,16 @@ class Row:
     start: object = None
     published: object = None
     why: dict = dataclasses.field(default_factory=dict)
+
+
+def corners(**ranges) -> tuple:
+    """The operating points at the ends of drawn ranges, every combination of ends,
+    each range pinned to one end: ``corners(a=(0, 1))`` is ``a=(0, 0)``, ``a=(1, 1)``.
+    """
+    points = [{}]
+    for name, (low, high) in ranges.items():
+        points = [{**q, name: (end, end)} for q in points for end in (low, high)]
+    return tuple(points)
 
 
 def manual(hold):
@@ -234,14 +251,30 @@ def build(name: str, row: Row) -> dict:
     n, nc = len(row.loops), len(row.cascades)
     cvs = [wrap(c.read) for c in row.loops] + [wrap(c.read) for c in row.cascades]
     cvs += [wrap(o.read) for o in row.limits]
-    plant = Plant(
-        spec,
-        p,
-        cvs,
-        [(None, None)] * len(cvs),
-        controller=manual(row.rest),
-        start=row.start,
-    )
+
+    def params_at(change):
+        return spec.make_test_params(
+            sensor_noise_scale=NOISE,
+            max_steps_in_episode=row.steps,
+            **{**row.test, **change},
+        )
+
+    def rest_of(q):
+        return row.rest_at(q) if row.rest_at else row.rest
+
+    def plant_at(q):
+        return Plant(
+            spec,
+            q,
+            cvs,
+            [(None, None)] * len(cvs),
+            controller=manual(rest_of(q)),
+            start=row.start,
+        )
+
+    at_points = [params_at(change) for change in ({}, *row.points)]
+    plants = [plant_at(q) for q in at_points]
+    plant = plants[0]
     dt = plant.dt
 
     def inst_of(tag):
@@ -251,25 +284,35 @@ def build(name: str, row: Row) -> dict:
         value = float(np.median(plant._y[:, cv]))
         return lambda o, xp: value
 
-    def bump(label, mv, cv, du, window, tag, model="fopdt", room=None, on=plant):
-        return read_loop(
-            on,
-            label,
-            mv,
-            cv,
-            du,
-            window,
-            inst_of(tag),
-            room or plant.room(mv),
-            model,
-            row.holds,
-        )
+    def tune(label, mv, cv, du, window, inst, db, model="fopdt", room=None, on=None):
+        """SIMC at every operating point, kept where the plant is most sensitive."""
+        designs = []
+        for k, at in enumerate(on or plants):
+            fit = read_loop(
+                at,
+                f"{label} at point {k}",
+                mv,
+                cv,
+                du,
+                window,
+                inst,
+                room or at.room(mv),
+                model,
+                row.holds,
+            )
+            designs.append(design(fit, inst, db))
+        out = most_sensitive(designs)
+        print(f"    {label}: {out}", flush=True)
+        return out
+
+    def valve(c):
+        return RAW_BAND if c.valve else None
 
     pis = []
     for i, c in enumerate(row.loops):
-        model = bump(c.name, c.mv, i, c.du, c.window, c.inst, c.model, c.room)
-        out = design(model, inst_of(c.inst), RAW_BAND if c.valve else None)
-        print(f"    {c.name}: {out}", flush=True)
+        out = tune(
+            c.name, c.mv, i, c.du, c.window, inst_of(c.inst), valve(c), c.model, c.room
+        )
         pis.append(pi_of(i, out, dt))
 
     m = env.action_space(p).shape[0]
@@ -300,41 +343,43 @@ def build(name: str, row: Row) -> dict:
         inner = []
         for k, c in enumerate(row.cascades):
             mv = row.loops[c.loop].mv
-            model = bump(c.name, mv, n + k, c.du, c.window, c.inst, c.model)
-            out = design(model, inst_of(c.inst), RAW_BAND if c.valve else None)
-            print(f"    {c.name}: {out}", flush=True)
+            out = tune(
+                c.name, mv, n + k, c.du, c.window, inst_of(c.inst), valve(c), c.model
+            )
             inner.append(pi_of(c.loop, out, dt))
-        outer = Plant(
-            spec,
-            p,
-            cvs,
-            [(None, None)] * len(cvs),
-            controller=manual(row.rest),
-            start=_inner_start(plant, row, n),
-            actuate=closed_inner(
-                inner, [row.loops[c.loop].mv for c in row.cascades], n, dt
-            ),
-            mv_range=FREE,
-        )
+        outer = [
+            Plant(
+                spec,
+                q,
+                cvs,
+                [(None, None)] * len(cvs),
+                controller=manual(rest_of(q)),
+                start=_inner_start(at, row, n),
+                actuate=closed_inner(
+                    inner, [row.loops[c.loop].mv for c in row.cascades], n, dt
+                ),
+                mv_range=FREE,
+            )
+            for at, q in zip(plants, at_points)
+        ]
         tuned = list(pis)
         for k, c in enumerate(row.cascades):
             base = row.loops[c.loop]
             label = f"{base.name} over {c.name}"
             room = 1.0 / abs(inner[k].kc)  # what the inner loop's output can answer
-            model = bump(
+            db = RAW_BAND / abs(inner[k].kc)
+            out = tune(
                 label,
                 base.mv,
                 c.loop,
                 c.du_outer,
                 c.window_outer,
-                base.inst,
+                inst_of(base.inst),
+                db,
                 base.model,
                 room,
                 outer,
             )
-            db = RAW_BAND / abs(inner[k].kc)
-            out = design(model, inst_of(base.inst), db)
-            print(f"    {label}: {out}", flush=True)
             tuned[c.loop] = pi_of(c.loop, out, dt)
         cascades = tuple(
             Cascade(c.read, c.rest or settled(n + k), q)
@@ -355,22 +400,27 @@ def build(name: str, row: Row) -> dict:
         for k, o in enumerate(row.limits):
             if o.slope is not None:
                 model = {"k": o.slope, "tau": None, "theta": o.theta, "band": 0.0}
+                out = design(model, Instrument(dt), None)
+                print(f"    {o.name}: {out}", flush=True)
             else:
-                model = read_loop(
-                    plant,
-                    o.name,
-                    o.mv,
-                    n + nc + k,
-                    o.du,
-                    o.window,
-                    inst_of(o.inst),
-                    plant.room(o.mv),
-                    "fopdt",
-                    row.holds,
-                    o.seeds,
-                )
-            out = design(model, Instrument(dt), None)
-            print(f"    {o.name}: {out}", flush=True)
+                designs = []
+                for j, at in enumerate(plants):
+                    model = read_loop(
+                        at,
+                        f"{o.name} at point {j}",
+                        o.mv,
+                        n + nc + k,
+                        o.du,
+                        o.window,
+                        inst_of(o.inst),
+                        at.room(o.mv),
+                        "fopdt",
+                        row.holds,
+                        o.seeds,
+                    )
+                    designs.append((design(model, Instrument(dt), None), model))
+                out, model = min(designs, key=lambda d: abs(d[0]["Kc"]))
+                print(f"    {o.name}: {out}", flush=True)
             over.append(
                 Override(
                     o.read,
@@ -471,6 +521,7 @@ def row_first_order() -> Row:
         half_target,
         (x,),
         balance=half_target,
+        points=corners(target_x_range=(0.5, 1.5)),
         why={"cascade": "one state", "decoupler": "one loop", "override": "no limit"},
     )
 
@@ -507,6 +558,7 @@ def row_ph_neutralization() -> Row:
         lambda o, xp: raw(reagent_demand(o[2], lab, xp), xp),
         (demand,),
         test=test,
+        points=corners(target_pH_range=tuple(nominal.target_pH_range)),
         balance=lambda o, xp: raw(reagent_demand(o[2], curve, xp), xp),
         why={
             "cascade": "pH is the only reading",
@@ -551,6 +603,10 @@ def row_four_tank() -> Row:
         balance,
         (h1, h2),
         test={"load_scale": 0.0},
+        points=corners(
+            target_h1_range=tuple(p.target_h1_range),
+            target_h2_range=tuple(p.target_h2_range),
+        ),
         balance=balance,
         cascades=(
             Inner(
@@ -579,7 +635,12 @@ def row_four_tank() -> Row:
             ),
         ),
         decouple=True,
-        why={"override": "low trip has 30 mm of margin at worst load"},
+        why={
+            "override": "low trip has 30 mm of margin at worst load",
+            "points": "only the target corners: the lower tanks' loads are steps the "
+            "episode switches during a run, and no parameter holds one, so the tests "
+            "run at no load",
+        },
     )
 
 
@@ -618,6 +679,14 @@ def row_cstr() -> Row:
         balance,
         (C_a,),
         test={"load_scale": 0.0},
+        # The feed's drawn loads, held: Ti and Caf at each end of their steps.
+        points=tuple(
+            {**q, "Ti": float(p.Ti) + dT, "Caf": float(p.Caf) + dC}
+            for q in corners(target_CA_range=tuple(p.target_CA_range))
+            for dT in (-float(p.Ti_load), float(p.Ti_load))
+            for dC in (-float(p.Caf_load), float(p.Caf_load))
+        ),
+        rest_at=lambda q: lambda o, xp: xp.reshape(_cstr_rest(q, o[2], xp)[1], (1,)),
         balance=balance,
         cascades=(T,),
         why={"decoupler": "one loop", "override": "no reachable limit"},
@@ -660,6 +729,8 @@ def row_distillation() -> Row:
             "feedforward": "no closed-form balance: L and V need the tray model, and "
             "no feed reading exists",
             "override": "the trip reads through a 5 min analyser",
+            "points": "the rest at another purity needs the tray model solved, which "
+            "the row doesn't have: the column is tested at its one rest",
         },
     )
 
@@ -703,6 +774,12 @@ def row_boiler_drum() -> Row:
         rest,
         (pressure, level),
         test={"q_steam_noise_std": 0.0},
+        # The episode draws its steam load from a normal: its ends taken at 2 sigma,
+        # 95 % of draws (ours). The rest follows the steam reading.
+        points=tuple(
+            {"q_steam_nominal": float(p.q_steam_nominal) + d}
+            for d in (-2 * float(p.q_steam_noise_std), 2 * float(p.q_steam_noise_std))
+        ),
         balance=balance,
         holds=(Loop(1, 1, level_gain * per_kg, 0),),
         why={
@@ -738,7 +815,18 @@ def row_hvac() -> Row:
     def balance(o, xp):
         return xp.reshape(xp.clip(2 * load(o, xp) / Q_max - 1, -1.0, 1.0), (1,))
 
-    raw = 2 * (H * (design_T - float(tp.T_out_mean)) - gains) / Q_max - 1
+    def raw_at(T):
+        return 2 * (H * (T - float(tp.T_out_mean)) - gains) / Q_max - 1
+
+    def rest_at(q):
+        raw = raw_at(float(q.setpoint_occupied_range[0]))
+        return lambda o, xp: xp.full((1,), raw)
+
+    ends = tuple(quiet.setpoint_occupied_range)
+    points = tuple(
+        {"setpoint_occupied_range": (T, T), "setpoint_setback": T} for T in ends
+    )
+    raw = raw_at(design_T)
     window = math.ceil((5 * float(tp.emitter_tau) + 450.0) / 900.0)
     air = Cv(
         "T_air on heat",
@@ -771,6 +859,8 @@ def row_hvac() -> Row:
         lambda o, xp: xp.full((1,), raw),
         (air,),
         test=test,
+        points=points,
+        rest_at=rest_at,
         balance=balance,
         cascades=(heat,),
         published=published,
@@ -815,6 +905,7 @@ def row_battery() -> Row:
         why={
             "cascade": "meter power is algebraic on the inverter",
             "decoupler": "one loop",
+            "points": "meter power is the inverter's, scaled: one gain at any dispatch",
         },
     )
 
@@ -840,6 +931,16 @@ def row_wind_turbine() -> Row:
 
     def balance(o, xp):
         return xp.stack([xp.asarray(raw_pitch, dtype=xp.float32), torque(o, xp)])
+
+    def rest_at(q):
+        v, P = float(q.v_mean_range[0]), float(q.target_power_range[1])
+        pitch = float(balance_pitch(rated, v, P / float(q.eta_gen), q))
+        held = 2 * pitch / pitch_max - 1
+
+        def rest(o, xp):
+            return xp.stack([xp.asarray(held, dtype=xp.float32), torque(o, xp)])
+
+        return rest
 
     speed = Cv(
         "speed on pitch",
@@ -870,6 +971,11 @@ def row_wind_turbine() -> Row:
         balance,
         (speed, grid),
         test=test,
+        points=corners(
+            v_mean_range=tuple(p.v_mean_range),
+            target_power_range=tuple(p.target_power_range),
+        ),
+        rest_at=rest_at,
         balance=balance,
         published=published,
         why={
@@ -936,6 +1042,8 @@ def row_compressor_surge() -> Row:
             "feedforward": "the consumer's opening is unread and the map's speed needs it",
             "cascade": "the drive is the slowest element on the way to pressure",
             "decoupler": "the second MV serves a limit, not a target",
+            "points": "each seed starts held at its own drawn setpoint and demand, "
+            "inside the ranges, not at their ends: the start isn't a parameter to pin",
         },
     )
 

@@ -3,7 +3,10 @@
 Contract, from docs/proposals/task-charter.md rule 3: every rung a task lacks has a
 written reason, and the bump tests read the plant. ``first_order`` is a lag whose
 datasheet is K = 1 per unit of input and tau = 0.5 s, with the raw action spanning
-2 units, so 2 per raw action (env.py).
+2 units, so 2 per raw action (env.py). A loop is tuned at every operating point its
+row names and kept as tuned where the plant is most sensitive, so adding a less
+sensitive point changes nothing, and adding a more sensitive one tunes as if the plant
+sat there alone.
 """
 
 import importlib.util
@@ -29,7 +32,7 @@ def ladder():
     return module
 
 
-def test_every_rung_a_task_lacks_has_a_reason(ladder):
+def test_every_rung_or_point_a_task_lacks_has_a_reason(ladder):
     for name, make in ladder.ROWS.items():
         row = make()
         present = {
@@ -38,6 +41,9 @@ def test_every_rung_a_task_lacks_has_a_reason(ladder):
             "cascade": bool(row.cascades),
             "decoupler": row.decouple,
             "override": bool(row.limits),
+            # A tuned loop is tested at each point the episode visits, or says why
+            # it has one.
+            "points": bool(row.points) or not row.loops,
         }
         missing = {rung for rung, there in present.items() if not there}
         assert missing <= set(
@@ -82,3 +88,34 @@ def test_the_kept_rung_of_the_fixture_trips_nothing(ladder):
     result = ladder.climb("first_order")
     assert result["kept"] in result["rungs"]
     assert result["rungs"][result["kept"]]["trips"] == 0
+
+
+def first_actions(ladder, row):
+    """The pi rung's actions on two fixed observations, for comparing tunings."""
+    import numpy as np
+
+    ctrl = ladder.build("first_order", row)["pi"]
+    memory, out = ctrl.init_state, []
+    for obs in ([1.0, 1.0], [0.95, 1.0]):  # small errors: no clipping
+        obs = np.asarray(obs + [0.0] * 8, np.float32)
+        action, memory = ctrl.step(ctrl.params, memory, obs, np)
+        out.append(float(np.asarray(action)[0]))
+    return out
+
+
+@pytest.mark.parametrize(
+    "points, alone",
+    [
+        # K 1.5 is more sensitive than the datasheet's 1: tune as if only there.
+        (({"K": 1.5},), {"K": 1.5}),
+        # K 0.5 is less: the datasheet's point keeps the tune.
+        (({"K": 0.5},), {}),
+    ],
+)
+def test_tuning_follows_the_most_sensitive_operating_point(ladder, points, alone):
+    import dataclasses
+
+    base = ladder.ROWS["first_order"]()
+    many = dataclasses.replace(base, points=points)
+    single = dataclasses.replace(base, test={**base.test, **alone})
+    assert first_actions(ladder, many) == pytest.approx(first_actions(ladder, single))
