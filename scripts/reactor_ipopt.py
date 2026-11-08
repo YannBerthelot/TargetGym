@@ -84,6 +84,9 @@ def main():
     parser.add_argument("--steps", type=int, default=2880)
     parser.add_argument("--block", type=int, default=1, help="env steps a move holds")
     parser.add_argument("--max-iter", type=int, default=600)
+    parser.add_argument(
+        "--final-max-iter", type=int, default=None, help="the last rung's cap"
+    )
     args = parser.parse_args()
 
     env, p = Reactor(), ReactorParams()
@@ -104,7 +107,12 @@ def main():
             "task": model.data(st), "end": args.steps, "path": jnp.asarray(path, float),
         }  # fmt: skip
         x0, hold = model.state_x(st), model.hold(st)
-        for width, boron_width in widths:
+        last = None
+        if args.final_max_iter:
+            _, last = build(env, q, args.steps, args.block, args.final_max_iter)
+        for k, (width, boron_width) in enumerate(widths):
+            if last is not None and k == len(widths) - 1:
+                shooting = last
             data["widths"] = jnp.asarray([width])
             data["boron_width"] = jnp.asarray(boron_width)
             t0 = time.time()
