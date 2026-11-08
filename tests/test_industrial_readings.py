@@ -90,8 +90,10 @@ OUTSIDE = {
     ),
     "cement_kiln": lambda s: s.replace(T_solid=s.T_solid + 1000.0),
     "wind_turbine": lambda s: s.replace(omega=3.0 * s.omega),
-    "battery": lambda s: s.replace(soc=jnp.float32(1.5)),
 }
+#: Tasks with no trip at all (charter rule 14): battery's limits are priced or
+#: protected (energy/battery/PHYSICS.md, Limits).
+NO_TRIP = ("battery",)
 
 DRAWS = 2000
 
@@ -239,6 +241,8 @@ def test_noise_never_reaches_the_plant_or_the_reward(name):
 def test_the_measured_trip_is_the_one_it_is_given(name):
     """A measured copy can sit outside the envelope when the plant is not, and
     the other way round, so the check must not run on it."""
+    if name in NO_TRIP:
+        pytest.skip(f"{name}: no limit trips (charter rule 14)")
     env, params, state = _setup(name)
     outside = OUTSIDE[name](state)
     assert bool(env.is_terminated(outside, params))
@@ -328,7 +332,9 @@ def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
         assert float(-reward) == pytest.approx(true_cost, abs=2e-2)
 
 
-@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3), ("battery", 330.0)])
+# battery's score has no tracking term since v4 (scoring.JOB_SCORED); its
+# meter reaches channel 3 at its figure in the instrument test above.
+@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3)])
 def test_measured_power_is_the_meters(name, sigma_W):
     """The proposal's reason for wind's own reading: speed times torque, each
     through its own sensor, scatters about 10.6 kW against a 1 kW meter, and a

@@ -114,20 +114,6 @@ def test_every_energy_recipe_fixes_its_own_tests_length(name):
     assert industrial._params(name).max_steps_in_episode == industrial.TEST_STEPS[name]
 
 
-def test_the_battery_recipe_reads_a_one_sample_plant():
-    # k 1 MW per MW. The first sample shows the whole step, so theta is half of
-    # the 5 s sample, and C7 takes tau1 + theta / 3 for a lag under theta: with
-    # tau1 under a second, Ki = 1 / (2 k theta) = 0.2 and Kp is 1 / (6 k) = 0.167
-    # plus tau1 / 5.
-    out = industrial.tune_battery()
-    model = out["model"]["power"]
-    assert model["k"] == pytest.approx(1.0, rel=0.01)
-    assert model["theta"] == pytest.approx(2.5, rel=1e-6)
-    assert out["Ki"] == pytest.approx(0.2, rel=0.01)
-    assert out["Kp"] == pytest.approx(0.1667 + model["tau1"] / 5.0, rel=0.01)
-    assert out["guard_margin"] == pytest.approx(900.0 / (1692.0 * 3.6), rel=1e-6)
-
-
 def test_a_cycle_read_leaves_the_crowns_own_swing_out():
     # A step of nothing, noise off: the crown moves about 2.5 K through a reversal
     # by itself, and against the same phase three reversals back only 0.2 K.
@@ -153,7 +139,9 @@ def test_a_cycle_read_leaves_the_crowns_own_swing_out():
 
 
 @pytest.mark.medium
-@pytest.mark.parametrize("name", ["battery", "boiler_drum", "glass_furnace", "hvac"])
+# battery left with v4: its expert plans a baseline from the reported energy
+# and has no tuned gains (energy/battery/PHYSICS.md, section 9).
+@pytest.mark.parametrize("name", ["boiler_drum", "glass_furnace", "hvac"])
 def test_an_energy_recipe_reproduces_what_is_stored(name):
     stored = json.loads(provenance.GAINS_PATH.read_text())[name]
     out = industrial.TUNERS[name]()

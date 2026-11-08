@@ -2,12 +2,12 @@
 
 The schematic is the pack: a stack of cells filled to state of charge, with the
 grid tie above it. Current direction and colour say whether the battery is
-being paid to deliver or to absorb, and the fill shows how far the pack is from
-the charge limits that would trip it.
+being paid to deliver or to absorb. The fill is the true charge, and the dashed
+mark the BMS's report of it.
 """
 
 from target_gym import render_kit as rk
-from target_gym.energy.battery.env import compute_reward, open_circuit_voltage
+from target_gym.energy.battery.env import compute_reward
 
 HISTORY_KEYS = ("t", "power", "target", "soc", "T_cell", "v_cell", "reward")
 
@@ -16,7 +16,7 @@ def _draw_pack(ax, state, params):
     soc = float(state.soc)
     P = float(state.power) / 1e6
     T = float(state.T_cell)
-    v_cell = float(open_circuit_voltage(state.soc, params)) / params.n_series
+    v_cell = float(state.v_cell)
 
     # Grid tie.
     rk.label(ax, 0.5, 0.955, "GRID", color=rk.DIM, size=8, weight="bold")
@@ -68,7 +68,9 @@ def _draw_pack(ax, state, params):
 
     # Usable window. The stack fills left to right, so the limits are vertical
     # marks along the row -- a horizontal line would correspond to nothing.
-    for lim, name in ((params.soc_min, "min"), (params.soc_max, "max")):
+    # The BMS's report, which the market checks; the fill is the true charge.
+    rep = float(state.soc_reported)
+    for lim, name in ((rep, "BMS"),):
         lxx = x0 + w * lim
         ax.plot(
             [lxx, lxx],
@@ -96,7 +98,9 @@ def _draw_pack(ax, state, params):
     )
 
     # Thermal strip along the bottom of the pack.
-    t_frac = rk.clamp01((T - params.T_ambient) / (params.T_max - params.T_ambient))
+    t_frac = rk.clamp01(
+        (T - params.T_charge_min) / (params.T_charge_max - params.T_charge_min)
+    )
     ax.add_patch(
         rk.patches.Rectangle(
             (x0, 0.13),
@@ -118,7 +122,7 @@ def _draw_pack(ax, state, params):
         size=7.5,
         zorder=6,
     )
-    rk.caption(ax, "2 MWh / 1 MW pack  ·  losses grow with the square of current")
+    rk.caption(ax, "3.9 MWh / 1.9 MW LFP unit  ·  the BMS estimates its charge")
 
 
 def render_battery(state, params, step, history):
@@ -127,9 +131,7 @@ def render_battery(state, params, step, history):
     history["target"].append(float(state.target_power) / 1e6)
     history["soc"].append(float(state.soc))
     history["T_cell"].append(float(state.T_cell))
-    history["v_cell"].append(
-        float(open_circuit_voltage(state.soc, params)) / params.n_series
-    )
+    history["v_cell"].append(float(state.v_cell))
     history["reward"].append(float(compute_reward(state, params)))
 
     err = abs(float(state.power) - float(state.target_power)) / 1e6
@@ -157,7 +159,7 @@ def render_battery(state, params, step, history):
             f"{float(state.soc) * 100:.1f} %",
             float(state.soc),
             rk.CYAN,
-            limit_frac=params.soc_max,
+            limit_frac=1.0,
         ),
         rk.Gauge(
             "CELL V",
@@ -169,15 +171,15 @@ def render_battery(state, params, step, history):
         rk.Gauge(
             "CELL T",
             f"{float(state.T_cell):.1f} C",
-            (float(state.T_cell) - params.T_ambient)
-            / (params.T_max - params.T_ambient),
+            (float(state.T_cell) - params.T_charge_min)
+            / (params.T_charge_max - params.T_charge_min),
             rk.RED,
             limit_frac=1.0,
         ),
         rk.Gauge(
-            "FADE",
-            f"{float(state.q_loss) * 100:.4f} %",
-            rk.clamp01(float(state.q_loss) * 100),
+            "BMS ERROR",
+            f"{float(state.soc_error) * 100:+.1f} %",
+            rk.clamp01(abs(float(state.soc_error)) * 5),
             rk.PURPLE,
             hidden=True,
         ),

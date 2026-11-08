@@ -1,7 +1,6 @@
 from typing import Tuple
 
 import chex
-import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
@@ -14,7 +13,6 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.energy.battery.env import (
-    N_DISPATCH_BLOCKS,
     BatteryParams,
     BatteryState,
     check_is_terminal,
@@ -22,6 +20,7 @@ from target_gym.energy.battery.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    initial_state,
 )
 from target_gym.energy.battery.rendering import _render
 from target_gym.expert_access import RegistryExperts
@@ -31,12 +30,15 @@ from target_gym.video import SavesVideo
 class GridBattery(
     RegistryExperts, SavesVideo, environment.Environment[BatteryState, BatteryParams]
 ):
-    """Grid battery storage following a regulation signal.
+    """Grid battery selling Dynamic Regulation, steered by its baseline.
 
-    Observation (7,): [soc, V_cell, T_cell, P_MW, target_P_MW, next_block_MW,
-    minutes_to_next_block]
-    Action      (1,): inverter power, raw in [-1, 1] -> [-P_max, +P_max] (positive
-    = discharge)
+    Observation (13,): [reported_soc, V_cell, T_cell, P_MW, required_MW,
+    signal_pu, baseline_now_MW, baseline_next_MW, baseline_after_MW,
+    export_requirement_MWh, import_requirement_MWh, seconds_to_next_period,
+    period_lost]
+    Action      (1,): Operational Baseline, raw in [-1, 1] -> +-40 % of the
+    contracted power (positive = export), for the first period past gate
+    closure
     """
 
     registry_name: str = "battery"
@@ -47,21 +49,21 @@ class GridBattery(
 
     obs_value_index: int = 3  # power at the meter (MW)
     tracked_names: tuple = ("delivered power (MW)",)
-    obs_target_index: int = 4  # regulation signal (MW)
+    obs_target_index: int = 4  # required power: baseline plus response (MW)
 
-    # A BMS estimate, a cell monitor, an NTC and a revenue meter (PHYSICS.md,
-    # Readings). Cell voltage is computed from current, charge and a hidden
-    # state, so its reading goes on channel 1. The NTC's step is 152.59 uV at
-    # the GPIO over the assumed 50 mV/K divider.
+    # The BMS display, a cell monitor, an NTC and a revenue meter (PHYSICS.md,
+    # Readings). The BMS's own bias is in the model (``reported_soc``); this
+    # is the display's scatter on top. Cell voltage is a channel reading. The
+    # NTC's step is 152.59 uV at the GPIO over the assumed 50 mV/K divider.
     readings: tuple = (
-        FieldReading("soc", sigma=4.7e-5),
+        FieldReading("soc_reported", sigma=4.7e-5),
         ChannelReading(1, sigma=5.5e-5),
         FieldReading("T_cell", sigma=0.03, step=152.59e-6 / 0.05),
         FieldReading("power", sigma=330.0),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (7,)
+        self.obs_shape = (13,)
         self.integration_method = integration_method
 
     @property
@@ -117,48 +119,7 @@ class GridBattery(
     ) -> Tuple[jnp.ndarray, BatteryState]:
         if params is None:
             params = self.default_params
-
-        key, soc_key, dispatch_key, signal_key = jax.random.split(key, 4)
-
-        soc = jax.random.uniform(
-            soc_key,
-            minval=params.initial_soc_range[0],
-            maxval=params.initial_soc_range[1],
-        )
-        # A schedule of hourly levels, drawn once, and the regulation signal at
-        # its stationary spread, in whole watts, so that the sum below rounds the
-        # same under jit, which may fuse a product into it, and outside it.
-        schedule = jax.random.uniform(
-            dispatch_key,
-            shape=(N_DISPATCH_BLOCKS,),
-            minval=-params.dispatch_range,
-            maxval=params.dispatch_range,
-        )
-        decorrelated = -jnp.expm1(-2.0 * params.delta_t / params.regulation_tau)
-        regulation = jnp.round(
-            params.dispatch_noise_std
-            / jnp.sqrt(decorrelated)
-            * jax.random.normal(signal_key)
-        )
-        target = jnp.clip(schedule[0] + regulation, -params.power_max, params.power_max)
-
-        # Rested pack: no diffusion voltage, at ambient, undegraded. A battery
-        # entering a dispatch window has typically been idle, and starting with
-        # a polarisation voltage would be an artefact.
-        state = BatteryState(
-            time=0,
-            soc=soc,
-            v_rc=jnp.zeros(()),
-            T_cell=jnp.asarray(params.T_ambient),
-            q_loss=jnp.zeros(()),
-            current=jnp.zeros(()),
-            power=jnp.zeros(()),
-            target_power=target,
-            regulation=regulation,
-            dispatch_schedule=schedule,
-            soc_anchor=soc,
-            soc_peak=soc,
-        )
+        state = initial_state(key, params)
         return self.get_obs(state), state
 
     def action_space(self, params: BatteryParams | None = None) -> spaces.Box:

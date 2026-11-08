@@ -926,12 +926,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
-        # the usable state-of-charge range at full power.
+        # v4 (charter Amendments 1 and 2): an LFP Megapack whose BMS reports a
+        # drifting state of charge, selling Dynamic Regulation for one 4 h EFA
+        # block, steered by its baseline past gate closure, and scored in MW h
+        # of availability lost (energy/battery/PHYSICS.md).
         tuned_gains_key="battery",
-        noise_fields=("dispatch_noise_std",),
-        disturbance_fields=("target_power",),
-        version=3,
+        # The regulation signal's innovation, and the BMS error drawn at reset.
+        noise_fields=("signal_std", "soc_error_std"),
+        disturbance_fields=("regulation",),
+        version=4,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.

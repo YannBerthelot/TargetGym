@@ -844,7 +844,7 @@
   {
     "name": "battery",
     "group": "energy",
-    "version": 3,
+    "version": 4,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",
@@ -870,14 +870,15 @@
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
-      "target_power"
+      "regulation"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "dispatch_noise_std"
+      "signal_std",
+      "soc_error_std"
     ]
   }
 ]

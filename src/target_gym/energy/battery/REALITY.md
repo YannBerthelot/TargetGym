@@ -244,6 +244,29 @@ changes, never under-delivery. [NESO-ST, para. 6.11-6.13; PJM-M12, sec. 4.4.5]
   https://docs.nrel.gov/docs/fy25osti/93281.pdf
 - **Photos or videos of real BESS control screens:** none found to cite.
 
+## Added by the fix session (fetched once, 2026-11-08)
+
+These were read once, by text extraction of the PDFs, and not re-fetched.
+
+- **Gate closure (GB).** Physical Notifications serve as the Operational
+  Baseline "for an upcoming Settlement Period". Gate Closure is "the time 60
+  minutes prior to the start of the Settlement Period", after which the PN
+  "can no longer be submitted or changed". A PN has at lowest 1 minute
+  resolution and may change within the period. [NESO-GUIDE, p. 36]
+- **SoE management guidance (GB).** Begin the EFA block with stored energy
+  adequate for the contracted quantity, review it at the start of each
+  settlement period, and "return the stored energy to an appropriate level by
+  following the submitted operational baselines". [NESO-GUIDE, p. 37, items
+  1 to 4]
+- **DR response curve.** DR "provides a constant power response across the
+  operational frequency range, reaching full delivery at a ±0.2 Hz frequency
+  deviation". [NESO-GUIDE, p. 4]
+- **Cell resistance.** EVE LF280K AC internal resistance at most 0.25 mOhm at
+  1 kHz. [EVE-LF280K, item 5]
+- **Cycle-life test conditions.** 25 +- 2 degC, 0.5C constant current and
+  voltage charge to 3.65 V with a 0.05C cut-off, 30 min rest, 0.5C discharge to
+  2.5 V, 30 min rest, repeated. [EVE-LF280K, item 10]
+
 ## Sources
 
 - **PJM-M12:** PJM Manual 12, Balancing Operations, Rev. 57, effective
