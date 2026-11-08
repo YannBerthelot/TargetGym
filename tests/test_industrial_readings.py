@@ -306,14 +306,15 @@ def test_cement_kiln_measured_reward_has_the_proposals_floor():
 
 
 def test_boiler_drum_measured_reward_has_the_steam_meters_floor():
-    """On plan, the measured cost is the steam meter's scatter priced as steam
-    off the plan: ``E|N(0, 0.047)| = 0.047 sqrt(2 / pi) = 0.0375`` kg/s, times
-    2 s, is 7.50e-5 t per step, with sd ``0.047 sqrt(1 - 2 / pi) * 2e-3 =
-    5.67e-5`` t per draw."""
+    """On plan, the measured cost is the steam meter's scatter past its own
+    resolution, priced as generation. For X ~ N(0, s), s = 0.047 kg/s, the
+    charged excess max(|X| - s, 0) has mean 2 s (phi(1) - (1 - Phi(1))) =
+    0.16662 s and sd 0.3506 s. Over 2 s, at 3.5 kg/kWh and GBP 80/MWh: mean
+    3.580e-4 GBP per step, sd 7.53e-4 per draw."""
     env, params, state = _setup("boiler_drum")
     resting = state.replace(level=jnp.float32(0.0), q_steam=state.q_demand)
     floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    assert floor == pytest.approx(7.50e-5, abs=4 * 5.67e-5 / math.sqrt(DRAWS))
+    assert floor == pytest.approx(3.580e-4, abs=4 * 7.53e-4 / math.sqrt(DRAWS))
 
 
 def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():

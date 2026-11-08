@@ -9,9 +9,11 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   and the feedwater's rate limits and lags: each move is an actuator's rate, a
   fraction of its limit, sent as the command that makes it (T1rr,
   ``oracles.rates``), with that command inside the box (T1); the turbine valve
-  on the episode's load plan, which the oracle knows ahead as the operator does;
-- objective: the score's steam off the plan, in tonnes per step (T2), smoothed
-  as a square root of a square;
+  on the episode's load plan, which the oracle knows ahead as the operator does,
+  upset included (a ceiling cheats on purpose); the upset's firing and feed caps;
+- objective: the score's steam off the plan past the meter's resolution, at
+  the imbalance price in GBP per step (T2), the absolute value and the dead
+  band each smoothed by a square root of a square;
 - limits: the level between the two trips on every visited state, elastic at
   the trip cost per unit (T3). The trip's 10 s delay is not used: the plan
   never leaves the band, which is stricter than the plant;
@@ -29,8 +31,10 @@ import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.boiler_drum.env import (
+    actuator_caps,
     compute_velocity,
     drum_level,
+    imbalance_cost,
     load_plan,
     steam_draw,
 )
@@ -50,7 +54,9 @@ def boiler_model(env, p) -> TaskModel:
         Q, q_feed = (
             0.5 * (held[0] + 1.0) * p.Q_max, 0.5 * (held[1] + 1.0) * p.q_feed_max
         )  # fmt: skip
-        q_demand = load_plan(plan, (now + t + 1) * p.delta_t)
+        Q_cap, q_cap = actuator_caps(plan, (now + t) * p.delta_t, p)
+        Q, q_feed = jnp.minimum(Q, Q_cap), jnp.minimum(q_feed, q_cap)
+        q_demand = load_plan(plan, (now + t + 1) * p.delta_t, p)
         x1, _ = integrate_dynamics(
             positions=x[:4], delta_t=p.delta_t, method=env.integration_method,
             compute_velocity=partial(
@@ -59,7 +65,9 @@ def boiler_model(env, p) -> TaskModel:
         )  # fmt: skip
         level = drum_level(x1[1], x1[2], x1[3], level_ref, x1[0], p)
         off = steam_draw(q_demand, x1[0], p) - q_demand
-        cost = jnp.sqrt(off * off + 1e-6) * p.delta_t / 1000.0
+        past = jnp.sqrt(off * off + 1e-6) - p.steam_resolution
+        kg = 0.5 * (past + jnp.sqrt(past * past + 1e-6)) * p.delta_t
+        cost = imbalance_cost(kg, p)
         tracked = jnp.stack([level, x1[0]])
         return jnp.concatenate([x1, held]), cost, jnp.stack([level]), tracked, ()
 

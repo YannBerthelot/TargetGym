@@ -1,8 +1,10 @@
 # Boiler drum: model, sources, limits and deviations
 
-Version 4, rebuilt on 2026-11-08 under charter Amendments 1 and 2. The plant
+Version 5, rebuilt on 2026-11-08 under charter Amendments 1 to 3. The plant
 record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source tags
-[S1] to [S21] are REALITY.md's. Nothing here is compared with an earlier
+[S1] to [S23] are REALITY.md's. Under Amendment 3 the task represents the drum
+boiler family, not one unit: its numbers come from P16-G16 where S1 gives
+them, and the rest are labelled "ours" with the family's range. Nothing here is compared with an earlier
 version of the task (rule 11).
 
 ## 1. The job
@@ -65,14 +67,22 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `Q_max` | 240 | MW | Bell and Astrom 1987: the fuel span is about 1.5 times nominal firing |
 | `q_feed_max` | 200 | kg/s | Ours: Bell and Astrom's span is 140 kg/s; 200 leaves the feed pump headroom at the 112 kg/s of Fig. 15 |
 | `load_range` | 0.40 to 1.0 | of nominal | [S17] Table 1, hard coal minimum load 25 to 40 %; three-element control holds above 20 to 30 % [S12] |
-| `ramp_rate_range` | 1 to 2 | %/min | [S10] |
+| `ramp_rate_range` | 1 to 6 | %/min | Family range: 1 to 2 typical [S10], 1.5 to 6 for coal [S17] |
+| `event_time_range` | 300 to 900 | s | Ours: inside the window, with an hour after it |
+| `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17] |
+| `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
+| `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
+| `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
+| `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
+| `imbalance_price` | 80 | GBP/MWh | Ours, family range 30 to 156: 59 % of 2018's periods in 30 to 60, short-system mean 78.84 [S22]; annual means 44.61 (2017 to 2020) and 156.20 (2021 to 2022) [S22b] |
+| `steam_resolution` | 0.047 | kg/s | The steam meter's scatter (Readings): off-plan steam it cannot see is not counted |
 | `ramp_start_range` | 300 to 900 | s | Ours: the slowest full ramp, 60 % at 1 %/min, ends inside the hour |
 | `max_steps_in_episode` | 1800 | steps | Ours: one hour around one planned load change; [S3] has setpoints "change several times during every 24 h" |
 | `level_trip_low` | -0.330 | m | [S9], "Drum Level Low-low (-330 mm)" |
 | `level_trip_high` | +0.254 | m | [S20], "Drum Level HH (+254 mm)" |
 | `level_trip_delay` | 10 | s | [S9] items 23 and 24, "for more than ten seconds"; [S21] on why trips are delayed |
 | `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps |
-| `failure_cost` | 0.1867 | t per step | `q_steam_nominal` for one 2 s step: the steam a restart does not make |
+| `failure_cost` | 4.267 | GBP per step | `q_steam_nominal` for one 2 s step, at `steam_rate` and `imbalance_price`: the generation a restart does not make |
 | `e_floor_level`, `e_floor_pressure` | 2.67e-3 m, 0.05 bar | - | Ours, read only by the time-in-band KPI tables, never by the score |
 | `delta_t` | 2 | s | Ours: S1 logged at 0.1 Hz and shows the swell within one or two samples, so 2 s resolves it |
 
@@ -97,9 +107,15 @@ off the plan, resting on plan costs a learner `0.047 sqrt(2 / pi) * 2e-3 =
 | Drum pressure | None | REALITY.md found no sourced trip value or safety valve setting, so none is modelled. Off 60 to 110 bar the property fits extrapolate |
 | Firing and feedwater ranges | Actuator range | `Q_max`, `q_feed_max` |
 
-A trip charges `restart_steps * failure_cost = 840 t` of steam, the nominal
-steam of a 2.5 h hot start, and the plant restarts at a new planned load
-(`base.failure_kernel`).
+A trip charges `restart_steps * failure_cost = GBP 19,203`, the generation of
+840 t of nominal steam over a 2.5 h hot start, and the plant restarts at a new
+planned load (`base.failure_kernel`).
+
+**Zones and cheap side (rule 22).** The score prices no zone. The level window
+between the trips, -330 to +254 mm, is a trip limit with no price inside it, so
+the reference holds normal water level (0, inside the window's centre, 38 mm on
+the high side) and has no cheap edge to back off from. Steam pressure is a
+setpoint whose error is priced, not a zone.
 
 ## 5. Observation, episode and score
 
@@ -110,55 +126,81 @@ to and the seconds until the ramp starts. The plan is known to the unit master
 in coordinated operation [S10]. Riser quality and the steam under the surface
 are hidden.
 
-**Episode** (rule 17): established operation. The unit holds a planned load
-drawn from 40 to 100 % of nominal, balanced at normal water level, and the plan
-ramps once, at 1 to 2 %/min [S10], to another load in that range, starting 5 to
-15 minutes in. Nothing else moves: REALITY.md shows no unmeasured disturbance
-on a utility unit, and runbacks [S10] have no sourced frequency.
+**Upsets.** The observation adds the firing and feedwater caps (channels 10,
+11), as the fan and pump trip alarms tell the control room. An upset is read as
+it strikes, not before; from then the plan shows the runback's load.
 
-**Score** (rule 15), in tonnes of steam: each step charges the steam delivered
-off the plan, `|q_s - q_demand| * delta_t / 1000`, which in boiler-following is
-the pressure error priced as production; a trip charges 840 t. Level precision
-inside the trips earns nothing. The floor of the score, in closed form: steam
-on plan costs zero, so the floor of the score is 0; rule 9's room needs an oracle, not run
-yet ("not measured").
+**Episode** (rule 17) and **scenarios** (rule 20): an hour of established
+operation. The unit holds a planned load, balanced at normal water level, and
+the plan ramps once to another load, 5 to 15 minutes in. The suite
+(`scenarios.py`), each from REALITY.md:
 
-## 6. Behaviour tests (charter step 3)
+| Scenario | What moves | Source |
+|---|---|---|
+| `normal` | one ramp at 1 to 6 %/min between 40 and 100 % load | [S10], [S17], [S3] |
+| `industrial_swing` | one steam demand swing at 15 to 25 %/min | [S15], [S3] |
+| `low_load` | one ramp at 1 to 6 %/min between 25 and 50 % load | [S11], [S1], [S2], [S16] |
+| `id_fan_runback` | from 75 to 100 % load, the fans cap firing at the runback load's and the plan runs back at 12 to 25 %/min to 50 % | [S10] Figs. 5, 6 |
+| `feed_pump_trip` | from 75 to 100 % load, feed falls to half the nominal flow until the standby pump delivers 30 to 60 s later, and the unit runs back | [S10] Fig. 7, [S11], [S9] |
+
+**Score** (rule 15), in GBP: each step charges the steam delivered off the plan
+beyond the steam meter's resolution, as generation at `steam_rate`, at the
+imbalance price; in boiler-following a pressure error is generation off
+schedule [S10]. A trip charges GBP 19,203. Level precision inside the trips
+earns nothing. The floor of the score, in closed form: steam within the
+meter's resolution of the plan costs zero, so the floor is 0; rule 9's room
+needs an oracle, not run yet ("not measured").
+
+**The reference measured per scenario** (shipped three-element expert, seeds
+100 to 109, sensor noise on; `scripts` not changed): no trip in any scenario.
+
+| Scenario | Cost, GBP per hour (10 seeds) | Level, min and max |
+|---|---|---|
+| `normal` | 0.0 to 0.5 on nine seeds, 7.5 on one | -76 to +95 mm |
+| `industrial_swing` | 0.1 to 1.3, 13.0 on one | -80 to +156 mm |
+| `low_load` | 11.8 to 14.1, 0.2 on one | -104 to +205 mm |
+| `id_fan_runback` | 34 to 95 | -76 to +108 mm |
+| `feed_pump_trip` | 2.3 to 4.1 | -209 to +237 mm |
+
+The feed pump trip is where shrink and swell reach the trips: the level falls
+to 63 % of the low margin and, when the standby pump delivers, rises to 93 % of
+the high one (S10's unit fell to 84 % of its low margin). Rule 23: the
+reference costs more than zero on 49 of 50 seeds.
+
+## 6. Behaviour tests (charter step 3, Amendment 3)
 
 `tests/boiler_drum/test_boiler_drum_reality.py` runs the cold review's eight
-tests with its tolerances. On the rebuilt plant:
+tests. Under Amendment 3, tests 2, 6 and 8 are stated as family properties
+with ranges from several units' sources, written in each test before its rerun
+(after the earlier results were known, which the tests say). On the rebuilt
+plant:
 
 | Test | Source | Result |
 |---|---|---|
 | 1. Swell on a medium-load steam step | S1 Figs. 12, 16 | Pass |
-| 2. Pressure ramp on that step | S1 Fig. 12 | **Fails**: 5.5 bar in 250 s (in 3 to 9), but the second 125 s fall 0.69 of the first, against at least 0.70 |
+| 2. Family: pressure ramps down through a dwell, 3 to 9 bar in 250 s, second half at least half the first | S1 Figs. 12, 15; S3 Figs. 3, 5 | Pass: 5.5 bar, ratio 0.69 |
 | 3. Swell per kg/s larger at medium load | S1 p. 26 | Pass |
 | 4. Swell for a 10 %-of-load step grows toward low load | S1 p. 20, S2, S11 | **Fails**: 20, 22, 24 mm at 50, 75, 100 % |
 | 5. Shrink smaller and shorter than swell | S14 | **Fails**: shrink 27 mm, swell 24 mm |
-| 6. Feedwater steps: inverse response, +-0.18 m | S1 Fig. 11 | Pass |
+| 6. Family: feedwater steps show the inverse response within +-0.18 m | S1 Fig. 11; S3 Fig. 5 | Pass |
 | 7. Rapid swell on a fuel step | S1 Fig. 10 | Pass |
-| 8. A 10 %/min ramp roughly halves the step's level deviation | S2 sec. 5.2 | **Fails**: ratio 0.31, against 0.35 to 0.70 |
+| 8. Family: a ramp moves the level at most 0.7 of a step's | S2 sec. 5.2; [S10] | Pass: 0.31 |
 
-Tests 2 and 6 differ from the audit's text in one respect, written in the
-tests: the audit balances the plant at 52 kg/s and steps around it, while the
-figures cycle about the middle of their range. At 52 kg/s test 6's mean feed
-exceeds the steam by 8 kg/s, which climbs the level 0.5 m in 1000 s on any drum,
-and test 2's step doubles the figure's energy deficit (10.8 bar). The
-tolerances are the audit's.
+Tests 2 and 6 balance the plant at the middle of the figures' ranges, which
+the figures' ramps both ways require; the review's challenger found both
+moves sound. At the audit's 52 kg/s test 6's mean feed exceeds the steam by 8
+kg/s and any drum climbs 0.5 m in 1000 s.
 
-The four failures are on S1's own model with the authors' own numbers, so no
-sourced physics is missing that would change them (rule 2 forbids moving a
-number). They are known deviations (rule 13):
+The two failures are known deviations (rule 13), on S1's own model:
 
-- Test 4: per kg/s the swell is larger at low load (test 3), but a step that
-  scales with the load swells less at low load. Effect on the score: low-load
-  ramps are milder than S11 reports, so high-level trips at low load are rarer.
-- Test 5: shrink is about 10 % larger than swell. Effect: a load decrease
-  brings the level nearer the low trip than practice reports, where the low
-  trip has the wider margin (330 against 254 mm).
-- Tests 2 and 8: within a few per cent of their bounds; the pressure ramp
-  curves slightly more than "roughly linear", and a ramp helps a little more
-  than S2's larger unit.
+- Test 4 is a family property from three sources: per kg/s the swell is larger
+  at low load (test 3), but a step that scales with the load swells less at
+  low load. The review measured that sliding pressure [S2] would pass it only
+  narrowly (25.0, 24.6, 23.6 mm); it is not added. Effect on the score:
+  `low_load` ramps are milder than S11 reports.
+- Test 5 rests on one source [S14]: shrink is about 10 % larger than swell.
+  Effect: a load decrease or a feed pump trip brings the level nearer the low
+  trip than practice reports.
 
 ## 7. Deviations still in the model
 
@@ -167,20 +209,33 @@ number). They are known deviations (rule 13):
 - The level reading is white noise with no delay; S3 fits coloured noise from
   surface boiling and carries a delay whose units it does not state (cold
   review 6).
-- No runback, fan trip or feed pump trip (cold review 8): their frequency is
-  not found.
+- Runbacks and feed pump trips are scenarios, one per window; their real
+  frequency is not found, and the headline weighs each scenario equally
+  (rule 21).
 - Pressure is held at one setpoint; sliding pressure [S2] is not modelled.
 - A restart is instant at a new load; a real one runs through single-element
   start-up with the level lowered for swell [S5, S19].
 
 ## 8. What the reference ladder's row needs
 
-- Inputs: the load plan in the observation (channels 7 to 9) as the
-  steady-state feedforward rung: steam feedforward to feedwater, `q_s (h_s -
-  h_f)` to firing.
-- Bump tests at loads across 40 to 100 %, since the plant's gains change with
-  load.
-- Its cost is now tonnes of steam off plan, with trips at 840 t; a rung that
-  trips any nominal seed is dropped.
-- Seeds 100 to 109 each carry their own plan; the ladder must not assume
-  nominal load.
+- Inputs: the load plan (channels 7 to 9) for the steady-state feedforward
+  rung: steam feedforward to feedwater, `q_s (h_s - h_f)` to firing; the caps
+  (channels 10, 11), which an override rung reads to stop winding up against a
+  capped fan or pump.
+- Bump tests at loads across 25 to 100 %, since the gains change with load and
+  `low_load` costs the shipped expert most on a normal day.
+- No zone to back off from (section 4): the level setpoint is normal water
+  level.
+- Cost in GBP; a rung that trips any nominal seed in any scenario is dropped.
+  Seeds carry their own plan and upset.
+
+## 9. What the oracle needs
+
+- `oracle.py` is ported to v5 (plan, upset caps, GBP cost with the meter's dead
+  band smoothed, a resting target for feedwater, G12) and builds; it has not
+  run. It knows the upset ahead, as a ceiling may.
+- Its horizon must cover a runback and the standby pump's delay (about 3 to 5
+  min, 90 to 150 steps), and the trip's 10 s delay is not planned (the limit is
+  held on every step, stricter than the plant).
+- `scripts/measure_oracle_widths.py` lists boiler guards of the old plant and
+  no longer imports; its boiler entry must be redone with the oracle run.

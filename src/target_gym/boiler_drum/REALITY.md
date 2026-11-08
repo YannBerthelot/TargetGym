@@ -282,6 +282,19 @@ automatics cannot cope [S4, p. 1; S10; S12].
   (fetched once, 2026-11-08).
 - [S21] US 4433646 A, "Boiler water trip system", Babcock and Wilcox Co., 1984.
   https://patents.google.com/patent/US4433646A/en (fetched once, 2026-11-08).
+- [S22] Elexon, "Elexon insights: system prices 2018": "in 59% of Settlement
+  Periods the System Price was between £30/MWh and £60/MWh"; average System
+  Price £41.39/MWh when long, £78.84/MWh when short.
+  https://www.elexon.co.uk/bsc/data/system-prices-analysis-report/elexon-insights-system-prices-2018/
+  (fetched once, 2026-11-08).
+- [S22b] Swansea University paper (cronfa 68151, 2024), citing Elexon: average
+  annual imbalance price £44.61/MWh in 2017 to 2020 and £156.20/MWh in 2021 to
+  2022. https://cronfa.swan.ac.uk/Record/cronfa68151 (read from a search
+  summary only, not fetched).
+- [S23] FOSSEE, Engineering Thermodynamics, chapter 12 (vapour power cycles),
+  examples 12.4 to 12.6: ideal-cycle steam rates of 2.18, 3.85 and 4.51 kg/kWh.
+  https://tbc-python.fossee.in/convert-notebook/Engineering_Thermodynamics/ch12.ipynb
+  (fetched once, 2026-11-08). Textbook cycles, not plant data.
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

@@ -770,7 +770,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 4,
+    "version": 5,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",

@@ -103,6 +103,9 @@ def test_pressure_regulates_itself_at_fixed_fuel_and_valve(offset):
     at ``u2`` 0.7, so a real unit is back by 3/4 of the offset. The model's
     storage differs, so this asks only for half."""
     obs, state = _reset()
-    start = state.replace(pressure=state.pressure + offset)
+    # A fixed valve: the load plan holds still.
+    start = state.replace(
+        pressure=state.pressure + offset, ramp_rate=0.0 * state.ramp_rate
+    )
     last = _roll(start, _held(obs), 300)
     assert abs(float(last.pressure) - STILL.p_nominal) < 0.5 * abs(offset)

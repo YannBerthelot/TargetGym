@@ -55,21 +55,33 @@ class BoilerDrumParams(EnvParams):
     #: One hour of operation around a planned load change (PHYSICS.md, Task).
     max_steps_in_episode: int = 1800
 
-    # ---- Score (rule 15): steam off the load plan, in tonnes ----
+    # ---- Score (rule 15, Amendment 3): money at the imbalance price ----
     # REALITY.md sec. 6: the job is to keep the level between the trips while
     # the load moves. In boiler-following mode the boiler holds pressure for the
-    # turbine [S10], so a pressure error is steam, and production, off the
-    # plan; a trip is "a costly plant trip" [S2], the production lost until a
-    # hot restart. Both are counted in tonnes of steam, the unit operators
-    # meter it in [S16]. Precision inside the trips earns nothing (rule 15).
-    reward_version: int = 3
+    # turbine [S10], so a pressure error is steam, and generation, off the
+    # plan, which imbalance settlement prices; a trip is "a costly plant trip"
+    # [S2], the generation lost until a hot restart. Steam off the plan within
+    # the steam meter's resolution is not counted: no settlement can see it.
+    # Precision inside the trips earns nothing (rule 15).
+    reward_version: int = 4
+    #: Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, REALITY.md
+    #: [S23]): the steam a kWh of the unit's generation takes.
+    steam_rate: float = 3.5  # kg/kWh
+    #: Ours, family range GBP 30 to 156 per MWh: 59 % of 2018's settlement
+    #: periods fell in 30 to 60, the short system averaged 78.84 [S22]; the
+    #: annual mean was 44.61 over 2017 to 2020 and 156.20 over 2021 to 2022
+    #: [S22b].
+    imbalance_price: float = 80.0  # GBP/MWh
+    #: Steam off the plan below this is not counted: the steam meter's scatter
+    #: (the ``q_steam`` reading, PHYSICS.md).
+    steam_resolution: float = 0.047  # kg/s
     #: Restart time priced into a trip: a hot start of a hard coal unit, 2.5 h
     #: at the low end of "most commonly used" (Agora Energiewende 2017,
     #: Table 1, p. 47; REALITY.md [S17]), at 2 s steps.
     restart_steps: int = 4500
-    #: Steam not produced per step of a restart, in tonnes: the unit's nominal
-    #: steam for one step (``reward.trip_cost``).
-    failure_cost: float = 93.35 * 2.0 / 1000.0
+    #: The generation a restart step does not make, in GBP: nominal steam for
+    #: one step, over the steam rate, at the imbalance price.
+    failure_cost: float = 93.35 * 2.0 / 3.5 / 1000.0 * 80.0
     # Kept for the time-in-band KPI tables (benchmark._OUTPUT_FLOORS); the
     # score does not read them.
     e_floor_level: float = 2.67e-3  # m
@@ -117,12 +129,32 @@ class BoilerDrumParams(EnvParams):
     #: Loads, as fractions of nominal steam: from the top of a hard coal unit's
     #: minimum load (25 to 40 %, [S17] Table 1) to nominal.
     load_range: Tuple[float, float] = (0.40, 1.0)
-    #: Load ramp, % of nominal per minute: "Typical values used by the industry
-    #: are 1% or 2% per minute" ([S10]).
-    ramp_rate_range: Tuple[float, float] = (1.0, 2.0)
+    #: Load ramp, % of nominal per minute: the family's 1 to 6 %/min, "1% or 2%
+    #: per minute" typical [S10] to state-of-the-art coal's 3 to 6 [S17].
+    ramp_rate_range: Tuple[float, float] = (1.0, 6.0)
     #: When the planned ramp starts, s after the episode starts. Ours: early
     #: enough that the slowest full ramp ends inside the hour.
     ramp_start_range: Tuple[float, float] = (300.0, 900.0)
+
+    # -- upsets, the family's bad days (REALITY.md sec. 5; scenarios.py) ------
+    #: 0 none, 1 an ID fan runback, 2 a feed pump trip.
+    event_kind: int = 0
+    #: When the upset strikes, s. Ours, inside the window.
+    event_time_range: Tuple[float, float] = (300.0, 900.0)
+    #: Where a runback takes the unit, of nominal steam. Ours, family range: "set
+    #: to a point that was below the three-mill minimum" [S10]; the minimum
+    #: load is 25 to 40 % [S17], so 0.40 to 0.60.
+    runback_load: float = 0.50
+    #: Runback rate, % of nominal per minute. Ours, family range from [S10]:
+    #: "The entire runback occurred in just over two minutes" from 75 % load.
+    runback_rate_range: Tuple[float, float] = (12.0, 25.0)
+    #: Feed flow left after one pump trips, of nominal steam. Ours, family
+    #: range 0.5 to 0.6: the second of two 50 or 60 % pumps (the feed span,
+    #: ``q_feed_max``, carries both pumps' headroom).
+    feed_trip_capacity: float = 0.5
+    #: Until the standby pump delivers, s: "may take more than 30 seconds to
+    #: start, come up to speed and pressure" [S11]. Ours, 30 to 60 s.
+    standby_delay_range: Tuple[float, float] = (30.0, 60.0)
 
     # -- actuators, fuel then feedwater (PHYSICS.md, Actuators) ----------------
     actuator_rate: Tuple[float, float] = (0.007, 0.05)
@@ -144,7 +176,16 @@ class BoilerDrumParams(EnvParams):
 PARAM_UNITS = {
     "reward_version": "-",
     "restart_steps": "steps",
-    "failure_cost": "t of steam per step",
+    "failure_cost": "GBP per step",
+    "steam_rate": "kg/kWh",
+    "imbalance_price": "GBP/MWh",
+    "steam_resolution": "kg/s",
+    "event_kind": "-",
+    "event_time_range": "s",
+    "runback_load": "fraction of nominal steam",
+    "runback_rate_range": "% of nominal per minute",
+    "feed_trip_capacity": "fraction of nominal steam",
+    "standby_delay_range": "s",
     "e_floor_level": "m",
     "e_floor_pressure": "bar",
     "level_precision_floor": "m",
@@ -199,6 +240,11 @@ class BoilerDrumState(EnvState):
     load_to: jnp.ndarray  # kg/s
     ramp_start: jnp.ndarray  # s
     ramp_rate: jnp.ndarray  # kg/s per s
+    # The upset (``event_kind``): when it strikes, how fast the unit runs
+    # back, and how long until the standby feed pump delivers.
+    event_time: jnp.ndarray  # s, 1e9 with no upset
+    event_rate: jnp.ndarray  # kg/s per s
+    standby_delay: jnp.ndarray  # s
     # How long the level has stayed past each trip, s (``level_trip_delay``).
     time_high: jnp.ndarray
     time_low: jnp.ndarray
@@ -392,12 +438,53 @@ def compute_velocity(position, action, q_demand, params: BoilerDrumParams):
 # ---------------------------------------------------------------------------
 
 
-def load_plan(state: BoilerDrumState, seconds):
-    """What the turbine valve passes at ``p_nominal`` at time ``seconds``: a
-    ramp from ``load_from`` to ``load_to`` at ``ramp_rate`` from ``ramp_start``."""
+def _base_plan(state: BoilerDrumState, seconds):
     span = state.load_to - state.load_from
     moved = state.ramp_rate * jnp.maximum(seconds - state.ramp_start, 0.0)
     return state.load_from + jnp.sign(span) * jnp.minimum(moved, jnp.abs(span))
+
+
+def runback_target(params: BoilerDrumParams):
+    return params.runback_load * params.q_steam_nominal
+
+
+def load_plan(state: BoilerDrumState, seconds, params: BoilerDrumParams):
+    """What the turbine valve passes at ``p_nominal`` at time ``seconds``.
+
+    The plan ramps from ``load_from`` to ``load_to`` at ``ramp_rate`` from
+    ``ramp_start``. An upset runs the unit back from where the plan stood,
+    at ``event_rate``, to ``runback_load``, and holds it there: an ID fan
+    runback [S10], or the runback a feed pump trip drives [S10, S9].
+    """
+    base = _base_plan(state, seconds)
+    struck = _base_plan(state, state.event_time)
+    back = jnp.maximum(
+        runback_target(params),
+        struck - state.event_rate * jnp.maximum(seconds - state.event_time, 0.0),
+    )
+    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+    return jnp.where(upset, jnp.minimum(base, back), base)
+
+
+def actuator_caps(state: BoilerDrumState, seconds, params: BoilerDrumParams):
+    """The firing and feedwater the plant can deliver at ``seconds``, W and kg/s.
+
+    After an ID fan trip the fans hold firing to what the runback load needs
+    [S10]. After a feed pump trip one pump is left until the standby delivers
+    [S10, S11].
+    """
+    pr = params
+    after = seconds >= state.event_time
+    h_s = steam_enthalpy(pr.p_nominal, pr)
+    fan_cap = runback_target(pr) * (h_s - pr.h_feedwater)
+    Q_cap = jnp.where((pr.event_kind == 1) & after, fan_cap, pr.Q_max)
+    pump_out = after & (seconds < state.event_time + state.standby_delay)
+    q_cap = jnp.where(
+        (pr.event_kind == 2) & pump_out,
+        pr.feed_trip_capacity * pr.q_steam_nominal,
+        pr.q_feed_max,
+    )
+    return Q_cap, q_cap
 
 
 def compute_next_state(
@@ -418,7 +505,10 @@ def compute_next_state(
     q_feed = convert_raw_action_to_range(
         action_raw[1], min_action=0.0, max_action=pr.q_feed_max
     )
-    q_demand = load_plan(state, (state.time + 1) * pr.delta_t)
+    q_demand = load_plan(state, (state.time + 1) * pr.delta_t, pr)
+    Q_cap, q_cap = actuator_caps(state, state.time * pr.delta_t, pr)
+    Q_fuel = jnp.minimum(Q_fuel, Q_cap)
+    q_feed = jnp.minimum(q_feed, q_cap)
 
     _compute_velocity = partial(
         compute_velocity, action=(Q_fuel, q_feed), q_demand=q_demand, params=pr
@@ -462,16 +552,25 @@ def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
     """What the control room reads (rule 16, REALITY.md sec. 1 and 2).
 
     ``[level, pressure, q_steam, fuel_pct, feed_pct, target_level,
-    target_pressure, load_now, load_planned, s_to_ramp]``
+    target_pressure, load_now, load_planned, s_to_ramp, fuel_cap_pct,
+    feed_cap_pct]``
 
     Drum level, drum pressure and steam flow, the three-element measurements
     [S5, S12]; the fuel and feedwater actuators' positions; and the load plan,
     which the unit master knows ahead [S10]: the valve's load now, the load the
     plan ramps to, and the seconds until the ramp starts (0 once it has). Riser
     quality and the steam under the water surface are hidden: no instrument
-    reads them.
+    reads them. An upset is read as it strikes, not before: the plan then
+    shows the runback's load, and the last two channels the firing and the
+    feedwater the plant can still deliver, as the fan and pump trip alarms
+    tell the control room.
     """
     seconds = state.time * params.delta_t
+    Q_cap, q_cap = actuator_caps(state, seconds, params)
+    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+    planned = jnp.where(
+        upset, jnp.minimum(state.load_to, runback_target(params)), state.load_to
+    )
     return jnp.array(
         [
             state.level,
@@ -482,8 +581,10 @@ def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
             jnp.zeros_like(state.level),
             state.target_pressure,
             state.q_demand,
-            state.load_to,
+            planned,
             jnp.maximum(state.ramp_start - seconds, 0.0),
+            100.0 * Q_cap / params.Q_max + 0.0 * state.level,
+            100.0 * q_cap / params.q_feed_max + 0.0 * state.level,
         ]
     )
 
@@ -503,21 +604,28 @@ def check_is_terminal(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
 
 
 def steam_off_plan(state: BoilerDrumState, params: BoilerDrumParams, xp=jnp):
-    """Tonnes of steam delivered off the load plan in one step."""
-    return xp.abs(state.q_steam - state.q_demand) * params.delta_t / 1000.0
+    """Kilograms of steam delivered off the load plan in one step, beyond the
+    steam meter's resolution."""
+    off = xp.abs(state.q_steam - state.q_demand) - params.steam_resolution
+    return xp.maximum(off, 0.0) * params.delta_t
+
+
+def imbalance_cost(kg, params: BoilerDrumParams):
+    """GBP for ``kg`` of steam's generation at the imbalance price."""
+    return kg / params.steam_rate / 1000.0 * params.imbalance_price
 
 
 def compute_reward_terms(
     state: BoilerDrumState, params: BoilerDrumParams, xp=jnp, tripped=None
 ):
-    """The score's terms, in tonnes of steam, each >= 0.
+    """The score's terms, in GBP, each >= 0.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
     if tripped is None:
         tripped, _ = check_is_terminal(state, params, xp)
-    terms = {"off_plan": steam_off_plan(state, params, xp)}
+    terms = {"imbalance": imbalance_cost(steam_off_plan(state, params, xp), params)}
     return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 

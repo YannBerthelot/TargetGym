@@ -34,9 +34,9 @@ class BoilerDrum(
 ):
     """Natural-circulation drum boiler with shrink-and-swell.
 
-    Observation (10): [level, pressure, q_steam, fuel_pct, feed_pct,
+    Observation (12): [level, pressure, q_steam, fuel_pct, feed_pct,
                        target_level, target_pressure, load_now, load_planned,
-                       s_to_ramp]
+                       s_to_ramp, fuel_cap_pct, feed_cap_pct]
     Action      (2): [fuel, feedwater], raw in [-1, 1]
     """
 
@@ -59,7 +59,7 @@ class BoilerDrum(
     )
 
     def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (10,)
+        self.obs_shape = (12,)
         self.integration_method = integration_method
 
     @property
@@ -118,7 +118,7 @@ class BoilerDrum(
         # Established operation (rule 17): the unit holds a load on its plan,
         # balanced at normal water level, and the plan ramps once to another
         # load at an industry ramp rate (PHYSICS.md, Task; REALITY.md sec. 4).
-        k_from, k_to, k_rate, k_start = jax.random.split(key, 4)
+        k_from, k_to, k_rate, k_start, k_ev, k_back, k_wait = jax.random.split(key, 7)
         nominal = params.q_steam_nominal
         lo, hi = params.load_range
         load_from = nominal * jax.random.uniform(k_from, minval=lo, maxval=hi)
@@ -132,6 +132,25 @@ class BoilerDrum(
             k_start,
             minval=params.ramp_start_range[0],
             maxval=params.ramp_start_range[1],
+        )
+        event_time = jnp.where(
+            params.event_kind > 0,
+            jax.random.uniform(
+                k_ev,
+                minval=params.event_time_range[0],
+                maxval=params.event_time_range[1],
+            ),
+            1e9,
+        )
+        back_pct = jax.random.uniform(
+            k_back,
+            minval=params.runback_rate_range[0],
+            maxval=params.runback_rate_range[1],
+        )
+        standby = jax.random.uniform(
+            k_wait,
+            minval=params.standby_delay_range[0],
+            maxval=params.standby_delay_range[1],
         )
         V_wt, alpha_r, V_sd, level_ref, Q = steady_state(
             params, params.p_nominal, load_from
@@ -154,6 +173,9 @@ class BoilerDrum(
             load_to=load_to,
             ramp_start=ramp_start,
             ramp_rate=rate_pct / 100.0 * nominal / 60.0,
+            event_time=event_time + zero,
+            event_rate=back_pct / 100.0 * nominal / 60.0 + zero,
+            standby_delay=standby + zero,
             time_high=zero,
             time_low=zero,
         )

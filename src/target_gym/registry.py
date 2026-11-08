@@ -394,6 +394,12 @@ def _cement_kiln():
     return CementKiln()
 
 
+def _boiler_drum_scenarios():
+    from target_gym.boiler_drum.scenarios import boiler_drum_scenarios
+
+    return boiler_drum_scenarios()
+
+
 def _boiler_drum():
     from target_gym.boiler_drum.env_jax import BoilerDrum
 
@@ -899,7 +905,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # The load plan is drawn at reset and read by the agent: no hidden
         # disturbance moves with the step's key.
         oracle_data=_shared_oracle("boiler_drum"),
-        version=4,
+        # v5 (Amendment 3): scenarios with an ID fan runback and a feed pump
+        # trip, ramps over the family's 1 to 6 %/min, a score in GBP at the
+        # imbalance price past the steam meter's resolution.
+        scenarios=_boiler_drum_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="wind_turbine",
