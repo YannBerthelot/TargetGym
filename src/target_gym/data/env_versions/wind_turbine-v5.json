@@ -1,5 +1,5 @@
 {
-  "fingerprint": "71cd764dea05f3b3",
-  "note": "Re-stamped in place, unreleased v5: scenario weights added; the plant and the scenarios' overrides are unchanged.",
-  "stamped": "2026-11-08T17:37:40+00:00"
+  "fingerprint": "34fca092efb4657f",
+  "note": "Re-stamped in place, unreleased v5: Oye's dynamic inflow lag, with Buhl's correction above Ct 0.96, added before any v5 result was published (owner, 2026-11-08).",
+  "stamped": "2026-11-08T18:24:25+00:00"
 }

@@ -64,6 +64,14 @@ class WindTurbineParams(EnvParams):
     R: float = 63.0  # m, rotor radius (126 m diameter)
     rho: float = 1.225  # kg/m^3, air density
 
+    # ---- Dynamic inflow: Oye's lag on the rotor's induced velocity ----
+    # tau1 = 1.1 / (1 - 1.3 min(a, 0.5)) R / U0, as OpenFAST's AeroDyn DBEMT
+    # writes it (REALITY.md [S22]); one lumped rotor-average lag, so tau2 and
+    # its radial split are not modelled. 1 on, 0 the quasi-steady tables.
+    dynamic_inflow: float = 1.0
+    oye_k1: float = 1.1
+    oye_k2: float = 1.3
+
     # ---- Drivetrain [S1 Table 5-1] ----
     J_rotor: float = 38_759_228.0  # kg m^2
     J_gen: float = 534.116  # kg m^2, generator side
@@ -177,6 +185,9 @@ class WindTurbineParams(EnvParams):
 #: Units of the WindTurbineParams fields, for the generated environment pages.
 PARAM_UNITS = {
     "R": "m",
+    "dynamic_inflow": "-",
+    "oye_k1": "-",
+    "oye_k2": "-",
     "rho": "kg/m^3",
     "J_rotor": "kg m^2",
     "J_gen": "kg m^2",
@@ -240,6 +251,9 @@ class WindTurbineState(EnvState):
     x_tower: float = 0.0
     v_tower: float = 0.0
     a_tower: float = 0.0
+    #: The rotor-average induced velocity (m/s), which lags its quasi-steady
+    #: value by Oye's tau1 (``induction``).
+    w_induced: float = 0.0
     #: The turbulence's deviation from the mean (m/s), without the gust.
     v_turb: float = 0.0
     #: 1 once the safety system has fed the blades to feather (a trip).
@@ -319,6 +333,28 @@ def rotor_thrust(omega, v_wind, pitch_deg, params: WindTurbineParams):
     v = jnp.maximum(v_wind, 1e-3)
     ct = thrust_coefficient(w * params.R / v, pitch_deg, params)
     return 0.5 * params.rho * rotor_area(params) * v**2 * ct
+
+
+def induction(omega, v_wind, pitch_deg, params: WindTurbineParams):
+    """The quasi-steady rotor-average induced velocity (m/s) and Oye's time
+    constant (s), from the thrust table: momentum theory, a = (1 - sqrt(1 -
+    Ct)) / 2, up to Ct = 0.96, and above it Buhl's empirical correction, a =
+    0.143 + sqrt(0.0203 - 0.6427 (0.889 - Ct)), which meets it there in value
+    and slope (as AeroDyn applies it, REALITY.md [S22])."""
+    w = jnp.maximum(omega, 1e-3)
+    v = jnp.maximum(v_wind, 1e-3)
+    # No floor at Ct = 0: momentum theory runs smoothly into the propeller
+    # state (negative Ct and induction) at high tip-speed ratios.
+    ct = thrust_coefficient(w * params.R / v, pitch_deg, params)
+    low = jnp.minimum(ct, 0.96)
+    high = jnp.maximum(ct, 0.96)
+    a = jnp.where(
+        ct <= 0.96,
+        0.5 * (1.0 - jnp.sqrt(1.0 - low)),
+        0.143 + jnp.sqrt(0.0203 - 0.6427 * (0.889 - high)),
+    )
+    tau = params.oye_k1 / (1.0 - params.oye_k2 * jnp.minimum(a, 0.5)) * params.R / v
+    return a * v, tau
 
 
 def balance_pitch(omega, v_wind, power, params: WindTurbineParams):
@@ -406,18 +442,36 @@ def count_half_cycles(state, moment, params):
 
 
 def compute_velocity(position, action, v_wind, params: WindTurbineParams):
-    """RHS for ``[omega, pitch, torque, x_tower, v_tower]``. ``action`` is the
-    step's ``(pitch rate, torque rate)``, constant over the step."""
+    """RHS for ``[omega, pitch, torque, x_tower, v_tower]``, and the induced
+    velocity as a sixth state when given. ``action`` is the step's ``(pitch
+    rate, torque rate)``, constant over the step.
+
+    With the sixth state the tables, which hold equilibrium induction, are read
+    at the wind that gives the rotor plane its lagging inflow, ``v_rel - (w -
+    w_qs)``: an up-step in wind or a pitch move changes the loads at once and
+    then relaxes as the wake catches up, Oye's overshoot.
+    """
     p = params
-    omega, pitch, torque, x, xdot = position
+    omega, pitch, torque, x, xdot = (position[i] for i in range(5))
     v_rel = v_wind - xdot
-    tau_aero, _ = aerodynamic_torque(omega, v_rel, pitch, p)
-    thrust = rotor_thrust(omega, v_rel, pitch, p)
+    rates = [action[0], action[1]]
+    if position.shape[0] > 5:
+        w_qs, tau = induction(omega, v_rel, pitch, p)
+        w = position[5]
+        v_eff = v_rel - p.dynamic_inflow * (w - w_qs)
+        dw = (w_qs - w) / tau
+    else:
+        v_eff = v_rel
+    tau_aero, _ = aerodynamic_torque(omega, v_eff, pitch, p)
+    thrust = rotor_thrust(omega, v_eff, pitch, p)
     domega = (tau_aero - p.N_gear * torque) / drivetrain_inertia(p)
     accel = (
         thrust - tower_damping(p) * xdot - tower_stiffness(p) * x
     ) / p.tower_modal_mass
-    return jnp.stack([domega, action[0], action[1], xdot, accel]), None
+    out = [domega, *rates, xdot, accel]
+    if position.shape[0] > 5:
+        out.append(dw)
+    return jnp.stack(out), None
 
 
 def _ramp(command, now, rate, dt):
@@ -464,7 +518,14 @@ def compute_next_state(
     )
     new, _ = integrate_dynamics(
         positions=jnp.stack(
-            [state.omega, state.pitch, state.torque, state.x_tower, state.v_tower]
+            [
+                state.omega,
+                state.pitch,
+                state.torque,
+                state.x_tower,
+                state.v_tower,
+                state.w_induced,
+            ]
         ),
         delta_t=p.delta_t,
         compute_velocity=partial(
@@ -475,7 +536,7 @@ def compute_next_state(
     omega = jnp.maximum(new[0], 1e-3)  # numerical floor: tau_aero = P / omega
     pitch = jnp.clip(new[1], p.pitch_min, p.pitch_max)
     torque = jnp.clip(new[2], 0.0, p.torque_max)
-    position = jnp.stack([omega, pitch, torque, new[3], new[4]])
+    position = jnp.stack([omega, pitch, torque, new[3], new[4], new[5]])
     accel = compute_velocity(position, (0.0, 0.0), v_wind, p)[0][4]
     over = omega >= p.overspeed_factor * omega_rated(p)
     moment, turn, direction, damage = count_half_cycles(
@@ -491,6 +552,7 @@ def compute_next_state(
             torque=torque,
             x_tower=new[3],
             v_tower=new[4],
+            w_induced=new[5],
             a_tower=accel,
             v_wind=v_wind,
             v_turb=v_turb,
