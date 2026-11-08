@@ -107,6 +107,15 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
 - **UK shell boilers** [S8]: first low alarm shuts the burner but lets it
   re-fire when level recovers; second low alarm ("lockout") needs a manual
   reset. High level actions depend "on the individual plant requirements".
+- **High-high value and delays, added 2026-11-08 by the fix session.** Hub
+  Power Station's FSSS logic lists "Drum Level HH (+254 mm) (5 seconds)" and
+  "Drum Level LL (-254 mm) (5 seconds)" as master fuel trip inputs [S20,
+  slides 9, 11, 12]. A BHEL 500 MW boiler trips on "Drum level very low for
+  more than 5 seconds" and "Drum level very high for more than 10 seconds"
+  (unit protection slides, slide 27, SlideShare deck 29657473; fetched once).
+  A Babcock and Wilcox patent says instantaneous level trips would cause
+  excessive false trips, and that setting the delay "involves compromises"
+  [S21].
 - **EN limiters.** EN 12952-11 (water-tube) and EN 12953-9 (shell) set
   requirements for water level limiters; the text itself is paywalled (see
   owner list). Values: not found.
@@ -164,6 +173,9 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   exceed 1 percent per minute" [S17, Table 1 and p. 13]. S17 covers coal units
   in general, not only drum boilers. Industrial steam flow ramps "up to 20-25%
   per minute" [S15].
+- **Start-up times** (S17 Table 1, p. 47, read 2026-11-08 by the fix session):
+  hard coal, most commonly used, hot start 2.5 to 3 h, cold 5 to 10 h; state
+  of the art hot 80 min to 2.5 h. Minimum load 25 to 40 %.
 - **Pump restart.** Feedwater pumps "may take more than 30 seconds to start,
   come up to speed and pressure" [S11].
 - **Shrink versus swell.** The level drop on a load decrease "is typically much
@@ -265,6 +277,11 @@ automatics cannot cope [S4, p. 1; S10; S12].
   https://www.thechemicalengineer.com/features/practical-process-control-part-11-controlling-steam-drum-level
 - [S17] Agora Energiewende, "Flexibility in thermal power plants", 2017 (Table
   1; Fig. S3). https://www.agora-energiewende.org/fileadmin/Projekte/2017/Flexibility_in_thermal_plants/115_flexibility-report-WEB.pdf
+- [S20] "FSSS logic presentation", Hub Power Station (CFB boiler), SlideShare.
+  https://www.slideshare.net/MuhammadAsif771197/fssslogic-presentation-modifiedv11pptx
+  (fetched once, 2026-11-08).
+- [S21] US 4433646 A, "Boiler water trip system", Babcock and Wilcox Co., 1984.
+  https://patents.google.com/patent/US4433646A/en (fetched once, 2026-11-08).
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

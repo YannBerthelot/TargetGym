@@ -174,7 +174,9 @@ def test_without_recorded_moves_the_best_known_is_unknown():
 
 # The ceiling of every environment. hvac prices comfort without
 # ``reward.tracking_cost`` and has its own test below.
-_VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
+_VIA_TRACKING_COST = sorted(
+    n for n in REGISTRY if n != "hvac" and n not in scoring.JOB_SCORED
+)
 
 
 def _control_step_tracking(env, state, params) -> float:

@@ -203,7 +203,12 @@ def test_version2_reward_has_no_log_shape_and_no_precision_floor(spec):
 def test_reward_version_1_is_still_the_shipped_reward(spec):
     """Every plant keeps its version-1 reward constructible: on a real state
     it is bounded in [0, 1] as the capped log reward was, while version 2 is
-    a cost."""
+    a cost. A task scored on its job (``scoring.JOB_SCORED``, charter rule
+    15) was rebuilt on a new plant, where version 1 reproduces nothing."""
+    from target_gym.scoring import JOB_SCORED
+
+    if spec.name in JOB_SCORED:
+        pytest.skip("scored on the job's cost: no version-1 reward (rule 15)")
     env, p, state = _a_state(spec)
     v1 = float(env.compute_reward(state, p.replace(reward_version=1)))
     v2 = float(env.compute_reward(state, p))

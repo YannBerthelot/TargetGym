@@ -28,16 +28,16 @@ HISTORY_KEYS = (
 def _draw_loop(ax, state, params):
     level = float(state.level)
     p_bar = float(state.pressure)
-    alpha = float(void_fraction(state.m_sr, state.pressure, params))
+    alpha = float(void_fraction(state.alpha_r, state.pressure, params))
 
     # Drum.
     dx, dy, dw, dh = 0.24, 0.60, 0.52, 0.26
     rk.vessel(ax, dx, dy, dw, dh, fc="#0b1420", ec=rk.FRAME, lw=2.4)
     # Water level: normal water level sits mid-drum, trips at +/- level_trip.
-    lf = 0.5 + 0.5 * float(np.clip(level / params.level_trip, -1.3, 1.3)) * 0.72
+    lf = 0.5 + 0.5 * float(np.clip(level / params.level_trip_high, -1.3, 1.3)) * 0.72
     rk.fill_level(ax, dx, dy, dw, dh, lf, color=rk.BLUE, alpha=0.55)
     # Bubbles below the surface -- the swell made visible.
-    n_b = int(4 + 26 * rk.clamp01(float(state.m_sd) / 200.0))
+    n_b = int(4 + 26 * rk.clamp01(float(state.V_sd) / 10.0))
     rng = np.random.default_rng(int(state.time) // 4)
     for _ in range(n_b):
         bx = dx + 0.03 + rng.random() * (dw - 0.06)
@@ -179,7 +179,7 @@ def _draw_loop(ax, state, params):
 
 
 def render_boiler_drum(state, params, step, history):
-    alpha = float(void_fraction(state.m_sr, state.pressure, params))
+    alpha = float(void_fraction(state.alpha_r, state.pressure, params))
     history["t"].append(step * params.delta_t / 60.0)
     history["level"].append(float(state.level) * 100.0)
     history["pressure"].append(float(state.pressure))
@@ -194,15 +194,15 @@ def render_boiler_drum(state, params, step, history):
     status = (
         rk.NOMINAL
         if lvl_err < params.level_band
-        else (rk.WATCH if lvl_err < 0.6 * params.level_trip else rk.ALARM)
+        else (rk.WATCH if lvl_err < 0.6 * params.level_trip_high else rk.ALARM)
     )
-    trip_cm = params.level_trip * 100.0
+    trip_cm = params.level_trip_high * 100.0
 
     gauges = [
         rk.Gauge(
             "DRUM LEVEL",
             f"{float(state.level) * 100:+.2f} cm",
-            float(state.level) / params.level_trip,
+            float(state.level) / params.level_trip_high,
             rk.CYAN,
             bipolar=True,
             neg_color=rk.CYAN,
@@ -211,11 +211,9 @@ def render_boiler_drum(state, params, step, history):
         rk.Gauge(
             "PRESSURE",
             f"{float(state.pressure):.2f} bar",
-            (float(state.pressure) - params.pressure_min)
-            / (params.pressure_max - params.pressure_min),
+            (float(state.pressure) - 65.0) / (105.0 - 65.0),
             rk.ORANGE,
-            target_frac=(float(state.target_pressure) - params.pressure_min)
-            / (params.pressure_max - params.pressure_min),
+            target_frac=(float(state.target_pressure) - 65.0) / (105.0 - 65.0),
         ),
         rk.Gauge(
             "STEAM OUT",

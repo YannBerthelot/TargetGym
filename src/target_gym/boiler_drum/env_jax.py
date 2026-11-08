@@ -34,8 +34,9 @@ class BoilerDrum(
 ):
     """Natural-circulation drum boiler with shrink-and-swell.
 
-    Observation (7): [level, pressure, q_steam, fuel_pct, feed_pct,
-                      target_level, target_pressure]
+    Observation (10): [level, pressure, q_steam, fuel_pct, feed_pct,
+                       target_level, target_pressure, load_now, load_planned,
+                       s_to_ramp]
     Action      (2): [fuel, feedwater], raw in [-1, 1]
     """
 
@@ -58,7 +59,7 @@ class BoilerDrum(
     )
 
     def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (7,)
+        self.obs_shape = (10,)
         self.integration_method = integration_method
 
     @property
@@ -114,50 +115,47 @@ class BoilerDrum(
         if params is None:
             params = self.default_params
 
-        key, level_key, target_key, load_key = jax.random.split(key, 4)
-
-        # Start from the balanced operating point. A boiler that began with its
-        # riser voidage inconsistent with its firing rate would spend the first
-        # minute of every episode relaxing, which is an artefact rather than a
-        # control problem.
-        V_wt, m_sr, m_sd, level_ref, Q = steady_state(params)
-
-        target_pressure = jax.random.uniform(
-            target_key,
-            minval=params.target_pressure_range[0],
-            maxval=params.target_pressure_range[1],
+        # Established operation (rule 17): the unit holds a load on its plan,
+        # balanced at normal water level, and the plan ramps once to another
+        # load at an industry ramp rate (PHYSICS.md, Task; REALITY.md sec. 4).
+        k_from, k_to, k_rate, k_start = jax.random.split(key, 4)
+        nominal = params.q_steam_nominal
+        lo, hi = params.load_range
+        load_from = nominal * jax.random.uniform(k_from, minval=lo, maxval=hi)
+        load_to = nominal * jax.random.uniform(k_to, minval=lo, maxval=hi)
+        rate_pct = jax.random.uniform(
+            k_rate,
+            minval=params.ramp_rate_range[0],
+            maxval=params.ramp_rate_range[1],
         )
-        level0 = jax.random.uniform(
-            level_key,
-            minval=params.initial_level_range[0],
-            maxval=params.initial_level_range[1],
+        ramp_start = jax.random.uniform(
+            k_start,
+            minval=params.ramp_start_range[0],
+            maxval=params.ramp_start_range[1],
         )
-        # Offset the inventory so the gauge reads ``level0`` at t = 0.
-        V_wt = V_wt + level0 * params.A_d
-        q_demand = params.q_steam_nominal
-        q_demand += params.q_steam_noise_std * jax.random.normal(load_key)
-
+        V_wt, alpha_r, V_sd, level_ref, Q = steady_state(
+            params, params.p_nominal, load_from
+        )
+        zero = jnp.zeros_like(load_from)
         state = BoilerDrumState(
             time=0,
-            pressure=jnp.asarray(params.p_nominal),
+            pressure=jnp.asarray(params.p_nominal) + zero,
             V_wt=V_wt,
-            m_sr=m_sr,
-            m_sd=m_sd,
-            level=jnp.asarray(level0),
-            q_steam=q_demand,  # at p_nominal the valve passes its demand
-            q_demand=q_demand,
-            Q_fuel=jnp.asarray(Q),
-            # Feedwater matched to the steam actually leaving, not to nominal.
-            # Setting it to nominal while sampling steam at +/-8 kg/s opened
-            # every episode with a mass imbalance of about 7% on a level that
-            # does not self-regulate: uncorrected, that walks the drum roughly
-            # 43 cm over the episode against a 25 cm trip. The plant now starts
-            # genuinely balanced, which is what the comment above already
-            # claimed, and the OU steam demand supplies the control problem
-            # from there.
-            q_feed=q_demand,
-            target_pressure=target_pressure,
-            level_ref=jnp.asarray(level_ref),
+            alpha_r=alpha_r,
+            V_sd=V_sd,
+            level=zero,
+            q_steam=load_from,  # at p_nominal the valve passes its plan
+            q_demand=load_from,
+            Q_fuel=Q,
+            q_feed=load_from,
+            target_pressure=jnp.asarray(params.p_nominal) + zero,
+            level_ref=jnp.asarray(level_ref) + zero,
+            load_from=load_from,
+            load_to=load_to,
+            ramp_start=ramp_start,
+            ramp_rate=rate_pct / 100.0 * nominal / 60.0,
+            time_high=zero,
+            time_low=zero,
         )
         return self.get_obs(state), state
 

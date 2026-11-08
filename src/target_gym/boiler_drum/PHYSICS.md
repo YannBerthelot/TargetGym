@@ -1,381 +1,186 @@
-# Boiler drum — physics model, provenance and validation
+# Boiler drum: model, sources, limits and deviations
 
-Reference plant: a **natural-circulation drum boiler**, 160 MW, 85 bar, with
-the geometry of the Öresundsverket P16-G16 unit used by Åström & Bell.
+Version 4, rebuilt on 2026-11-08 under charter Amendments 1 and 2. The plant
+record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source tags
+[S1] to [S21] are REALITY.md's. Nothing here is compared with an earlier
+version of the task (rule 11).
 
-Contract for `target_gym.boiler_drum`. Method: `docs/PHYSICS_METHODOLOGY.md`.
+## 1. The job
 
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+REALITY.md sec. 6: keep the drum water between the low trip that starves the
+tubes and the high trip that floods the turbine while the load moves, using
+feedwater and firing. The unit runs boiler-following [S10]: the turbine valve
+follows the load plan, and the boiler holds steam pressure for it by firing.
 
----
+Named property (rule 18): **shrink and swell**, the inverse response of the
+level to steam and feedwater moves. It is in the model through the steam
+distribution in the risers and under the water surface, Astrom and Bell's
+fourth-order model.
 
-## 1. Model and provenance
+## 2. Model
 
-Global mass and energy balances over the whole water/steam circuit, plus two
-states saying **where** the steam is:
+The plant is the four-state model of [S1], ported from the authors' own
+simulation code (S1 Appendix B, `sfd302`) with the P16-G16 numbers in it.
+States: drum pressure `p`, total water volume `V_wt`, riser outlet quality
+`alpha_r`, steam volume under the water surface `V_sd`. The code solves
+`e @ dx = b` for the four derivatives:
 
 ```
-q_s = q_demand · p / p_nominal                      (fixed turbine valve)
-d/dt[ρ_s V_st + ρ_w V_wt]                          = q_f − q_s
-d/dt[ρ_s h_s V_st + ρ_w h_w V_wt − p V_t + m C t_s] = Q + q_f h_f − q_s h_s
-dm_sr/dt = q_ct + q_flash,r − m_sr/τ_sr        (steam in the risers)
-dm_sd/dt = f_carry·m_sr/τ_sr + q_flash,d − m_sd/T_d − q_cd   (bubbles in the drum)
+e11 dV_wt + e12 dp                     = q_f - q_s                       (mass)
+e21 dV_wt + e22 dp                     = Q + q_f h_f - q_s h_s           (energy)
+            e32 dp + e33 dalpha_r      = Q - alpha_r h_c q_dc            (risers)
+            e42 dp + e43 dalpha_r + e44 dV_sd
+                 = rho_s (V_sd0 - V_sd) / T_d + (h_f - h_w) q_f / h_c    (drum)
+q_dc^2 = k_e (rho_w - rho_s) V_r alpha_v,   T_d = 600 / q_s
+level  = (V_wd + V_sd) / A_d - 1 m,   V_wd = V_wt - V_dc - (1 - alpha_v) V_r
 ```
 
-with `V_st + V_wt = V_t`. The first two are linear in `(dp/dt, dV_wt/dt)` and
-are solved as a 2×2 system each step. Level follows from where the water is:
+with `alpha_v` the mean void fraction for a linear quality profile, and the
+`e` coefficients exactly as S1 Appendix B writes them (eq. (25) in the report's
+text for `e42`). The steam through the turbine valve is proportional to drum
+pressure, `q_s = q_demand p / p_nominal` (Bell and Astrom 1987, eq. 14), with
+`q_demand` the valve's flow at `p_nominal` on the load plan.
 
-```
-level = [ (V_wt − V_dc − (1 − α_v)·V_r) + m_sd/ρ_s − V_ref ] / A_d
-```
+Saturated steam properties are quadratic fits to IAPWS values over 60 to 110
+bar (residuals under 0.5 %, asserted in `test_boiler_drum_env.py`), in place of
+S1's own fits around 10 MPa, which the scan does not print legibly.
 
-**Tracking steam as mass rather than quality is what makes the model work.**
-The void fraction is `α_v = m_sr/(ρ_s V_r)`, so a falling pressure raises it
-*instantly* at constant mass — bubbles expand, water is pushed out of the
-risers into the drum, and the level rises. A formulation that relaxes riser
-*quality* toward a quasi-steady value on the 18 s riser time constant
-suppresses exactly this effect, and produces no swell at all.
+## 3. Numbers
 
-**Flashing** is the other half. A falling pressure lowers the saturation
-temperature, leaving the entire water inventory superheated so that it boils:
-`q_flash = −(V ρ_w c_pw · dt_s/dp / h_c)·dp/dt`. For this boiler a 1 bar drop
-flashes about 143 kg of water — 3.1 m³ of steam, roughly 16 cm of level.
-
-**Steam follows pressure.** At a fixed valve the turbine passes steam in
-proportion to drum pressure, Bell and Åström's `q_s = (1.1 u2 − 0.19) P` (1987,
-eq. 14). The hidden valve state `q_demand` wanders, and the meter reads `q_s`. So
-pressure regulates itself: a 1 bar offset at fixed firing decays with a 227 s
-time constant, against about 400 s from the report's own `dP/dt` (eq. 3, `u2`
-0.7).
-
-Saturated steam properties are quadratic fits to IAPWS values over 60–110 bar
-(residuals below 0.5 %, asserted in the tests). Fits rather than steam tables
-because the model must stay `jit`/`vmap`-friendly.
-
-Deliberately **not** modelled:
-
-| Omitted | Rationale |
-|---|---|
-| Superheater and steam temperature | The drum is the control problem; steam temperature is a separate downstream loop. |
-| Furnace-side combustion detail | One lag and one rate limit stand for the burners, the furnace gas and the tube walls (see *Actuators*). |
-| Spatial distribution along the risers | One lumped riser; the void fraction is a volume mean. |
-| Drum-level-gauge dynamics | Treated as instantaneous. |
-| Steam separator detail | Represented only by `f_carry`, the fraction of riser steam passing below the water level. |
-| Drum geometry | Level is linear in volume (`A_d` constant), valid for deviations around normal water level. |
-
-**Regime of validity.** 60–110 bar (the property-fit range), near-normal water
-level, loads between roughly 50 % and 130 % of nominal. Termination on drum
-pressure keeps episodes inside the fit range.
-
----
-
-## 2. Validation targets
-
-| Quantity | Target | Model | |
+| Symbol | Value | Unit | Source |
 |---|---|---|---|
-| Steam property fits vs IAPWS, 60–110 bar | < 1 % | **max 0.49 %** | ✅ |
-| Saturation temperature at 85 bar | 299.3 °C | 299.27 | ✅ |
-| ρ_water, ρ_steam at 85 bar | 711.5, 45.3 kg/m³ | 712.0, 45.5 | ✅ |
-| Latent heat at 85 bar | 1410 kJ/kg | 1410.1 | ✅ |
-| Circulation ratio | 5–15 (natural circulation) | **8.84** | ✅ |
-| Circulation ratio falls with load | required | 10.2 → 8.1 | ✅ |
-| Mean riser void fraction | 0.3–0.6 | 0.467 | ✅ |
-| Drum volume closure | 40 m³ | **40.00** | ✅ |
-| Metal share of pressure inertia | dominant | **58.5 %** | ✅ |
-| Swell on a valve step | 25–100 mm typical | 21 mm (5 %) → 89 mm (21 %) | ✅ |
-| Shrink on a feedwater step | present, correct sign | −2.4 mm | ⚠️ |
-| Level self-regulates | it must **not** | +8.9 cm per 10 min at 2 % bias | ✅ |
-| Pressure self-regulates at a fixed valve | about 400 s (report, eq. 3) | 227 s | ✅ |
+| `V_t`, `V_d`, `V_r`, `V_dc` | 85, 37, 37, 11 | m^3 | [S1] Appendix B, P16-G16 |
+| `A_d` | 23 | m^2 | [S1] Appendix B |
+| `m_metal`, `m_riser`, `m_drum` | 300 000, 100 000, 20 000 | kg | [S1] Appendix B |
+| `C_metal` | 650 | J/(kg K) | [S1] Appendix B |
+| `k_e` | 200 | - | [S1] Appendix B (`ke`) |
+| `V_sd0` | 8 | m^3 | [S1] Appendix B (`Vsd0`) |
+| `beta` | 0.3 | - | [S1] Appendix B |
+| `T_d_flow` | 600 | kg | [S1] Appendix B, `Td = 600 / qs` |
+| `normal_level_height` | 1.0 | m | [S1] Appendix B, `l = lw + ls - 1.0` |
+| `p_nominal` | 85 | bar | [S1] Appendix B, the steam transducer's 8.5 MPa |
+| property fits | see params | - | IAPWS saturation values, least squares |
+| `h_feedwater` | 1.037 | MJ/kg | Ours: feedwater at 240 C; S1 reads it as an input |
+| `Q_nominal`, `q_steam_nominal` | 160 MW, 93.35 kg/s | - | Ours: S1's 160 MW rating taken as the heat input; `Q = q_s (h_s - h_f)`. S1's high-load tests ran at 100 to 112 kg/s (Fig. 15), so this unit is the smaller |
+| `Q_max` | 240 | MW | Bell and Astrom 1987: the fuel span is about 1.5 times nominal firing |
+| `q_feed_max` | 200 | kg/s | Ours: Bell and Astrom's span is 140 kg/s; 200 leaves the feed pump headroom at the 112 kg/s of Fig. 15 |
+| `load_range` | 0.40 to 1.0 | of nominal | [S17] Table 1, hard coal minimum load 25 to 40 %; three-element control holds above 20 to 30 % [S12] |
+| `ramp_rate_range` | 1 to 2 | %/min | [S10] |
+| `ramp_start_range` | 300 to 900 | s | Ours: the slowest full ramp, 60 % at 1 %/min, ends inside the hour |
+| `max_steps_in_episode` | 1800 | steps | Ours: one hour around one planned load change; [S3] has setpoints "change several times during every 24 h" |
+| `level_trip_low` | -0.330 | m | [S9], "Drum Level Low-low (-330 mm)" |
+| `level_trip_high` | +0.254 | m | [S20], "Drum Level HH (+254 mm)" |
+| `level_trip_delay` | 10 | s | [S9] items 23 and 24, "for more than ten seconds"; [S21] on why trips are delayed |
+| `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps |
+| `failure_cost` | 0.1867 | t per step | `q_steam_nominal` for one 2 s step: the steam a restart does not make |
+| `e_floor_level`, `e_floor_pressure` | 2.67e-3 m, 0.05 bar | - | Ours, read only by the time-in-band KPI tables, never by the score |
+| `delta_t` | 2 | s | Ours: S1 logged at 0.1 Hz and shows the swell within one or two samples, so 2 s resolves it |
 
-The drum volume closure is the load-bearing check, because nothing in the
-model is fitted to it: the water, bubbles and steam space computed from the
-solved inventory add to 40.00 m³ against a drum specified independently as
-40 m³. Circulation ratio is what sets `k_friction`, the one free parameter in
-the circulation loop.
+Actuators (shared `actuate` stage, Bell and Astrom 1987, section 4 and
+appendix E): fuel rate 0.007 of span per s, feedwater rate 0.05 of span per s,
+feedwater lag 1 s. The firing lag of 20 s is **ours** (burners, furnace gas and
+tube walls on oil); S1's fuel step test (Fig. 10, test 7) still shows its rapid
+swell through it.
 
----
+Readings: level 0.5 mm (Rosemount 5300), pressure 0.022 bar (Yokogawa
+EJA530E), steam flow 0.047 kg/s (Rosemount 8800D, not checked); none has a dead
+time. These are datasheet figures outside REALITY.md. With the score in steam
+off the plan, resting on plan costs a learner `0.047 sqrt(2 / pi) * 2e-3 =
+7.5e-5` t per step through the steam meter alone.
 
-## 3. Parameter table
+## 4. Limits (rule 14)
 
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| `V_t`, `V_d`, `V_r`, `V_dc` | 88, 40, 37, 11 | m³ | Åström & Bell P16-G16 geometry | ✅ |
-| `A_d` | 20 | m² | Drum area at normal water level | ✅ |
-| `A_dc`, `L_r` | 0.355 m², 11 m | – | Downcomer area, riser height | ✅ |
-| `m_metal`, `C_metal` | 300 t, 550 J/(kg K) | – | Tube and drum steel | ✅ |
-| property fit coefficients | see params | – | Least squares on IAPWS saturation values | ✅ |
-| `k_friction` | 25 | – | Set by the circulation ratio (validated 5–15) | ⚠️ |
-| `tau_sr` | 8.0 | s | Riser steam transit; equals `m_sr/q_steam` at nominal | ⚠️ |
-| `T_d` | 15.0 | s | Bubble residence below the water level | ⚠️ |
-| `f_carry` | 0.10 | – | TUNED — riser steam passing below the level | ⚠️ |
-| `f_cd` | 0.25 | – | TUNED — feedwater heat deficit paid by drum bubbles | ⚠️ |
-| `h_feedwater` | 1.037 MJ/kg | – | Feedwater at 240 °C (59 K subcooled) | ✅ |
-| `Q_nominal`, `q_steam_nominal` | 160 MW, 93.35 kg/s | – | `Q = q_s(h_s − h_f)`, self-consistent | ✅ |
-| `level_trip` | ±0.25 | m | Carryover / dryout; real trips are ±150–300 mm | ✅ |
-| `delta_t` | 2.0 | s | ~14 steps to the swell peak, ours as a control interval | ⚠️ |
+| Limit | Kind | Model |
+|---|---|---|
+| Low level, -330 mm [S9] | Trip | Past it for more than 10 s [S9]: master fuel trip, a hot restart |
+| High level, +254 mm [S20] | Trip | Past it for more than 10 s [S9]: turbine trip against carryover [S12], a hot restart |
+| Drum pressure | None | REALITY.md found no sourced trip value or safety valve setting, so none is modelled. Off 60 to 110 bar the property fits extrapolate |
+| Firing and feedwater ranges | Actuator range | `Q_max`, `q_feed_max` |
 
-`f_carry` and `f_cd` are the two genuinely tuned numbers. They were chosen
-together against three targets at once — baseline bubble volume, swell
-magnitude and shrink magnitude — not fitted to any single one.
+A trip charges `restart_steps * failure_cost = 840 t` of steam, the nominal
+steam of a 2.5 h hot start, and the plant restarts at a new planned load
+(`base.failure_kernel`).
 
----
+## 5. Observation, episode and score
 
-## 4. Task design
+**Observation** (rule 16): drum level, drum pressure, steam flow (the three
+elements [S5, S12]), the two actuator positions, the level target (zero), the
+pressure setpoint, and the load plan: the valve's load now, the load it ramps
+to and the seconds until the ramp starts. The plan is known to the unit master
+in coordinated operation [S10]. Riser quality and the steam under the surface
+are hidden.
 
-### Task: `boiler_drum`
+**Episode** (rule 17): established operation. The unit holds a planned load
+drawn from 40 to 100 % of nominal, balanced at normal water level, and the plan
+ramps once, at 1 to 2 %/min [S10], to another load in that range, starting 5 to
+15 minutes in. Nothing else moves: REALITY.md shows no unmeasured disturbance
+on a utility unit, and runbacks [S10] have no sourced frequency.
 
-Hold the drum level and the steam pressure of a 160 MW natural-circulation drum
-boiler with fuel and feedwater, while the turbine's steam draw moves. Drum
-level is the classic non-minimum-phase loop: a pressure drop swells the level
-while water is leaving, and cold feedwater shrinks it before it rises. The
-level integrates, the riser voidage behind both effects is hidden, and both a
-high and a low level trip the boiler.
+**Score** (rule 15), in tonnes of steam: each step charges the steam delivered
+off the plan, `|q_s - q_demand| * delta_t / 1000`, which in boiler-following is
+the pressure error priced as production; a trip charges 840 t. Level precision
+inside the trips earns nothing. The floor of the score, in closed form: steam
+on plan costs zero, so the floor of the score is 0; rule 9's room needs an oracle, not run
+yet ("not measured").
 
-| obs | meaning |
-|---|---|
-| 0 | drum level relative to normal water level (m) |
-| 1 | drum pressure (bar) |
-| 2 | `q_steam`, steam flow to the turbine (kg/s), which follows the valve and drum pressure |
-| 3 | fuel actuator position, percent of maximum |
-| 4 | feedwater actuator position, percent of maximum |
-| 5 | target level, always 0 (m) |
-| 6 | target pressure (bar) |
+## 6. Behaviour tests (charter step 3)
 
-**Why it is hard.** Drum level is the classic non-minimum-phase control
-problem, and nothing else in this suite has that shape.
+`tests/boiler_drum/test_boiler_drum_reality.py` runs the cold review's eight
+tests with its tolerances. On the rebuilt plant:
 
-1. **Swell.** Open the turbine valve and pressure falls; every bubble expands
-   and the water inventory flashes, so the level goes **up** while mass is
-   leaving. A controller that believes the gauge cuts feedwater exactly when
-   it should be adding it, and the level then collapses into a low-level trip.
-2. **Shrink.** Subcooled feedwater collapses bubbles, so adding water makes the
-   level fall before it rises.
-3. **Level is an integrator.** There is no self-regulating steady state — a
-   2 % feedwater bias walks the level 9 cm in ten minutes.
-4. **Both limits are irrecoverable.** High level carries water into the
-   turbine, low level uncovers the tubes; real boilers trip on both.
-5. **Voidage is unmeasurable.** `m_sr`, `m_sd` and `V_wt` are hidden. No plant
-   instrument reads riser void fraction, and it is exactly the state driving
-   the inverse response.
+| Test | Source | Result |
+|---|---|---|
+| 1. Swell on a medium-load steam step | S1 Figs. 12, 16 | Pass |
+| 2. Pressure ramp on that step | S1 Fig. 12 | **Fails**: 5.5 bar in 250 s (in 3 to 9), but the second 125 s fall 0.69 of the first, against at least 0.70 |
+| 3. Swell per kg/s larger at medium load | S1 p. 26 | Pass |
+| 4. Swell for a 10 %-of-load step grows toward low load | S1 p. 20, S2, S11 | **Fails**: 20, 22, 24 mm at 50, 75, 100 % |
+| 5. Shrink smaller and shorter than swell | S14 | **Fails**: shrink 27 mm, swell 24 mm |
+| 6. Feedwater steps: inverse response, +-0.18 m | S1 Fig. 11 | Pass |
+| 7. Rapid swell on a fuel step | S1 Fig. 10 | Pass |
+| 8. A 10 %/min ramp roughly halves the step's level deviation | S2 sec. 5.2 | **Fails**: ratio 0.31, against 0.35 to 0.70 |
 
-**Observation.** Drum level, drum pressure and steam flow are the three
-measurements of classic three-element control, plus the positions of the two
-actuators. The turbine valve is hidden.
+Tests 2 and 6 differ from the audit's text in one respect, written in the
+tests: the audit balances the plant at 52 kg/s and steps around it, while the
+figures cycle about the middle of their range. At 52 kg/s test 6's mean feed
+exceeds the steam by 8 kg/s, which climbs the level 0.5 m in 1000 s on any drum,
+and test 2's step doubles the figure's energy deficit (10.8 bar). The
+tolerances are the audit's.
 
-**Two coupled targets.** Firing and feedwater are not independent: firing
-harder raises pressure, which *compresses* bubbles and lowers the level.
+The four failures are on S1's own model with the authors' own numbers, so no
+sourced physics is missing that would change them (rule 2 forbids moving a
+number). They are known deviations (rule 13):
 
-**Reward** = ½·level band + ½·pressure band − fuel.
+- Test 4: per kg/s the swell is larger at low load (test 3), but a step that
+  scales with the load swells less at low load. Effect on the score: low-load
+  ramps are milder than S11 reports, so high-level trips at low load are rarer.
+- Test 5: shrink is about 10 % larger than swell. Effect: a load decrease
+  brings the level nearer the low trip than practice reports, where the low
+  trip has the wider margin (330 against 254 mm).
+- Tests 2 and 8: within a few per cent of their bounds; the pressure ramp
+  curves slightly more than "roughly linear", and a ramp helps a little more
+  than S2's larger unit.
 
----
+## 7. Deviations still in the model
 
-## 5. Baselines
+- The feedwater flow loop is perfect: the action is flow, as a cascade's
+  setpoint, with no pump or valve characteristic (cold review 7).
+- The level reading is white noise with no delay; S3 fits coloured noise from
+  surface boiling and carries a delay whose units it does not state (cold
+  review 6).
+- No runback, fan trip or feed pump trip (cold review 8): their frequency is
+  not found.
+- Pressure is held at one setpoint; sliding pressure [S2] is not modelled.
+- A restart is instant at a new load; a real one runs through single-element
+  start-up with the level lowered for swell [S5, S19].
 
-| controller | return (400 steps) | mean level error | pressure error |
-|---|---|---|---|
-| MPC (horizon 30 ≈ 60 s) | **318 – 364** | **0.1 – 0.6 cm** | 0.2 – 0.7 bar |
-| Three-element PID | 215 – 296 | 2.7 – 7.3 cm | 0.01 – 0.05 bar |
-| best constant action | 5.0 | trips in 5 – 117 steps | — |
+## 8. What the reference ladder's row needs
 
-Throughput is measured in [docs/performance.md](../../docs/performance.md).
-
-**Three-element control is the right PID baseline**, and its structure is the
-point: feedwater tracks *measured steam flow* as a feedforward, closing the
-mass balance without going through the level gauge, and the level PI only
-trims it slowly. That is what makes it immune to the level lying during a
-transient. Single-element level control, a level loop on the feedwater alone,
-is the weaker controller precisely because it has no such feedforward.
-
-**The expert's tuning: lambda, from single-run bump tests.** The recipe is section
-10 of `docs/proposals/expert-protocols-process.md`. On each training seed (100 to
-109) the firing is in manual at the seed's heat balance, a P loop holds the level,
-since nobody leaves a drum level in manual, and the steam demand is quiet. Each loop
-then takes one step:
-
-| loop | step | model | lambda | gains |
-|---|---|---|---|---|
-| pressure | firing +0.02, 120 steps | k 60 bar per unit action, tau 146 s, theta 22 s | theta | Kc 0.0554 per bar on the action, Ti 146 s |
-| level | feed +2 kg/s through the loop's setpoint, 120 steps | k' 7.96e-5 m/s per kg/s, theta 19.6 s and lag 1.3 s, counted as delay | theta | Kp 451 kg/s per m, Ki 7.18 |
-
-Steam now follows pressure at a fixed turbine valve, so pressure regulates itself and
-its model is first order. The firing lag is most of its 22 s, which is why the gains
-fall from Kc 1.34, the value the old plant gave, to 0.055. The level's trim has no limit of its
-own now: the integral stops only at the feedwater's limits, while the error pushes
-past them.
-
-The level's RGA, firing and feed on pressure and level, read from the moves over a
-test with the loop open, is 1.03 on the diagonal, so the pairing stands. The level
-step above is N1's closed test, and its fit carries the shrink in its delay.
-
-On the held-out seeds 200 to 209 it holds 409 a step (worst 792) against a ceiling of
-1.14, with no trip, where the old gains held 1624. Level RMS is 48 mm, 34 to 64 by
-seed, and p99 77 to 160 mm, against the +-1 inch of check 2, so it is 1.9 times the
-figure on RMS and 3 to 6 on p99. Pressure RMS is 0.24 to 0.45 bar. Spec, a strict
-xfail in `tests/boiler_drum/test_boiler_drum_expert.py`: mean level error under 25 mm
-on every held-out seed. Measured 26 to 52 mm.
-
-**Most of what remains is the fuel rate.** A 20 s firing lag and a 0.7 %/s slew keep
-pressure, and with it swell, from answering the steam swings the feed sees at once.
-The review's figures, 0.65 bar and a cost of 1342 at 20 s, came from the plant before
-steam followed pressure. Its 0.6 trips per episode at 60 s do not carry over: at 60 s
-this plant does not trip, because pressure regulates itself.
-
-**The oracle is the shared solver, on the reward itself (`oracle.py`).** Cooper's
-recipe gives P = 237 steps (474 s), which covers the ~35 s swell peak several
-times over, so the plan sees the level reverse and keeps feeding through a
-swell. Each move is an actuator's rate, sent as the command that makes it, so
-neither rate limit nor lag hides a move from the plan (`oracles/rates.py`). The
-steam follows the planned pressure, with the turbine valve on its mean path. The
-reward has been squared errors in floor units since version 2, so no surrogate
-is needed; the fuel's kink at `c_hold` is an epigraph row, and the level and
-pressure trips are hard limits, backed off by what one steam-demand innovation
-can move them (K11). On the ten test seeds it beats the stored gains by 12 to 67
-times, with no trip, no failed or capped solve and a replay gap under 1e-7, in
-about 23 iterations a solve. What cost remains sits where the steam demand swings,
-since the plan assumes a swing decays on its mean path.
-
----
-
-## 6. Known deviations
-
-**⚠️ D1 — feedwater shrink is weak.** A 10 kg/s (11 %) feedwater step produces
-about 2.4 mm of shrink, at the low end of what is reported for real boilers.
-The magnitude is bounded by the feedwater subcooling, which is already at a
-realistic 59 K, and the two channels through which it acts (suppressed riser
-boiling, collapsed drum bubbles) largely cancel — as conservation requires,
-since the heat deficit is fixed however it is split. The **load-change** swell,
-which is the effect that actually destabilises level control, is at documented
-magnitude.
-
-**⚠️ D2 — no combustion dynamics.** Heat release follows the fuel command
-instantly. A real boiler has burner and mill lags of seconds to minutes, which
-make pressure control materially harder than modelled here.
-
-**⚠️ D3 — lumped riser.** One volume-mean void fraction stands in for a
-distribution that varies along the riser height, and `τ_sr` is constant rather
-than varying with circulation.
-
-**⚠️ D4 — `f_carry` and `f_cd` are tuned.** They are not measurable plant
-quantities. They were set against three behavioural targets jointly, but they
-are the least defensible numbers in the table.
-
-**⚠️ D5 — level is linear in volume.** `A_d` is constant, which is right for
-deviations around normal water level and wrong for large excursions in a
-cylindrical drum. Trips at ±25 cm keep the model inside the linear region.
-
----
-
-<!-- BEGIN GENERATED FACTS -->
-
-<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
-     `make ci-docs` fails if this block does not match the code. Prose
-     about *why* these numbers are what they are belongs outside it. -->
-
-### Facts, generated from the code
-
-| environment | steps | step (s) | episode | action | obs | float state |
-| --- | --- | --- | --- | --- | --- | --- |
-| `boiler_drum` | 400 | 2 | 13 min | 2 in [-1, 1] | 7 | 14 |
-
-`float state` counts the scalar and array float fields the state carries,
-`time` excluded; the gap between it and `obs` is what the controller cannot
-see. Episode lengths are the scored configuration's (`env.default_params`),
-which is what the recorded baselines use.
-
-<!-- END GENERATED FACTS -->
-
-## Reward (version 2)
-
-`compute_reward = -(tracking + running + failure)`, one tracking term for the level and one for the pressure, see docs/reward-shaping.md.
-
-| parameter | value | source |
-| --- | --- | --- |
-| `e_floor_level` | 2.67e-3 m | an earlier oracle's lowest per-seed long-run mean \|level\| under the shipped steam-demand disturbance (seeds 2.7 / 17 / 18 mm), measured while it saw the steam noise of that seed. The current oracle, planning on the mean demand, holds 3.4 / 2.5 / 2.7 mm (`scripts/measure_hold.py`, 1200 hold steps after a 60-step burn-in; PID 37-70 mm). Its best seed, 2.45 mm, is within 1.1x of the floor, which is kept as the scale. Upper bound |
-| `e_floor_pressure` | 0.05 bar (the MPC holds 0.052) | the pressure transmitter's resolution. The oracle holds 0.066 / 0.052 / 0.053 bar per seed (PID 0.035-0.050), just above it; an earlier oracle's 0.028 bar came from seeing the steam noise. The hold is within 1.5x of the resolution, so the resolution stays the scale (the PID's best seed, 0.035 bar, sits below it, and a hold the instrument cannot see is not a floor). |
-| `e_tol` | 0 | no specification band |
-| `tracking_exponent` | 2 | quadratic on both |
-| `c_hold` | 1.566e8 W | firing rate while holding, MPC (PID 1.568e8) (`scripts/measure_hold.py`) |
-| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 4.4e5 | twice the level-trip plus the reachable pressure excursion's cost, 2 x ((0.25 / 2.67e-3)^2 + (23 / 0.05)^2): the 88 bar target to the 65 bar trip, per trip step |
-| `restart_steps` | 7200 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (a drum trip's restart; provisional); where a plant engineer would get it: the plant's restart procedure |
-
-`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
-hold cost the reference controller demonstrated, in the reward's units, which
-is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution. On this plant neither holds exactly: the level
-floor (2.67 mm) is an earlier oracle's hold, so the current oracle's 2.45 mm
-costs 0.84, and its 0.0519 bar pressure hold sits just above the 0.05 bar
-resolution kept as the scale, so that term costs 1.08 and `rho* = 1.92` -- `rho_floor` the same with consumption
-charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
-measured/certified floor or a resolution used as a scale, and where it is a
-resolution on a deterministic plant both references are 0, since exact hold is
-achievable there and the resolution only sets the unit;
-`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce, and `restart_steps` the time a restart would take,
-so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
-ends the window (`base.failure_kernel`): the step that leaves the envelope is
-charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` stays
-false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
-capped log-scaled reward of the previous version (`precision_floor` and the
-old weights are read only by it).
-
-## Actuators
-
-Fuel and feedwater reach the plant through the shared actuator stage (`actuate`),
-which is the block diagram of Bell and Åström's Fig. 1: a first-order lag, a rate
-limit, and the range. A reset starts both actuators where the plant is
-(`initial_action`).
-
-| figure | value | status | source |
-| --- | --- | --- | --- |
-| fuel rate | 0.007 of span per s, 143 s full stroke | Read, checked on the page and in the listing | [Bell and Åström 1987](https://lup.lub.lu.se/record/8602296), section 4, and appendix E (`UDH:0.007`) |
-| feedwater rate | 0.05 of span per s, 20 s full stroke | Read, checked the same way | same, section 4 and appendix E (`UDH:0.05`) |
-| feedwater lag | 1 s | Read in the listing | same, appendix E (`tc1:1`), the `Tc` of Fig. 1 |
-| firing lag | 20 s | **Ours, for the owner to accept** | see below |
-| control interval | 2 s | **Ours** | the unit's logs were sampled at 0.1 Hz ([Åström and Bell 2000](http://www.dei.unipd.it/~picci/Files/TEACHING/CONTROLLO_DEI_PROCESSI/DrumBoiler.pdf)), which says nothing of a controller's scan |
-| dead time of the three readings | none | **Ours** | transmitters with no modelled damping |
-
-These are the actuators of the plant this model takes its geometry from, a 160 MW
-oil-fired unit at Öresundsverket. Its fuel span, 0 to 14 kg/s, is about 1.5 times
-its nominal firing, as `Q_max` is here. Its feedwater span is 0 to 140 kg/s against
-200 kg/s here, so the same stroke moves about twice the share of nominal flow.
-
-**The firing lag is not sourced.** The report's model has no heat release lag, and
-`Tc` for fuel is 1 s, the actuator alone. On a plant log sampled every 10 s that
-leaves little room for a long lag on oil. A coal unit has one: General Signal's
-[US 4909037](https://patents.google.com/patent/US4909037) puts a mill at 100 to
-160 s before a change shows at the furnace, as a dead time and a lag. 20 s stands
-for burners, furnace gas and tube walls on oil or gas, well under a mill and well
-over the valve. No figure for it was found; the IEEE working group's papers
-(de Mello 1991) would be the place to look, and they are not open. It is the
-lower of the two lags the industrial review tried.
-
-## Readings
-
-The observation reports drum level, drum pressure and steam flow through their
-instruments (`docs/proposals/measurement-noise.md`). `fuel_pct` and `feed_pct` are
-the actuators' positions, as a plant's drives report them, and they stay exact
-with both targets.
-`sensor_noise_scale = 0` gives the noise-free task.
-
-| reading | sigma | step | instrument | status | source |
-| --- | --- | --- | --- | --- | --- |
-| `level` | 0.5 mm | | Rosemount 5300 guided-wave radar | Confirmed | [5300](https://www.emerson.com/documents/automation/73580.pdf) |
-| `pressure` | 0.022 bar | | Yokogawa EJA530E pressure transmitter | Confirmed | [EJA530E](https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf) |
-| `q_steam` | 0.047 kg/s | | Rosemount 8800D vortex class | Not checked | [8800D](https://core.instrumart.com/assets/Rosemount-8800D-Series-Vortex-Flow-Meter-Datasheet.pdf) |
-
-`level` excludes drum surface turbulence, so on a real drum it is a lower bound.
-`pressure` is an upper bound: 0.055 % of an assumed 0 to 120 bar span at a stated
-3 sigma, a conformance figure that includes linearity and hysteresis.
-
-**Weak figure.** The refutation pass did not reach `q_steam`. It reads the sheet's
-0.1 % repeatability as 2 sigma on 93.35 kg/s, and a main this large may use flow
-nozzles instead.
-
-The expert reads these values, and so does every tuner. The oracle plans and acts
-on the true state, so it stays a full-state bound. `reward`, trips and the score
-read the true state. `info["measured_reward"]` is the same cost on the readings,
-with any trip taken from the true state, so resting on target costs a learner
-`(0.022 / 0.05)^2 = 0.19` per step in pressure and `(0.5 / 2.67)^2 = 0.035` in
-level.
+- Inputs: the load plan in the observation (channels 7 to 9) as the
+  steady-state feedforward rung: steam feedforward to feedwater, `q_s (h_s -
+  h_f)` to firing.
+- Bump tests at loads across 40 to 100 %, since the plant's gains change with
+  load.
+- Its cost is now tonnes of steam off plan, with trips at 840 t; a rung that
+  trips any nominal seed is dropped.
+- Seeds 100 to 109 each carry their own plan; the ladder must not assume
+  nominal load.

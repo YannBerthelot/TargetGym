@@ -884,15 +884,15 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_boiler_drum_pid_controller", module="target_gym.boiler_drum.experts"
         ),
         make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.oracle"),
-        # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
-        # so a controller has to survive many inverse-response transients.
+        # v4 (charter Amendments 1 and 2): Astrom and Bell's published model,
+        # the sourced timed level trips, a load plan ramping at 1 to 2 %/min
+        # over an hour, and a score in tonnes of steam off the plan
+        # (boiler_drum/PHYSICS.md).
         tuned_gains_key="boiler_drum",
-        disturbance_fields=("q_steam",),
-        # The steam demand's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
+        # The load plan is drawn at reset and read by the agent: no hidden
+        # disturbance moves with the step's key.
         oracle_data=_shared_oracle("boiler_drum"),
-        noise_fields=("q_steam_noise_std",),
-        version=3,
+        version=4,
     ),
     EnvSpec(
         name="wind_turbine",

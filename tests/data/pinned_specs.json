@@ -770,7 +770,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",
@@ -795,16 +795,12 @@
     "tuned_gains_key": "boiler_drum",
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [
-      "q_steam"
-    ],
+    "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "q_steam_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "wind_turbine",

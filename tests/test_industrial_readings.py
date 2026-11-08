@@ -86,7 +86,10 @@ OUTSIDE = {
     "glass_furnace": lambda s: s.replace(T_crown=jnp.float32(2000.0)),
     "reactor": lambda s: s.replace(n=jnp.float32(2.0)),
     "hvac": lambda s: s.replace(T_air=jnp.float32(50.0)),
-    "boiler_drum": lambda s: s.replace(level=jnp.float32(1.0)),
+    # Past the high trip for 12 s, more than its 10 s delay (boiler_drum/env.py).
+    "boiler_drum": lambda s: s.replace(
+        level=jnp.float32(1.0), time_high=jnp.float32(12.0)
+    ),
     "cement_kiln": lambda s: s.replace(T_solid=s.T_solid + 1000.0),
     "wind_turbine": lambda s: s.replace(omega=3.0 * s.omega),
     "battery": lambda s: s.replace(soc=jnp.float32(1.5)),
@@ -295,16 +298,15 @@ def test_cement_kiln_measured_reward_has_the_proposals_floor():
     assert floor == pytest.approx(0.1296, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS))
 
 
-def test_boiler_drum_measured_reward_has_the_proposals_floor():
-    """Pressure ``(0.022 / 0.05)^2 = 0.1936``, the table's 0.19, plus level
-    ``(5e-4 / 2.67e-3)^2 = 0.0351``. Zero firing costs nothing."""
+def test_boiler_drum_measured_reward_has_the_steam_meters_floor():
+    """On plan, the measured cost is the steam meter's scatter priced as steam
+    off the plan: ``E|N(0, 0.047)| = 0.047 sqrt(2 / pi) = 0.0375`` kg/s, times
+    2 s, is 7.50e-5 t per step, with sd ``0.047 sqrt(1 - 2 / pi) * 2e-3 =
+    5.67e-5`` t per draw."""
     env, params, state = _setup("boiler_drum")
-    resting = state.replace(
-        level=jnp.float32(0.0), pressure=state.target_pressure, Q_fuel=jnp.float32(0.0)
-    )
-    sd = math.sqrt(2.0 * (0.1936**2 + 0.0351**2))
+    resting = state.replace(level=jnp.float32(0.0), q_steam=state.q_demand)
     floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    assert floor == pytest.approx(0.1936 + 0.0351, abs=4 * sd / math.sqrt(DRAWS))
+    assert floor == pytest.approx(7.50e-5, abs=4 * 5.67e-5 / math.sqrt(DRAWS))
 
 
 def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():

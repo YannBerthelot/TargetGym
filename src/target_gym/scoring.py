@@ -62,7 +62,14 @@ from target_gym import eval as E
 from target_gym import records
 from target_gym.eval import fixed_settle
 
-__all__ = ["CONSUMPTION", "SPEC_BAND", "TRACKED_TERMS", "ceiling", "compare"]
+__all__ = [
+    "CONSUMPTION",
+    "JOB_SCORED",
+    "SPEC_BAND",
+    "TRACKED_TERMS",
+    "ceiling",
+    "compare",
+]
 __all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
 __all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
 
@@ -131,7 +138,6 @@ def _recycle_power(state, params, tripped):
 CONSUMPTION = {
     "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
-    "boiler_drum": lambda state, params, tripped: state.Q_fuel,
     "distillation": lambda state, params, tripped: state.V,
     "ph_neutralization": lambda state, params, tripped: state.q3,
     "compressor_surge": _recycle_power,
@@ -208,10 +214,19 @@ def _currency_per_floor(name: str, p, step_seconds: float) -> float:
     return 1.0
 
 
+#: Tasks scored on the operator's job (charter rule 15): the cost of keeping
+#: inside the plant's limits, with no tracking term. They have no resolution
+#: ceiling or settle band, which are NaN; rule 9's room comes from an oracle.
+JOB_SCORED = frozenset({"boiler_drum"})
+
+
 def _per_step(name: str, params, env, at_resolution: bool) -> float:
     """The reward's tracking charge per step with every tracked error one
     resolution (or one floor) beyond its tolerance."""
     from target_gym.registry import REGISTRY, control_step_seconds
+
+    if name in JOB_SCORED:
+        return float("nan")
 
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
