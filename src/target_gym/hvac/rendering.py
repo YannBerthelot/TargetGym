@@ -179,11 +179,7 @@ def render_hvac(state, params, step, history):
     err = max(
         params.band_low - float(state.T_air), float(state.T_air) - params.band_high, 0.0
     )
-    status = (
-        rk.NOMINAL
-        if err < params.comfort_band
-        else (rk.WATCH if err < 2 * params.comfort_band else rk.ALARM)
-    )
+    status = rk.NOMINAL if err <= 0.0 else (rk.WATCH if err < 1.0 else rk.ALARM)
     span = _T_HI - _T_LO
     f = lambda T: (float(T) - _T_LO) / span
 

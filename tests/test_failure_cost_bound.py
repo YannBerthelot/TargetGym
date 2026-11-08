@@ -74,6 +74,9 @@ def _worst_surviving_cost(name: str) -> float:
             else n
         )
         for n in sorted(REGISTRY)
+        # A plant with no trip (charter rule 14: hvac, battery) has nothing to
+        # bound; its failure cost is 0 by construction.
+        if float(REGISTRY[n].make_test_params().failure_cost) > 0.0
     ],
 )
 def test_a_trip_costs_more_per_step_than_any_surviving_step(name):

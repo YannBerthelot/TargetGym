@@ -215,11 +215,15 @@ step response (time to 63.2% of the total change, the quantity relay tuning
 assumes). Where it does not, that is a property of the environment worth knowing
 before reading any result from it.
 
+The four tasks rebuilt under the charter's Amendment 2 on 2026-11-08 (hvac,
+battery, boiler_drum, wind_turbine) have new plants and episodes; their tau has
+not been remeasured.
+
 | environment | N | tau (steps) | 5·tau | gamma |
 | --- | --- | --- | --- | --- |
 | cstr | 150 | 5 | 25 | 0.99333 |
 | first_order | 150 | 10 | 50 | 0.99333 |
-| hvac | 720 | 62 | 310 | 0.99861 |
+| hvac | 1344 | not remeasured | not remeasured | 0.99926 |
 | plane | 280 | 23 | 115 | 0.99643 |
 | plane_energy | 1600 | 23 | 115 | 0.99938 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
@@ -232,9 +236,9 @@ before reading any result from it.
 | distillation | 400 | 8 | 40 | 0.99750 |
 | glass_furnace | 1600 | 132 | 660 | 0.99938 |
 | cement_kiln | 700 | 58 | 290 | 0.99857 |
-| battery | 2880 | 1 | 5 | 0.99965 |
-| boiler_drum | 400 | 3 | 15 | 0.99750 |
-| wind_turbine | 400 | 1 | 5 | 0.99750 |
+| battery | 14400 | not remeasured | not remeasured | 0.99993 |
+| boiler_drum | 1800 | not remeasured | not remeasured | 0.99944 |
+| wind_turbine | 2400 | not remeasured | not remeasured | 0.99958 |
 | four_tank | 1200 | 38 | 190 | 0.99917 |
 | ph_neutralization | 300 | 14 | 70 | 0.99667 |
 | reactor | 1440 | 1 | 5 | 0.99931 |

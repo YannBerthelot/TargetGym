@@ -14,6 +14,10 @@ tests here catch for a name that stops being a live gain.
 Gaps a row shows on purpose:
 
 - ``reactor`` has no gains: its rod program steps on deadbands.
+- ``hvac`` has no gains: its heating curve is two points from the building's
+  design calculation (charter Amendment 2 rebuild).
+- ``battery`` has no gains: its expert re-declares baselines from the reported
+  state of charge (charter Amendment 2 rebuild).
 - ``cement_kiln`` lists the inner burning-zone PI only: its fuzzy rule base has no
   gains.
 - The aircraft list TECS and guidance gains only. Their attitude loops move into the
@@ -26,7 +30,7 @@ _L1 = ("period", "damping")
 
 #: Per registry name, read off each law at the sensor-noise plants.
 GAIN_NAMES: dict[str, tuple[str, ...]] = {
-    "battery": ("Kp", "Ki"),
+    "battery": (),
     "boiler_drum": ("Kp_level", "Ki_level", "Kp_pressure", "Ki_pressure"),
     "cement_kiln": ("Kp_inner", "Ki_inner"),
     "compressor_surge": ("kp_speed", "ki_speed", "kp_surge", "ki_surge"),
@@ -34,7 +38,7 @@ GAIN_NAMES: dict[str, tuple[str, ...]] = {
     "distillation": ("Kp_T", "Ti_T", "Kp_D", "Ti_D", "Kp_B", "Ti_B"),
     "four_tank": ("Kp_1", "Ti_1", "Kp_2", "Ti_2"),
     "glass_furnace": ("Kp", "Ki"),
-    "hvac": ("kp", "Ti"),
+    "hvac": (),
     "ph_neutralization": ("Kp", "Ti"),
     "plane": _TECS,
     "plane3d_circle": _L1 + _TECS,
