@@ -97,6 +97,25 @@ def test_bank_and_overspeed_are_not_trips(name):
     assert not bool(env.is_terminated(fast, params))
 
 
+@pytest.mark.parametrize("name", (HEADING, RACETRACK))
+def test_a_full_bank_demand_is_held_at_the_protected_bank(name):
+    """Rule 14, Amendment 3: the autopilot's bank is a protected limit, 25 to 30
+    deg in the family [IFH ch. 10's 30 deg holding bank; the 25 deg of ICAO Doc
+    8168 and the A320's HDG mode, unconfirmed], for agent and reference alike.
+    The limit is on the demand, as the autopilot's own bank limit is; the roll
+    loop then holds it. Full bank demand for 20 s: the bank settles within 2 deg
+    of the 30 deg chosen (ours, inside that range), and peaks nearer 30 than
+    the 45 deg demand the agent had before (37.5)."""
+    params = _params(name, target_altitude_range=(6000.0, 6000.0))
+    states, _, tripped = _rollout(
+        name, params, 20, act=lambda o, a: a.at[2].set(1.0)
+    )
+    phi = np.rad2deg([float(s.phi) for s in states])
+    assert not tripped
+    assert phi.max() < 37.5
+    assert abs(phi[-5:].mean() - 30.0) < 2.0
+
+
 # -- Turn physics (A1, A2) --------------------------------------------------------
 
 
@@ -293,6 +312,30 @@ def test_the_reference_holds_the_rvsm_band_in_still_air(name):
     assert not tripped
     assert np.abs(error).max() < BAND
     print(f"{name}: reference cost in calm air {cost:.1f}")
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize("wind_kt", (0.0, 30.0))
+def test_the_hold_reference_flies_its_assigned_speed(wind_kt):
+    """Rule 3 (Amendment 3): the reference is the family's autopilot. It reads
+    airspeed, as TECS does [TECS; REALITY.md, readings], and its slowest speed
+    is 1.2 times the level stall, "20% higher than level flight stall speed"
+    (ARSPD_FBW_MIN [P409]), raised by the load factor of the bank it demands,
+    as STALL_PREVENTION's "roll limits based on aerodynamic load factor in
+    turns" [P409]. So on a low hold, 220 KIAS under the 230 cap [IFH ch. 10],
+    in still air and in a steady 30 kt wind across the pattern, its airspeed
+    stays inside +-10 kt [AIM 4-4-12] after its first 60 s, through 600 s."""
+    env, _ = tg.make(RACETRACK)
+    params = _params(
+        RACETRACK,
+        target_altitude_range=(4000.0, 4000.0),
+        wind_y=float(wind_kt * KT),
+    )
+    states, obs, tripped = _rollout(RACETRACK, params, 600)
+    speed = np.array([float(o[env.obs_index["airspeed"]]) for o in obs[60:]])
+    target = np.array([float(o[env.obs_index["target_speed"]]) for o in obs[60:]])
+    assert not tripped
+    assert np.abs(speed - target).max() < 10.0 * KT
 
 
 def test_the_reference_l1_sits_in_its_documented_ranges():

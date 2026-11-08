@@ -330,6 +330,10 @@ class PlaneParams3D(EnvParams):
     #: Holding turns: 3 deg/s or 30 deg of bank, whichever is less [IFH ch. 10].
     holding_rate: float = 3.0 * 3.14159265 / 180.0
     holding_bank: float = 30.0 * 3.14159265 / 180.0
+    #: The protected bank: the demand stops here, for agent and reference alike
+    #: (rule 14, Amendment 3). Ours, family range 25 to 30 deg [IFH ch. 10's 30
+    #: deg holding bank; ICAO Doc 8168 and the A320 HDG mode's 25, unconfirmed].
+    protected_bank: float = 30.0 * 3.14159265 / 180.0
     #: Inbound leg 1 min at or below 14 000 ft, 1.5 min above [IFH ch. 10].
     holding_split_altitude: float = 14_000.0 * 0.3048
     holding_leg_low: float = 60.0
@@ -354,6 +358,7 @@ PARAM_UNITS = {
     "assigned_speed_mode": "-",
     "holding_rate": "rad/s",
     "holding_bank": "rad",
+    "protected_bank": "rad",
     "holding_split_altitude": "m",
     "holding_leg_low": "s",
     "holding_leg_high": "s",
@@ -1052,6 +1057,9 @@ def compute_next_state_3d(
     ``key=None`` freezes the gust (constant wind).
     """
     dt = params.delta_t / inner_steps
+    # Amended: bank is a protected limit (rule 14), the demand clipped to it.
+    protected = jnp.clip(bank_demand, -params.protected_bank, params.protected_bank)
+    bank_demand = jnp.where(params.amended, protected, bank_demand)
 
     # Total wind = steady mean + altitude shear + OU turbulence gust.
     previous = jnp.array([state.gust_x, state.gust_y, state.gust_z])
