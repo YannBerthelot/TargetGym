@@ -238,6 +238,10 @@ _SHARED_MODULES = {
     # Unhashed on purpose too: it films an episode, which cannot change what
     # the episode scores.
     "target_gym.video",
+    # Unhashed on purpose: a package imports only its Scenario record to
+    # declare its suite, and the suite's values live in the package, which its
+    # fingerprint covers. Running a suite is evaluation, like target_gym.eval.
+    "target_gym.scenarios",
 }
 # And, in experts*.py and oracle*.py only, the shared controller code.
 _CONTROLLER_MODULES = {
