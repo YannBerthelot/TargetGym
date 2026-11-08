@@ -40,6 +40,8 @@ from target_gym.base import (
 from target_gym.benchmark import episodes_of, run_policy, task_info
 from target_gym.eval import time_in_band
 from target_gym.experts.mpc import plan_params
+from target_gym.pc_gym.first_order.env import FirstOrderParams
+from target_gym.pc_gym.first_order.env_jax import FirstOrderSystem
 from target_gym.pc_gym.four_tank.env import FourTankParams
 from target_gym.pc_gym.four_tank.env_jax import FourTank
 from target_gym.registry import REGISTRY
@@ -102,6 +104,22 @@ def _quiet(params):
     return params.replace(sensor_noise_scale=0.0)
 
 
+#: The trip tests need a plant that can trip: four_tank has no trip since its
+#: version 5, so they use the first-order fixture at gain 2, which drives x
+#: past its -3 limit with the input at its -2 floor.
+def _tripping():
+    return FirstOrderSystem(), FirstOrderParams(K=2.0)
+
+
+#: A four-tank plant left alone: no setpoint moves, outlet or cup.
+def _still_tanks(**kw):
+    """Raw action 0 is the P+ operating point, 3.15 V, with a 6.3 V pump
+    range: at the shipped 10 V range raw 0 is 5 V, where the Lund tanks
+    overflow."""
+    quiet = dict(setpoint_step=0.0, leak_fraction=0.0, cup_volume=0.0, v_max=6.3)
+    return FourTankParams(**{**quiet, **kw})
+
+
 def _added(env, state, params):
     """``(what each reading adds at state, the values it adds to)``, flat.
 
@@ -158,18 +176,18 @@ def test_two_policies_on_one_episode_key_see_identical_noise_draws(spec):
 def test_noise_path_survives_a_trip():
     """A policy that trips restarts the plant, not the instruments: the noise
     after the restart is the noise of a policy that never tripped."""
-    env = _unrounded(FourTank())
-    params = FourTankParams()
+    env, params = _tripping()
+    env = _unrounded(env)
     key = jax.random.PRNGKey(3)
-    pumps_off = _rollout(env, params, key, jnp.array([-1.0, -1.0]), step_stream=1)
-    steady = _rollout(env, params, key, jnp.array([0.0, 0.0]), step_stream=2)
+    pumps_off = _rollout(env, params, key, jnp.array([-1.0]), step_stream=1)
+    steady = _rollout(env, params, key, jnp.array([0.0]), step_stream=2)
     assert any(bool(info["tripped"]) for *_, info in pumps_off[1:])
     assert not any(bool(info["tripped"]) for *_, info in steady[1:])
     for (obs_a, state_a, *_), (obs_b, state_b, *_) in zip(pumps_off, steady):
         np.testing.assert_allclose(
             obs_a - env.get_obs(state_a, _quiet(params)),
             obs_b - env.get_obs(state_b, _quiet(params)),
-            atol=3e-7,  # 4 float32 steps at the 1.5 m overflow level
+            atol=3e-7,  # a few float32 steps at the 3.0 limit
         )
 
 
@@ -324,16 +342,15 @@ def test_step_returns_a_reading_at_the_params_it_was_given():
 
 @pytest.mark.parametrize("scale", [1.0, 1000.0])
 def test_noise_never_fires_a_trip_or_changes_reward(scale):
-    """h4 sits 0.1 mm above the low-level trip, filling. At scale 1000 a
-    reading lands 0.5 m away, far outside the 0.05 to 1.5 m envelope half the
-    time, so a trip read from a measured copy would fire within steps."""
-    env = FourTank()
-    params = FourTankParams()
+    """x sits 1e-4 above the low trip at -3, rising. At scale 1000 a reading
+    lands 1.1 away, outside the -3 to 3 envelope often, so a trip read from a
+    measured copy would fire within steps."""
+    env, params = _tripping()
     key = jax.random.PRNGKey(0)
     noisy = params.replace(sensor_noise_scale=scale)
     _, start = env.reset_env(key, noisy)
-    start = start.replace(h4=jnp.float32(params.h_min + 1e-4))
-    action = jnp.array([1.0, 1.0])
+    start = start.replace(x=jnp.float32(params.x_min + 1e-4))
+    action = jnp.array([0.0])  # x relaxes toward 0, inside the envelope
     charge = params.restart_steps * params.failure_cost
 
     def run(p):
@@ -356,8 +373,8 @@ def test_noise_never_fires_a_trip_or_changes_reward(scale):
 def test_measured_reward_charges_a_true_trip_and_nothing_else():
     """On the step that trips, the measured reward is the trip charge, as the
     true reward is: ``reward.with_trip`` zeroes every other term."""
-    env, params = FourTank(), FourTankParams()
-    rows = _rollout(env, params, jax.random.PRNGKey(0), jnp.array([-1.0, -1.0]), 60)
+    env, params = _tripping()
+    rows = _rollout(env, params, jax.random.PRNGKey(0), jnp.array([-1.0]), 60)
     trips = [(r, info) for _, _, r, _, info in rows[1:] if bool(info["tripped"])]
     assert trips, "pumps off did not trip within 60 steps"
     charge = params.restart_steps * params.failure_cost
@@ -397,7 +414,8 @@ def _steady_levels(params: FourTankParams, volts: float):
 
 def _hold_costs(env, params, n_episodes=64, n_steps=500):
     """True and measured cost per step of a plant resting exactly on target."""
-    h1, h2, h3, h4 = _steady_levels(params, 5.0)  # raw action 0 is 5 V
+    # Raw action 0 is the middle of the pump range.
+    h1, h2, h3, h4 = _steady_levels(params, 0.5 * (params.v_min + params.v_max))
     action = jnp.zeros(2)
 
     def episode(key):
@@ -431,7 +449,7 @@ def test_measured_reward_carries_the_proposals_floor():
     0.5 / sqrt(N) over N independent steps. The tolerance is 4 of those.
     """
     env = _unrounded(FourTank())
-    true, measured, n = _hold_costs(env, FourTankParams())
+    true, measured, n = _hold_costs(env, _still_tanks())
     assert measured == pytest.approx(0.5, abs=4 * 0.5 / np.sqrt(n))
     assert true < 1e-2, "the plant did not hold its target"
 
@@ -443,7 +461,7 @@ def test_rounding_adds_its_quantisation_variance_to_the_floor():
     ``2 / 3``. The formula holds at sigma = step / 2 to about 0.2% (Widrow's
     condition), inside the 4 standard errors allowed here."""
     env = FourTank()
-    true, measured, n = _hold_costs(env, FourTankParams())
+    true, measured, n = _hold_costs(env, _still_tanks())
     assert measured == pytest.approx(2.0 / 3.0, abs=4 * (2.0 / 3.0) / np.sqrt(n))
     assert true < 1e-2, "the plant did not hold its target"
 
@@ -465,18 +483,10 @@ _RESTING_PLANT = FourTank()
 
 
 def _resting_on(offset):
-    """Four-tank params whose every episode starts at rest at raw action 0,
-    with both targets ``offset`` metres above the levels it rests on."""
-    params = FourTankParams()
-    h1, h2, h3, h4 = (float(h) for h in _steady_levels(params, 5.0))
-    return params.replace(
-        initial_h1_range=(h1, h1),
-        initial_h2_range=(h2, h2),
-        initial_h3_range=(h3, h3),
-        initial_h4_range=(h4, h4),
-        target_h1_range=(h1 + offset, h1 + offset),
-        target_h2_range=(h2 + offset, h2 + offset),
-    )
+    """Four-tank params whose every episode starts at rest at raw action 0
+    (3.15 V), with both targets ``offset`` metres from the levels it rests on:
+    a setpoint move of ``offset`` on each tank at the first step."""
+    return _still_tanks(setpoint_step=offset, setpoint_times=(1, 10**6, 1))
 
 
 def _hold_rollout(offset):

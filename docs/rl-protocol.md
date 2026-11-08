@@ -235,8 +235,8 @@ before reading any result from it.
 | battery | 2880 | 1 | 5 | 0.99965 |
 | boiler_drum | 400 | 3 | 15 | 0.99750 |
 | wind_turbine | 400 | 1 | 5 | 0.99750 |
-| four_tank | 1200 | 38 | 190 | 0.99917 |
-| ph_neutralization | 300 | 14 | 70 | 0.99667 |
+| four_tank | 3300 | 38 | 190 | 0.99970 |
+| ph_neutralization | 1440 | 14 | 70 | 0.99931 |
 | reactor | 1440 | 1 | 5 | 0.99931 |
 | unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |

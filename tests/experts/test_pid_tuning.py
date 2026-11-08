@@ -119,6 +119,7 @@ def test_four_tank_loss_is_differentiable():
     import jax
 
     from target_gym import FourTank, FourTankParams
+    from target_gym.pc_gym.four_tank.env import setpoint_ranges
 
     env = FourTank(integration_method="rk4_1")
     params = FourTankParams()
@@ -129,7 +130,7 @@ def test_four_tank_loss_is_differentiable():
             target_h1=t1, target_h2=t2
         ),
         obs_indices=((0, 4), (1, 5)),
-        target_ranges=(tuple(params.target_h1_range), tuple(params.target_h2_range)),
+        target_ranges=setpoint_ranges(params),
         n_targets=2,
         n_steps=int(params.max_steps_in_episode),
     )

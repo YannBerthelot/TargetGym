@@ -175,7 +175,7 @@ sensor type, noise and lag are not found.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `four_tank` | 3300 | 1 | 55 min | 2 in [-1, 1] | 6 | 16 |
+| `four_tank` | 3300 | 1 | 55 min | 2 in [-1, 1] | 6 | 14 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

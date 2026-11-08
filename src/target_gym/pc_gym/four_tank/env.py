@@ -159,27 +159,41 @@ class FourTankState(EnvState):
     cup_tank: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
     )
-    #: The nominal setpoints the moves are taken from; NaN keeps a hand-built
-    #: state's own targets.
-    nominal_h: jax.Array = struct.field(
-        default_factory=lambda: jnp.full(2, jnp.nan), kw_only=True
-    )
-
     actuator_held: jax.Array = actuator_field(2)
 
 
-def targets_at(state: FourTankState, params: FourTankParams, time):
-    """The two setpoints at step ``time``: the nominal point plus the moves so
-    far. The second move returns the first tank; the third moves the other."""
+def steady_levels(volts, params: FourTankParams):
+    """The four levels both pumps at ``volts`` hold, from the mass balances
+    [S1, eq. (1)]: each outflow a_i sqrt(2 g h_i) equals its inflow."""
+    p = params
+    q3 = (1.0 - p.gamma2) * p.k2 * volts
+    q4 = (1.0 - p.gamma1) * p.k1 * volts
+    q1 = p.gamma1 * p.k1 * volts + q3
+    q2 = p.gamma2 * p.k2 * volts + q4
+    level = lambda q, a: (q / a) ** 2 / (2.0 * p.g)  # noqa: E731
+    return level(q1, p.a1), level(q2, p.a2), level(q3, p.a3), level(q4, p.a4)
+
+
+def setpoint_ranges(params: FourTankParams):
+    """The setpoints an episode can ask for: the operating point's lower
+    levels, one ``setpoint_step`` either side."""
+    h1, h2, _, _ = steady_levels(params.v_nominal, params)
+    s = params.setpoint_step
+    return (h1 - s, h1 + s), (h2 - s, h2 + s)
+
+
+def setpoint_move(state: FourTankState, params: FourTankParams, time):
+    """The move the schedule makes to the two setpoints at step ``time``: the
+    first away from the point, the second back, the third on the other tank."""
     times = jnp.asarray(params.setpoint_times)
-    passed = time >= times
     step = params.setpoint_step * state.sp_sign
-    first = jnp.where(passed[0] & ~passed[1], step[0], 0.0)
-    third = jnp.where(passed[2], step[2], 0.0)
+    first = jnp.where(time == times[0], step[0], 0.0) - jnp.where(
+        time == times[1], step[0], 0.0
+    )
+    third = jnp.where(time == times[2], step[2], 0.0)
     delta = jnp.zeros(2)
     delta = delta.at[state.sp_tank].add(first)
-    delta = delta.at[1 - state.sp_tank].add(third)
-    return state.nominal_h + delta
+    return delta.at[1 - state.sp_tank].add(third)
 
 
 def compute_velocity(
@@ -272,9 +286,8 @@ def compute_next_state(
     # A full tank overflows back to the reservoir [S4, p. 15]: the level holds
     # at the rim. An empty tank stays empty.
     h1, h2, h3, h4 = (jnp.clip(h, 0.0, params.h_max) for h in (h1, h2, h3, h4))
-    target = targets_at(state, params, t + 1)
-    target = jnp.where(
-        jnp.isnan(target), jnp.stack([state.target_h1, state.target_h2]), target
+    target = jnp.stack([state.target_h1, state.target_h2]) + setpoint_move(
+        state, params, t + 1
     )
     return (
         state.replace(

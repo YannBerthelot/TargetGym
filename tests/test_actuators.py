@@ -38,7 +38,10 @@ NOISY = [s for s in REGISTRY.values() if _declares_readings(s)]
 
 
 def _state(env, params):
-    return env.reset_env(jax.random.PRNGKey(0), params)[1]
+    """The reset plant with its actuators at raw 0, the rest these tests
+    measure moves from (four_tank resets them where its pumps run)."""
+    state = env.reset_env(jax.random.PRNGKey(0), params)[1]
+    return state.replace(actuator_held=jnp.zeros_like(state.actuator_held))
 
 
 def _track(params, commands):
@@ -196,21 +199,26 @@ def test_a_small_command_does_not_reach_the_plant_through_a_stuck_valve():
 
 
 def test_a_restart_returns_the_actuator_to_rest():
-    """A trip is a cold restart: the memory goes with the state."""
-    env = FourTank()
-    params = FourTankParams(actuator_dead_band=0.1)
+    """A trip is a cold restart: the memory goes with the state. On the
+    first-order fixture at gain 2, which trips with its input at the floor
+    (four_tank has no trip since its version 5)."""
+    from target_gym.pc_gym.first_order.env import FirstOrderParams
+    from target_gym.pc_gym.first_order.env_jax import FirstOrderSystem
+
+    env = FirstOrderSystem()
+    params = FirstOrderParams(K=2.0, actuator_dead_band=0.1)
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     tripped = False
     for t in range(60):
         _, state, _, _, info = env.step_env(
-            jax.random.fold_in(key, t), state, jnp.array([-1.0, -1.0]), params
+            jax.random.fold_in(key, t), state, jnp.array([-1.0]), params
         )
         if bool(info["tripped"]):
             tripped = True
             break
     assert tripped, "pumps off did not trip within 60 steps"
-    np.testing.assert_array_equal(state.actuator_held, jnp.zeros(2))
+    np.testing.assert_array_equal(state.actuator_held, jnp.zeros(1))
 
 
 def test_rate_and_lag_default_to_off():
@@ -334,10 +342,12 @@ def test_the_column_starts_with_its_valves_where_the_plant_is():
     range to the plant's own flows."""
     spec = REGISTRY["distillation"]
     env, p = spec.make_env(), spec.make_test_params()
-    state = _state(env, p)
+    state = env.reset_env(jax.random.PRNGKey(0), p)[1]
     span = np.array([p.L_max - p.L_min, p.V_max - p.V_min])
     want = 2.0 * (np.array([state.L, state.V]) - [p.L_min, p.V_min]) / span - 1.0
-    np.testing.assert_allclose(state.actuator_held, want, rtol=1e-6)
+    # The held action is float32 arithmetic on float32 flows, and at the design
+    # point it sits near 0, so the tolerance is absolute: a few float32 steps.
+    np.testing.assert_allclose(state.actuator_held, want, rtol=1e-6, atol=1e-6)
 
 
 class _BangBang:

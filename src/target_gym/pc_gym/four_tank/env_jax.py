@@ -21,6 +21,7 @@ from target_gym.pc_gym.four_tank.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    steady_levels,
 )
 from target_gym.pc_gym.four_tank.rendering import _render
 from target_gym.video import SavesVideo
@@ -101,6 +102,11 @@ class FourTank(
         terminated, _ = check_is_terminal(state, params)
         return terminated
 
+    def initial_action(self, state, params):
+        """The raw action that holds the reset pumps where they run."""
+        v = jnp.stack([state.v1, state.v2])
+        return 2.0 * (v - params.v_min) / (params.v_max - params.v_min) - 1.0
+
     @canonical_reset
     def reset_env(
         self, key: chex.PRNGKey, params: FourTankParams = None
@@ -111,23 +117,10 @@ class FourTank(
         keys = jax.random.split(key, 7)
 
         # Established operation (charter rule 17): both pumps at the operating
-        # point and the four tanks on its steady state [S4, pp. 5-6], solved
-        # from the mass balances [S1, eq. (1)]: each outflow a_i sqrt(2 g h_i)
-        # equals its inflow.
+        # point and the four tanks on its steady state [S4, pp. 5-6].
         p = params
         v = p.v_nominal
-        q3 = (1.0 - p.gamma2) * p.k2 * v
-        q4 = (1.0 - p.gamma1) * p.k1 * v
-        q1 = p.gamma1 * p.k1 * v + q3
-        q2 = p.gamma2 * p.k2 * v + q4
-        level = lambda q, a: (q / a) ** 2 / (2.0 * p.g)  # noqa: E731
-        h1, h2, h3, h4 = (
-            level(q1, p.a1),
-            level(q2, p.a2),
-            level(q3, p.a3),
-            level(q4, p.a4),
-        )
-        nominal = jnp.stack([h1, h2])
+        h1, h2, h3, h4 = steady_levels(v, p)
         span = p.max_steps_in_episode
 
         state = FourTankState(
@@ -146,11 +139,7 @@ class FourTank(
             leak_tank=jax.random.randint(keys[3], (), 0, 2),
             cup_time=jax.random.randint(keys[4], (), 0, span),
             cup_tank=jax.random.randint(keys[5], (), 0, 2),
-            nominal_h=nominal,
         )
-        # The pumps start where the operating point holds them.
-        u = 2.0 * (v - p.v_min) / (p.v_max - p.v_min) - 1.0
-        state = state.replace(actuator_held=jnp.full((2,), u))
         obs = self.get_obs(state)
         return obs, state
 

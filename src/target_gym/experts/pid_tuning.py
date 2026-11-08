@@ -423,6 +423,7 @@ def tune_four_tank_pid(
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Tune FourTank MIMO PID gains via gradient descent."""
     from target_gym import FourTank, FourTankParams
+    from target_gym.pc_gym.four_tank.env import setpoint_ranges
 
     env = FourTank()
     params = FourTankParams()
@@ -434,10 +435,7 @@ def tune_four_tank_pid(
             target_h1=t1, target_h2=t2
         ),
         obs_indices=((0, 4), (1, 5)),  # (h1, target_h1), (h2, target_h2)
-        target_ranges=(
-            tuple(params.target_h1_range),
-            tuple(params.target_h2_range),
-        ),
+        target_ranges=setpoint_ranges(params),
         n_targets=6,  # 6×6 = 36 pairs
         n_steps=int(params.max_steps_in_episode),
     )

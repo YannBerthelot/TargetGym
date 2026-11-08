@@ -499,7 +499,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 4,
+    "version": 5,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",
@@ -529,14 +529,12 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "load_scale"
-    ]
+    "noise_fields": []
   },
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",
@@ -575,7 +573,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 4,
+    "version": 5,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",
@@ -600,16 +598,12 @@
     "tuned_gains_key": "distillation",
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [
-      "zF"
-    ],
+    "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "zF_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "glass_furnace",
