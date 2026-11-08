@@ -1,5 +1,37 @@
 # CSTR — physics model, provenance and validation
 
+## Status: Extra (charter rule 5), 2026-11-08
+
+This task goes to Extra under charter rules 12, 18 and 5. It keeps its code and
+is not scored.
+
+**Reason.** The named property is the jacket and the runaway it must stay ahead
+of (charter, Amendment 2; `REALITY.md`, "The operator's job"). The task's
+kinetics and heat capacity match no plant (`COLD_REVIEW.md`), so under rule 12
+they go, and the one continuous stirred tank with plant data is the PARSEX
+pilot reactor [S1]. Built from PARSEX's own numbers (k0 2.0e11 1/s, E/R
+10700 K, dH -200 kJ/mol, CA,in 1.5 kmol/m3, 90 g/s at 24 C, 34 min), its
+balances reproduce the pilot's design point: 79 % conversion against S1's about
+74 to 78 %, and a cooler duty that needs 89 g/s of water, inside S1's 40 to
+110 g/s. But on a loss of cooling it heats at 0.81 K/min over the first
+3 minutes, where the audit's test T6 asks at least 2 K/min [S3, Fig. 11]. T7
+passes (a 25 K rise in 25 min against 3 to 48). A failing test is decided by
+missing physics from a source, never by moving a number, and none was found:
+the pilot simulates its reaction by steam injection, at a heat release a
+quarter of what T6 needs. Fouling, the other half of the property, has no
+measured source (`REALITY.md`, "A measured fall of U ... not found"). The
+calculation is `cstr-parsex-runaway.py` in the session notes folder.
+
+**For the owner.** This decision rests on T6, whose lower bound comes from a
+different plant (Bayer's residue treater, a different chemistry). If the owner
+reads T6 as not applying to a pilot CSTR, the PARSEX rebuild above is the
+sourced design: a cooler energy balance with fresh water as the action
+(40 to 110 g/s), the 2 min loop dead time of [S6], a thin-well thermowell
+[S10], temperature as the job, and no concentration reading (no online
+analyser was found). The cooler's hold-up would be ours.
+
+The sections below describe the task as it was, for the record.
+
 Reference process: a **non-isothermal continuous stirred-tank reactor** running
 an irreversible first-order exothermic reaction A → B, cooled through a jacket.
 The coolant temperature is the manipulated variable.

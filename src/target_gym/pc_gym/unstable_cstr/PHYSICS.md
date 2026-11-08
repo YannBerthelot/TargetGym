@@ -22,8 +22,8 @@ different task, which rule 5 does not allow as a second try.
 reactor run at an unstable point (Pinheiro and Kershenbaum 1999 is on the
 owner list, unopened), a jacket energy balance with sourced dead time, and the
 operator's job of `REALITY.md`: hold temperature, watch the rate of rise, and
-trip feed before heat release outruns the jacket. The `cstr` task now carries
-the jacket and the runaway on the same reactor (`../cstr/PHYSICS.md`).
+trip feed before heat release outruns the jacket. `cstr` went to Extra too
+(`../cstr/PHYSICS.md`), so no task carries this reactor's jacket today.
 
 The sections below describe the task as it was, for the record.
 
