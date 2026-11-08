@@ -24,8 +24,12 @@ Rungs, each adding to the last:
 5. Rung 3 with an override on the rods' saturation instead: at their top stop with
    Tavg still low, boron takes Tavg, the textbook answer to a saturated actuator.
 
-The published rod program with rung 1's boron loop is a row beside them, as rule 3
-allows. The script keeps the best rung that trips no seed.
+The published rod program is a row beside them twice: with rung 1's boron, and with
+rung 5's. The owner chose the second as the reference on 2026-11-08, after the first
+was traced to its boron: it never dilutes for xenon or ahead of the return to power.
+The published program's nonlinear speed (8 to 72 steps/min) also copes with the rods'
+7-fold gain swing, which a linear PI tuned for the worst point cannot. If that pairing
+trips a seed, the best clean rung is the reference instead.
 
     uv run python scripts/reactor_ladder.py
 """
@@ -226,10 +230,32 @@ def make_policy(tune, rung, p):
     return act, memory
 
 
+PUBLISHED = "rod program + rung 5 boron"
+
+
 def reference(saved, p):
-    """``(act, memory)`` of the best rung in a saved ladder run."""
+    """``(act, memory)`` of the reference in a saved ladder run: the published rod
+    program with the best rung's boron when that runs clean, else the best rung."""
     tune = Tune(**saved["tune"])
+    if saved.get("reference") == PUBLISHED:
+        return program_with(p, tune, 5)
     return make_policy(tune, int(saved["best_rung"].split()[1]), p)
+
+
+def program_with(p, tune, rung):
+    """The published rod program on Tavg, with ``rung``'s boron: the operator's part,
+    on the plant's own rod control. Rule 3 allows a published controller."""
+    rc = RodControlParams()
+    boron_act, boron_memory = make_policy(tune, rung, p)
+
+    def act(memory, obs):
+        state, bm = memory
+        a, state = rod_control_step(rc, state, obs[:6])
+        b, bm = boron_act(bm, obs)
+        return jnp.stack([a[0], b[1]]), (state, bm)
+
+    zero = jnp.asarray(0.0)
+    return act, (RodControlState(zero, zero, zero), boron_memory)
 
 
 def published(p, tune):
@@ -448,13 +474,19 @@ def main():
         table[f"rung {rung}"] = rows(env, p, act, memory)
     act, memory = published(p, tune)
     table["rod program + boron on offset"] = rows(env, p, act, memory)
+    act, memory = program_with(p, tune, 5)
+    table[PUBLISHED] = rows(env, p, act, memory)
     hold = lambda m, o: (jnp.array([PARK, 0.0]), m)  # noqa: E731
     table["null: rods parked, no boron"] = rows(env, p, hold, jnp.asarray(0.0))
     rung_names = [k for k in table if k.startswith("rung")]
     clean = [k for k in rung_names if table[k]["seeds_tripped"] == 0]
     best = min(clean, key=lambda k: table[k]["cost_mean"]) if clean else None
+    # The owner's choice of 2026-11-08: the published rod program carries the rods,
+    # the recipe's boron the operator's part, if that pairing trips no seed.
+    reference = PUBLISHED if table[PUBLISHED]["seeds_tripped"] == 0 else best
     print(json.dumps({
-        "bump_models": models, "tune": tune.__dict__, "best_rung": best, "table": table,
+        "bump_models": models, "tune": tune.__dict__, "best_rung": best,
+        "reference": reference, "table": table,
     }, indent=1))  # fmt: skip
 
 

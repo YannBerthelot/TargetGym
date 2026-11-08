@@ -274,12 +274,13 @@ def test_reward_charges_past_the_band_only():
     assert extra == pytest.approx(1000.0 * 5.0 / 3600.0, rel=1e-3)
 
 
-# Contract: the reference's rod loop on delta I is stable at every point the day
-# holds. Its plant settles inside a step, so the loop is discrete: with g the gain
-# times Kc, z^2 - (1 - 2g) z - g = 0 reaches -1, a swing of delta I every other step,
-# at g = 2/3. A swing over the band (0.05) between two steps is that cycle, since
-# nothing else in the plant moves delta I that fast. The day's hard point is the
-# half-power hold; seeds 100, 102 and 103 cycled there under a full-power tune.
+# Contract: the reference does not limit-cycle the offset at any point the day holds.
+# The plant settles inside a step, so a discrete loop past its margin cycles at a
+# pole of -1: delta I swings one way then back, over the band (0.05), step after
+# step. A single fast rod move can also swing it past the band, so the cycle is read
+# as two such swings in a row with opposite signs. The day's hard point is the
+# half-power hold; seeds 100, 102 and 103 cycled there under a full-power tune, with
+# hundreds of alternating swings (docs/proposals/reactor-axial.md).
 @pytest.mark.parametrize("seed", [100, 102, 103])
 def test_the_reference_does_not_cycle_the_offset_in_the_half_power_hold(seed):
     from target_gym.reactor.experts import make_reactor_pid_controller
@@ -297,4 +298,7 @@ def test_the_reference_does_not_cycle_the_offset_in_the_half_power_hold(seed):
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), 1440)  # half a day
     di = np.asarray(jax.lax.scan(step, (s, obs, expert.init_state), keys)[1])
-    assert np.max(np.abs(np.diff(di))) < p.ao_band
+    swing = np.diff(di)
+    big = np.abs(swing) > p.ao_band
+    back_and_forth = big[1:] & big[:-1] & (np.sign(swing[1:]) != np.sign(swing[:-1]))
+    assert not back_and_forth.any()

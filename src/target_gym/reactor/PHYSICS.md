@@ -228,13 +228,14 @@ power or to a trip.
 
 ## 6. The expert
 
-The expert is rung 5 of `scripts/reactor_ladder.py`, EDF's Mode A. The rods hold Tavg
-past their 1.6 C dead band. The operator's boron steers the offset through the rods, as
-a cascade, fed forward from the plan and led by the line's delay. Boron takes Tavg
-while the rods sit at their top stop. Every gain is SIMC on bump tests at full power
-and at the half-power hold, keeping the least gain. The published rod program stays in
-`experts.py` as `rod_control_step`, a row in that script's table. Results and room are
-in
+The expert is the reference of `scripts/reactor_ladder.py`, EDF's Mode A. The
+published rod program (`rod_control_step`, the NRC's Westinghouse manual) holds Tavg.
+The operator's boron, from the ladder's rung 5, steers the offset through the rods as a
+cascade, fed forward from the plan and led by the line's delay, and takes Tavg while
+the rods sit at their top stop. Every boron gain is SIMC on bump tests at full power and
+at the half-power hold, keeping the least gain. The owner chose this pairing on
+2026-11-08: the program's nonlinear speed copes with the rods' 7-fold gain swing, which
+the rungs' linear PI could not. Results and room are in
 `docs/proposals/reactor-axial.md`.
 
 ---

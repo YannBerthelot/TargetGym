@@ -92,19 +92,19 @@ def rod_control_step(params, state, obs, xp=jnp):
 
 @struct.dataclass
 class ReferenceParams:
-    """Rung 5 of ``scripts/reactor_ladder.py``, EDF's Mode A: rods on Tavg past a
-    1.6 C dead band (IAEA NP-T-3.23, annex II-5.1); boron, the operator's, on the
-    axial offset through the rods, as a cascade (the offset sets the rods' target,
-    boron carries them there); boron fed forward from the day's plan for the power
-    defect, led by the boron line's expected delay; and an override, boron on Tavg,
-    while the rods sit at their top stop with Tavg still low. Every gain is SIMC on a
-    bump test at full power and at the half-power hold, the design asking the least
-    gain kept. Nothing here was set from a cost (docs/proposals/reactor-axial.md)."""
+    """The reference of ``scripts/reactor_ladder.py``, EDF's Mode A: the published
+    rod program on Tavg (:func:`rod_control_step`), and the operator's boron from the
+    ladder's rung 5. Boron steers the axial offset through the rods, as a cascade
+    (the offset sets the rods' target, boron carries them there). It is fed forward
+    from the day's plan for the power defect, led by the boron line's expected delay,
+    and takes Tavg while the rods sit at their top stop with Tavg still low past
+    1.6 C (IAEA NP-T-3.23, annex II-5.1). Every boron gain is SIMC on a bump test at
+    full power and at the half-power hold, the design asking the least gain kept.
+    Nothing here was set from a cost (docs/proposals/reactor-axial.md)."""
 
     dt: float = 30.0
     dead_band: float = 1.6
-    rod_Kc: float = 0.0108248
-    rod_Ti: float = 30.0
+    rods: RodControlParams = struct.field(default_factory=RodControlParams)
     ff: float = -113.648191
     ao_Kc: float = 0.1942105
     ao_Ti: float = 765.0
@@ -120,9 +120,10 @@ class ReferenceParams:
 
 @struct.dataclass
 class ReferenceState:
-    """The loops' outputs and last errors, the plan and the clock."""
+    """The rod program's state, the boron loops' outputs and last errors, the plan
+    and the clock."""
 
-    rods: float = 1.0 - 2.0 * 3.0 / 228.0
+    rods: RodControlState = struct.field(default_factory=RodControlState)
     boron: float = 0.0
     target: float = 1.0 - 2.0 * 3.0 / 228.0
     last_e: float = 0.0
@@ -148,8 +149,8 @@ def reference_step(params, state, obs, xp=jnp):
 
     error = T_ref - T_avg
     e = xp.sign(error) * xp.maximum(xp.abs(error) - p.dead_band, 0.0)
-    rods = state.rods + p.rod_Kc * ((e - state.last_e) + p.dt / p.rod_Ti * e)
-    rods = xp.clip(xp.clip(rods, rod - p.reach, rod + p.reach), -1.0, 1.0)
+    demand, rod_state = rod_control_step(p.rods, state.rods, obs[..., :6], xp)
+    rods = demand[..., 0]
 
     ao = p.ao_ref - di / xp.maximum(n, 0.05)
     target = state.target + p.ao_Kc * ((ao - state.last_ao) + p.dt / p.ao_Ti * ao)
@@ -166,7 +167,7 @@ def reference_step(params, state, obs, xp=jnp):
     override = xp.where(stuck, state.override + step, 0.0)
     out = xp.clip(boron + p.ff * planned + override, -1.0, 1.0)
     new = ReferenceState(
-        rods=rods, boron=boron, target=target, last_e=e, last_ao=ao, last_r=r,
+        rods=rod_state, boron=boron, target=target, last_e=e, last_ao=ao, last_r=r,
         clock=state.clock + p.dt, down=down, up=up, override=override,
     )  # fmt: skip
     return xp.stack([rods, out], axis=-1), new

@@ -48,7 +48,8 @@ def main():
     env, p = Reactor(), ReactorParams()
     saved = json.load(open(sys.argv[1]))
     ref = ladder.reference(saved, p)
-    reference = np.asarray(saved["table"][saved["best_rung"]]["cost_by_seed"])
+    name = saved.get("reference") or saved["best_rung"]
+    reference = np.asarray(saved["table"][name]["cost_by_seed"])
     coef = fit_table(env, p, ref)
     zero = jnp.asarray(0.0)
 
