@@ -81,7 +81,7 @@ _ONE = (("precision_floor", "e_floor", 1),)
 #: setpoint. They have no tracking ceiling or settle band, which rule 8 no
 #: longer reads (S and H are dropped), so ``ceiling`` and ``settle_band`` are
 #: NaN for them, and they are in neither ``TRACKED_TERMS`` nor ``CONSUMPTION``.
-JOB_SCORED = frozenset({"ph_neutralization"})
+JOB_SCORED = frozenset({"distillation", "ph_neutralization"})
 
 #: Per environment, the terms its reward tracks: ``(resolution field, e_floor
 #: field, count)`` on its params. ``count`` is ``"wingmen"`` for a term charged
@@ -106,10 +106,6 @@ TRACKED_TERMS = {
     "cstr": _ONE,
     "unstable_cstr": _ONE,
     "four_tank": (("precision_floor", "e_floor", 2),),
-    "distillation": (
-        ("precision_floor", "e_floor_top", 1),
-        ("precision_floor", "e_floor_bottom", 1),
-    ),
     "glass_furnace": _ONE,
     "cement_kiln": _ONE,
     "boiler_drum": (
@@ -139,7 +135,6 @@ CONSUMPTION = {
     "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
     "boiler_drum": lambda state, params, tripped: state.Q_fuel,
-    "distillation": lambda state, params, tripped: state.V,
     "compressor_surge": _recycle_power,
 }
 

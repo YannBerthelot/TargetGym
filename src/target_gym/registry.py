@@ -792,12 +792,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         # step (80 states, 16 substeps for stability).
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
-        # layer's temperature loop holds.
-        version=4,
-        disturbance_fields=("zF",),
-        # The feed composition's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
-        noise_fields=("zF_noise_std",),
+        # layer's temperature loop holds. v5 (charter Amendment 2): product
+        # zones instead of trips, feed-rate and composition steps [D1, Fig.
+        # 18], the feed flow observed, and a job score in kmol of boilup.
+        # The feed steps are drawn at reset, so no step key moves them: no
+        # ``disturbance_fields``.
+        version=5,
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(

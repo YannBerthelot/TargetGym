@@ -429,7 +429,7 @@ def _column_gains(p, n=3000):
 
     spec = REGISTRY["distillation"]
     env = spec.make_env()
-    quiet = spec.make_test_params(sensor_noise_scale=0.0, zF_noise_std=0.0)
+    quiet = spec.make_test_params(sensor_noise_scale=0.0, feed_step=0.0, zF_step=0.0)
     L0, V0 = COLUMN_REST
 
     def settle(L, V):
@@ -470,7 +470,7 @@ def tune_distillation() -> dict:
     The pairing is read first: yD on L, the tray on V, xB on the tray's setpoint."""
     name = "distillation"
     # The feed blended steady for the tests: the loads off, as on every task.
-    spec, p = REGISTRY[name], _params(name, zF_noise_std=0.0)
+    spec, p = REGISTRY[name], _params(name, feed_step=0.0, zF_step=0.0)
     env = spec.make_env()
     dt = float(p.delta_t)
     L_span, V_span = float(p.L_max - p.L_min), float(p.V_max - p.V_min)
@@ -519,9 +519,10 @@ def tune_distillation() -> dict:
         loops=held,
     )
     T_loop = rescaled(T_loop, per_V)
-    # The feed's 3 sd moves distillate, and so boilup at fixed reflux, F dz (mass
-    # balance over the column at fixed purities).
-    u_d = 3 * float(_params(name).zF_noise_std) * float(p.F)
+    # The feed's sourced composition step (distillation v5, which replaced the
+    # 3 sd of the retired drift) moves distillate, and so boilup at fixed
+    # reflux, F dz (mass balance over the column at fixed purities).
+    u_d = float(_params(name).zF_step) * float(p.F)
     T_out = tuned(T_loop, inst_T.h, DEAD_BAND * V_span, u_d)
     Kp_T, Ti_T, Tf_T = T_out["Kc"], T_out["Ti"], T_out["Tf"]
     a = -np.expm1(-dt / Tf_T) if Tf_T else 1.0

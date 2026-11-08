@@ -69,7 +69,8 @@ EXACT = {
     "cstr": (2,),
     "first_order": (1,),
     "unstable_cstr": (3,),
-    "distillation": (2, 3, 4, 5),
+    # Flows, specs, and the feed meter (FC 1), read exactly: ours.
+    "distillation": (2, 3, 4, 5, 7),
     # Valve, set point, and the monitor's own excursion clock.
     "ph_neutralization": (1, 2, 3),
     "compressor_surge": (4, 6),
@@ -87,7 +88,6 @@ ON_TARGET = {
     "unstable_cstr": lambda s: s.replace(
         target_levels=jnp.full_like(s.target_levels, s.C_a)
     ),
-    "distillation": lambda s: s.replace(target_yD=s.x[-1], target_xB=s.x[0]),
     "compressor_surge": lambda s: s.replace(
         setpoint_levels=jnp.full_like(s.setpoint_levels, s.dp),
         setpoint_lead=jnp.zeros_like(s.setpoint_lead),
@@ -99,7 +99,6 @@ FLOOR = {
     "cstr": (5e-4 / 5e-4) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
     "unstable_cstr": (5e-4 / 5e-4) ** 2,
-    "distillation": 2.0 * (4e-4 / 4e-4) ** 2,
     "compressor_surge": (9.17 / 27.5) ** 2,
 }
 #: Independent tracked readings behind each floor: a sum of k equal chi-squared

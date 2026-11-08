@@ -31,20 +31,21 @@ from target_gym.pc_gym.distillation.env import (
 )
 from target_gym.pc_gym.distillation.env_jax import _NOMINAL_PROFILE, DistillationColumn
 
-P = DistillationParams(zF_noise_std=0.0)
+P = DistillationParams(feed_step=0.0, zF_step=0.0)
 ENV, KEY = DistillationColumn(), jax.random.PRNGKey(0)
 L0, V0, TRAYS, TAUL = 2.70629, 3.20629, 39, 0.063  # colamod.m
 EQ_31 = [[0.8754, -0.8618], [1.0846, -1.0982]]  # d[yD, xB] / d[L, V]
 
 
 @jax.jit
-def _target_steady_state(yD, xB, zF):
+def _target_steady_state(yD, xB, zF, F=1.0):
     """[x, L, V] holding both products: Newton, float64 under ``enable_x64``."""
+    p = P.replace(F=F)
 
     def residual(z):
         x, L, V = z[:N], z[N], z[N + 1]
-        here = jnp.concatenate([x, steady_liquid(L, P)])
-        dx = compute_velocity(here, (L, V), zF, P)[0][:N]
+        here = jnp.concatenate([x, steady_liquid(L, p)])
+        dx = compute_velocity(here, (L, V), zF, p)[0][:N]
         return jnp.concatenate([dx, jnp.stack([x[-1] - yD, x[0] - xB])])
 
     def newton(_, z):
@@ -124,12 +125,13 @@ def test_moving_holdup_conserves_the_light_component():
 
 
 @pytest.mark.parametrize(
-    "yD, xB, zF",
-    list(itertools.product(P.target_yD_range, P.target_xB_range, (0.44, 0.50, 0.56))),
+    "F, zF", list(itertools.product((0.8, 1.0, 1.2), (0.4, 0.5, 0.6)))
 )
-def test_every_target_in_the_box_holds_inside_the_flow_limits(yD, xB, zF):
+def test_the_specs_hold_inside_the_flow_limits_after_any_feed_step(F, zF):
+    """The feed's sourced steps, 20 % in rate and 0.1 in composition [D1,
+    Fig. 18], either way: the products can be held on spec in the flow box."""
     with enable_x64():
-        z = _target_steady_state(yD, xB, zF)
+        z = _target_steady_state(P.yD_spec, P.xB_spec, zF, F)
     assert P.L_min < float(z[N]) < P.L_max
     assert P.V_min < float(z[N + 1]) < P.V_max
 
