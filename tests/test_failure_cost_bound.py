@@ -30,8 +30,6 @@ KNOWN_BELOW: dict[str, str] = {
     # cement_kiln sat here until v3: a kiln starved of fuel ran cold to ~17 %
     # free lime without tripping. It now trips at ``lime_max`` (5 %), the
     # level its failure_cost is sized on.
-    "glass_furnace": "no trip: the plant's override protects the crown and the canal "
-    "and fining are priced zones, so failure_cost is 0 and never charged",
 }
 
 
@@ -76,6 +74,9 @@ def _worst_surviving_cost(name: str) -> float:
             else n
         )
         for n in sorted(REGISTRY)
+        # A plant with no trip (charter B5: hvac, battery) has nothing to
+        # bound; its failure cost is 0 by construction.
+        if float(REGISTRY[n].make_test_params().failure_cost) > 0.0
     ],
 )
 def test_a_trip_costs_more_per_step_than_any_surviving_step(name):
