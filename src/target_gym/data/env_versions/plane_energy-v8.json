@@ -1,5 +1,5 @@
 {
-  "fingerprint": "1fa079b672eb4b4f",
-  "note": "charter Amendment 2 on plane_energy (plane/PHYSICS.md): the +-65 ft band travels with the 500 fpm profile from each level clearance, instead of applying only once the profile reaches the level",
-  "stamped": "2026-11-08T13:49:10+00:00"
+  "fingerprint": "1d9cf5e5f0275be8",
+  "note": "re-stamped in place: plane/env_jax.py changed only plane's default_params (Amendment 3); this task's own params and code paths are unchanged; behaviour unchanged",
+  "stamped": "2026-11-08T16:41:39+00:00"
 }

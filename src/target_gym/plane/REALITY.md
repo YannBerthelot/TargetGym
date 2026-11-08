@@ -204,3 +204,9 @@ the flight controls, not the pilot, keep load factor, bank and AOA inside their 
 - Thrust-limited maximum altitude: where residual climb at max climb thrust falls to 100
   to 300 fpm (training slides and a forum post, per the 2026-11-08 review; not found in
   an Airbus manual).
+- Holding-area design wind: an omnidirectional 2h + 47 kt at h thousand feet, after
+  ICAO PANS-OPS Doc 8168 (PPRuNe posts quoting it; a 2003 post gives 3h + 47; the
+  primary text was not reached). Used only as the top of the scenarios' wind range.
+- Cost index: operators trade fuel against time; long-range cruise is the speed at 99 %
+  of the best specific range, the curve being flat there (secondary accounts of Airbus,
+  "Getting to grips with the cost index"; the document was not reached).

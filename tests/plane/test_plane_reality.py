@@ -149,6 +149,33 @@ def test_the_target_is_one_assigned_level():
     assert len(targets) == 1
 
 
+def test_the_hold_is_at_a_cruise_level_in_rvsm_airspace():
+    """The +-65 ft band is RVSM's, which applies from FL290 to FL410 [RVSM];
+    the levels stop at FL370, clear of the 39 100 ft maximum altitude [TCDS]
+    (Amendment 3: the reviewer's FL390 cost 294 at that edge). On every seed
+    the assigned level, where the aircraft starts, is in FL290 to FL370."""
+    env, params = tg.make("plane")
+    for seed in range(8):
+        _, state = env.reset_env(jax.random.PRNGKey(seed), params)
+        level = float(state.target_altitude) / FT
+        assert 29_000.0 <= level <= 37_000.0
+        assert float(state.z) == pytest.approx(float(state.target_altitude), abs=0.5)
+
+
+def test_the_light_zone_is_derived_at_the_cruise_level():
+    """turbulence_sigma from the sharp-edged gust load at FL330, the middle
+    level, on the M0.78 schedule: dn/dw = rho V S a / (2 m g), with the model's
+    lift slope 0.08786 per deg [PHYSICS.md] and Prandtl-Glauert. ISA at 10 058
+    m: 222.77 K, rho 0.4097 kg/m3, a 299.2 m/s, so V = 233.4 m/s, slope 5.034
+    / sqrt(1 - 0.78^2) = 8.04 per rad, and dn/dw = 0.4097 x 233.4 x 122.6 x
+    8.04 / (2 x 73 500 x 9.81) = 0.0654 g per m/s. A minute is 60 V / L = 26.3
+    scale lengths of 533.4 m, whose expected range is 2 sqrt(2 ln 26.3) = 5.11
+    standard deviations, so 0.2 g peak to peak [BEA447 Figure 24's usual level]
+    needs 0.2 / (5.11 x 0.0654) = 0.598 m/s."""
+    _, params = tg.make("plane")
+    assert float(params.turbulence_sigma) == pytest.approx(0.598, rel=0.01)
+
+
 def test_turbulence_comes_in_a_zone_with_calm_around_it():
     """Turbulence comes in zones of 3 to 30 min [BEA447 Figure 24]: on every
     seed the gust is zero outside one zone, and the zone lasts 180 to 1 800 s."""

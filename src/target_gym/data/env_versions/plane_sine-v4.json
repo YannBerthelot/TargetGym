@@ -1,5 +1,5 @@
 {
-  "fingerprint": "85f3a18980696f21",
-  "note": "charter Amendment 2 on the 2D plant (plane/PHYSICS.md); re-stamped in place after later plane/env.py changes that act only on target_pattern 5 (plane_energy), so this task is unchanged",
-  "stamped": "2026-11-08T13:49:10+00:00"
+  "fingerprint": "d68b9aaf4f2a82da",
+  "note": "re-stamped in place: plane/env_jax.py changed only plane's default_params (Amendment 3); this task's own params and code paths are unchanged; behaviour unchanged",
+  "stamped": "2026-11-08T16:41:39+00:00"
 }

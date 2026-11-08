@@ -280,6 +280,17 @@ class EnvSpec:
 # ---------------------------------------------------------------------------
 
 
+def _scenarios(module, name):
+    """A task's scenario suite, imported when asked for (``target_gym.scenarios``)."""
+
+    def suite():
+        import importlib
+
+        return getattr(importlib.import_module(module), name)()
+
+    return suite
+
+
 def _plane():
     from target_gym.plane.env_jax import Airplane2D
 
@@ -534,7 +545,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("turbulence_sigma",),
         # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
         # data read, established start, a turbulence zone, band costs.
-        version=4,
+        scenarios=_scenarios("target_gym.plane.scenarios", "suite"),
+        # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
+        # zone's sigma re-derived there, and a scenario suite.
+        version=5,
     ),
     # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
     # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid

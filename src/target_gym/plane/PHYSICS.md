@@ -480,6 +480,59 @@ The 2D oracle plans the earlier cost, so the room is "not measured" (rule 9).
 **Known deviations.** The speed schedule's CAS is still the unsourced 290 kt;
 no published clearance profile was found, so the sequence is ours.
 
+## Amendment 3: `plane` and `plane_energy` (2026-11-08)
+
+The owner's ruling: a task represents its family, here the A320 family of airliners;
+a number not sourced is allowed inside the family's documented range, labelled
+"ours, family range". Tests: `tests/plane/test_plane_reality.py`,
+`tests/plane/test_aircraft_scenarios.py`.
+
+**`plane`: cruise levels.** FL290 to FL370, RVSM airspace where the +-65 ft band
+applies [RVSM], clear of the 39 100 ft maximum altitude [TCDS] (the reviewer's
+FL390 cost 294 at that edge). The light zone's sigma is re-derived at FL330 on
+the M0.78 schedule: dn/dw = 0.4097 x 233.4 x 122.6 x 8.04 / (2 x 73 500 x 9.81) =
+0.0654 g per m/s, a minute 26.3 scale lengths, expected range 5.11 sigma, so 0.2 g
+peak to peak needs 0.598 m/s. A5 still holds at the new levels.
+
+**`plane`: a cost operators pay (rule 23).** Operators pay fuel and time, traded by
+the cost index; long-range cruise sits at 99 % of the best specific range, where
+the curve is flat (secondary sources, REALITY.md, unconfirmed). Fuel is modelled in
+kg. Measured on seeds 0 to 2: flying 8 kt slow, inside the band, burns 1.3 to 1.9 %
+less fuel in the 30 min window (1 171 to 1 156 kg, 1 285 to 1 261, 1 266 to 1 244),
+and 9.5 kt slow 1.8 to 2.4 % less while touching the band's edge (0.3 to 1.0). That
+is a room of about 1.02 on fuel in a fixed-time window, and less on the operator's
+real cost, fuel per distance plus time. No other cost is found: the reviewer's ride
+and throttle terms were refuted (gusts set the ride; throttle travel has no wear
+source). So `plane` is listed as solved (rule 23), and stays in the core pool.
+
+**`plane`: scenarios (rule 20)**, `plane/scenarios.py`: normal (one light zone),
+calm, the worst recorded zone (0.5 g peak to peak, 2.5 times the light sigma
+[BEA447 Figure 24]), a 30 min zone over the whole window, heavy and high (78 t,
+FL350 to 370 [TCDS]), light and low (60 t, FL290 to 310).
+
+| Number | Value | Status |
+|---|---|---|
+| `target_altitude_range` | FL290 to FL370 | cited: RVSM's airspace, under TCDS's maximum altitude |
+| `turbulence_sigma` | 0.598 m/s | derived at FL330, above |
+| `target_cas`, `target_mach` | 290 kt, M 0.78 | ours, family range: under the A320's VMO 350 kt and MMO 0.82 [TCDS]; a cruise Mach range is not sourced in REALITY.md (cold review D4) |
+| `initial_mass` | 73.5 t; 60 t and 78 t in scenarios | ours, family range 42.6 t (OEW) to 78 t (MTOW) |
+| worst zone | 2.5 x the light sigma | derived: 0.5 g, BEA447 Figure 24's top, over 0.2 g, the load being linear in the gust |
+| episode | 1 800 s | ours: one zone of up to 30 min [BEA447] |
+
+**`plane_energy`: Extra (rule 18).** The owner's criterion: a heavy member, 78 t,
+at FL330 to 370; Extra if residual climb stays well above 500 fpm. It is 909 to
+1 163 fpm (V (T_max - D) / W), and 879 to 1 123 fpm in a full-thrust climb at held
+airspeed in the plant, so thrust never runs out and the speed-against-height trade
+never happens. Reasons and evidence in [EXTRA.md](EXTRA.md).
+
+**Reference ladder row (for `scripts/reference_ladder.py`, not edited here).**
+`plane` needs a row with two loops on the 2D plant: altitude (CV `z`, MV pitch
+demand, action 1) and airspeed (CV `airspeed`, MV throttle, action 0), bump-tested
+at the corners of `target_altitude_range` and of `initial_mass` (60 and 78 t, the
+scenarios' ends); rung 2's balance is `trim_action`; the zone for rule 22's
+back-off is the +-65 ft and +-10 kt bands; limits are the protected pitch demand
+the plant already applies. Until then TECS is the reference.
+
 ## 5. Known deviations
 
 **✅ D1 and D2 — resolved.** They were one defect, not two.

@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -26,6 +26,15 @@
       "failure_cost": 377468.4556213017,
       "rho_floor_tracking": 0.0,
       "rho_floor": 0.0,
+      "target_altitude_range": [
+        8839.2,
+        11277.6
+      ],
+      "initial_altitude_range": [
+        8839.2,
+        11277.6
+      ],
+      "turbulence_sigma": 0.598,
       "speed_band_cost": true
     },
     "tuned_gains_key": "plane",
