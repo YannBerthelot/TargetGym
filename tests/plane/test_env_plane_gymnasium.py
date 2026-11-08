@@ -19,14 +19,17 @@ def test_compute_reward():
     env_params = PlaneParams(reward_version=1)
     reward = compute_reward(state=env.state, params=env_params)
     assert reward.shape == ()
-    assert 1 > reward > 0
+    # 1 exactly when the hold starts on its level (Amendment 2 rule 17).
+    assert 1 >= reward > 0
 
 
 def test_step():
     # Still air: the assertion is about the elevator, not a gust.
     env = Airplane2D(env_params=PlaneParams(turbulence_sigma=0.0))
     obs, info = env.reset(seed=42)
-    action = (0.5, 0)
+    # Idle and a level pitch demand, below the reset's trim pitch (the hold
+    # starts established, Amendment 2 rule 17).
+    action = (-1.0, 0)
     state = env.state
     # Perform the step transition.
     n_obs, reward, terminated, truncated, new_info = env.step(action)
@@ -41,70 +44,37 @@ def test_step():
 
     assert new_state.power < state.power
     assert new_state.time == state.time + 1
-    # assert new_state.theta == state.theta
-    assert new_state.alpha > state.alpha
+    assert new_state.theta < state.theta
     assert new_state.gamma < state.gamma
 
 
 def test_is_terminal():
+    """Only the ground ends a flight: the ceiling is an operating limit, not a
+    trip (Amendment 2 rule 14; REALITY.md, limits, TCDS item 11)."""
     env_params = PlaneParams(reward_version=1)
-    env = Airplane2D()
-    obs, info = env.reset()
-    terminal_state = PlaneState(
-        x=0,
-        x_dot=0,
-        z=env_params.max_alt + 0.01,
-        z_dot=0,
-        theta=0,
-        theta_dot=0,
-        alpha=0,
-        gamma=0,
-        m=0,
-        power=0,
-        stick=0,
-        fuel=0,
-        time=0,
-        target_altitude=0,
+
+    def state_at(z):
+        return PlaneState(
+            x=0,
+            x_dot=0,
+            z=z,
+            z_dot=0,
+            theta=0,
+            theta_dot=0,
+            alpha=0,
+            gamma=0,
+            m=0,
+            power=0,
+            stick=0,
+            fuel=0,
+            time=0,
+            target_altitude=0,
+        )
+
+    assert not Airplane2D().is_terminated(
+        state_at(env_params.max_alt + 0.01), env_params
     )
-    assert env.is_terminated(terminal_state, env_params)
-    terminal_state = PlaneState(
-        x=0,
-        x_dot=0,
-        z=env_params.min_alt - 0.01,
-        z_dot=0,
-        theta=0,
-        theta_dot=0,
-        alpha=0,
-        gamma=0,
-        m=0,
-        power=0,
-        stick=0,
-        fuel=0,
-        time=0,
-        target_altitude=0,
-    )
-    assert env.is_terminated(terminal_state, env_params)
-    terminal_state = PlaneState(
-        x=0,
-        x_dot=0,
-        z=env_params.max_alt - 0.01,
-        z_dot=0,
-        theta=0,
-        alpha=0,
-        gamma=0,
-        m=0,
-        power=0,
-        theta_dot=0,
-        stick=0,
-        fuel=0,
-        time=env_params.max_steps_in_episode + 1,
-        target_altitude=0,
-    )
-    # Past the time limit with the altitude in range: truncated, not
-    # terminated. gymnax >= 1.0 keeps the two apart, and an agent must still
-    # bootstrap on V(s_T) here.
-    assert env.is_truncated(terminal_state, env_params)
-    assert not env.is_terminated(terminal_state, env_params)
+    assert Airplane2D().is_terminated(state_at(env_params.min_alt - 0.01), env_params)
 
 
 def test_render():

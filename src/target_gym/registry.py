@@ -285,6 +285,17 @@ class EnvSpec:
 # ---------------------------------------------------------------------------
 
 
+def _scenarios(module, name):
+    """A task's scenario suite, imported when asked for (``target_gym.scenarios``)."""
+
+    def suite():
+        import importlib
+
+        return getattr(importlib.import_module(module), name)()
+
+    return suite
+
+
 def _plane():
     from target_gym.plane.env_jax import Airplane2D
 
@@ -559,32 +570,64 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped "
+            "model plans the earlier quadratic cost, so plane's room is not "
+            "measured (charter rule 9)."
+        ),
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
+        # data read, established start, a turbulence zone, band costs.
+        fingerprint_sources=("scenarios.py",),
+        scenarios=_scenarios("target_gym.plane.scenarios", "suite"),
+        # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
+        # zone's sigma re-derived there, and a scenario suite.
+        version=5,
     ),
-    # Two moving-setpoint variants of the same aircraft: same plant, same
-    # controllers, a different commanded altitude. Steps expose the transient
-    # response repeatedly, and the sinusoid the closed loop's bandwidth.
+    # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
+    # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid
+    # (plane_sine, Extra: no real duty, plane/EXTRA.md).
     EnvSpec(
         name="plane_energy",
         group="aircraft",
         env_factory=_plane_energy,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): "
+            "the shipped model plans the earlier cost, so plane_energy's room "
+            "is not measured (charter rule 9)."
+        ),
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_energy"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=5,
+        # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md).
+        # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
+        # bands (plane/PHYSICS.md). v8: the altitude band travels with the
+        # 500 fpm profile instead of starting where it ends.
+        version=8,
     ),
     EnvSpec(
         name="plane_sine",
@@ -596,9 +639,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_sine"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        version=4,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -608,16 +657,34 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
+        scenarios=_scenarios("target_gym.plane3d.scenarios", "heading_suite"),
+        # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
+        # vectors every 150 s, and a scenario suite.
+        version=7,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -645,15 +712,35 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
+        scenarios=_scenarios("target_gym.plane3d.scenarios", "racetrack_suite"),
+        # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank and
+        # a scenario suite with steady winds.
+        # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
+        # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
+        version=8,
     ),
     EnvSpec(
         name="plane3d_figure8",

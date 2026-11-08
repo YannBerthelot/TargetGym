@@ -157,7 +157,9 @@ AIRLINER = TECSParams(
     thr_min=-1.0,
     thr_max=1.0,
     pitch_trim=0.0,
-    time_const=2.0,
+    # AP_TECS's default and the tuning guide's starting point, inside its
+    # documented 3 to 10 s [P409, TECS]. 2.0 sat outside it (BEHAVIOUR_TESTS C1).
+    time_const=5.0,
     ptch_damp=1.0,
     integ_gain=0.1,
     spd_weight=0.0,

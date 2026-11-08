@@ -224,6 +224,8 @@ aircraft's and the patrol's reward parameters; `e_floor_path` is unused here.
 | --- | --- | --- |
 | `e_floor_altitude` | 1 m | the barometric altimeter resolution, as in the 3D tasks: the oracle holds the lead's altitude below it (0.80 m, lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 0.94 to 1.56 m on held-out seeds), so the instrument sets the scale |
 | `e_tol_altitude` | 0 | inherited; no altitude band |
+| `e_tol_heading` | 0 | inherited; no heading band |
+| `e_tol_path` | 0 | inherited; unused |
 | `e_floor_heading` | 0.0087 rad | the 0.5 deg AHRS resolution, for the lead's heading against its route and each wingman's alignment with the lead; the oracle holds both below it |
 | `e_floor_slot` | 3 m | the relative-GPS resolution, the patrol's: the oracle holds each slot below it |
 | `e_tol_slot` | 0 | **provisional**, the patrol's: the station-keeping radius is a procedural number to be supplied |

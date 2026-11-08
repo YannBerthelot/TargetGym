@@ -122,6 +122,21 @@ def _v_min(params, z, xp):
     return params.v_min_eas / xp.sqrt(sigma)
 
 
+def _engaged(tecs, state, power, pitch, v, xp):
+    """``state`` with, before TECS's first step, the integrators that make its
+    outputs the observed ``power`` and ``pitch``, its errors being zero there.
+    The throttle action spans [-1, 1] for power in [0, 1]."""
+    throttle = 2.0 * power - 1.0
+    fresh = state.started <= 0.0
+    gain_inv = xp.maximum(v, 1.0) * tecs.time_const * tecs.gravity
+    return state.replace(
+        thr_integ=xp.where(fresh, throttle - tecs.thr_trim, state.thr_integ),
+        pitch_integ=xp.where(
+            fresh, (pitch - tecs.pitch_trim) * gain_inv, state.pitch_integ
+        ),
+    )
+
+
 def l1_lateral_accel(params, cross, tangent, curvature, obs, xp):
     """L1 guidance's lateral acceleration (Park, Deyst and How, 2004), as
     ArduPilot computes it, plus ``v^2 * curvature`` so a curved path needs no
@@ -135,29 +150,53 @@ def l1_lateral_accel(params, cross, tangent, curvature, obs, xp):
     return k * v**2 / l1 * xp.sin(nu) + v**2 * curvature
 
 
-def _fly(params, state, obs, xp, h_dem, accel, target_speed, **carry):
+def _fly(
+    params,
+    state,
+    obs,
+    xp,
+    h_dem,
+    accel,
+    target_speed,
+    airspeed=None,
+    power=None,
+    **carry,
+):
     """The autopilot under a guidance law: TECS on height and speed, and the
     bank that makes ``accel`` in a coordinated turn. Returns the demands the
-    plant's inner loop holds, ``[throttle, pitch, bank]`` in [-1, 1]."""
+    plant's inner loop holds, ``[throttle, pitch, bank]`` in [-1, 1].
+
+    With ``airspeed`` and ``power`` (the amended tasks' air data and engine
+    reading), TECS reads the airspeed and engages on the trim found, and the
+    speed floor carries the load factor of the bank demanded, not of the full
+    limit. Without it, the earlier expert: ground speed, and the floor at the
+    full bank's load factor (the Extra tasks, patrol, formation)."""
     z, z_dot = obs[..., 2], obs[..., 3]
     phi, gamma = obs[..., 6], obs[..., 8]
-    v = xp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + z_dot**2)
-    # Stall prevention, as ArduPilot's STALL_PREVENTION: never slower than
-    # the speed at which the full bank is safe, and never more bank than the
-    # speed supports, n = (v / v_min)^2.
+    ground = xp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + z_dot**2)
+    v = ground if airspeed is None else airspeed
+    # Stall prevention, as ArduPilot's STALL_PREVENTION: "roll limits based on
+    # aerodynamic load factor in turns" [P409], never more bank than the speed
+    # supports, n = (v / v_min)^2; and never slower than the speed at which the
+    # bank flown is safe.
     v_min = _v_min(params, z, xp)
-    target_speed = xp.maximum(
-        target_speed, v_min / xp.sqrt(xp.cos(params.max_bank_rad))
-    )
     max_bank = xp.arccos(xp.clip((v_min / v) ** 2, xp.cos(params.max_bank_rad), 1.0))
+    demanded = xp.clip(xp.arctan(accel / params.gravity), -max_bank, max_bank)
+    floor_bank = params.max_bank_rad if airspeed is None else xp.abs(demanded)
+    target_speed = xp.maximum(target_speed, v_min / xp.sqrt(xp.cos(floor_bank)))
+    tecs_state = state.tecs
+    if airspeed is not None:
+        # The amended tasks start established, the autopilot already flying
+        # (rule 17): on its first step TECS's integrators take up the trim it
+        # finds, the observed throttle and pitch, so it engages bumpless.
+        tecs_state = _engaged(params.tecs, tecs_state, power, obs[..., 4], v, xp)
     power, pitch, tecs = tecs_step(
-        params.tecs, state.tecs, z, z_dot, v, h_dem, target_speed, phi, xp
+        params.tecs, tecs_state, z, z_dot, v, h_dem, target_speed, phi, xp
     )
     load_factor = 1.0 / xp.maximum(xp.cos(phi), 0.35)
     theta_cmd = pitch + params.k_bank_comp * (load_factor - 1.0)
     theta_cmd = xp.clip(theta_cmd, gamma - params.alpha_max, gamma + params.alpha_max)
-    bank = xp.clip(xp.arctan(accel / params.gravity), -max_bank, max_bank)
-    action = [power, theta_cmd / PITCH_DEMAND_MAX, bank / BANK_DEMAND_MAX]
+    action = [power, theta_cmd / PITCH_DEMAND_MAX, demanded / BANK_DEMAND_MAX]
     return xp.stack(action, axis=-1), state.replace(tecs=tecs, **carry)
 
 
@@ -167,6 +206,25 @@ def plane3d_heading_step(params, state, obs, xp=jnp):
     turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
     return _fly(params, state, obs, xp, obs[..., 10], v * turn_rate, target)
+
+
+def plane3d_heading_select_step(params, state, obs, xp=jnp):
+    """The heading task's course hold (Amendment 3): as ``plane3d_heading_step``,
+    which the patrol's lead also flies, with TECS on the observed airspeed."""
+    v = _ground_speed(obs, xp)
+    turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
+    target = _cruise_speed(params, obs, xp)
+    return _fly(
+        params,
+        state,
+        obs,
+        xp,
+        obs[..., 10],
+        v * turn_rate,
+        target,
+        airspeed=obs[..., 16],
+        power=obs[..., 12],
+    )
 
 
 def plane3d_circle_step(params, state, obs, xp=jnp):
@@ -184,8 +242,19 @@ def plane3d_racetrack_step(params, state, obs, xp=jnp):
     """L1 on the holding pattern, whose guidance the observation gives."""
     cross, tangent, curvature = obs[..., 18], obs[..., 19], obs[..., 20]
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
-    target = _turn_speed(params, obs[..., 13], obs, xp)
-    return _fly(params, state, obs, xp, obs[..., 10], accel, target)
+    # The assigned holding speed the observation gives (Amendment 2).
+    target, airspeed, power = obs[..., 22], obs[..., 23], obs[..., 15]
+    return _fly(
+        params,
+        state,
+        obs,
+        xp,
+        obs[..., 10],
+        accel,
+        target,
+        airspeed=airspeed,
+        power=power,
+    )
 
 
 def plane3d_figure8_step(params, state, obs, xp=jnp):
@@ -245,13 +314,14 @@ def plane3d_figure8_step(params, state, obs, xp=jnp):
 
 
 register_learnable_gains(plane3d_heading_step, ("tau_hdg",))
+register_learnable_gains(plane3d_heading_select_step, ("tau_hdg",))
 for _step in (plane3d_circle_step, plane3d_racetrack_step, plane3d_figure8_step):
     register_learnable_gains(_step, ("period", "damping"))
 
 
 def make_plane3d_heading_pid_controller() -> Controller:
     """The heading task's expert: course hold over the autopilot's loops."""
-    return Controller(_HEADING, Plane3DGuidanceState(), plane3d_heading_step)
+    return Controller(_AMENDED, Plane3DGuidanceState(), plane3d_heading_select_step)
 
 
 def make_plane3d_circle_pid_controller() -> Controller:
@@ -261,7 +331,7 @@ def make_plane3d_circle_pid_controller() -> Controller:
 
 def make_plane3d_racetrack_pid_controller() -> Controller:
     """The holding pattern's expert: L1 guidance over the autopilot's loops."""
-    return Controller(_PATH, Plane3DGuidanceState(), plane3d_racetrack_step)
+    return Controller(_AMENDED, Plane3DGuidanceState(), plane3d_racetrack_step)
 
 
 def make_plane3d_figure8_pid_controller() -> Controller:
@@ -274,6 +344,11 @@ def make_plane3d_figure8_pid_controller() -> Controller:
 # seeds 0-9 (scripts/tune_aircraft_guidance.py).
 _HEADING = Plane3DGuidanceParams()
 _PATH = Plane3DGuidanceParams()
+# The amended tasks (heading, racetrack; Amendment 3): the plant's protected
+# 30 deg bank (plane3d/PHYSICS.md), and the slowest speed 1.2 times the model's
+# clean 1 g stall, 80 m/s EAS: "20% higher than level flight stall speed"
+# (ARSPD_FBW_MIN [P409]).
+_AMENDED = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96.0)
 # The figure-8 flies slower and higher than the other tasks, banked most of
 # the way, so it gets a faster, better damped TECS, chosen to hold with any one
 # gain 25% off. Its lobe tips are flown with a quarter of the bank in hand. PR 9

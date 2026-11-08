@@ -47,8 +47,9 @@ class PlaneTECSState:
 
 def plane_tecs_step(params, state, obs, xp=jnp):
     """One step of the expert: ``([throttle, pitch demand], new_state)``."""
-    x_dot, z, z_dot, gamma = obs[..., 0], obs[..., 1], obs[..., 2], obs[..., 5]
-    v = xp.sqrt(x_dot**2 + z_dot**2)
+    z, z_dot, gamma = obs[..., 1], obs[..., 2], obs[..., 5]
+    # TECS holds airspeed, from air data [TECS], not ground speed.
+    v = obs[..., 10]
     power, pitch, tecs = tecs_step(
         params.tecs, state.tecs, z, z_dot, v, obs[..., 6], obs[..., 9], 0.0, xp
     )

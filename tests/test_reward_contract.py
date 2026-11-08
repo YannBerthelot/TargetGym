@@ -147,10 +147,12 @@ def test_running_cost_charges_all_of_the_consumption():
 
 def test_the_aircraft_speed_band_pays_only_past_its_tolerance():
     """``c_hold`` on the aircraft is a tolerance on speed, not a consumption: a
-    deviation inside it costs nothing, and twice it costs one ``w``."""
+    deviation inside it costs nothing, and twice it costs one ``w``. (``plane``
+    scores the AIM's +-10 kt band instead since Amendment 2:
+    tests/plane/test_plane_reality.py.)"""
     from target_gym.plane.env import target_airspeed
 
-    env, p, state = _a_state(REGISTRY["plane"], steps=0)
+    env, p, state = _a_state(REGISTRY["plane_sine"], steps=0)
     state = state.replace(z_dot=jnp.float32(0.0))
     target = float(target_airspeed(state, p))
 

@@ -451,25 +451,36 @@ def test_elevation_agrees_with_the_altitudes_read():
 
 
 def test_the_measured_cost_is_the_cost_of_the_altitude_and_track_read():
-    """The heading task's cost, worked from the observation the policy got."""
+    """The heading task's cost, worked from the observation the policy got
+    (Amendment 2's bands): the altitude past +-65 ft and the airspeed past
+    +-10 kt of the assigned speed, both as read. One step after the clearance
+    the turn is still allowed, so the heading costs nothing yet."""
+    from target_gym.plane.dynamics import speed_band_excess
+
     env, params = tg.make("plane3d_heading")
+    i = env.obs_index
     key = jax.random.PRNGKey(1)
     _, state = env.reset_env(key, params)
+    # 5 m past the +-65 ft band, where the altimeter's noise moves the cost
+    # (inside the band it costs nothing either way).
+    state = state.replace(z=state.target_altitude - params.e_tol_altitude - 5.0)
     obs, new, reward, _, info = env.step_env(key, state, jnp.zeros(3), params)
     altitude = tracking_cost(
-        obs[10] - obs[2],
+        obs[i["target_altitude"]] - obs[i["z"]],
         params.e_floor_altitude,
         params.e_tol_altitude,
         params.tracking_exponent,
     )
-    heading = tracking_cost(
-        jnp.arctan2(jnp.sin(obs[9] - obs[11]), jnp.cos(obs[9] - obs[11])),
-        params.e_floor_heading,
-        0.0,
-        params.tracking_exponent,
+    speed = speed_band_excess(obs[i["z"]], obs[i["airspeed"]], params) ** 2
+    turn_left = jnp.abs(
+        jnp.arctan2(
+            jnp.sin(obs[i["psi"]] - obs[i["target_heading"]]),
+            jnp.cos(obs[i["psi"]] - obs[i["target_heading"]]),
+        )
     )
+    assert float(turn_left) <= float(new.heading_change) + 0.01
     assert float(info["measured_reward"]) == pytest.approx(
-        -float(altitude + heading), rel=1e-4
+        -float(altitude + speed), rel=1e-4, abs=1e-6
     )
     assert float(reward) != pytest.approx(float(info["measured_reward"]), rel=1e-5)
 

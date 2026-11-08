@@ -21,6 +21,9 @@ from target_gym.plane.dynamics import total_wind_2d
 from target_gym.plane3d.env import PlaneParams3D
 
 FIXED = dict(target_altitude_range=(5000, 5000), initial_altitude_range=(5000, 5000))
+#: Turbulence comes in a zone (Amendment 2 rule 17; plane/REALITY.md, BEA447
+#: Figure 24); these tests put the zone over the whole run.
+ZONE = dict(zone_onset_range=(0.0, 0.0), zone_duration_range=(1e6, 1e6))
 
 
 def _final_alt_2d(env, params, n=300):
@@ -63,10 +66,12 @@ class TestSteadyWindPhysics:
         env = Plane()
         base_params = dict(max_steps_in_episode=50, turbulence_sigma=0.0, **FIXED)
         climbs = []
+        # Established in still air, then the wind arrives: the reset trims for
+        # whatever wind it starts in (Amendment 2 rule 17).
+        key = jax.random.PRNGKey(0)
+        _, state = env.reset_env(key, PlaneParams(**base_params))
         for wind_x in (-15.0, 0.0, +15.0):
             params = PlaneParams(wind_x=wind_x, **base_params)
-            key = jax.random.PRNGKey(0)
-            _, state = env.reset_env(key, params)
             _, nxt, _, _, _ = env.step_env(key, state, jnp.array([0.5, 0.0]), params)
             climbs.append(float(nxt.z_dot) - float(state.z_dot))
 
@@ -81,11 +86,12 @@ class TestSteadyWindPhysics:
         pw = PlaneParams(max_steps_in_episode=5, wind_x=-30.0, **FIXED)
         o0, s0 = env.reset_env(jax.random.PRNGKey(0), p0)
         ow, sw = env.reset_env(jax.random.PRNGKey(0), pw)
-        # Same obs at reset (wind not observed) ...
-        assert np.allclose(np.array(o0), np.array(ow))
-        # ... but the dynamics diverge.
+        # The wind has no channel of its own: the autopilot reads airspeed
+        # (rule 16), not the wind (plane/REALITY.md, readings) ...
+        assert o0.shape == ow.shape
+        # ... and from the same state the dynamics diverge.
         _, s0b, *_ = env.step_env(jax.random.PRNGKey(0), s0, jnp.zeros(2), p0)
-        _, swb, *_ = env.step_env(jax.random.PRNGKey(0), sw, jnp.zeros(2), pw)
+        _, swb, *_ = env.step_env(jax.random.PRNGKey(0), s0, jnp.zeros(2), pw)
         assert not np.isclose(float(s0b.z_dot), float(swb.z_dot))
 
 
@@ -94,7 +100,7 @@ class TestObservability:
         env = Plane(observe_wind=True)
         params = PlaneParams(wind_x=-20.0, wind_z=3.0, **FIXED)
         obs, _ = env.reset_env(jax.random.PRNGKey(0), params)
-        assert obs.shape == (12,)
+        assert obs.shape == (14,)
         assert np.allclose(np.array(obs[-2:]), [-20.0, 3.0])
 
     def test_observable_appends_wind_3d(self):
@@ -107,14 +113,14 @@ class TestObservability:
             **FIXED,
         )
         obs, _ = env.reset_env(jax.random.PRNGKey(0), params)
-        assert obs.shape == (18,)
+        assert obs.shape == (21,)
         assert np.allclose(np.array(obs[-3:]), [-20.0, 10.0, 3.0])
 
     def test_hidden_is_prefix_of_observable(self):
         params = PlaneParams3D(wind_x=5.0, target_heading_range=(0.0, 0.0), **FIXED)
         oh, _ = Plane3D(observe_wind=False).reset_env(jax.random.PRNGKey(0), params)
         oo, _ = Plane3D(observe_wind=True).reset_env(jax.random.PRNGKey(0), params)
-        assert np.allclose(np.array(oh), np.array(oo[:15]))
+        assert np.allclose(np.array(oh), np.array(oo[:18]))
 
 
 class TestTurbulence:
@@ -125,6 +131,7 @@ class TestTurbulence:
             turbulence_sigma=sigma,
             turbulence_theta=0.2,
             **FIXED,
+            **ZONE,
         )
         obs, state = env.reset_env(jax.random.PRNGKey(0), params)
 
@@ -261,7 +268,9 @@ class TestImpulseGustsAndLookahead:
 
     def _gusts(self, steps=800, **kw):
         env = Plane()
-        params = PlaneParams(max_steps_in_episode=steps, turbulence_sigma=3.0, **kw)
+        params = PlaneParams(
+            max_steps_in_episode=steps, turbulence_sigma=3.0, **ZONE, **kw
+        )
         key = jax.random.PRNGKey(0)
         _, state = env.reset_env(key, params)
         step = jax.jit(env.step_env)

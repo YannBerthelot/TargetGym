@@ -1,5 +1,5 @@
 {
-  "fingerprint": "72985c14c2318bfd",
-  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
-  "stamped": "2026-11-06T11:50:31+00:00"
+  "fingerprint": "755f3e68b4ff498d",
+  "note": "re-stamped without a note",
+  "stamped": "2026-11-08T13:24:36+00:00"
 }

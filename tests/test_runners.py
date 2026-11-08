@@ -204,6 +204,10 @@ def test_env_make_mpc_returns_controller(
 
 
 def test_plane_env_make_mpc_returns_controller():
-    env = Airplane2D()
+    # The 2D plant's oracle, on plane_sine: plane ships none until its oracle
+    # is rebuilt for the Amendment 2 score (registry baselines_note).
+    from target_gym.plane.env_jax import PlaneSine
+
+    env = PlaneSine()
     params = PlaneParams(max_steps_in_episode=N)
     assert isinstance(env.make_mpc(params=params), Oracle)

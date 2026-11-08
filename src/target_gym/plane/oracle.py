@@ -36,6 +36,7 @@ from target_gym.plane.dynamics import (
     airspeed_scaler,
     compute_air_density_from_altitude,
     compute_thrust_output,
+    protected_pitch_demand,
     scheduled_airspeed,
     total_wind_2d,
 )
@@ -88,8 +89,13 @@ def plane_step(p, x, u, t, gust, method, widths, deltas=om.NO_DELTA):
         rho = compute_air_density_from_altitude(height)
         eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
         scaler = airspeed_scaler(eas, gains)
+        # The plant's normal-law protection (``protected_pitch_demand``).
+        held = protected_pitch_demand(
+            demand, jnp.arctan2(vz - wind[1], vx - wind[0]), air_speed, height,
+            mass, p,
+        )  # fmt: skip
         surface, integ = om.attitude(
-            gains.Kp_theta, gains.Ki_theta, gains.Kd_theta, demand - attitude, rate,
+            gains.Kp_theta, gains.Ki_theta, gains.Kd_theta, held - attitude, rate,
             integ, scaler, dt, w.surface_clip, deltas.surface_clip,
         )  # fmt: skip
         stick = om.surface_step(
@@ -159,7 +165,15 @@ def state_x(s):
 
 
 def plane_model(env, p) -> TaskModel:
-    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
+    if bool(p.speed_band_cost) or float(p.e_tol) != 0.0:
+        # ``plane`` since Amendment 2 scores bands (plane/PHYSICS.md); this
+        # model plans the earlier quadratic cost. Its room is "not measured"
+        # (charter rule 9) until the oracle is rebuilt on the new score.
+        raise NotImplementedError(
+            "the 2D oracle plans the pre-Amendment-2 cost; "
+            f"{env.registry_name}'s band score needs the oracle rebuilt"
+        )
+    assert float(p.tracking_exponent) == 2.0
     price = float(trip_cost(p))
     method = env.integration_method
 

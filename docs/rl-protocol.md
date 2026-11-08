@@ -224,13 +224,13 @@ not been remeasured.
 | cstr | 960 | 5 | 25 | 0.99896 |
 | first_order | 150 | 10 | 50 | 0.99333 |
 | hvac | 1344 | not remeasured | not remeasured | 0.99926 |
-| plane | 280 | 23 | 115 | 0.99643 |
-| plane_energy | 1600 | 23 | 115 | 0.99938 |
+| plane | 1800 | 23 | 115 | 0.99944 |
+| plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
-| plane3d_heading | 300 | 14 | 70 | 0.99667 |
+| plane3d_heading | 600 | 14 | 70 | 0.99833 |
 | plane3d_circle | 300 | 14 | 70 | 0.99667 |
 | plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
-| plane3d_racetrack | 650 | 14 | 70 | 0.99846 |
+| plane3d_racetrack | 1200 | 14 | 70 | 0.99917 |
 | patrol | 200 | 13 | 65 | 0.99500 |
 | patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 400 | 8 | 40 | 0.99750 |

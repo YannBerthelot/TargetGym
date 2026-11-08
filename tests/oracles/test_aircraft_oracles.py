@@ -32,7 +32,9 @@ from target_gym.registry import REGISTRY
 N_SITES = len(om.SITE_NAMES)
 
 
-def _setup(name="plane", **overrides):
+def _setup(name="plane_sine", **overrides):
+    # plane_sine flies the 2D plant ``plane`` flies; ``plane``'s own oracle
+    # waits on its rebuild for the Amendment 2 score (plane/PHYSICS.md).
     spec = REGISTRY[name]
     env = spec.make_env()
     params = plan_params(spec, spec.make_test_params(**overrides))
@@ -68,9 +70,10 @@ def test_the_load_rows_hold_the_load_the_trip_reads():
 
 
 @pytest.mark.parametrize("excess, trips", [(-1.0, False), (1.0, True)])
-def test_the_eas_row_is_the_vmo_trip(excess, trips):
+def test_the_eas_row_is_the_vmo_warning(excess, trips):
     """Level flight at 5000 m: EAS = V sqrt(rho / rho_0) with the ISA density.
-    Set 1 m/s either side of VMO, the env trips exactly when the row passes it."""
+    Set 1 m/s either side of VMO, the env warns exactly when the row passes it.
+    VMO is a warning, not a trip (Amendment 2 rule 14; plane/REALITY.md)."""
     spec, env, p = _setup()
     rho_0 = float(p.air_density_at_sea_level)
     with enable_x64():
@@ -82,7 +85,7 @@ def test_the_eas_row_is_the_vmo_trip(excess, trips):
         u = jnp.array([0.0, 0.0])
         s1 = env.step_env(jax.random.PRNGKey(0), state, u, p)
         _, _, y = _model_outputs(env, p, state, u)
-    assert bool(s1[4]["tripped"]) == trips
+    assert bool(s1[4]["overspeed"]) == trips
     assert (float(y[6]) > float(p.vmo_eas)) == trips
 
 

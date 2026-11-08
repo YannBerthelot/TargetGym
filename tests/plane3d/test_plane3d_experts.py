@@ -35,7 +35,9 @@ def _oracle(name, **kwargs):
     return spec.make_mpc(env, plan_params(spec, params), **kwargs)
 
 
-@pytest.mark.parametrize("name", TASKS)
+# The heading and racetrack tasks ship no oracle until it is rebuilt for the
+# Amendment 2 score (registry baselines_note).
+@pytest.mark.parametrize("name", ["plane3d_circle", "plane3d_figure8"])
 def test_the_registry_builds_each_task_with_its_settings(name):
     oracle = _oracle(name)
     assert oracle.horizon == 30
@@ -56,7 +58,29 @@ def test_an_unknown_task_keeps_the_fixed_step():
     assert task_settings(object()) == {"n_iter": 50, "lr_end": None}
 
 
-@pytest.mark.parametrize("name", TASKS)
+AMENDED = ["plane3d_heading", "plane3d_racetrack"]
+EXTRA = ["plane3d_circle", "plane3d_figure8"]
+
+
+@pytest.mark.parametrize("name", AMENDED)
+def test_the_amended_tasks_score_bands_and_price_only_the_ground(name):
+    """Amendment 2: altitude past +-65 ft [RVSM] on the heading task, past the
+    holding tolerance +-100 ft on the racetrack [ACS IR.III.B.S4], which holds
+    at FL100 to FL260, below RVSM airspace (owner, 2026-11-08); heading past
+    +-10 deg [ACS], the racetrack's path past 3/4 NM [ACS, AIM]; a crash (the
+    one trip) costs an hour at 40 000 ft off the level (ours); a hold inside the
+    bands costs 0."""
+    p = registry.get(name).make_test_params()
+    band = (100.0 if name == "plane3d_racetrack" else 65.0) * 0.3048
+    assert p.e_floor_altitude == p.e_tol_altitude == pytest.approx(band)
+    assert p.e_floor_heading == p.e_tol_heading == pytest.approx(np.deg2rad(10.0))
+    if name == "plane3d_racetrack":
+        assert p.e_floor_path == p.e_tol_path == pytest.approx(0.75 * 1852.0)
+    assert p.failure_cost == pytest.approx(((12192.0 - band) / band) ** 2)
+    assert p.rho_floor == p.rho_floor_tracking == 0.0
+
+
+@pytest.mark.parametrize("name", EXTRA)
 def test_the_failure_cost_is_twice_the_envelopes_cost(name):
     """In floor units: the 12 192 m (40 000 ft) altitude envelope's, or the
     70 km path's on the figure-8, which scores no altitude. Every floor is the
@@ -74,7 +98,7 @@ def test_the_failure_cost_is_twice_the_envelopes_cost(name):
         assert p.e_floor_path == p.position_precision_floor
 
 
-@pytest.mark.parametrize("name", TASKS)
+@pytest.mark.parametrize("name", EXTRA)
 def test_the_nea_reference_is_the_recorded_hold(name):
     """rho_floor is the oracle's lowest per-seed hold in floor units, summed
     over the tracked outputs (``scripts/measure_hold.py``)."""
