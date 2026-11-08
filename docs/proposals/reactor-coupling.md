@@ -104,3 +104,48 @@ The trace shows two causes:
 EDF's temperature group sits in a manoeuvring band inside the core, so it can move both
 ways. No public figure was found for it. A US NRC document says the lead bank at full
 power stays more than 190 of 228 steps withdrawn; it was not opened.
+
+## The temperature rods' band: what the sources give
+
+Two open papers by CEA and EDF authors on EDF's 1300 MW units in Mode G, both read in
+full:
+
+- Muniglia et al., ICAPP 2016, *A multi-physics PWR model for the load following*:
+  <https://hal.science/hal-01355257v1/file/paper_ICAPP.pdf>, section II.C.
+- Muniglia et al., arXiv 2107.11201: <https://arxiv.org/pdf/2107.11201>, section 2 and
+  its figure 2.
+
+What they say:
+
+- **Two groups, two jobs.** The power-shimming rods (grey G1 and G2, black N1 and N2)
+  run open loop, set from the electrical power by a calibration. The temperature group
+  R, 9 black rods, runs closed loop on Tavg.
+- **R's band.** "the regulation rods are shut within a maneuvering band which height is
+  27 steps in the upper part of the core". The core is 260 steps of about 1.65 cm. The
+  second paper says "about 50 centimeters in the upper part of the core".
+- **R's speed program.** 0 steps/min inside +-0.8 C. 8 steps/min from 0.8 to 1.7 C.
+  Linear from 8 to 72 steps/min between 1.7 and 2.8 C. 72 steps/min past 2.8 C.
+- **Boron.** It takes over when R is at the edge of its band. To lower a high offset,
+  "the operator reduces the boron concentration (dilution) to increase the temperature.
+  Automatically, the regulation rods will insert". That is item 4's mechanism, now
+  sourced.
+- **Make-up.** Boric acid at 7700 ppm (ours was 7800, unsourced). At most 30 t/h for
+  dilution and 10 t/h for boration, 8.3 and 2.8 kg/s, against OAPS's 10 and 3.
+
+## What this means for the task
+
+- **The band is Mode G's.** In Mode G, R is a small group in a narrow band because the
+  shimming rods take the power defect. This task has one bank holding all 1500 pcm, as
+  in Mode A (OAPS: one black group on Tavg). No band for Mode A was found.
+- **Parking one whole bank in a 27-step band does not work.** Scaled to 228 steps it is
+  24 steps from the top, worth about 11 pcm on this bank's S-curve. Far too little to
+  regulate.
+- **The dead band conflicts.** The CEA papers give +-0.8 C, with slow motion up to
+  1.7 C. The IAEA report's 1.6 C is the frequency-control threshold for moving the
+  black rods. The CEA program is the more complete source. It also matches 0.8 C plus
+  slow speed to 1.7 C.
+
+So a sourced band needs the task to follow Mode G, which 48 of EDF's 56 units run
+(OAPS 2.2). That means two rod groups: shimming rods on a calibration of power, and an
+R group in its 27-step band on Tavg with the speed program above. Staying with one
+Mode A bank keeps the rods parked at the top or puts them at an unsourced depth.
