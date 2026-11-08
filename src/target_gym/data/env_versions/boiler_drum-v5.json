@@ -1,4 +1,5 @@
 {
-  "fingerprint": "dd55ac6f4c22d5f2",
-  "stamped": "2026-11-08T16:26:44+00:00"
+  "fingerprint": "6973c9c541fe70f8",
+  "note": "Re-stamped in place, unreleased v5: scenarios.py now returns rows that the registry builds into Scenario, so the package imports nothing outside its fingerprint; the suite and the plant are unchanged.",
+  "stamped": "2026-11-08T16:56:00+00:00"
 }

@@ -405,8 +405,9 @@ def _cement_kiln():
 
 def _boiler_drum_scenarios():
     from target_gym.boiler_drum.scenarios import boiler_drum_scenarios
+    from target_gym.scenarios import Scenario
 
-    return boiler_drum_scenarios()
+    return tuple(Scenario(**row) for row in boiler_drum_scenarios())
 
 
 def _boiler_drum():
@@ -417,8 +418,9 @@ def _boiler_drum():
 
 def _hvac_scenarios():
     from target_gym.hvac.scenarios import hvac_scenarios
+    from target_gym.scenarios import Scenario
 
-    return hvac_scenarios()
+    return tuple(Scenario(**row) for row in hvac_scenarios())
 
 
 def _hvac():
