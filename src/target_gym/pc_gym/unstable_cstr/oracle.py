@@ -4,9 +4,10 @@ Kept apart from the expert (``experts.py``) so that each has a fingerprint of
 its own (``provenance.oracle_fingerprint``). The planner problem (version 5,
 charter Amendment 3), run by ``target_gym.oracles.controller.Oracle``:
 
-- model: the env's own ``compute_velocity`` and integrator, the initiator's
-  clip removed and the move bounded (T1), the scenario's event as the state
-  carries it, held over the plan (a later event is not seen);
+- model: the env's own step (``env.advance``: the initiator exact per
+  substep, RK4 on the monomer and temperature), the initiator's clip removed
+  and the move bounded (T1), the scenario's event as the state carries it,
+  held over the plan (a later event is not seen);
 - objective: the temperature's tracking term as (e / e_floor)^2, exact since
   e_tol = 0 and p = 2 (T2);
 - limit: the trip temperature on every visited state, elastic at the trip cost
@@ -16,12 +17,10 @@ Not run since the rebuild.
 """
 
 import jax.numpy as jnp
-from jax.tree_util import Partial as partial
 
-from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of
 from target_gym.oracles.shooting import Limit
-from target_gym.pc_gym.unstable_cstr.env import compute_velocity, events
+from target_gym.pc_gym.unstable_cstr.env import advance, events
 from target_gym.reward import trip_cost
 
 
@@ -31,12 +30,7 @@ def autoclave_model(env, p) -> TaskModel:
     def step(d, x, u, t):
         target, T_f, f, scale = d["task"]
         I_f = p.I_f_min + 0.5 * (u[0] + 1.0) * (p.I_f_max - p.I_f_min)  # T1
-        y, _ = integrate_dynamics(
-            positions=x, delta_t=p.delta_t, method=env.integration_method,
-            compute_velocity=partial(
-                compute_velocity, action=I_f, params=p, extra=(T_f, f, scale)
-            ),
-        )  # fmt: skip
+        y = advance(x, I_f, p, (T_f, f, scale), env.integration_method)
         cost = ((target - y[2]) / p.e_floor) ** 2
         return y, cost, y[2:3], y[2:3], ()
 

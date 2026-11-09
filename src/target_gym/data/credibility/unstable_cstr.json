@@ -10,8 +10,8 @@
     "value": 3.0,
     "what": "+2 and -3 C deviations under PID at the unstable region of a laboratory CSTR, sodium thiosulfate and hydrogen peroxide; a rig, not a plant"
   },
-  "expert_fingerprint": "603ea92e46f1802e",
-  "generated": "2026-11-09T13:34:08+00:00",
+  "expert_fingerprint": "fa3365489df15d16",
+  "generated": "2026-11-09T17:15:18+00:00",
   "null_wins": [],
   "nulls": {
     "constant 0.0": {

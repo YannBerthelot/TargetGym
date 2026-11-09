@@ -40,8 +40,10 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
-#: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
-START_CLOCK = {"unstable_cstr": 195}
+#: Exactness is the rewrites', so a disturbance the planner holds over its plan
+#: by design is held still here: the autoclave's feed wander (its v5 has no
+#: block clock, which this test used to start 5 steps before a switch).
+QUIET = {"unstable_cstr": {"feed_T_wander": 0.0}}
 C2 = (
     "hvac",
     "boiler_drum",
@@ -94,14 +96,12 @@ def test_the_exact_rewrites_replay_on_the_env(name, load):
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
     a rewrite is not exact. The compressor's sites run exact (width 0). With
     a ``load`` in force at the solve, the plan and the env both hold it."""
-    env, params, oracle = _oracle(name)
+    env, params, oracle = _oracle(name, **QUIET.get(name, {}))
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
         if load is not None:
             state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
-        if name in START_CLOCK:
-            st = st.replace(block_clock=jnp.asarray(START_CLOCK[name], jnp.int64))
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
         moves = jnp.clip(hold + wave, -1.0, 1.0)

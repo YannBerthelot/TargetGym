@@ -237,14 +237,10 @@ def events(state: UnstableCSTRState, params: UnstableCSTRParams, second):
     )
 
 
-@partial(jax.jit, static_argnames=["integration_method"])
-def compute_next_state(
-    raw: float,
-    state: UnstableCSTRState,
-    params: UnstableCSTRParams,
-    integration_method: str = "rk4_4",
-):
-    """``raw`` in [-1, 1] maps to the initiator feed in [I_f_min, I_f_max].
+def advance(x, I_f, params: UnstableCSTRParams, extra, integration_method: str):
+    """``(I, M, T)`` one step on from ``x`` at the initiator feed ``I_f``
+    (kmol/m3) and the feed's ``extra = (T_f, f, flow scale)``, held over the
+    step. The plant's step, and the oracle's model of it.
 
     Each substep moves the initiator exactly, ``dI/dt = I_f / tau - (1 / tau +
     k_d) I`` being linear at the substep's temperature, then the monomer and
@@ -255,10 +251,7 @@ def compute_next_state(
     p = params
     n = int(integration_method.split("_")[1]) if "_" in integration_method else 1
     h = p.delta_t / n
-    second = state.time * p.delta_t
-    I_f = convert_raw_action_to_range(raw, min_action=p.I_f_min, max_action=p.I_f_max)
-    _, T_f, f, scale = events(state, p, second)
-    tau = residence(p, scale)
+    tau = residence(p, extra[2])
 
     def substep(carry, _):
         I, M, T = carry
@@ -267,9 +260,7 @@ def compute_next_state(
         I = I_eq + (I - I_eq) * jnp.exp(-a * h)
 
         def mt(y):
-            v, _ = compute_velocity(
-                jnp.array([I, y[0], y[1]]), I_f, p, extra=(T_f, f, scale)
-            )
+            v, _ = compute_velocity(jnp.array([I, y[0], y[1]]), I_f, p, extra=extra)
             return v[1:]
 
         y = jnp.array([M, T])
@@ -280,7 +271,25 @@ def compute_next_state(
         y = y + h / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
         return (I, y[0], y[1]), None
 
-    (I, M, T), _ = jax.lax.scan(substep, (state.I, state.M, state.T), None, length=n)
+    (I, M, T), _ = jax.lax.scan(substep, (x[0], x[1], x[2]), None, length=n)
+    return jnp.stack([I, M, T])
+
+
+@partial(jax.jit, static_argnames=["integration_method"])
+def compute_next_state(
+    raw: float,
+    state: UnstableCSTRState,
+    params: UnstableCSTRParams,
+    integration_method: str = "rk4_4",
+):
+    """``raw`` in [-1, 1] maps to the initiator feed in [I_f_min, I_f_max],
+    held over the step (``advance``)."""
+    p = params
+    second = state.time * p.delta_t
+    I_f = convert_raw_action_to_range(raw, min_action=p.I_f_min, max_action=p.I_f_max)
+    _, T_f, f, scale = events(state, p, second)
+    x = jnp.stack([state.I, state.M, state.T])
+    I, M, T = advance(x, I_f, p, (T_f, f, scale), integration_method)
     target, *_ = events(state, p, second + p.delta_t)
     return (
         state.replace(I=I, M=M, T=T, I_f=I_f, target_T=target, time=state.time + 1),
