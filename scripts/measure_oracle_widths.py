@@ -31,9 +31,7 @@ import numpy as np
 
 from target_gym import records
 from target_gym.benchmark import episode_keys
-from target_gym.boiler_drum.env import STEAM_OU_THETA
 from target_gym.cement_kiln.env import FEED_OU_THETA
-from target_gym.energy.wind_turbine.env import WIND_OU_THETA
 from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.rates import RateLimit
@@ -497,6 +495,14 @@ def kiln_sites(_points) -> tuple[dict, list]:
     }, []  # fmt: skip
 
 
+def _stale_wind(p):
+    """Stale since wind_turbine v5 (no WIND_OU_THETA nor turbulence_std: the
+    turbulence is IEC's sigma on a Kaimal time scale), and the receding
+    model's data carries no wind path to perturb. Left for the wind
+    re-measure; the record is not regenerated from here."""
+    raise NotImplementedError("wind_turbine v5's K11 noise term")
+
+
 SITES = {
     **{n: functools.partial(aircraft_sites, n) for n in AIRCRAFT},
     "reactor": reactor_sites,
@@ -527,13 +533,9 @@ NOISY = {
         "target_gym.pc_gym.unstable_cstr.oracle:unstable_cstr_model",
         lambda p: (np.exp(-p.delta_t / p.Ti_tau), p.Ti_sigma),
     ),
-    "boiler_drum": (
-        "target_gym.boiler_drum.oracle:boiler_model",
-        lambda p: (1.0 - STEAM_OU_THETA * p.delta_t, p.q_steam_noise_std),
-    ),
     "wind_turbine": (
         "target_gym.energy.wind_turbine.oracle:wind_model",
-        lambda p: (1.0 - WIND_OU_THETA * p.delta_t, p.turbulence_std),
+        _stale_wind,
     ),
     "cement_kiln": (
         "target_gym.cement_kiln.oracle:kiln_model",
@@ -562,6 +564,8 @@ def noise_terms(name: str, points) -> list:
     spec = REGISTRY[name]
     env, p = spec.make_env(), float64(spec.make_test_params())
     model = build(env, p)
+    if not model.limits:  # nothing to back off (hvac prices its band)
+        return []
     a, sigma = decay(p)
     std = float(sigma) * float(np.sqrt(1.0 - a**2))
     n_sites = N_SITES.get(name, 0)

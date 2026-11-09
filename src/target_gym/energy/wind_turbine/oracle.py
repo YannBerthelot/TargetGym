@@ -56,7 +56,13 @@ from target_gym.energy.wind_turbine.env import (
     wind_power,
 )
 from target_gym.integration import integrate_dynamics
-from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
+from target_gym.oracles.controller import (
+    Oracle,
+    TaskModel,
+    raw_of,
+    scored_run,
+    softplus_clip,
+)
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
 
@@ -228,21 +234,28 @@ def ceiling_backoffs(env, p) -> tuple:
     return (float(sigma),)
 
 
-def ceiling_data(env, p, state, step_keys):
+def ceiling_data(env, p, state, step_keys, run_as=scored_run):
     """The data of a plan from ``state`` over the steps of ``step_keys``: the
     wind and the rating's power after every step, from those keys.
     Neither depends on the moves, so they are read off a run of the env at
     any move (here the reset's pitch and torque held) that cannot trip: a trip
     restarts the plant on a fresh draw of the turbulence, which is not the
-    episode's wind (the overspeed level is lifted for this run alone)."""
-    held = env.initial_action(state, p)
-    free = p.replace(overspeed_factor=1e9)
+    episode's wind (the overspeed level is lifted for this run alone). The run
+    is the scored one's, in float32 (``scored_run``; a test of the
+    model on x64 data passes its own ``run_as``): under x64 the turbulence
+    draws other values."""
 
-    def advance(s, k):
-        s1 = env.step_env(k, s, held, free)[1]
-        return s1, jnp.stack([s1.v_wind, s1.target_power])
+    def run(state, p, step_keys):
+        held = env.initial_action(state, p)
+        free = p.replace(overspeed_factor=1e9)
 
-    path = jax.lax.scan(advance, state, step_keys)[1]
+        def advance(s, k):
+            s1 = env.step_env(k, s, held, free)[1]
+            return s1, jnp.stack([s1.v_wind, s1.target_power])
+
+        return jax.lax.scan(advance, state, step_keys)[1]
+
+    path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
         state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
         state.derate_t0, path,

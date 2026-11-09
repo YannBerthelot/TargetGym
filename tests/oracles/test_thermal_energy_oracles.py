@@ -19,6 +19,8 @@ planner's model is exact:
   no plan a fine grid beats.
 """
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -32,7 +34,11 @@ pytestmark = pytest.mark.medium
 
 
 def plan_and_replay(task, model, data_of, moves, start=lambda s: s, **over):
-    """(planned, replayed, env terms) of ``moves`` from the seed-100 reset."""
+    """(planned, replayed, env terms) of ``moves`` from the seed-100 reset.
+    Both sides run under x64, so a ceiling's disturbance path is read under
+    x64 too (``as_called``): the replay's draws are x64's, and the check is
+    the model's exactness on its data. That the path is the float32 scored
+    run's is ``test_ceiling_weather_is_the_float32_episodes_under_x64``."""
     spec = REGISTRY[task]
     env = spec.make_env()
     p = spec.make_test_params(**over)
@@ -57,6 +63,11 @@ def plan_and_replay(task, model, data_of, moves, start=lambda s: s, **over):
             for k, v in env.reward_terms(s, p64).items():
                 terms[k] = terms.get(k, 0.0) + float(v)
     return planned, replayed, terms
+
+
+def as_called(fn, *args):
+    """Runs ``fn`` in the caller's mode: the exact path for an x64 replay."""
+    return fn(*args)
 
 
 def test_boiler_plan_costs_what_the_env_charges():
@@ -91,7 +102,7 @@ def test_hvac_plan_costs_what_the_env_charges():
     planned, replayed, terms = plan_and_replay(
         "hvac",
         hvac_model,
-        ceiling_data,
+        partial(ceiling_data, run_as=as_called),
         [[1.0], [-1.0], [-0.2], [0.4]],
         start=lambda s: s.replace(time=36, T_mass=s.T_mass - 4.0, T_core=19.5),
     )
@@ -115,7 +126,7 @@ def test_wind_plan_costs_what_the_env_charges_bar_the_tower():
     planned, replayed, terms = plan_and_replay(
         "wind_turbine",
         wind_model,
-        ceiling_data,
+        partial(ceiling_data, run_as=as_called),
         [[1.0, -1.0], [0.5, -1.0], [-1.0, 0.2], [0.0, 1.0], [0.3, 0.0]],
     )
     assert terms["lost"] > 0.0 and terms["pitch"] > 0.0
@@ -196,3 +207,58 @@ def test_battery_ceiling_is_the_scored_cost_of_its_plan_and_beats_a_fine_grid():
     grid = np.stack(np.meshgrid(axis, axis, indexing="ij"), -1).reshape(-1, 2)
     f = O.evaluator(env, p, st, steps[:, 0], periods, batch=len(grid))
     assert res["cost"] <= f(grid)[0].min() + 1e-6
+
+
+def test_boiler_receding_oracle_holds_the_steam_under_water_at_or_above_zero():
+    """The env holds the steam under the water surface at 0 (``compute_next
+    _state``), so a plan that drives it below 0 mispredicts the level; the
+    ceiling holds it as a limit, and the registry's receding slot must too."""
+    from target_gym.boiler_drum.oracle import boiler_model, make_boiler_drum_mpc
+    from target_gym.experts.mpc import plan_params
+
+    spec = REGISTRY["boiler_drum"]
+    env = spec.make_env()
+    p = plan_params(spec, spec.make_test_params())
+    receding = make_boiler_drum_mpc(env, p).model
+    with enable_x64():
+        ceiling = boiler_model(env, float64(p), ceiling=True)
+    floors = [(q.lo, q.hi, q.price) for q in receding.limits]
+    assert floors == [(q.lo, q.hi, q.price) for q in ceiling.limits]
+
+
+@pytest.mark.parametrize("task", ["wind_turbine", "hvac"])
+def test_ceiling_weather_is_the_float32_episodes_under_x64(task):
+    """The ceiling plans on the episode's weather, which the scored run draws
+    in float32. ``jax.random.normal`` draws other values under x64, so the
+    path must not depend on whether the caller has x64 on."""
+    import importlib
+
+    module = (
+        "target_gym.energy.wind_turbine.oracle"
+        if task == "wind_turbine"
+        else ("target_gym.hvac.oracle")
+    )
+    ceiling_data = importlib.import_module(module).ceiling_data
+    spec = REGISTRY[task]
+    env, p = spec.make_env(), spec.make_test_params()
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, 30)
+    st = env.reset_env(resets[0], p)[1]
+    scored = np.asarray(ceiling_data(env, p, st, steps[:, 0])[-1])
+    with enable_x64():
+        planned = np.asarray(
+            ceiling_data(env, float64(p), float64(st), steps[:, 0])[-1]
+        )
+    assert np.any(scored != scored[0])  # the weather moves on this seed
+    np.testing.assert_allclose(planned, scored, rtol=1e-5, atol=1e-6)
+
+
+def test_boiler_oracle_backs_off_no_limit():
+    """K11 backs a limit off by the planner's smoothing error and by the noise
+    it cannot foresee. The boiler's planner smooths nothing (no width sites)
+    and its plant draws nothing after the reset (the load plan and its upset
+    are drawn there), so no limit is backed off in the receding slot."""
+    from target_gym import records
+
+    row = records.load_row("oracle_widths", "boiler_drum")
+    assert row["sites"] == {}
+    assert not any(row.get("limit_backoffs") or [])

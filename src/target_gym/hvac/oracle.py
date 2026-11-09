@@ -46,7 +46,13 @@ from target_gym.hvac.env import (
     zone_conductances,
 )
 from target_gym.integration import integrate_dynamics
-from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
+from target_gym.oracles.controller import (
+    Oracle,
+    TaskModel,
+    raw_of,
+    scored_run,
+    softplus_clip,
+)
 from target_gym.oracles.shooting import Hinge
 
 
@@ -123,17 +129,23 @@ def hvac_model(env, p) -> TaskModel:
     )  # fmt: skip
 
 
-def ceiling_data(env, p, state, step_keys):
+def ceiling_data(env, p, state, step_keys, run_as=scored_run):
     """The data of a plan from ``state`` over the steps of ``step_keys``: the
     weather's deviation after every step, from the episode's step keys. The
     deviation does not depend on the moves, so it is read off a run of the env
-    at any move (here the reset's supply)."""
+    at any move (here the reset's supply). The run is the scored one's, in
+    float32 (``scored_run``; a test of the
+    model on x64 data passes its own ``run_as``): under x64 the weather draws other values.
+    """
 
-    def advance(s, k):
-        s1 = env.step_env(k, s, jnp.zeros(1, jnp.float32), p)[1]
-        return s1, s1.weather_dev
+    def run(state, p, step_keys):
+        def advance(s, k):
+            s1 = env.step_env(k, s, jnp.zeros(1, jnp.float32), p)[1]
+            return s1, s1.weather_dev
 
-    path = jax.lax.scan(advance, state, step_keys)[1]
+        return jax.lax.scan(advance, state, step_keys)[1]
+
+    path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.T_core))
     return state.time, state.weather_dev, path
 
 

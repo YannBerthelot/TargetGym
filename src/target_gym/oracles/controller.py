@@ -94,6 +94,24 @@ def float64(tree):
     return jax.tree_util.tree_map(cast, tree)
 
 
+def scored_run(fn, *args):
+    """``fn(*args)`` as the scored run computes it: in float32 with x64 off,
+    whatever the caller's mode. ``jax.random.normal`` draws other values under
+    x64, so a disturbance path read off ``step_env`` under x64 is not the
+    episode's (a ceiling's weather or turbulence). Called eagerly, not traced."""
+
+    def cast(a):
+        a = np.asarray(a)
+        if np.issubdtype(a.dtype, np.floating):
+            return a.astype(np.float32)
+        return a.astype(np.int32) if a.dtype == np.int64 else a
+
+    with enable_x64(False):
+        return jax.tree_util.tree_map(
+            np.asarray, fn(*jax.tree_util.tree_map(cast, args))
+        )
+
+
 def raw_of(value, lo, hi):
     """The raw move in [-1, 1] that ``convert_raw_action_to_range`` maps to
     ``value``, clipped to the box."""
