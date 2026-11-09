@@ -256,8 +256,9 @@ def test_a_paired_bump_cancels_what_both_runs_share(ladder):
 def test_j2_holds_each_episodes_reset_action_as_a_null(ladder):
     # Charter J2: a reference must beat doing nothing, and on a plant that starts at
     # rest (rule 17) doing nothing is holding the actuator where the reset put it.
-    # On cstr's normal day with no sensor noise that hold keeps the reactor on its
-    # setpoint; the reset's own action is the plant's, not the null's.
+    # On cstr's normal day with no sensor noise and the feed's drift held still
+    # (cstr-v6 moves it), that hold keeps the reactor on its setpoint; the reset's
+    # own action is the plant's, not the null's.
     import jax
     import numpy as np
 
@@ -269,7 +270,11 @@ def test_j2_holds_each_episodes_reset_action_as_a_null(ladder):
     spec = REGISTRY["cstr"]
     env = spec.make_env()
     (normal,) = [s for s in scenarios.suite(spec) if s.name == "normal"]
-    params = scenarios.params_for(spec, normal, sensor_noise_scale=0.0)
+    lo, hi = spec.make_test_params().feed_T_range
+    still = (0.5 * (lo + hi),) * 2
+    params = scenarios.params_for(
+        spec, normal, sensor_noise_scale=0.0, feed_T_range=still
+    )
     seeds = (100, 101)
     (hold,) = [n for n in ladder.null_set("cstr") if n.name == "hold reset"]
     hold.bind(env, params, seeds)
@@ -296,3 +301,48 @@ def test_a_zones_sigma_is_the_spread_where_its_loop_holds(ladder):
     held = ladder.cv_traces("ph_neutralization", row, rungs["pi"], 1)
     second_half = np.concatenate([t[len(t) // 2 :] for t in held])
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
+
+
+def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):
+    # A plant's bump tests run in a quiet period: the slow wander of the monomer
+    # feed's temperature (unstable_cstr-v6) is off while the row steps the
+    # initiator, so the loop it tunes is the one it would tune on a plant with no
+    # wander at all. Checked at the nominal point only, to keep the test short.
+    import dataclasses
+
+    import jax
+    import numpy as np
+
+    from target_gym.registry import REGISTRY
+
+    class NoWander:
+        """unstable_cstr with the wander off in its scored parameters."""
+
+        def __init__(self, spec):
+            self._spec = spec
+
+        def __getattr__(self, name):
+            return getattr(self._spec, name)
+
+        def make_test_params(self, **overrides):
+            return self._spec.make_test_params(**{"feed_T_wander": 0.0, **overrides})
+
+    spec = REGISTRY["unstable_cstr"]
+    row = dataclasses.replace(ladder.ROWS["unstable_cstr"](), points=())
+    scored = ladder.build("unstable_cstr", row, spec)["pi"]
+    quiet = ladder.build("unstable_cstr", row, NoWander(spec))["pi"]
+    obs = np.asarray(
+        spec.make_env().reset_env(jax.random.PRNGKey(0), spec.make_test_params())[0]
+    )
+
+    def actions(ctrl):
+        # The loop's moves on its reading 1 K then 2 K above the setpoint.
+        memory, out = ctrl.init_state, []
+        for dT in (1.0, 2.0):
+            o = obs.copy()
+            o[0] = o[2] + dT
+            action, memory = ctrl.step(ctrl.params, memory, o, np)
+            out.append(float(np.asarray(action)[0]))
+        return out
+
+    assert actions(scored) == pytest.approx(actions(quiet), rel=1e-6)

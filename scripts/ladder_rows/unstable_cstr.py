@@ -76,10 +76,14 @@ def row() -> Row:
         for efficiency in (1.0, 1.0 - 0.2)
         for flow in (1.0, 1.0 + 0.1)
     )
+    # The bumps run in a quiet period, as on a plant: the monomer feed's slow
+    # wander (PHYSICS.md, its size ours) is off for the tests, and still on in the
+    # scored episodes the rungs are judged on.
     return Row(
         60,
         pump,
         (T,),
+        test={"feed_T_wander": 0.0},
         points=points,
         balance=balance,
         why={
