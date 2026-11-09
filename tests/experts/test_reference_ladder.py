@@ -251,3 +251,32 @@ def test_a_paired_bump_cancels_what_both_runs_share(ladder):
     model = ladder.read_loop(plant, "x", 0, 0, 0.1, 60, inst, plant.room(0), "fopdt")
     assert model["k"] == pytest.approx(2.0, rel=0.01)
     assert model["tau"] == pytest.approx(0.5, rel=0.01)
+
+
+def test_j2_holds_each_episodes_reset_action_as_a_null(ladder):
+    # Charter J2: a reference must beat doing nothing, and on a plant that starts at
+    # rest (rule 17) doing nothing is holding the actuator where the reset put it.
+    # On cstr's normal day with no sensor noise that hold keeps the reactor on its
+    # setpoint; the reset's own action is the plant's, not the null's.
+    import jax
+    import numpy as np
+
+    from target_gym import scenarios
+    from target_gym.benchmark import episode_keys, run_policy, task_info
+    from target_gym.registry import REGISTRY
+
+    assert "hold reset" in [n.name for n in ladder.null_set("cstr")]
+    spec = REGISTRY["cstr"]
+    env = spec.make_env()
+    (normal,) = [s for s in scenarios.suite(spec) if s.name == "normal"]
+    params = scenarios.params_for(spec, normal, sensor_noise_scale=0.0)
+    seeds = (100, 101)
+    (hold,) = [n for n in ladder.null_set("cstr") if n.name == "hold reset"]
+    hold.bind(env, params, seeds)
+    task = task_info("cstr", env, params, len(seeds))
+    out = run_policy(hold, env, params, task, seeds=seeds, n_steps=40)
+    for i, s in enumerate(seeds):
+        key = episode_keys(jax.random.PRNGKey(s), 1, 1)[0][0]
+        held = np.asarray(env.reset_env(key, params)[1].actuator_held, float)
+        np.testing.assert_allclose(out["action"][i], np.tile(held, (40, 1)))
+    np.testing.assert_allclose(out["value"], out["target"], atol=1e-3)

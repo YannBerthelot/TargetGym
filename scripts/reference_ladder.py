@@ -571,6 +571,8 @@ def run_suite(name, row, policy, spec=None) -> dict:
     for s in scenarios.suite(spec):
         params = scenarios.params_for(spec, s, sensor_noise_scale=NOISE, **row.score)
         task = task_info(name, env, params, len(SEEDS))
+        if hasattr(policy, "bind"):  # a null that reads each episode's reset
+            policy.bind(env, params, SEEDS)
         episodes = episodes_of(run_policy(policy, env, params, task, seeds=SEEDS))
         per[s.name] = (
             np.array([float(e.cost.mean()) for e in episodes]),
@@ -611,16 +613,49 @@ def climb(name: str, nulls: bool = False) -> dict:
 _ORDER = ("pi", "feedforward", "cascade", "decoupler", "override", "published")
 
 
+class HoldReset:
+    """The do-nothing null: each episode's actuator held where its reset put it,
+    the plant's own starting move (rule 17), whatever the plant then does."""
+
+    name, oracle = "hold reset", False
+
+    def bind(self, env, params, seeds):
+        import jax
+
+        from target_gym.benchmark import episode_keys
+
+        keys = [episode_keys(jax.random.PRNGKey(s), 1, 1)[0][0] for s in seeds]
+        held = [env.reset_env(k, params)[1].actuator_held for k in keys]
+        self.u = np.stack([np.asarray(h, float).reshape(-1) for h in held])
+
+    def reset(self, key, obs, task):
+        return np.zeros((task.n_episodes, task.n_act))
+
+    def act(self, carry, obs, t):
+        return self.u, carry
+
+
+def null_set(name: str) -> list:
+    """Charter J2's nulls on ``name``: the stored ones (``null_policies``) and,
+    where the plant holds an actuator, the hold of its reset."""
+    import jax
+
+    from target_gym.null_policies import null_policies
+
+    spec = REGISTRY[name]
+    state = spec.make_env().reset_env(jax.random.PRNGKey(0), spec.make_test_params())[1]
+    held = hasattr(state, "actuator_held")
+    return list(null_policies(name)) + ([HoldReset()] if held else [])
+
+
 def check_nulls(name: str, row, reference: dict) -> dict:
     """Charter J2: every null policy (``null_policies``) over the same scenarios and
     seeds as ``reference``, a ``run_suite`` result. A null whose stored table no
     longer fits the plant is reported with its error, not run. The tables and
     integrator gains come from the old plants' recordings until the re-record
     refits them, so a table null's result is marked stale."""
-    from target_gym.null_policies import null_policies
-
     runs, broken = {}, {}
-    for null in null_policies(name):
+    for null in null_set(name):
         try:
             runs[null.name] = run_suite(name, row, null)
         except Exception as err:  # a stale table's shape, or a missing field
