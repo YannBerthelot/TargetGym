@@ -8,7 +8,11 @@ Contract (charter J3, the task's oracle rule; ``glass_furnace/oracle.py``):
 - a solve meets the fining and canal limits on every step and stops at a KKT point;
 - the furnace is continuing and the episode's time limit cuts it, unseen by any agent
   (docs/rl-protocol.md), so the plan's last knot, held for ``TAIL_HOURS`` past the
-  episode on the walks' mean path, loses no glass, and the tail is not charged;
+  episode on the walks' mean path, loses no glass, and the plan is the cheapest over the
+  episode and that tail: the tail's fuel is charged in its objective, though the cost it
+  reports is the episode's;
+- a plan that gets the tail's fuel free buys episode fuel with it: it costs less over the
+  episode and more over the episode and the tail;
 - without that tail, a horizon shorter than the fining's dead time (11.8 h, the ladder
   row's step test) and a canal that its own loop holds let no valve move reach a limit,
   so the cheapest plan is the valve closed to its minimum.
@@ -45,6 +49,24 @@ def _replayed(env, params, seed, valve):
     task = task_info("glass_furnace", env, params, 1)
     out = run_policy(Plan(), env, params, task, seeds=[seed])
     return float(-out["reward"][0].mean())
+
+
+def _held_past_the_episode(env, p, state, keys, plan):
+    """Replay ``plan`` on the env's step from ``state``, then hold its last knot on the
+    walks' mean path (no innovation) for ``TAIL_HOURS``: per tail step, the fining share,
+    the canal (K) and the env's charge (EUR)."""
+    step = jax.jit(env.step_env)
+    for t in range(len(keys)):
+        _, state, _, _, _ = step(keys[t], state, E.to_action(plan.valve[t], p), p)
+    tail = p.replace(walk_sd=(0.0,) * len(E.WALKS))
+    hold = E.to_action(plan.knots[-1], p)
+    n_tail = int(round(O.TAIL_HOURS * 3600.0 / float(p.delta_t)))
+    out = []
+    for k in jax.random.split(jax.random.PRNGKey(0), n_tail):
+        _, state, r, _, _ = step(k, state, hold, tail)
+        read = P.sensors(state.plant, p.grid, p.plant)
+        out.append((float(read["fining"]), float(read["canal"]), -float(r)))
+    return np.array(out).T
 
 
 def test_a_step_without_lost_glass_costs_its_fuel_at_the_gas_price():
@@ -97,24 +119,36 @@ def test_the_last_knot_held_past_the_episode_loses_no_glass():
     _, state = env.reset_env(reset, p)
     plan = O.solve(env, p, state, keys, knot_steps=10)
     assert plan.lost_steps == 0
-    # The tail is not charged: the reported cost is the episode's replayed cost.
+    # The reported cost is the episode's replayed cost, the tail left out.
     assert plan.cost == pytest.approx(_replayed(env, p, 5, plan.valve), rel=1e-5)
-    # Replay the episode on the env's step, then hold the last knot on the walks' mean
-    # path (no innovation) for the tail, reading the pass and the canal every step.
-    step = jax.jit(env.step_env)
-    for t in range(30):
-        _, state, _, _, _ = step(keys[t], state, E.to_action(plan.valve[t], p), p)
-    tail = p.replace(walk_sd=(0.0,) * len(E.WALKS))
-    hold = E.to_action(plan.knots[-1], p)
-    n_tail = int(round(O.TAIL_HOURS * 3600.0 / float(p.delta_t)))
-    fining, canal = [], []
-    for k in jax.random.split(jax.random.PRNGKey(0), n_tail):
-        _, state, _, _, _ = step(k, state, hold, tail)
-        read = P.sensors(state.plant, p.grid, p.plant)
-        fining.append(float(read["fining"]))
-        canal.append(float(read["canal"]))
-    assert min(fining) >= p.fining_pass
-    assert min(canal) >= p.canal_target
+    fining, canal, _ = _held_past_the_episode(env, p, state, keys, plan)
+    assert fining.min() >= p.fining_pass
+    assert canal.min() >= p.canal_target
+
+
+def test_the_plan_is_cheapest_over_the_episode_and_its_tail():
+    # Six hours on 2 h knots: the design state's fining margin lets a plan coast through
+    # the episode and pay the fining back in the tail. Charged for the tail's fuel, the
+    # plan beats one that gets that fuel free over the episode and the tail together;
+    # the free one beats it over the episode alone. Each is optimal for its own bill,
+    # so these hold at any two optima, and they differ only if the free tail is used.
+    # Margin: 1e-3 of the bill, far above float32's 1e-5 over these steps (ours).
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=180)
+    reset, keys = O.episode_keys(5, 180)
+    _, state = env.reset_env(reset, p)
+    bills = {}
+    for charged in (True, False):
+        plan = O.solve(env, p, state, keys, knot_steps=60, charge_tail=charged)
+        assert plan.lost_steps == 0
+        episode = 180 * _replayed(env, p, 5, plan.valve)
+        fining, canal, tail = _held_past_the_episode(env, p, state, keys, plan)
+        assert fining.min() >= p.fining_pass and canal.min() >= p.canal_target
+        bills[charged] = (episode, episode + tail.sum())
+        if charged:  # the tail's planned fuel bill is the one the env charges
+            assert plan.tail_running == pytest.approx(tail.mean(), rel=1e-5)
+    assert bills[True][1] < (1.0 - 1e-3) * bills[False][1]
+    assert bills[False][0] < (1.0 - 1e-3) * bills[True][0]
 
 
 def test_the_registered_oracle_plays_its_plan_for_the_seed():

@@ -23,11 +23,12 @@ still passes them when the runner replays it step by step.
 The furnace runs on after the episode: the tasks are continuing, ended by a time limit
 that no agent sees (docs/rl-protocol.md). So the plan does not end at the cut. Its last
 knot is held for ``TAIL_HOURS`` more on the walks' mean path, under the same limits, and
-the tail is not charged. Without it the plan closes the valve on its last knot, whose
-fuel first moves the canal's fining 5.4 h later, and spends the fining the furnace
-needs after the cut. With it some end effect stays: the plan drops the knot before the
-last, and the uncharged tail repays its fining (about 0.6 point of the room, PHYSICS.md
-row 12).
+the tail's fuel is charged in the plan's objective, though not in the cost the plan
+reports, which is the episode's. Without a tail the plan closes the valve on its last
+knot, whose fuel first moves the canal's fining 5.4 h later, and spends the fining the
+furnace needs after the cut. With a tail whose fuel is free, the plan drops the knot
+before the last and buys its fining back with that fuel (about 0.6 point of the room,
+measured 2026-11-09).
 
 The planner runs in the env's float32: under x64, ``jax.random.normal`` draws other walk
 innovations from the same keys, so a float64 plan would be planned on another episode.
@@ -70,9 +71,11 @@ from target_gym.glass_furnace import physical as P
 #: The suite was solved on 4 h knots: 2 h knots cost twice and ran no better.
 KNOT_HOURS = 4.0
 #: Inside the pass mark (fining share) and the canal target (K): the planner's scan and
-#: the runner's step-by-step replay round apart, with a margin (ours). Worth about 1e-5
-#: of the fuel bill.
-FINING_BACKOFF, CANAL_BACKOFF = 1e-4, 1e-3
+#: the runner's step-by-step replay round apart in float32, by up to 7e-5 of share and
+#: 0.028 K of canal over an episode (measured 2026-11-10 on four kept plans, where a
+#: 1e-3 K backoff let the runner lose 1 to 4 steps), so about three and two times that
+#: (ours).
+FINING_BACKOFF, CANAL_BACKOFF = 2e-4, 0.05
 #: Limit rows' scale for the solver: fining shares to tenths, the canal in K, the
 #: valve's headroom under the override in hundredths of a kg/s.
 FINING_SCALE, CANAL_SCALE, HEADROOM_SCALE = 10.0, 0.1, 100.0
@@ -88,7 +91,7 @@ ACTIVE = 1e-6
 MAX_ITER, FTOL = 400, 1e-8
 #: Stationarity a converged float32 plan reaches (ours, float32 Jacobians).
 KKT_TOL = 1e-3
-#: Hours the last knot is held past the episode, under the limits and uncharged: the
+#: Hours the last knot is held past the episode, under the limits, its fuel charged: the
 #: fining's dead time (11.8 h, scripts/ladder_rows/glass_furnace.py) plus a knot, with a
 #: margin (ours). Without a tail, the plans' end effect spans the last 24 h (measured
 #: 2026-11-09). Industrial MPC predicts past its last move until the moves' effects have
@@ -101,6 +104,7 @@ class Plan(NamedTuple):
     knots: np.ndarray  # kg/s, one per knot
     cost: float  # EUR per step, the reward's mean cost on the planned rollout
     running: float  # EUR per step, its fuel bill
+    tail_running: float  # EUR per tail step, the tail's fuel bill as planned
     lost_steps: int  # steps the planned rollout loses
     status: int  # SLSQP's exit mode, 0 converged
     message: str
@@ -167,13 +171,15 @@ def kkt(grad, rows, jac, lo_gap, hi_gap):
 
 def solve(
     env, params, state, keys, knot_steps: int, start=None, max_iter=MAX_ITER, log=None,
-    tail_hours=TAIL_HOURS,
+    tail_hours=TAIL_HOURS, charge_tail=True,
 ):  # fmt: skip
     """The plan from ``state`` over the steps ``keys`` cover, one valve per
     ``knot_steps``, its last knot held ``tail_hours`` past them on the walks' mean path,
-    under the limits and uncharged; ``start`` the knots to start from (the state's valve
-    if None); ``log(iteration, knots, EUR per step, worst row)`` called after each
-    iteration if given.
+    under the limits, the tail's fuel charged in the objective unless ``charge_tail`` is
+    False; ``start`` the knots to start from (the state's valve if None);
+    ``log(iteration, knots, objective, worst row)`` called after each iteration if
+    given. The objective is the fuel bill over the episode and the tail, per episode
+    step; the plan's ``cost`` is the episode's alone.
     """
     from scipy.optimize import minimize
 
@@ -190,8 +196,9 @@ def solve(
 
     def outs(z):
         end, (cost, run, fining, canal, headroom) = _scan(env, p, st, keys, valve(z))
+        run_t = jnp.zeros(1)
         if n_tail:
-            _, (_, _, f_t, c_t, h_t) = _scan(
+            _, (_, run_t, f_t, c_t, h_t) = _scan(
                 env, tail_p, end, tail_keys, jnp.full(n_tail, z[-1])
             )
             fining, canal, headroom = (jnp.concatenate(v) for v in
@@ -202,7 +209,15 @@ def solve(
             HEADROOM_SCALE * headroom,
         ])  # fmt: skip
         lost = (fining[:n] < p.fining_pass) | (canal[:n] < p.canal_target)
-        return jnp.mean(run), rows, jnp.mean(cost), jnp.sum(lost)
+        spent = jnp.sum(run) + (jnp.sum(run_t) if charge_tail else 0.0)
+        return (
+            spent / n,
+            rows,
+            jnp.mean(cost),
+            jnp.sum(lost),
+            jnp.mean(run),
+            jnp.mean(run_t),
+        )
 
     value = jax.jit(outs)
     jac = jax.jit(jax.jacfwd(lambda z: outs(z)[:2]))
@@ -260,12 +275,14 @@ def solve(
         elif "z" in best:
             how = "best iterate that lost no glass"
         z = best.get("z", z)
-    run, rows, cost, lost = (np.asarray(v, float) for v in value(jnp.asarray(z)))
+    _, rows, cost, lost, run, run_t = (
+        np.asarray(v, float) for v in value(jnp.asarray(z))
+    )
     g, J = at(z, True)
     stat, active = kkt(g, rows, J, z - lo, hi - z)
     return Plan(
         valve=np.asarray(valve(jnp.asarray(z))), knots=z, cost=float(cost),
-        running=float(run), lost_steps=int(lost), status=int(res.status),
+        running=float(run), tail_running=float(run_t), lost_steps=int(lost), status=int(res.status),
         message=str(res.message), iterations=int(res.nit),
         capped=int(res.nit) >= max_iter, kkt=stat,
         violation=float(max(0.0, -rows.min())), active=active, how=how,

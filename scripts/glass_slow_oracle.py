@@ -5,9 +5,10 @@
 
 ``solve`` plans one episode with ``glass_furnace.oracle.solve`` (the env's own step and
 reward, the seed's walks and events foreseen) from the design valve (``START`` "-"), a
-constant ``START`` kg/s, or ("restart") the seed's last plan, then replays the plan through ``benchmark.run_policy`` on the seed at
-sensor noise 1, as the reference ladder scores its rungs, and writes the solver's
-certificate and the replayed cost. ``room`` reads those files and the ladder's
+constant ``START`` kg/s, ("restart") the seed's last plan, or the knots saved in
+``START``/SCENARIO_SEED.npy (a directory), then replays the plan through
+``benchmark.run_policy`` on the seed at sensor noise 1, as the reference ladder scores
+its rungs, and writes the solver's certificate and the replayed cost. ``room`` reads those files and the ladder's
 reference JSON: room per scenario is the kept rung's mean cost per step over the
 oracle's replayed one on the same seeds, room on J the same on the scenario-weighted
 costs, and writes ``data/oracle_ceilings/glass_furnace.json``.
@@ -70,6 +71,9 @@ def solve(name, seed, knot_hours, start, out):
     elif start == "restart":  # from this seed's last plan, SLSQP's memory reset
         z0 = np.load(pathlib.Path(out, f"{name}_{seed}_{knot_hours:g}h_plan.npy"))
         tag = f"{name}_{seed}_{knot_hours:g}h_restart"
+    elif pathlib.Path(start).is_dir():  # knots saved for this scenario and seed
+        z0 = np.load(pathlib.Path(start, f"{name}_{seed}.npy"))
+        tag = f"{name}_{seed}_{knot_hours:g}h_from-{pathlib.Path(start).name}"
     else:
         z0, tag = (
             np.full(-(-n // knot), float(start)),
@@ -92,7 +96,7 @@ def solve(name, seed, knot_hours, start, out):
     terms = rollout["terms"]
     row = {
         "scenario": name, "seed": seed, "knot_hours": knot_hours, "start": start,
-        "tail_hours": O.TAIL_HOURS,
+        "tail_hours": O.TAIL_HOURS, "tail_running": plan.tail_running,
         "seconds": seconds, "status": plan.status, "message": plan.message,
         "iterations": plan.iterations, "capped": plan.capped, "kkt": plan.kkt,
         "violation": plan.violation, "active": plan.active, "how": plan.how,
@@ -150,6 +154,8 @@ def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
         "seeds": list(seeds),
         "knot_hours": knot_hours,
         "tail_hours": O.TAIL_HOURS,
+        "tail": "the last knot held past the episode under the limits, its fuel charged "
+        "in the plan's objective, not in the ceiling",
         "units": "EUR per step, mean over each episode, then over seeds",
         "scenarios": rows,
         "J": {
