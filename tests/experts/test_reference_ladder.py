@@ -280,3 +280,19 @@ def test_j2_holds_each_episodes_reset_action_as_a_null(ladder):
         held = np.asarray(env.reset_env(key, params)[1].actuator_held, float)
         np.testing.assert_allclose(out["action"][i], np.tile(held, (40, 1)))
     np.testing.assert_allclose(out["value"], out["target"], atol=1e-3)
+
+
+def test_a_zones_sigma_is_the_spread_where_its_loop_holds(ladder):
+    # Charter J1: the setpoint sits k standard deviations of the controlled variable
+    # inside the cheap edge. On a nonlinear plant that spread depends on where the
+    # loop holds, so it is the spread at the placed setpoint, not at the centre: on
+    # pH, the pi rung's discharge spread at its setpoint matches the sigma it was
+    # placed with (20 %: ten seeds). Stage 1 follows the discharge's setpoint.
+    import numpy as np
+
+    row = ladder.ROWS["ph_neutralization"]()
+    rungs = ladder.build("ph_neutralization", row)
+    sigma, setpoint = row.placed["pH on trim"]
+    held = ladder.cv_traces("ph_neutralization", row, rungs["pi"], 1)
+    second_half = np.concatenate([t[len(t) // 2 :] for t in held])
+    assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)

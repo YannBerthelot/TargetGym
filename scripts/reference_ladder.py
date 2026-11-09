@@ -13,8 +13,10 @@ test's step size and length.
 Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``, defining
 ``row()``. A loop on a zone (``Cv.zone``) holds a setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre (``ladder.zone_setpoint``). The
-deviation is the controlled variable's, with the pi rung held at the zone's centre on
-the bump-test seeds in the scored normal day, over the second half of each episode.
+deviation is the controlled variable's, with the pi rung holding it on the bump-test
+seeds in the scored normal day, over the second half of each episode: first at the
+zone's centre, then at each placed setpoint until the setpoint stops moving, since on
+a nonlinear plant the spread depends on where the loop holds.
 Bumps are read against the same seed's unstepped run (``Plant(paired=True)``), so a
 slow walk or drift the two runs share leaves the response.
 
@@ -354,19 +356,31 @@ def build(name: str, row: Row, spec=None) -> dict:
         for i in zoned:
             low, high, _ = row.loops[i].zone
             centres[i] = _constant(0.5 * (low + high))
-        probe = ladder_controller(
-            Rung("pi", tuple(pis), mix), read, stacked(centres), flat, dt
-        )
         for i in zoned:
             c = row.loops[i]
-            held = cv_traces(name, row, probe, i, spec)
-            sigma = cv_sigma([t[len(t) // 2 :] for t in held])
-            setpoint = zone_setpoint(*c.zone[:2], sigma, c.zone[2])
-            row.placed[c.name] = (sigma, setpoint)
+            setpoint, at = None, list(centres)
+            # The spread is the controlled variable's where its loop holds, which on
+            # a nonlinear plant moves with the setpoint: start at the centre, then
+            # re-read at each placed setpoint, with the row's other loops following
+            # it (``row.placed``), until it moves less than PLACE_TOLERANCE sigma.
+            for _ in range(PLACE_ROUNDS):
+                probe = ladder_controller(
+                    Rung("pi", tuple(pis), mix), read, stacked(at), flat, dt
+                )
+                held = cv_traces(name, row, probe, i, spec)
+                sigma = cv_sigma([t[len(t) // 2 :] for t in held])
+                last, setpoint = setpoint, zone_setpoint(*c.zone[:2], sigma, c.zone[2])
+                row.placed[c.name] = (sigma, setpoint)
+                print(
+                    f"    {c.name}: sigma {sigma:.4g}, setpoint {setpoint:.4g}",
+                    flush=True,
+                )
+                if last is not None and abs(setpoint - last) <= PLACE_TOLERANCE * sigma:
+                    break
+                at[i] = _constant(setpoint)
+            else:
+                print(f"    {c.name}: placement still moving after {PLACE_ROUNDS}")
             targets[i] = _constant(setpoint)
-            print(
-                f"    {c.name}: sigma {sigma:.4g}, setpoint {setpoint:.4g}", flush=True
-            )
     target = stacked(targets)
 
     def make(rung, bias):
@@ -609,6 +623,10 @@ def climb(name: str, nulls: bool = False) -> dict:
         out["nulls"] = check_nulls(name, row, results[kept])
     return out
 
+
+#: A zone's placement stops once its setpoint moves under this many sigma, the 2-sigma
+#: rule's own resolution at 1 %, or after PLACE_ROUNDS reads.
+PLACE_TOLERANCE, PLACE_ROUNDS = 0.01, 8
 
 _ORDER = ("pi", "feedforward", "cascade", "decoupler", "override", "published")
 
