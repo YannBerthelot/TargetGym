@@ -6,7 +6,7 @@ Contract (charter J3, the task's oracle rule; ``glass_furnace/oracle.py``):
 - that cost is the reward's: on a step that loses no glass, the fuel burnt at its heating
   value and the gas price (env_jax.compute_reward's docstring, REALITY.md section 6);
 - a solve meets the fining and canal limits on every step and stops at a KKT point;
-- with a horizon shorter than the fining's dead time (3.8 h, the ladder row's step
+- with a horizon shorter than the fining's dead time (11.8 h, the ladder row's step
   test) and a canal that its own loop holds, no valve move can reach a limit, so the
   cheapest plan is the valve closed to its minimum.
 """

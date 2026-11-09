@@ -31,15 +31,15 @@ solver does not grade itself: the KKT stationarity of the plan, from non-negativ
 multipliers on its active limits and bounds (``kkt``), and its worst violation.
 
 On the registered plant it does not converge (measured 2026-11-09, seeds 100 to 104,
-``data/oracle_ceilings/glass_furnace.json``). SLSQP stops on a failed line search
-with the KKT certificate near 1: the plant is not smooth in the valve. Each cell's
-fining share is a ratchet (``physical``: the max of what it carries and what its
-temperature has done), and the refiner's cooling loop clamps at zero, so the limits'
-Jacobians jump. The ratchet also makes pulsed firing pay, at equal mean fuel, so the
-iterates pulse the valve between its ends on the knots' period. A solve's plan is
-then its cheapest iterate that loses no glass, or its last one raised until it loses
-none, whichever costs less; it is replayed and its replayed cost reported, an upper
-bound on the ceiling, so the room from it is a lower bound.
+``data/oracle_ceilings/glass_furnace.json``). SLSQP stops at its iteration cap or on a
+failed line search, with the KKT certificate near 1. The plant is not smooth in the
+valve: the fining band has two ends (``physical.fining_done``), and the refiner's
+cooling loop clamps at zero, so the limits' Jacobians jump. The iterates drop the
+valve for a knot every 12 to 20 h, and they close it on the last knot, whose fuel first
+moves the canal's fining 5.4 h later, after the episode ends. A solve's plan is then
+its cheapest iterate that loses no glass, or its last one raised until it loses none,
+whichever costs less. It is replayed and its replayed cost reported, an upper bound on
+the ceiling, so the room from it is a lower bound.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
 plan made with full foresight. Without one it plans on the walks' mean path from the

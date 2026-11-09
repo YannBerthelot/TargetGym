@@ -2,7 +2,8 @@
 
 Reference plant: a **regenerative side-port fired float-glass furnace**, about 500 t/day,
 natural gas, its melter, waist and working end in one long section. Registered as
-`glass_furnace-v4` (attempt 3 of the rebuild, charter Amendments 1 to 3).
+`glass_furnace-v5` (attempt 3 of the rebuild, charter Amendments 1 to 3; v5 makes fining
+a time-temperature integral).
 
 This document is the task's contract. The plant record it rests on is `REALITY.md`
 (sources S1 to S44); the cold review is `COLD_REVIEW.md`; the design, the measurements and
@@ -33,8 +34,11 @@ Temperatures are in K unless a name says otherwise.
   per melter column; it melts at 2.2 MJ/kg to 1450 K. Foam grows with the fining gas and
   decays with its lifetime.
 - **Fining.** Each cell carries the share of its sulfate fining its glass has done,
-  advanced while it sits in the 1420 to 1500 C band [S31] and carried with the flow,
-  never undone (a max closure).
+  carried with the flow. Fining is a time-temperature integral [S45], not the peak: in
+  the 1420 to 1500 C band [S31] a cell's unfined share falls at the band's share over
+  `fining_time`, 1 h at the band's top (`fining_after`). Glass that cools keeps what it
+  fined, since the gas it released is spent; reheating fined glass, which raises reboil
+  bubbles [S45], is not modelled.
 
 | Quantity | Value | Source |
 |---|---|---|
@@ -119,7 +123,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | 9 | No couple lag, drift or reversal ripple; air preheat and stack had no source | Partly fixed: air preheat and stack removed | Readings are cleaner than real |
 | 10 | Batch islands as a wedge; no level loop, tweel, waist coolers or boost; forward flow into the waist 2.6 times the pull against 1.2 to 2.5 [S17] | Known deviation | The refiner is slightly more coupled to the melter than the range allows |
 | 11 | Unsourced numbers | Listed below with their family ranges | See the list |
-| 12 | A constant valve with a margin may do nearly as well as a controller | Measured: the best box null costs 4.1 % more than the oracle's best path, weighted; 0.7 to 3.7 % per scenario. The oracle is not converged, so these are lower bounds on room | Small room, as the family's 2 to 4 % saving says |
+| 12 | A constant valve with a margin may do nearly as well as a controller | Measured on v5 (2026-11-09): the fining PI costs 232,043 EUR a 7-day episode against 242,995 for the best constant valve (the conformance test's two seeds), and the ladder's kept rung costs 3.05 % more than the oracle's best paths, weighted (1.8 to 3.4 % per scenario, `data/oracle_ceilings/glass_furnace.json`). No solve converged, so the room is a lower bound. About 1 point of it is the last 4 h, whose fuel reaches the canal after the episode ends | Small room, as the family's 2 to 4 % saving says |
 | 13 | Crown wear neither priced nor measured | Fixed: measured as is | Hours over 1600 and 1610 C, and the maximum, per policy |
 | 14 | Cooling air power, scanner rejects and cullet remelt are not charged; the agent sees the valve after the override | Known deviation; the last is intended | Small |
 
@@ -140,11 +144,12 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | Waist and working end widths | 3.5 and 7.9 m | A 1300 t/d furnace's ratios to its melter [S18], scaled |
 | Surface emissivity, port shares, couple depth and bay, combustion height | 0.8; ports 1 to 4 even then 0.7, 0.4; 36 mm in bay 3; 2.4 m | Not found; ours |
 | Bubble radius | 8.3 mm | Top of the laboratory range [S32] |
+| Fining time | 1 h at the band's top | Not found; ours. By Stokes at this plant's viscosity, a 0.5 mm bubble (radius ours) rises half the 1.2 m depth in 1.0 h at 1500 C and 1.7 h at 1420 C. At 3 h the plant could not pass 0.5 under its crown cap |
 | Scenario weights | Normal 0.7; pull up and down 0.05 each; gas rich and lean 0.1 each | Gas swings: none at stable entry points to weekly where LNG blends [S19; S20], each 0 to 0.3. Pull changes: none on a steady float line [S5] to about 20 job changes a month on a container line [S9], each 0 to 0.3. Normal: the rest, 0.4 to 1 |
 
 ### The reference ladder's row (rule 3, for `scripts/reference_ladder.py`)
 
-- **Registered** as `glass_furnace-v4`: `env_jax.GlassFurnace` with `GlassFurnaceParams`,
+- **Registered** as `glass_furnace-v5`: `env_jax.GlassFurnace` with `GlassFurnaceParams`,
   the scored configuration as `default_params`, starting from the packaged
   `design_state.npz`. Its scenarios are `EnvSpec.scenarios`, five, weighted
   (`physical_scenarios.suite`), and their overrides `pull_change` and `gas_swing` are
@@ -171,8 +176,9 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 - **PID slot:** a fining PI on this plant (`experts.py`), the ladder's first rung: SIMC on
   the valve's step test, setpoint 2 sigma above the pass mark, gains in `pid_gains.json`
   under `glass_furnace`, provisional until the ladder measures its own sigma.
-- **MPC slot:** retired, with `oracle.py`, which planned on the old plant's params. The
-  task's ceiling is `scripts/glass_slow_oracle.py`, not yet converged.
+- **MPC slot:** the oracle (`oracle.py`), which plans the valve on the env's own step and
+  reward with the episode's foresight. It does not converge on this plant (row 12), so its
+  plans bound the ceiling from above; `scripts/glass_slow_oracle.py` runs the suite.
 - **Scoring:** `scoring.SPEC_BAND["glass_furnace"]` is None, as HVAC's: a zone the reward
   prices itself. The legacy ceiling and settle band are one step's lost glass, 416.88 EUR,
   since any shortfall loses the step's whole pull. The consumption ratio reads the fuel

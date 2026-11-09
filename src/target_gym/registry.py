@@ -972,21 +972,14 @@ _SPECS: tuple[EnvSpec, ...] = (
             "ladder's first rung, a PI on the cold-end fining reading two sigma "
             "above its pass mark. The oracle plans the valve on the env's own step "
             "and reward, with the episode's walks foreseen when given its seed, by "
-            "SLSQP, which does not converge on this plant's ratchet: its plans "
-            "bound the ceiling from above (glass_furnace/oracle.py)."
-        ),
-        expert_degraded=(
-            "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance "
-            "test's two seeds, against 242,995 for the best constant valve (raw 0.0, "
-            "0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward "
-            "prices as a step, so it loses glass where a wide constant margin does "
-            "not: full back-off is what this reward pays for (PHYSICS.md, cold "
-            "review item 4). A finding for the reference ladder; not tuned."
+            "SLSQP, which does not converge on this plant: its plans bound the "
+            "ceiling from above (glass_furnace/oracle.py)."
         ),
         tuned_gains_key="glass_furnace",
         disturbance_fields=("walk",),
         scenarios=_glass_furnace_scenarios,
-        version=4,
+        # v5: fining is a time-temperature integral, not the peak (PHYSICS.md).
+        version=5,
     ),
     EnvSpec(
         name="reactor",
