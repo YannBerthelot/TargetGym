@@ -58,6 +58,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `event_window` | 30, 150 | min | ours |
 | `setpoint_step` | 2 | K (scenario) | cited: a 2 C step [S1, Fig. 2] |
 | `k0_drop` | 0.4 | - (scenario) | cited: a 40 % drop [S1, Fig. 3] |
+| `k0_decay` | 90 | min (scenario) | ours: no source gives a rate inside hours; the slowest linear decay that ends inside the 240 min episode from the latest event, at 150 min |
 | `feed_rise` | 0.1 | - (scenario) | ours: feed build-up is sourced [S3], its size is not |
 | `cooling_loss` | 5 | min (scenario) | ours: cooling failures are sourced [S2; S3], their length is not |
 | readings | 0.04 K; lag 13 s; dead time 2 min | - | Pt100 scatter as before; thin-walled well about 13 s [S10, Fig. 2]; jacket outlet about 2 min [S6] |
@@ -93,7 +94,7 @@ temperature, with the water where that needs it. `scenarios.py`:
 |---|---|---|
 | `normal` | none; the feed at 23 to 25 C | [S1, Tables 3, 4] |
 | `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
-| `catalyst_loss` | activity -40 % | [S1, Fig. 3] |
+| `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
 | `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
 | `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
 
@@ -164,24 +165,28 @@ inhibitor, quench and dump [S5]. Effect: a narrower job.
 **D4. A simulated reaction.** PARSEX injects steam for the heat a reaction
 would release [S1]; the model is that reaction.
 
-**D5. The catalyst loss is a step.** S1's 40 % loss was instantaneous, which
-its authors say "is not likely to occur" in operation, where activity decays
-[S1, p. 6]; S1 rode it out on feed concentration, a handle this task lacks
-(D3). It is kept as S1 ran it, the family's hardest documented upset. On
-water alone it is held only while the water's floor removes less heat than the
-reactor then releases: with water entering at 24 C (v5's own number) the
-steady water after the loss, 50 to 58 g/s, sat so near the 40 g/s floor that
-every rung of the ladder quenched the reactor to under 35 C; with S1's 120 g/s
-design water (v6) it is 64 to 75 g/s.
+**D5. The catalyst loss is a decay, not S1's step.** S1's 40 % loss was
+instantaneous, which its authors say "is not likely to occur" in operation,
+where activity "is always expected to decay throughout the operation"
+[S1, p. 6]. The owner chose the decay (2026-11-09): the same 40 % falls
+linearly over 90 min. No source gives a rate inside a 4 h window (real
+deactivation runs over a catalyst's life), so the rate is ours under the family
+ruling: the slowest that ends inside the episode from the window's latest
+event (240 - 150 min). S1 rode its step out on feed concentration, a handle
+this task lacks (D3). With S1's 120 g/s design water the steady water after the
+loss is 64 to 75 g/s, above the 40 g/s floor; with v5's 24 C water it sat at 50
+to 58 g/s and every rung quenched the reactor under the step.
 
-**Finding, J2 (v6).** The ladder's cascade still loses to the I-only null on
-all 10 seeds, median J 403 against 124, almost all of it the catalyst loss
-(3045 against 248 per step). The loss takes away heat equal to the whole jacket
-duty at once; SIMC's loops give the valve's span away over 16 min and the
-reactor dips to 48.5 C, while the null's integrator, a relay at its gain, puts
-the valve on its floor in one step and dips to 54.4 C. Nothing in the row is
-wrong (sign, pairing, saturation); the scenario's weight (0.1, ours) and its
-form (a step S1 calls unlikely) are the owner's to weigh.
+**Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
+I-only null on all 10 seeds (median J 403 against 124), almost all of it the
+catalyst loss (3045 against 248 per step): SIMC's loops gave the valve's span
+away over 16 min while the null, a relay at its gain, floored the valve in one
+step. Nothing in the row was wrong (sign, pairing, saturation). With the loss
+as a 90 min decay (D5) the cascade's median J is 90.7 and I-only's 88.5; the
+null wins 5 of 10 seeds, not more than half, so J2 passes, at its edge. The
+catalyst loss now costs the cascade 158 per step against I-only's 17, and the
+normal day 1.6 against 22.5. The I-only gain and the null table were fitted on
+v5 and are stale.
 
 ---
 
