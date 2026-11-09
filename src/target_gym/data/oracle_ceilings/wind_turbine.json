@@ -1,0 +1,1486 @@
+{
+ "task": "wind_turbine",
+ "protocol": "charter J3: the score's own reward planned with the true model, the true state and the episode's future, replayed on the env in float32 on seeds 100 to 109 at sensor noise 1; room = the kept reference's mean cost per step over the oracle's replayed one, on the same seeds",
+ "solver": "shared shooting IPM, one plan over the 2400-step episode, block 1, cap 500, Cp and Ct tables through K7 rungs (pitch, tip-speed widths in cells) 1/0.1, 0.1/0.01 (cap 500); seeds 100 to 104 only (one solve is 10 to 25 min on the loaded host); overspeed backed off by the speed reading's sigma (5.2e-4 rad/s), and by the K11 back-off of data/oracle_widths (7.3e-3 rad/s) on all of near_rated and on any seed whose plan tripped at the smaller one (the tables' smoothing error over the episode exceeds 5.2e-4); the tower's fatigue is not planned, so the replayed ceiling bounds the true one above",
+ "reference": "pi",
+ "J_reference": 0.0050885850613188255,
+ "J_ceiling": null,
+ "room_J": null,
+ "subset_seeds": [
+  100,
+  101,
+  102,
+  103,
+  104
+ ],
+ "J_reference_subset": 0.006937985395380264,
+ "J_ceiling_subset": 0.0007263394585092856,
+ "room_J_subset": 9.551987454487946,
+ "scenarios": {
+  "normal": {
+   "weight": 0.4944824005472272,
+   "reference_mean": 0.0031367670373591205,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.0007854108080336179,
+   "ceiling_per_seed": [
+    0.00031171562863492217,
+    0.0017090692279222634,
+    0.00016209710078276756,
+    0.0008829777528931145,
+    0.0008611943299350223
+   ],
+   "planned_mean": 7.671319514362927e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.004714010942314868,
+   "room": 6.00196851647233,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 4.174305907015767e-08,
+    "pitch": 7.67141208696857e-06,
+    "tower": 0.0007776976585488699
+   },
+   "solver": {
+    "max_kkt_error": 4.699149553158935e-10,
+    "max_iterations": 75,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.4350572508092796e-08,
+    "max_planned_limit_excess": -0.0005200160662841569
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.00031171562863492217,
+     "planned_cost_per_step": 8.617991671262994e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 3.799479485847949e-09,
+      "pitch": 8.617967342557931e-06,
+      "tower": 0.0003030938650066995
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5061012082891974e-09,
+       "iterations": 54,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 4.699149553158935e-10,
+       "iterations": 26,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3925489872335106e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0017090692279222634,
+     "planned_cost_per_step": 8.610025542713243e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 8.7171014197344e-08,
+      "pitch": 8.610180770797967e-06,
+      "tower": 0.0017003718792236548
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505908759347734e-09,
+       "iterations": 49,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 7.820239210820104e-11,
+       "iterations": 57,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4350572508092796e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.00016209710078276756,
+     "planned_cost_per_step": 4.944995778766343e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 4.944998660034542e-06,
+      "tower": 0.00015715210134260141
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 6.856494316753725e-09,
+       "iterations": 70,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 6.569399655989896e-11,
+       "iterations": 30,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3953662003629574e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0008829777528931145,
+     "planned_cost_per_step": 9.033545584550805e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 7.643490222160784e-08,
+      "pitch": 9.03367788312311e-06,
+      "tower": 0.0008738676525590028
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059040365149516e-09,
+       "iterations": 71,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.390910778487617e-10,
+       "iterations": 51,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4171839257670626e-08
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0008611943299350223,
+     "planned_cost_per_step": 7.1500389945212555e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 4.1309899445988544e-08,
+      "pitch": 7.150235778329295e-06,
+      "tower": 0.0008540027946123909
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505990364211515e-09,
+       "iterations": 47,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.378667615305071e-11,
+       "iterations": 75,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4097346623387352e-08
+      }
+     ]
+    }
+   ]
+  },
+  "gusty_class_a": {
+   "weight": 0.10988497789938381,
+   "reference_mean": 0.004746102583886574,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.0013162613738188574,
+   "ceiling_per_seed": [
+    0.0005992358805741286,
+    0.002707138639711008,
+    0.0003043334698367603,
+    0.0013442657631569596,
+    0.0016263331158154302
+   ],
+   "planned_mean": 9.78428588560347e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.005034319443372969,
+   "room": 3.824711066896192,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 4.1205125018262124e-08,
+    "pitch": 9.784362435026376e-06,
+    "tower": 0.0013064358070003148
+   },
+   "solver": {
+    "max_kkt_error": 5.124194700161651e-09,
+    "max_iterations": 55,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.4339117226924714e-08,
+    "max_planned_limit_excess": -0.0005200160777374396
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.0005992358805741286,
+     "planned_cost_per_step": 1.030081105680195e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 8.698221230544571e-08,
+      "pitch": 1.0300739005703792e-05,
+      "tower": 0.0005888481580023236
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059035779379757e-09,
+       "iterations": 56,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.124194700161651e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 1.404897131962457e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.002707138639711008,
+     "planned_cost_per_step": 1.1455589905233429e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 5.236111539907995e-08,
+      "pitch": 1.1455680688646775e-05,
+      "tower": 0.002695630595503498
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505905597259534e-09,
+       "iterations": 55,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 8.683775057178922e-10,
+       "iterations": 33,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4339117226924714e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.0003043334698367603,
+     "planned_cost_per_step": 5.8434729771710004e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 5.843487241126525e-06,
+      "tower": 0.00029848998343625586
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.507046664681746e-09,
+       "iterations": 70,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309077e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.8506093671377677e-09,
+       "iterations": 35,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3898368012021933e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0013442657631569596,
+     "planned_cost_per_step": 1.1852758046758398e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.83159739967446e-10,
+      "pitch": 1.1852934218769724e-05,
+      "tower": 0.0013324126474648112
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059036069003528e-09,
+       "iterations": 67,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.711986439393968e-11,
+       "iterations": 55,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3568917323070195e-08
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0016263331158154302,
+     "planned_cost_per_step": 9.468797442052568e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 6.64991376468175e-08,
+      "pitch": 9.468971020885064e-06,
+      "tower": 0.0016167976505946854
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059035624127365e-09,
+       "iterations": 62,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.0951156912996797e-10,
+       "iterations": 44,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4085617339176792e-08
+      }
+     ]
+    }
+   ]
+  },
+  "extreme_gust": {
+   "weight": 4.670111560723812e-05,
+   "reference_mean": 0.0032078736273681457,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.0008003825952256372,
+   "ceiling_per_seed": [
+    0.00034747637434518467,
+    0.0017068422017608757,
+    0.00016841781224947514,
+    0.0009632575115109378,
+    0.0008159190762617125
+   ],
+   "planned_mean": 7.722528111225268e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.004785024742026141,
+   "room": 5.978421782993903,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 5.761615064447945e-08,
+    "pitch": 7.72262219402392e-06,
+    "tower": 0.0007926023584096428
+   },
+   "solver": {
+    "max_kkt_error": 5.297371305501564e-09,
+    "max_iterations": 68,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.4418219951295441e-08,
+    "max_planned_limit_excess": -0.0005200159986311625
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.00034747637434518467,
+     "planned_cost_per_step": 8.835880867807689e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 7.699653423361615e-09,
+      "pitch": 8.835859945760898e-06,
+      "tower": 0.0003386328171039491
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059938462741783e-09,
+       "iterations": 54,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 2.407680226131997e-10,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3925489872335106e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0017068422017608757,
+     "planned_cost_per_step": 8.71213724181337e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.0966841196428471e-07,
+      "pitch": 8.712283785595743e-06,
+      "tower": 0.001698020252510176
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059617139791605e-09,
+       "iterations": 49,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 6.186942198519575e-11,
+       "iterations": 68,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4418219951295441e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.00016841781224947514,
+     "planned_cost_per_step": 4.949835059867685e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 4.949853972299097e-06,
+      "tower": 0.00016346795746738835
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 8.893523348318944e-09,
+       "iterations": 68,
+       "capped": false,
+       "failed": false,
+       "violation": 8.893523348318944e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.5650911848892577e-11,
+       "iterations": 39,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3953662891807994e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0009632575115109378,
+     "planned_cost_per_step": 8.960094215566796e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 8.436719455754786e-08,
+      "pitch": 8.960225745235546e-06,
+      "tower": 0.0009542129176084807
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505909607157895e-09,
+       "iterations": 73,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.297371305501564e-09,
+       "iterations": 49,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4171839479715231e-08
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0008159190762617125,
+     "planned_cost_per_step": 7.154693171070801e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 8.634549327720306e-08,
+      "pitch": 7.154887521228318e-06,
+      "tower": 0.0008086778473582194
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505903987430681e-09,
+       "iterations": 47,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 8.145143343042164e-11,
+       "iterations": 62,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4097347067476562e-08
+      }
+     ]
+    }
+   ]
+  },
+  "near_rated": {
+   "weight": 0.28844806698588255,
+   "reference_mean": 0.009475948807070566,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.00027571447893184,
+   "ceiling_per_seed": [
+    8.540898463510134e-05,
+    0.0007023047400951825,
+    5.7012857531956986e-05,
+    0.0004484365848401868,
+    8.540922755677242e-05
+   ],
+   "planned_mean": 4.7211716362542e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.012773438305122864,
+   "room": 46.32850024637485,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 1.9758682245315147e-08,
+    "pitch": 4.711650901241621e-06,
+    "tower": 0.0002709830720187262
+   },
+   "solver": {
+    "max_kkt_error": 3.851593128828706e-09,
+    "max_iterations": 139,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.3747527782825841e-08,
+    "max_planned_limit_excess": -0.007275028772802727
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 8.540898463510134e-05,
+     "planned_cost_per_step": 4.341601664355006e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 4.341486213035965e-06,
+      "tower": 8.106749819113335e-05
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": -1.0,
+       "iterations": 500,
+       "capped": false,
+       "failed": true,
+       "violation": 0.017280665601451577
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 4.1736836746045306e-10,
+       "iterations": 81,
+       "capped": false,
+       "failed": false,
+       "violation": 1.366508994848914e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0007023047400951825,
+     "planned_cost_per_step": 6.277593211036879e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 6.2776722847649824e-06,
+      "tower": 0.0006960270752335736
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505985229250749e-09,
+       "iterations": 109,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309077e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.0000010766551134e-11,
+       "iterations": 45,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3747527782825841e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 5.7012857531956986e-05,
+     "planned_cost_per_step": 2.250184693664102e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 9.581337632920869e-08,
+      "pitch": 2.202593616374473e-06,
+      "tower": 5.4714451042880974e-05
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 4.560964883548735e-09,
+       "iterations": 306,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090907792e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 9.549346383063948e-10,
+       "iterations": 139,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3741744853135174e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0004484365848401868,
+     "planned_cost_per_step": 6.595002387159565e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 2.9800348973670527e-09,
+      "pitch": 6.5950094064835355e-06,
+      "tower": 0.00044183860114831896
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 9.090909264879879e-10,
+       "iterations": 105,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090907661e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 3.851593128828706e-09,
+       "iterations": 36,
+       "capped": false,
+       "failed": false,
+       "violation": 9.957831219389107e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 8.540922755677242e-05,
+     "planned_cost_per_step": 4.14147622505545e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 4.141492985549148e-06,
+      "tower": 8.126773447772391e-05
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 7.720095770991087e-09,
+       "iterations": 61,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090907661e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.0000200368395715e-11,
+       "iterations": 33,
+       "capped": false,
+       "failed": false,
+       "violation": 1.35579574234157e-08
+      }
+     ]
+    }
+   ]
+  },
+  "near_cut_out": {
+   "weight": 0.035712617817299744,
+   "reference_mean": 0.001991758290624712,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.0018473070444932117,
+   "ceiling_per_seed": [
+    0.0025786038257251333,
+    0.0016520621920876218,
+    0.00167402204782882,
+    0.0019266724048783252,
+    0.0014051747519461591
+   ],
+   "planned_mean": 9.64959581806596e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.0015528503982982593,
+   "room": 0.8406022176590934,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 6.09605952811935e-08,
+    "pitch": 9.649829070519294e-06,
+    "tower": 0.0018375962568046727
+   },
+   "solver": {
+    "max_kkt_error": 5.170480474325778e-09,
+    "max_iterations": 75,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.4371827283810035e-08,
+    "max_planned_limit_excess": -0.0005200160450449243
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.0025786038257251333,
+     "planned_cost_per_step": 1.162970347797409e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.8206598689785026e-08,
+      "pitch": 1.1629938878976453e-05,
+      "tower": 0.0025669556872490416
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 3.923644753582793e-09,
+       "iterations": 53,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 8.21474711991197e-10,
+       "iterations": 44,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4371827283810035e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0016520621920876218,
+     "planned_cost_per_step": 8.866520633888064e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 2.7911460574273997e-08,
+      "pitch": 8.866609735556085e-06,
+      "tower": 0.0016431676725722159
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059038932891244e-09,
+       "iterations": 67,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.0000000245799917e-11,
+       "iterations": 46,
+       "capped": false,
+       "failed": false,
+       "violation": 1.42917684353705e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.00167402204782882,
+     "planned_cost_per_step": 9.146657105109244e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 7.725781885422241e-08,
+      "pitch": 9.146950794590714e-06,
+      "tower": 0.0016647978506705873
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059043101366558e-09,
+       "iterations": 59,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.8993582438349108e-10,
+       "iterations": 75,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4202057085910269e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0019266724048783252,
+     "planned_cost_per_step": 1.03483723249722e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.0852865475234157e-07,
+      "pitch": 1.0348602208402058e-05,
+      "tower": 0.0019162152723421174
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059035597107597e-09,
+       "iterations": 76,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 4.098761074138925e-09,
+       "iterations": 58,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4360511002564635e-08
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0014051747519461591,
+     "planned_cost_per_step": 8.256725548386201e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 7.28984435353445e-08,
+      "pitch": 8.257043735071153e-06,
+      "tower": 0.001396844801189402
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505903773540314e-09,
+       "iterations": 61,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440309276e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.170480474325778e-09,
+       "iterations": 41,
+       "capped": false,
+       "failed": false,
+       "violation": 9.699160051653154e-09
+      }
+     ]
+    }
+   ]
+  },
+  "curtailment": {
+   "weight": 0.07142523563459949,
+   "reference_mean": 0.002959510838992091,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104
+   ],
+   "ceiling_mean": 0.0006691112268844331,
+   "ceiling_per_seed": [
+    0.0002105705248550692,
+    0.0015628985777792535,
+    0.00015616276465774462,
+    0.000716113363041004,
+    0.0006998109040890945
+   ],
+   "planned_mean": 5.98739600958978e-06,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.0043911715262365415,
+   "room": 6.56269294222285,
+   "terms_mean": {
+    "failure": 0.0,
+    "lost": 1.6577779137105786e-08,
+    "pitch": 5.987528873876287e-06,
+    "tower": 0.0006631071214926959
+   },
+   "solver": {
+    "max_kkt_error": 5.8282027317223924e-09,
+    "max_iterations": 63,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 1.4347157462069049e-08,
+    "max_planned_limit_excess": -0.0005200160696994249
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.0002105705248550692,
+     "planned_cost_per_step": 7.283306790207259e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.565885543693598e-08,
+      "pitch": 7.2832944916428885e-06,
+      "tower": 0.00020327157222749988
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.5059036184912997e-09,
+       "iterations": 55,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440311818e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 3.780332424033985e-10,
+       "iterations": 36,
+       "capped": false,
+       "failed": false,
+       "violation": 1.401248317378645e-08
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0015628985777792535,
+     "planned_cost_per_step": 6.463474340817497e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 5.4520837823313073e-08,
+      "pitch": 6.463682865776773e-06,
+      "tower": 0.0015563803736981536
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 9.837318758199043e-09,
+       "iterations": 63,
+       "capped": false,
+       "failed": false,
+       "violation": 9.837318758199043e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.8149277806874633e-11,
+       "iterations": 63,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4347157462069049e-08
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.00015616276465774462,
+     "planned_cost_per_step": 4.213183280353379e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 4.213171332561605e-06,
+      "tower": 0.0001519495929374483
+     },
+     "limit_backoffs": [
+      0.007275012103467589
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.0563093085797474e-09,
+       "iterations": 66,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090908007e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.0000018894835397e-11,
+       "iterations": 31,
+       "capped": false,
+       "failed": false,
+       "violation": 1.37969795588333e-08
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.000716113363041004,
+     "planned_cost_per_step": 7.071226934157047e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 5.286458785539831e-10,
+      "pitch": 7.071415549114353e-06,
+      "tower": 0.0007090414182525281
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 2.505903560532996e-09,
+       "iterations": 67,
+       "capped": false,
+       "failed": false,
+       "violation": 7.494096440311818e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.8282027317223924e-09,
+       "iterations": 43,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4171839479715231e-08
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0006998109040890945,
+     "planned_cost_per_step": 4.905788702413717e-06,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.2180556546725895e-08,
+      "pitch": 4.906080130285817e-06,
+      "tower": 0.0006948926503478497
+     },
+     "limit_backoffs": [
+      0.00052
+     ],
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        1.0,
+        0.1
+       ],
+       "error": 9.090909115506446e-10,
+       "iterations": 52,
+       "capped": false,
+       "failed": false,
+       "violation": 9.090909090908022e-09
+      },
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 1.323247671370589e-09,
+       "iterations": 35,
+       "capped": false,
+       "failed": false,
+       "violation": 1.4088042510351784e-08
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "generated": "2026-11-08, AMD EPYC 9454 (bob)"
+}
