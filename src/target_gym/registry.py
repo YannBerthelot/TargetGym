@@ -948,7 +948,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
         # drums, specs at the family's give-away margin, scenario suite. v7:
         # failure_cost 0, as for every plant with no trip (charter B5).
-        version=7,
+        # v8: light key lost to the bottoms is priced at 100 kmol of boilup a
+        # kmol, Column A's distillate over bottoms price and energy [D8].
+        version=8,
         scenarios=_scenarios(
             "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
         ),

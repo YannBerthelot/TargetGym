@@ -138,6 +138,11 @@ class DistillationParams(EnvParams):
     reward_version: int = 3
     boilup_price: float = 1.0  # per kmol of boilup
     reprocess_price: float = 3.206  # kmol of boilup per kmol off spec
+    # Recovery: light key leaving in the bottoms is sold at the bottoms' price
+    # instead of the distillate's. On Column A, distillate 2 $/mol, bottoms
+    # 1 $/mol and boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p.
+    # 2965], so each kmol lost costs (2 - 1) / 0.01 = 100 kmol of boilup.
+    recovery_price: float = 100.0  # kmol of boilup per kmol of light key lost
     # No trip (the zones are not trips), so a trip has no cost: 0, the
     # charter's convention for a plant with no trip (B5).
     failure_cost: float = 0.0
@@ -177,6 +182,7 @@ PARAM_UNITS = {
     "reward_version": "-",
     "boilup_price": "kmol",
     "reprocess_price": "kmol/kmol",
+    "recovery_price": "kmol/kmol",
     "failure_cost": "kmol",
     "restart_steps": "steps",
     "e_floor_top": "-",
@@ -378,7 +384,9 @@ def compute_reward_terms(
     (``DistillationParams``, "Score").
 
     - ``boilup``: the reboiler's duty [D4, p. 5];
-    - ``off_spec``: each product outside its zone, run through again.
+    - ``off_spec``: each product outside its zone, run through again;
+    - ``light_lost``: the light key leaving in the bottoms, sold at the
+      bottoms' price instead of the distillate's [D8].
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
@@ -393,6 +401,9 @@ def compute_reward_terms(
         "boilup": R.priced_cost(state.V * p.delta_t, p.boilup_price, xp),
         "off_spec": R.priced_cost(
             (off_top + off_bottom) * p.delta_t, p.reprocess_price, xp
+        ),
+        "light_lost": R.priced_cost(
+            B * xp.clip(state.x[0], 0.0, 1.0) * p.delta_t, p.recovery_price, xp
         ),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)

@@ -618,7 +618,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 7,
+    "version": 8,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",

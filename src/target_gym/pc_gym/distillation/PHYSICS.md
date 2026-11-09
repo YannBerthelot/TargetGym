@@ -111,6 +111,7 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | analyser cycle, dead time | 5, 5 | min | cited range: 3 to 30 min in total [D5] |
 | `boilup_price` | 1 | kmol | ours: the unit of the score |
 | `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec product is run through again, at the nominal V/F |
+| `recovery_price` | 100 | kmol/kmol | cited: (pD - pB) / pV on Column A, distillate 2 and bottoms 1 $/mol, boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965] |
 | `failure_cost` | 0 | kmol | no trip, so a trip costs nothing (charter B5) |
 | `restart_steps` | 1 | steps | never charged |
 | `e_floor_top`, `e_floor_bottom` | 4e-4 | - | the analysers' scatter (section Readings), for the time-in-band KPI only |
@@ -165,12 +166,18 @@ the least reflux and boilup, without flooding [D4, p. 5; D6]. Per minute, in
 kmol of boilup:
 
 ```
-reward   = -(boilup + off_spec)
-boilup   = V dt
-off_spec = 3.206 (D [yD < 0.9857] + B [xB > 0.0143]) dt
+reward     = -(boilup + off_spec + light_lost)
+boilup     = V dt
+off_spec   = 3.206 (D [yD < 0.9857] + B [xB > 0.0143]) dt
+light_lost = 100 B xB dt
 ```
 
-Inside the zones purity earns nothing; it costs the boilup it takes.
+Light key leaving in the bottoms is sold at the bottoms' price instead of the
+distillate's: on Column A distillate sells at 2 $/mol, bottoms at 1 and boilup
+costs about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965], so each kmol
+costs (2 - 1) / 0.01 = 100 kmol of boilup. With energy this cheap the
+bottoms pay to be over-purified, as D8 finds for Column A (its region with the
+bottoms' spec inactive); the distillate's purity earns nothing past its spec.
 
 ---
 

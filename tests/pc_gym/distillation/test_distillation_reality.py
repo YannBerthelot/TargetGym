@@ -23,7 +23,11 @@ from the code (tolerances are the audit's, fixed before any run):
    of 8 (D1: zF moves xD less than xB);
 10. the analyser reports a change 3 to 30 min after it happens [D5].
 Two more, from the job [D4, p. 5]: the product limits are zones, not trips,
-and inside them the run on less boilup scores better.
+and inside them, at the same product split, the run on less boilup scores
+better. And one from the family's economics [D8, Table 1]: distillate sells at
+2 $/mol and bottoms at 1, with boilup at about 0.01 $/mol for hydrocarbons, so
+each kmol of light key lost to the bottoms costs (2 - 1) / 0.01 = 100 kmol of
+boilup: purer bottoms on the same boilup score better.
 
 Configurations (charter Amendment 3). D1's figures are for Column A with
 0.5 kmol drums, so tests 1 and 5 to 10 run that configuration. The shipped
@@ -306,9 +310,23 @@ def test_off_spec_product_is_priced_not_tripped():
 
 def test_inside_spec_less_boilup_scores_better():
     """[D4, p. 5]: hold both impurities in their zones at least reflux and
-    boilup. Two columns inside spec, one purer on more boilup."""
+    boilup. Two columns inside spec with the same products, one on more boilup
+    and reflux."""
     p = quiet()
     s = start(p)
-    pure = s.replace(x=s.x.at[-1].set(0.995).at[0].set(0.005), V=V0 * 1.05)
     lean = s.replace(x=s.x.at[-1].set(0.991).at[0].set(0.009), V=V0)
-    assert float(ENV.compute_reward(lean, p)) > float(ENV.compute_reward(pure, p))
+    more = lean.replace(V=V0 * 1.05, L=L0 + 0.05 * V0)
+    assert float(ENV.compute_reward(lean, p)) > float(ENV.compute_reward(more, p))
+
+
+def test_light_key_lost_to_the_bottoms_costs_100_kmol_of_boilup_a_kmol():
+    """[D8, Table 1]: (pD - pB) / pV = (2 - 1) / 0.01. Two columns inside spec on
+    the same flows; the bottoms of one carry 0.004 less light key. B = F - (V - L)
+    = 1 - 0.5 = 0.5 kmol/min, so per 1 min step it keeps 0.5 * 0.004 = 0.002 kmol
+    of light key, worth 0.2 kmol of boilup."""
+    p = quiet()
+    s = start(p)
+    lean = s.replace(x=s.x.at[-1].set(0.991).at[0].set(0.009))
+    pure = lean.replace(x=lean.x.at[0].set(0.005))
+    gain = float(ENV.compute_reward(pure, p)) - float(ENV.compute_reward(lean, p))
+    assert gain == pytest.approx(100.0 * 0.5 * 0.004 * float(p.delta_t), rel=1e-3)

@@ -57,8 +57,8 @@ def make_distillation_mpc(
 
 
 #: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
-#: the boilup; ``off_spec`` is the margins.
-CEILING_TERMS = ("boilup",)
+#: the boilup and the light key lost; ``off_spec`` is the margins.
+CEILING_TERMS = ("boilup", "light_lost")
 
 
 def ceiling_margins(state, p):
