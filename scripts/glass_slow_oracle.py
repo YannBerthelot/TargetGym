@@ -92,6 +92,7 @@ def solve(name, seed, knot_hours, start, out):
     terms = rollout["terms"]
     row = {
         "scenario": name, "seed": seed, "knot_hours": knot_hours, "start": start,
+        "tail_hours": O.TAIL_HOURS,
         "seconds": seconds, "status": plan.status, "message": plan.message,
         "iterations": plan.iterations, "capped": plan.capped, "kkt": plan.kkt,
         "violation": plan.violation, "active": plan.active, "how": plan.how,
@@ -148,6 +149,7 @@ def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
         "reference_rung": ref["kept"],
         "seeds": list(seeds),
         "knot_hours": knot_hours,
+        "tail_hours": O.TAIL_HOURS,
         "units": "EUR per step, mean over each episode, then over seeds",
         "scenarios": rows,
         "J": {
