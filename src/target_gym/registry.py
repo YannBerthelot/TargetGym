@@ -961,17 +961,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_glass_furnace_pid_controller",
             module="target_gym.glass_furnace.experts",
         ),
-        # Attempt 3 (2026-11-08) replaced the plant. The old MPC planned on the old
-        # plant's params, so its slot is retired; the task's ceiling is the
-        # foresight oracle in scripts/glass_slow_oracle.py.
-        make_mpc=None,
+        # Attempt 3 (2026-11-08) replaced the plant. Its oracle plans the reward on
+        # the env's own step with the episode's foresight (glass_furnace/oracle.py).
+        make_mpc=_mpc(
+            "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
+        ),
         baselines_note=(
             "The plant was rebuilt (attempt 3: a float melter in two dimensions, "
             "scored in money on fuel and lost glass). The PID is the reference "
             "ladder's first rung, a PI on the cold-end fining reading two sigma "
-            "above its pass mark. The old MPC read the retired plant's params, so "
-            "the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, "
-            "not yet converged (PHYSICS.md, section 2)."
+            "above its pass mark. The oracle plans the valve on the env's own step "
+            "and reward, with the episode's walks foreseen when given its seed, by "
+            "SLSQP, which does not converge on this plant's ratchet: its plans "
+            "bound the ceiling from above (glass_furnace/oracle.py)."
         ),
         expert_degraded=(
             "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance "

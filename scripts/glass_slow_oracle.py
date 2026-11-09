@@ -1,141 +1,178 @@
-"""Attempt 3's oracle: the fuel a controller with foresight would fire.
+"""The glass furnace's foresight oracle on the ladder's seeds, and its room (charter J3).
 
-    python glass_slow_oracle.py SCENARIO SEED [iterations] [knot_hours] [OUT_DIR]
+    python glass_slow_oracle.py solve SCENARIO SEED KNOT_HOURS START OUT_DIR
+    python glass_slow_oracle.py room OUT_DIR LADDER_JSON KNOT_HOURS [SEEDS]
 
-It knows the true plant, its state and every walk and event of the seed's episode. First
-it finds the best constant valve in hindsight on a grid; then it shapes the valve as a
-piecewise-constant path (one value per ``knot_hours``) by Adam on the gradient through the
-whole episode, from that constant and from the design valve. Lost glass is a step in
-cost, so the gradient sees a smooth step whose width shrinks over the run; every cost
-reported is the true one from the environment's ``reward_terms``, and each start keeps
-its best true path, so the oracle is never worse than the best constant. A step whose
-gradient is not finite is skipped and counted. Converged is shown, not assumed: the two
-starts must end within 0.5 % of each other.
+``solve`` plans one episode with ``glass_furnace.oracle.solve`` (the env's own step and
+reward, the seed's walks and events foreseen) from the design valve (``START`` "-"), a
+constant ``START`` kg/s, or ("restart") the seed's last plan, then replays the plan through ``benchmark.run_policy`` on the seed at
+sensor noise 1, as the reference ladder scores its rungs, and writes the solver's
+certificate and the replayed cost. ``room`` reads those files and the ladder's
+reference JSON: room per scenario is the kept rung's mean cost per step over the
+oracle's replayed one on the same seeds, room on J the same on the scenario-weighted
+costs, and writes ``data/oracle_ceilings/glass_furnace.json``.
 """
 
+import json
+import pathlib
 import sys
 import time
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-import optax
 
-from target_gym.glass_furnace import env_jax as E
-from target_gym.glass_furnace import physical as P
-from target_gym.glass_furnace.physical_scenarios import suite
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
 
-ENV = E.GlassFurnace()
-F0 = E.design_state()[0]
-SCENARIO = {s.name: s for s in suite()}[sys.argv[1]]
-SEED = int(sys.argv[2])
-ITERS = int(sys.argv[3]) if len(sys.argv) > 3 else 400
-KNOT_H = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
-OUT = sys.argv[5] if len(sys.argv) > 5 else "."
-EP = ENV.default_params.replace(**SCENARIO.overrides)
-N = EP.max_steps_in_episode
-PER = int(round(KNOT_H * 3600.0 / EP.delta_t))
-KNOTS = -(-N // PER)
-LO, HI = EP.fuel_min, EP.fuel_max
+from target_gym import scenarios  # noqa: E402
+from target_gym.benchmark import run_policy, task_info  # noqa: E402
+from target_gym.experts.mpc import plan_params  # noqa: E402
+from target_gym.glass_furnace import env_jax as E  # noqa: E402
+from target_gym.glass_furnace import oracle as O  # noqa: E402
+from target_gym.registry import REGISTRY  # noqa: E402
+
+SPEC = REGISTRY["glass_furnace"]
+SEEDS = tuple(range(100, 110))
+NOISE = 1.0  # the ladder's sensor noise scale
+ITER_CAP = 300  # SLSQP iterations per episode solve (ours: about 50 min on bob)
 
 
-def valve(z):
-    return LO + (HI - LO) * jax.nn.sigmoid(z)
+def scenario_params(name):
+    s = {x.name: x for x in scenarios.suite(SPEC)}[name]
+    return scenarios.params_for(SPEC, s, sensor_noise_scale=NOISE)
 
 
-def unvalve(u):
-    u = jnp.clip(u, LO + 1e-4, HI - 1e-4)
-    return jnp.log((u - LO) / (HI - u))
+class Replay:
+    """A plan as a ``benchmark.Policy``."""
+
+    oracle = True
+
+    def __init__(self, valve, params):
+        to_action = jax.vmap(E.to_action, in_axes=(0, None))
+        self.actions = np.asarray(to_action(jnp.asarray(valve), params)).reshape(-1)
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t, state=None):
+        return self.actions[t].reshape(1, 1), carry
 
 
-def costs(z, width):
-    """Episode cost, EUR: with ``width`` 0 the true one, else a smooth step of that
-    width on the fining share (and 100 times it, in K, on the canal)."""
-    k0, k1 = jax.random.split(jax.random.split(jax.random.PRNGKey(0), 64)[SEED])
-    _, st = ENV.reset_env(k0, EP)
-    u = jnp.repeat(valve(z), PER)[:N]
-    step = jax.checkpoint(
-        lambda st, k, a: ENV.step_env(k, st, E.to_action(a, EP), EP)[1]
-    )
-
-    def f(st, x):
-        k, a = x
-        st = step(st, k, a)
-        c = E.compute_reward_terms(st, EP)
-        r = P.sensors(st.plant, EP.grid, EP.plant)
-        glass = st.pull * EP.delta_t / 1000.0 * EP.lost_glass_price
-        w = jnp.maximum(width, 1e-9)
-        ok = jax.nn.sigmoid((r["fining"] - EP.fining_pass) / w) * jax.nn.sigmoid(
-            (r["canal"] - EP.canal_target) / (100.0 * w)
+def solve(name, seed, knot_hours, start, out):
+    env, params = SPEC.make_env(), scenario_params(name)
+    n = int(params.max_steps_in_episode)
+    reset, keys = O.episode_keys(seed, n)
+    _, state = env.reset_env(reset, params)
+    knot = int(round(knot_hours * 3600.0 / float(params.delta_t)))
+    if start is None:
+        z0, tag = None, f"{name}_{seed}_{knot_hours:g}h"
+    elif start == "restart":  # from this seed's last plan, SLSQP's memory reset
+        z0 = np.load(pathlib.Path(out, f"{name}_{seed}_{knot_hours:g}h_plan.npy"))
+        tag = f"{name}_{seed}_{knot_hours:g}h_restart"
+    else:
+        z0, tag = (
+            np.full(-(-n // knot), float(start)),
+            f"{name}_{seed}_{knot_hours:g}h_s{start}",
         )
-        smooth = c["running"] + glass * (1.0 - ok)
-        return st, jnp.where(width > 0, smooth, c["running"] + c["tracking"])
-
-    return jnp.sum(jax.lax.scan(f, st, (jax.random.split(k1, N), u))[1])
-
-
-TRUE = jax.jit(lambda z: costs(z, 0.0))
-GRAD = jax.jit(jax.value_and_grad(costs))
-
-
-def best_constant():
-    grid = jnp.linspace(0.40, 0.60, 41)
-    c = np.asarray(
-        jax.jit(jax.vmap(lambda u: costs(jnp.full((KNOTS,), unvalve(u)), 0.0)))(grid)
-    )
-    return float(grid[int(np.argmin(c))]), float(c.min())
-
-
-def solve(start):
-    z = jnp.full((KNOTS,), unvalve(jnp.asarray(start)))
-    opt = optax.adam(optax.exponential_decay(0.05, ITERS, 0.1))
-    state = opt.init(z)
-    best_z, best = z, float(TRUE(z))
-    skipped = 0
-    for i in range(ITERS):
-        width = 0.02 * (0.1 ** (i / max(ITERS - 1, 1)))  # 0.02 down to 0.002
-        _, g = GRAD(z, width)
-        if not bool(jnp.all(jnp.isfinite(g))):
-            skipped += 1
-            continue
-        upd, state = opt.update(g, state)
-        z = optax.apply_updates(z, upd)
-        if i % 10 == 9 or i == ITERS - 1:
-            v = float(TRUE(z))
-            if v < best:
-                best_z, best = z, v
-    return best_z, best, skipped
-
-
-def main():
-    days = N * EP.delta_t / 86400.0
     t0 = time.time()
-    c_best, c_cost = best_constant()
-    print(
-        f"{SCENARIO.name} seed {SEED}: best constant {c_best:.3f} kg/s, EUR/day {c_cost / days:.0f}",
-        flush=True,
-    )
-    out = {}
-    for name, start in (("best constant", c_best), ("design", F0)):
-        z, best, skipped = solve(start)
-        out[name] = (z, best)
-        print(
-            f"{SCENARIO.name} seed {SEED} start {name}: EUR/day {best / days:.0f},"
-            f" mean valve {float(valve(z).mean()):.4f} kg/s, skipped {skipped},"
-            f" {time.time() - t0:.0f} s",
-            flush=True,
-        )
-    a, b = (out[k][1] for k in out)
-    best = min(a, b)
-    print(
-        f"{SCENARIO.name} seed {SEED}: oracle EUR/day {best / days:.0f}; best constant"
-        f" {c_cost / days:.0f}; starts agree to {100 * abs(a - b) / best:.2f} %"
-        f" ({'converged' if abs(a - b) / best < 0.005 else 'NOT converged'})",
-        flush=True,
-    )
-    z = out["best constant"][0] if a <= b else out["design"][0]
-    np.save(f"{OUT}/oracle_{SCENARIO.name}_{SEED}.npy", np.asarray(valve(z)))
+    plan = O.solve(
+        env, plan_params(SPEC, params), state, keys, knot, start=z0, max_iter=ITER_CAP,
+        log=lambda i, z, f, r: (
+            print(f"it {i} {f:.6f} {r:.2e} {time.time() - t0:.0f}s", flush=True),
+            np.save(pathlib.Path(out, f"{tag}_knots.npy"), z),
+        ),
+    )  # fmt: skip
+    seconds = time.time() - t0
+    np.save(pathlib.Path(out, f"{tag}_plan.npy"), plan.knots)
+    rollout = run_policy(
+        Replay(plan.valve, params), env, params, task_info(SPEC.name, env, params, 1),
+        seeds=[seed],
+    )  # fmt: skip
+    terms = rollout["terms"]
+    row = {
+        "scenario": name, "seed": seed, "knot_hours": knot_hours, "start": start,
+        "seconds": seconds, "status": plan.status, "message": plan.message,
+        "iterations": plan.iterations, "capped": plan.capped, "kkt": plan.kkt,
+        "violation": plan.violation, "active": plan.active, "how": plan.how,
+        "planned_cost": plan.cost, "planned_lost": plan.lost_steps,
+        "replayed_cost": float(-rollout["reward"][0].mean()),
+        "replayed_lost": int((terms["tracking"][0] > 0).sum()),
+        "replayed_trips": int(rollout["tripped"][0].sum()),
+        "knots": [float(v) for v in plan.knots],
+    }  # fmt: skip
+    pathlib.Path(out, f"{tag}.json").write_text(json.dumps(row, indent=1))
+    print(json.dumps({k: v for k, v in row.items() if k != "knots"}), flush=True)
+
+
+def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
+    """Each seed's ceiling is its cheapest replayed solve that lost no glass and
+    tripped nothing, over every start; it is converged only if that solve is."""
+    ref = json.loads(pathlib.Path(ladder).read_text())
+    kept = ref["rungs"][ref["kept"]]
+    weights = scenarios.weights(SPEC)
+    idx = [SEEDS.index(s) for s in seeds]
+    rows, per, solves = {}, {}, {}
+    for name in weights:
+        got = []
+        for seed in seeds:
+            runs = [
+                json.loads(p.read_text())
+                for p in pathlib.Path(out).glob(f"{name}_{seed}_{knot_hours:g}h*.json")
+            ]
+            runs = [r for r in runs
+                    if r["replayed_lost"] == 0 and r["replayed_trips"] == 0]  # fmt: skip
+            r = min(runs, key=lambda r: r["replayed_cost"])
+            solves[f"{name} {seed}"] = {
+                k: r[k] for k in ("status", "message", "iterations", "capped", "kkt",
+                                  "active", "how", "planned_cost", "replayed_cost")
+            }  # fmt: skip
+            solves[f"{name} {seed}"]["starts"] = len(runs)
+            got.append(r["replayed_cost"])
+        ceiling = np.array(got)
+        reference = np.array(kept["scenarios"][name]["costs"])[idx]
+        per[name] = ceiling
+        rows[name] = {
+            "weight": weights[name],
+            "ceiling_per_seed": [round(float(c), 4) for c in ceiling],
+            "ceiling": round(float(ceiling.mean()), 4),
+            "reference": round(float(reference.mean()), 4),
+            "room": round(float(reference.mean() / ceiling.mean()), 4),
+        }
+    j = sum(weights[n] * per[n] for n in weights)
+    j_ref = np.array(kept["costs"])[idx]
+    converged = [k for k, v in solves.items()
+                 if v["status"] == 0 and v["kkt"] < O.KKT_TOL and not v["capped"]]  # fmt: skip
+    result = {
+        "task": "glass_furnace",
+        "reference_rung": ref["kept"],
+        "seeds": list(seeds),
+        "knot_hours": knot_hours,
+        "units": "EUR per step, mean over each episode, then over seeds",
+        "scenarios": rows,
+        "J": {
+            "ceiling": round(float(j.mean()), 4),
+            "reference": round(float(j_ref.mean()), 4),
+            "room": round(float(j_ref.mean() / j.mean()), 4),
+        },
+        "converged": f"{len(converged)} of {len(solves)} solves",
+        "solves": solves,
+    }
+    path = ROOT / "src/target_gym/data/oracle_ceilings/glass_furnace.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(result, indent=1) + "\n")
+    print(json.dumps(result, indent=1))
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "solve":
+        a = sys.argv[2:]
+        start = None if len(a) < 5 or a[3] == "-" else a[3]
+        solve(a[0], int(a[1]), float(a[2]), start, a[-1])
+    else:
+        seeds = (
+            tuple(int(x) for x in sys.argv[5].split(","))
+            if len(sys.argv) > 5
+            else SEEDS
+        )
+        room(sys.argv[2], sys.argv[3], float(sys.argv[4]), seeds)

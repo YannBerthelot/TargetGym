@@ -669,11 +669,15 @@
       "target_gym.glass_furnace.experts",
       "make_glass_furnace_pid_controller"
     ],
-    "make_mpc": null,
+    "make_mpc": [
+      "_mpc.<locals>.make",
+      "target_gym.glass_furnace.oracle",
+      "make_glass_furnace_mpc"
+    ],
     "scored_overrides": {},
     "tuned_gains_key": "glass_furnace",
     "gains_keys": [],
-    "baselines_note": "The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The old MPC read the retired plant's params, so the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, not yet converged (PHYSICS.md, section 2).",
+    "baselines_note": "The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The oracle plans the valve on the env's own step and reward, with the episode's walks foreseen when given its seed, by SLSQP, which does not converge on this plant's ratchet: its plans bound the ceiling from above (glass_furnace/oracle.py).",
     "disturbance_fields": [
       "walk"
     ],
