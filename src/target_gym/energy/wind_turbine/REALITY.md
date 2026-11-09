@@ -280,6 +280,13 @@ All were fetched twice and the cited phrases found both times, except where mark
   https://openfast.readthedocs.io/en/main/source/user/aerodyn/theory.html (fetched
   once, 2026-11-08). Buhl's correction above Ct 0.96 is AeroDyn's standard high-thrust
   form (not re-read here).
+- [S23] J. Alves Ribeiro, F. Pimenta, B. Alves Ribeiro, S. M. O. Tavares, F. Ahmed,
+  "FLOAT: Fatigue-Aware Design Optimization of Floating Offshore Wind Turbine Towers",
+  arXiv 2601.01657, 2026. Sec. 3.5.1: welded tower joints on "the type E S-N curve from
+  the DNV-RP-C203 standard", detail category 80 of EN 1993-1-9, "two linear regimes
+  with slopes of 3 and 5, transitioning at 10^7 cycles"; sec. 3.7.1: "m is set by
+  default to 4, the average slope of the two S-N curve regimes".
+  https://arxiv.org/html/2601.01657v1 (fetched twice, 2026-11-09).
 - [S18 family] ROSCO's Cp tables at the same commit for the IEA 15 MW, BAR 10 and NREL 2.8 MW
   rotors: peak Cp 0.470 at a tip speed ratio of 8.5, 0.454 at 10.0 and 0.477 at 8.2; every
   table, the NREL 5 MW's included, stops at 30 deg of pitch.
