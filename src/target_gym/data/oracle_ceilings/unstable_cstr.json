@@ -17,23 +17,23 @@
     108,
     109
    ],
-   "reference_mean": 0.1313875335988899,
-   "ceiling_mean": 3.891357945071327e-06,
+   "reference_mean": 0.16154667858241334,
+   "ceiling_mean": 0.11007571484500334,
    "ceiling_costs": [
-    4.011160797542996e-06,
-    3.1186309125688343e-06,
-    4.144579999976688e-06,
-    3.7473088337315454e-06,
-    4.257537010643217e-06,
-    4.1366472012466856e-06,
-    3.6709859139389463e-06,
-    3.5468613107999167e-06,
-    4.090451531940036e-06,
-    4.1894159383243984e-06
+    0.12469878235210975,
+    4.721944116883808e-06,
+    0.18872397790973386,
+    0.1861854357086122,
+    0.12706774091555012,
+    0.19866918893944885,
+    4.009701725509432e-06,
+    0.1195228703547683,
+    4.1362539761596255e-06,
+    0.15587628436999187
    ],
    "ceiling_trips": 0,
-   "room": 33763.929058569716,
-   "planned_minus_replayed_max": 4.3669731692514335e-09,
+   "room": 1.467595997989982,
+   "planned_minus_replayed_max": 1.5282796489435313e-07,
    "solver": {
     "status": [
      2,
@@ -47,23 +47,23 @@
      2,
      2
     ],
-    "projected_gradient_max": 0.88186036708703,
+    "projected_gradient_max": 1.2324223965406418,
     "capped": 0,
-    "iterations_max": 154,
-    "min_margin": 58.986083984375,
+    "iterations_max": 272,
+    "min_margin": 56.58758544921875,
     "start": [
+     "reference",
      "hold",
+     "reference",
+     "reference",
+     "reference",
+     "reference",
      "hold",
+     "reference",
      "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold"
+     "reference"
     ],
-    "fell_back": 0,
+    "fell_back": 7,
     "rho": [
      1.0,
      1.0,
@@ -76,8 +76,8 @@
      1.0,
      1.0
     ],
-    "two_starts_max_rel_gap": 44943.82174155636,
-    "two_starts_median_rel_gap": 34378.4930666991
+    "two_starts_max_rel_gap": 41738.338790425245,
+    "two_starts_median_rel_gap": 13.116668030254722
    }
   },
   "grade_change": {
@@ -94,23 +94,23 @@
     108,
     109
    ],
-   "reference_mean": 2.6416925022891826,
-   "ceiling_mean": 0.18818564449271397,
+   "reference_mean": 2.687317556530651,
+   "ceiling_mean": 1.0961648257093297,
    "ceiling_costs": [
-    0.18818077945667835,
-    0.1881677142696248,
-    0.18818745001529655,
-    0.18816293919665947,
-    0.18820005970696607,
-    0.1881702733412385,
-    0.1882057152564327,
-    0.18820782818521062,
-    0.18818093376855055,
-    0.18819275173048178
+    0.3914346958945195,
+    0.1908889967492885,
+    0.8259835648785034,
+    2.617999028894636,
+    0.6613109613934325,
+    0.6517430644896295,
+    0.1907289339684778,
+    2.57553635728442,
+    0.19074307319190767,
+    2.6652795803484817
    ],
    "ceiling_trips": 0,
-   "room": 14.03769405158565,
-   "planned_minus_replayed_max": 3.647046784571728e-06,
+   "room": 2.4515633903794387,
+   "planned_minus_replayed_max": 4.288885326886316e-07,
    "solver": {
     "status": [
      2,
@@ -120,27 +120,27 @@
      2,
      2,
      2,
-     2,
+     0,
      2,
      2
     ],
-    "projected_gradient_max": 0.719075720061625,
+    "projected_gradient_max": 1.3348235043047554,
     "capped": 0,
-    "iterations_max": 164,
-    "min_margin": 34.779296875,
+    "iterations_max": 267,
+    "min_margin": 30.24737548828125,
     "start": [
+     "reference",
+     "hold",
+     "hold",
+     "reference",
      "hold",
      "hold",
      "hold",
+     "reference",
      "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold"
+     "reference"
     ],
-    "fell_back": 0,
+    "fell_back": 3,
     "rho": [
      1.0,
      1.0,
@@ -153,8 +153,8 @@
      1.0,
      1.0
     ],
-    "two_starts_max_rel_gap": 13.296205283019823,
-    "two_starts_median_rel_gap": 13.007314945890565
+    "two_starts_max_rel_gap": 13.524849016777944,
+    "two_starts_median_rel_gap": 3.8022934562430812
    }
   },
   "initiator_efficiency": {
@@ -171,23 +171,23 @@
     108,
     109
    ],
-   "reference_mean": 1.77215818326734,
-   "ceiling_mean": 3.583803131348557e-05,
+   "reference_mean": 1.89993279605214,
+   "ceiling_mean": 0.5907493857683406,
    "ceiling_costs": [
-    3.479475983315044e-05,
-    3.145357386933433e-05,
-    3.294990087548892e-05,
-    4.232169853316413e-05,
-    4.431744416554769e-05,
-    3.5121204952398936e-05,
-    2.5208805584245257e-05,
-    3.713584401541286e-05,
-    3.7200434340371025e-05,
-    3.787664696574211e-05
+    2.099640527887063,
+    5.9857345703575344e-05,
+    0.036814183329956396,
+    0.05000876712509327,
+    0.47117116019336713,
+    0.461092382721189,
+    2.7685736616452534e-05,
+    1.7227682830641666,
+    2.9492216805617016e-05,
+    1.0658815180634458
    ],
    "ceiling_trips": 0,
-   "room": 49449.09411361809,
-   "planned_minus_replayed_max": 5.365129456750672e-09,
+   "room": 3.2161401125809874,
+   "planned_minus_replayed_max": 3.339598575458069e-07,
    "solver": {
     "status": [
      2,
@@ -201,12 +201,12 @@
      2,
      2
     ],
-    "projected_gradient_max": 1.1407337877143104,
+    "projected_gradient_max": 1.1617910861968994,
     "capped": 0,
-    "iterations_max": 176,
-    "min_margin": 58.86126708984375,
+    "iterations_max": 267,
+    "min_margin": 58.21221923828125,
     "start": [
-     "hold",
+     "reference",
      "hold",
      "hold",
      "hold",
@@ -217,7 +217,7 @@
      "hold",
      "hold"
     ],
-    "fell_back": 0,
+    "fell_back": 1,
     "rho": [
      1.0,
      1.0,
@@ -230,8 +230,8 @@
      1.0,
      1.0
     ],
-    "two_starts_max_rel_gap": 91496.2704734256,
-    "two_starts_median_rel_gap": 52932.22287720024
+    "two_starts_max_rel_gap": 81194.27022854598,
+    "two_starts_median_rel_gap": 21.065354895743877
    }
   },
   "normal": {
@@ -248,53 +248,53 @@
     108,
     109
    ],
-   "reference_mean": 0.016275671851096882,
-   "ceiling_mean": 0.0,
+   "reference_mean": 0.055308772281847066,
+   "ceiling_mean": 0.06024591473717657,
    "ceiling_costs": [
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0
+    0.06520106355970104,
+    0.16328253141707844,
+    0.10847737305694156,
+    0.061672192230406736,
+    0.05261046572898825,
+    0.05962933755790194,
+    2.862328870428933e-06,
+    0.040094938435488274,
+    2.600786586602529e-06,
+    0.05148578226980236
    ],
    "ceiling_trips": 0,
-   "room": "unbounded",
-   "planned_minus_replayed_max": 0.0,
+   "room": 0.9180501702585505,
+   "planned_minus_replayed_max": 1.9760388467182644e-07,
    "solver": {
     "status": [
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
     ],
-    "projected_gradient_max": 0.0,
-    "capped": 0,
-    "iterations_max": 0,
-    "min_margin": 59.0,
+    "projected_gradient_max": 1.1667735576629639,
+    "capped": 2,
+    "iterations_max": 300,
+    "min_margin": 58.21221923828125,
     "start": [
+     "reference",
+     "reference",
+     "reference",
+     "reference",
+     "reference",
+     "reference",
      "hold",
+     "reference",
      "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold"
+     "reference"
     ],
-    "fell_back": 0,
+    "fell_back": 8,
     "rho": [
      1.0,
      1.0,
@@ -307,8 +307,8 @@
      1.0,
      1.0
     ],
-    "two_starts_max_rel_gap": 334553122520.4468,
-    "two_starts_median_rel_gap": 17461829818.78519
+    "two_starts_max_rel_gap": 101960.83239517779,
+    "two_starts_median_rel_gap": 132.59086493416908
    }
   },
   "throughput_step": {
@@ -325,53 +325,53 @@
     108,
     109
    ],
-   "reference_mean": 0.3035715991506974,
-   "ceiling_mean": 0.00010696658968097634,
+   "reference_mean": 0.3674481430544207,
+   "ceiling_mean": 0.23507305027668673,
    "ceiling_costs": [
-    0.00010878640330500074,
-    6.57288854320844e-05,
-    0.00010764051021801101,
-    6.040570636590322e-05,
-    0.00020565933444433742,
-    0.00011447387437025707,
-    0.00011765942805343203,
-    0.00012035953915781445,
-    8.598110121157435e-05,
-    8.297111425134871e-05
+    0.4539071500363449,
+    0.0006194139334062735,
+    0.11155734469079309,
+    0.1272116295993328,
+    0.4646281009001864,
+    0.46103140466536086,
+    0.00010516282171010971,
+    0.38565126212934653,
+    8.223413800199827e-05,
+    0.34593679985238446
    ],
    "ceiling_trips": 0,
-   "room": 2838.003904360117,
-   "planned_minus_replayed_max": 8.843877973661461e-09,
+   "room": 1.5631232190245765,
+   "planned_minus_replayed_max": 9.456442462418835e-08,
    "solver": {
     "status": [
-     0,
      2,
      2,
      2,
      2,
      2,
-     0,
      2,
      2,
-     2
+     2,
+     2,
+     0
     ],
-    "projected_gradient_max": 1.1283754456123243,
+    "projected_gradient_max": 1.1621500700712204,
     "capped": 0,
-    "iterations_max": 118,
-    "min_margin": 58.83624267578125,
+    "iterations_max": 296,
+    "min_margin": 58.21221923828125,
     "start": [
+     "reference",
      "hold",
      "hold",
      "hold",
+     "reference",
      "hold",
      "hold",
+     "reference",
      "hold",
-     "hold",
-     "hold",
-     "hold",
-     "hold"
+     "reference"
     ],
-    "fell_back": 0,
+    "fell_back": 4,
     "rho": [
      1.0,
      1.0,
@@ -384,16 +384,18 @@
      1.0,
      1.0
     ],
-    "two_starts_max_rel_gap": 56812.70792318139,
-    "two_starts_median_rel_gap": 3776.463418625487
+    "two_starts_max_rel_gap": 91558.86210613795,
+    "two_starts_median_rel_gap": 6.225555465852306
    }
   }
  },
  "weights_covered": 1.0,
- "J_reference": 0.392487463005477,
- "J_ceiling": 0.01882609381611563,
- "room_J": 20.848056258462787,
+ "J_reference": 0.4369716110639274,
+ "J_ceiling": 0.2040873161737083,
+ "room_J": 2.141101266146302,
  "method": "pc_gym.foresight.solve: L-BFGS-B in float32 on env.step_env and the reward's smooth terms (CEILING_TERMS), the step terms as margins (ceiling_margins), the seed's own keys, from two starts (the reset's hold and the kept reference's actions), the cheaper replayed; replayed through benchmark.run_policy at sensor noise 1 on seeds 100-109. Solved in stretches (CEILING_WINDOW = 160, 20).",
  "replay": "TrackingPolicy (CEILING_FEEDBACK): open loop drifts on float32 rounding",
- "convergence": "status is L-BFGS-B's at float32 resolution; two_starts_*_rel_gap is how far the two starts' plans ended apart, per seed"
+ "convergence": "status is L-BFGS-B's at float32 resolution; two_starts_*_rel_gap is how far the two starts' plans ended apart, per seed",
+ "room_is_lower_bound": "48 of 50 solves ended at status 2 (abnormal line search) within maxiter 300, and the normal day's plan costs more than the reference (0.060 against 0.055): the plans are not optimal, a better one lowers the ceiling, so room is at least room_J",
+ "previous_room_J": 20.85
 }
