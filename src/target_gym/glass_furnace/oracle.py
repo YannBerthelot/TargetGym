@@ -25,7 +25,9 @@ that no agent sees (docs/rl-protocol.md). So the plan does not end at the cut. I
 knot is held for ``TAIL_HOURS`` more on the walks' mean path, under the same limits, and
 the tail is not charged. Without it the plan closes the valve on its last knot, whose
 fuel first moves the canal's fining 5.4 h later, and spends the fining the furnace
-needs after the cut.
+needs after the cut. With it some end effect stays: the plan drops the knot before the
+last, and the uncharged tail repays its fining (about 0.6 point of the room, PHYSICS.md
+row 12).
 
 The planner runs in the env's float32: under x64, ``jax.random.normal`` draws other walk
 innovations from the same keys, so a float64 plan would be planned on another episode.
@@ -37,15 +39,16 @@ differentiation through the episode. Convergence is shown by a certificate the
 solver does not grade itself: the KKT stationarity of the plan, from non-negative
 multipliers on its active limits and bounds (``kkt``), and its worst violation.
 
-On the registered plant it does not converge (measured 2026-11-09, seeds 100 to 104,
-``data/oracle_ceilings/glass_furnace.json``). SLSQP stops at its iteration cap or on a
-failed line search, with the KKT certificate near 1. The plant is not smooth in the
-valve: the fining band has two ends (``physical.fining_done``), and the refiner's
-cooling loop clamps at zero, so the limits' Jacobians jump. The iterates drop the
-valve for a knot every 12 to 20 h. A solve's plan is then
-its cheapest iterate that loses no glass, or its last one raised until it loses none,
+On the registered plant it does not converge (measured 2026-11-09 with the tail, seeds
+100 to 104, ``data/oracle_ceilings/glass_furnace.json``): none of 50 starts did. SLSQP
+stops at its iteration cap or on a failed line search, with the KKT certificate near 1.
+The plant is not smooth in the valve: the fining band has two ends
+(``physical.fining_done``), and the refiner's cooling loop clamps at zero, so the
+limits' Jacobians jump. The iterates drop the valve for a knot every 12 to 20 h. A
+solve's plan is then its cheapest iterate that loses no glass, or its last one raised until it loses none,
 whichever costs less. It is replayed and its replayed cost reported, an upper bound on
-the ceiling, so the room from it is a lower bound.
+the ceiling, so the room from it is a lower bound. On three scenario-seeds (pull_down 100
+and 102, pull_up 102) it costs more than the reference ladder's kept rung.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
 plan made with full foresight. Without one it plans on the walks' mean path from the

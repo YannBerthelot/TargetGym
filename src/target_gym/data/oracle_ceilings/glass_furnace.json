@@ -9,78 +9,79 @@
   104
  ],
  "knot_hours": 4.0,
+ "tail_hours": 24.0,
  "units": "EUR per step, mean over each episode, then over seeds",
  "scenarios": {
   "normal": {
    "weight": 0.7,
    "ceiling_per_seed": [
-    44.628,
-    44.9782,
-    45.0756,
-    44.9585,
-    44.6502
+    45.2384,
+    45.4933,
+    45.7016,
+    45.6842,
+    45.0513
    ],
-   "ceiling": 44.8581,
+   "ceiling": 45.4337,
    "reference": 46.2906,
-   "room": 1.0319
+   "room": 1.0189
   },
   "pull_up": {
    "weight": 0.05,
    "ceiling_per_seed": [
-    47.2995,
-    46.9283,
-    47.9046,
-    47.5412,
-    46.7942
+    48.0637,
+    47.2275,
+    49.9721,
+    47.7333,
+    47.5564
    ],
-   "ceiling": 47.2936,
+   "ceiling": 48.1106,
    "reference": 48.5016,
-   "room": 1.0255
+   "room": 1.0081
   },
   "pull_down": {
    "weight": 0.05,
    "ceiling_per_seed": [
-    42.1541,
-    43.9585,
-    42.6367,
-    45.4728,
-    42.4042
+    45.9309,
+    44.1313,
+    44.7302,
+    43.487,
+    42.9732
    ],
-   "ceiling": 43.3252,
+   "ceiling": 44.2505,
    "reference": 44.1005,
-   "room": 1.0179
+   "room": 0.9966
   },
   "gas_rich": {
    "weight": 0.1,
    "ceiling_per_seed": [
-    44.6841,
-    44.5927,
-    44.547,
-    44.5655,
-    44.0369
+    44.9524,
+    45.5547,
+    45.2291,
+    44.9623,
+    44.6074
    ],
-   "ceiling": 44.4852,
+   "ceiling": 45.0612,
    "reference": 46.004,
-   "room": 1.0341
+   "room": 1.0209
   },
   "gas_lean": {
    "weight": 0.1,
    "ceiling_per_seed": [
-    44.996,
-    45.3887,
-    46.3945,
-    45.3528,
-    45.0556
+    45.6725,
+    46.282,
+    46.0464,
+    46.1477,
+    45.8248
    ],
-   "ceiling": 45.4375,
+   "ceiling": 45.9947,
    "reference": 46.6216,
-   "room": 1.0261
+   "room": 1.0136
   }
  },
  "J": {
-  "ceiling": 44.9239,
+  "ceiling": 45.5273,
   "reference": 46.2961,
-  "room": 1.0305
+  "room": 1.0169
  },
  "converged": "0 of 25 solves",
  "solves": {
@@ -92,8 +93,8 @@
    "kkt": 1.0,
    "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.62796401977539,
-   "replayed_cost": 44.6279628564441,
+   "planned_cost": 45.238372802734375,
+   "replayed_cost": 45.2383691386571,
    "starts": 2
   },
   "normal 101": {
@@ -102,34 +103,34 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 11,
-   "how": "best iterate that lost no glass",
-   "planned_cost": 44.97816467285156,
-   "replayed_cost": 44.978158451261976,
+   "active": 80,
+   "how": "final iterate raised 1.56e-04 kg/s",
+   "planned_cost": 45.49335479736328,
+   "replayed_cost": 45.49334982084849,
    "starts": 2
   },
   "normal 102": {
-   "status": 8,
-   "message": "Positive directional derivative for linesearch",
-   "iterations": 257,
-   "capped": false,
-   "kkt": 0.9964490708308185,
-   "active": 3,
+   "status": 9,
+   "message": "Iteration limit reached",
+   "iterations": 300,
+   "capped": true,
+   "kkt": 1.0,
+   "active": 1,
    "how": "best iterate that lost no glass",
-   "planned_cost": 45.07562255859375,
-   "replayed_cost": 45.0756225850847,
-   "starts": 1
+   "planned_cost": 45.70155715942383,
+   "replayed_cost": 45.701556704536316,
+   "starts": 2
   },
   "normal 103": {
    "status": 9,
    "message": "Iteration limit reached",
    "iterations": 300,
    "capped": true,
-   "kkt": 0.9921907317206723,
-   "active": 5,
+   "kkt": 1.0,
+   "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.95845413208008,
-   "replayed_cost": 44.958451235483565,
+   "planned_cost": 45.68419647216797,
+   "replayed_cost": 45.68419157436916,
    "starts": 2
   },
   "normal 104": {
@@ -138,10 +139,10 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 7,
+   "active": 11,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.65024948120117,
-   "replayed_cost": 44.65024857256147,
+   "planned_cost": 45.0512809753418,
+   "replayed_cost": 45.05127913270678,
    "starts": 2
   },
   "pull_up 100": {
@@ -149,11 +150,11 @@
    "message": "Iteration limit reached",
    "iterations": 300,
    "capped": true,
-   "kkt": 0.8013654018299659,
-   "active": 2,
+   "kkt": 1.0,
+   "active": 8,
    "how": "best iterate that lost no glass",
-   "planned_cost": 47.29954147338867,
-   "replayed_cost": 47.299540658224196,
+   "planned_cost": 48.06373977661133,
+   "replayed_cost": 48.063738263977896,
    "starts": 2
   },
   "pull_up 101": {
@@ -162,10 +163,10 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 0,
+   "active": 5,
    "how": "best iterate that lost no glass",
-   "planned_cost": 46.928340911865234,
-   "replayed_cost": 46.92833528707898,
+   "planned_cost": 47.2275390625,
+   "replayed_cost": 47.22753288253905,
    "starts": 2
   },
   "pull_up 102": {
@@ -173,23 +174,23 @@
    "message": "Iteration limit reached",
    "iterations": 300,
    "capped": true,
-   "kkt": 1.0,
-   "active": 188,
-   "how": "final iterate raised 8.21e-04 kg/s",
-   "planned_cost": 47.904605865478516,
-   "replayed_cost": 47.90461938797481,
-   "starts": 2
+   "kkt": 1.0000059846490108,
+   "active": 4663,
+   "how": "final iterate raised 5.26e-02 kg/s",
+   "planned_cost": 49.972076416015625,
+   "replayed_cost": 49.972054235518925,
+   "starts": 1
   },
   "pull_up 103": {
-   "status": 4,
-   "message": "Inequality constraints incompatible",
-   "iterations": 280,
-   "capped": false,
+   "status": 9,
+   "message": "Iteration limit reached",
+   "iterations": 300,
+   "capped": true,
    "kkt": 1.0,
-   "active": 2311,
-   "how": "final iterate raised 1.65e-02 kg/s",
-   "planned_cost": 47.54179000854492,
-   "replayed_cost": 47.541171950764124,
+   "active": 11,
+   "how": "best iterate that lost no glass",
+   "planned_cost": 47.73334503173828,
+   "replayed_cost": 47.73334449435037,
    "starts": 2
   },
   "pull_up 104": {
@@ -198,10 +199,10 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 15,
+   "active": 5,
    "how": "best iterate that lost no glass",
-   "planned_cost": 46.79420471191406,
-   "replayed_cost": 46.794199937487406,
+   "planned_cost": 47.5564079284668,
+   "replayed_cost": 47.556405165460376,
    "starts": 2
   },
   "pull_down 100": {
@@ -210,22 +211,22 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 0,
-   "how": "best iterate that lost no glass",
-   "planned_cost": 42.154090881347656,
-   "replayed_cost": 42.1540872380847,
-   "starts": 2
+   "active": 4668,
+   "how": "final iterate raised 1.63e-01 kg/s",
+   "planned_cost": 45.92748260498047,
+   "replayed_cost": 45.93089970407032,
+   "starts": 1
   },
   "pull_down 101": {
-   "status": 9,
-   "message": "Iteration limit reached",
-   "iterations": 300,
-   "capped": true,
-   "kkt": 1.0,
-   "active": 0,
+   "status": 8,
+   "message": "Positive directional derivative for linesearch",
+   "iterations": 212,
+   "capped": false,
+   "kkt": 0.9996639329420381,
+   "active": 15,
    "how": "best iterate that lost no glass",
-   "planned_cost": 43.958473205566406,
-   "replayed_cost": 43.958466784916226,
+   "planned_cost": 44.131282806396484,
+   "replayed_cost": 44.13127382104359,
    "starts": 2
   },
   "pull_down 102": {
@@ -236,8 +237,8 @@
    "kkt": 1.0,
    "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 42.636661529541016,
-   "replayed_cost": 42.63665948443943,
+   "planned_cost": 44.73018264770508,
+   "replayed_cost": 44.73018204522511,
    "starts": 2
   },
   "pull_down 103": {
@@ -248,8 +249,8 @@
    "kkt": 1.0,
    "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 45.472816467285156,
-   "replayed_cost": 45.472810376636566,
+   "planned_cost": 43.48696517944336,
+   "replayed_cost": 43.48696153277442,
    "starts": 2
   },
   "pull_down 104": {
@@ -258,11 +259,11 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 4,
+   "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 42.404178619384766,
-   "replayed_cost": 42.404176285910225,
-   "starts": 1
+   "planned_cost": 42.97323989868164,
+   "replayed_cost": 42.973234545238434,
+   "starts": 2
   },
   "gas_rich 100": {
    "status": 9,
@@ -272,8 +273,8 @@
    "kkt": 1.0,
    "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.684078216552734,
-   "replayed_cost": 44.684074167978196,
+   "planned_cost": 44.95241928100586,
+   "replayed_cost": 44.95241518550449,
    "starts": 2
   },
   "gas_rich 101": {
@@ -282,10 +283,10 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 14,
-   "how": "final",
-   "planned_cost": 44.592735290527344,
-   "replayed_cost": 44.59273204273648,
+   "active": 0,
+   "how": "best iterate that lost no glass",
+   "planned_cost": 45.554744720458984,
+   "replayed_cost": 45.554738896233694,
    "starts": 2
   },
   "gas_rich 102": {
@@ -294,34 +295,34 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 2,
+   "active": 4,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.54705047607422,
-   "replayed_cost": 44.54704961852422,
-   "starts": 2
+   "planned_cost": 45.229103088378906,
+   "replayed_cost": 45.229102140759665,
+   "starts": 1
   },
   "gas_rich 103": {
    "status": 9,
    "message": "Iteration limit reached",
    "iterations": 300,
    "capped": true,
-   "kkt": 0.9767287985205028,
-   "active": 2,
+   "kkt": 1.0,
+   "active": 11,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.56545639038086,
-   "replayed_cost": 44.565451567513605,
-   "starts": 1
+   "planned_cost": 44.96227264404297,
+   "replayed_cost": 44.96226566102769,
+   "starts": 2
   },
   "gas_rich 104": {
-   "status": 9,
-   "message": "Iteration limit reached",
-   "iterations": 300,
-   "capped": true,
+   "status": 4,
+   "message": "Inequality constraints incompatible",
+   "iterations": 298,
+   "capped": false,
    "kkt": 1.0,
    "active": 3,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.036861419677734,
-   "replayed_cost": 44.03686036760845,
+   "planned_cost": 44.607383728027344,
+   "replayed_cost": 44.60738204017518,
    "starts": 2
   },
   "gas_lean 100": {
@@ -332,8 +333,8 @@
    "kkt": 1.0,
    "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 44.996036529541016,
-   "replayed_cost": 44.99603234094287,
+   "planned_cost": 45.672515869140625,
+   "replayed_cost": 45.67251136492169,
    "starts": 2
   },
   "gas_lean 101": {
@@ -341,11 +342,11 @@
    "message": "Iteration limit reached",
    "iterations": 300,
    "capped": true,
-   "kkt": 0.9663565630314427,
-   "active": 10,
+   "kkt": 1.0,
+   "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 45.388702392578125,
-   "replayed_cost": 45.38869765107594,
+   "planned_cost": 46.28196334838867,
+   "replayed_cost": 46.28195522399176,
    "starts": 2
   },
   "gas_lean 102": {
@@ -354,11 +355,11 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 0,
+   "active": 6,
    "how": "best iterate that lost no glass",
-   "planned_cost": 46.39448547363281,
-   "replayed_cost": 46.39448340204027,
-   "starts": 1
+   "planned_cost": 46.046409606933594,
+   "replayed_cost": 46.04641031007918,
+   "starts": 2
   },
   "gas_lean 103": {
    "status": 9,
@@ -366,10 +367,10 @@
    "iterations": 300,
    "capped": true,
    "kkt": 1.0,
-   "active": 6,
+   "active": 0,
    "how": "best iterate that lost no glass",
-   "planned_cost": 45.35279083251953,
-   "replayed_cost": 45.3527878783998,
+   "planned_cost": 46.14771270751953,
+   "replayed_cost": 46.147707839996094,
    "starts": 2
   },
   "gas_lean 104": {
@@ -380,8 +381,8 @@
    "kkt": 1.0,
    "active": 3,
    "how": "best iterate that lost no glass",
-   "planned_cost": 45.05564880371094,
-   "replayed_cost": 45.055646453963384,
+   "planned_cost": 45.82478332519531,
+   "replayed_cost": 45.82478119305202,
    "starts": 2
   }
  }
