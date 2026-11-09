@@ -4,7 +4,8 @@ T8, Amendment 3).
 Contract, from the sources and the audit's tolerances, not from the code:
 - the design point is PARSEX's: at 58 C with feed at 24 C it converts 74 to 79 %
   (CA about 0.31 to 0.39 mol/L [S1, Tables 3, 4]) with a cooler near 47 C, on
-  cooling water inside 40 to 110 g/s [S1, Table 1];
+  fresh water "around 120 g/s" [S1, p. 6]: from 10 % under that to the 136 g/s
+  Figure 2 logs [S1, Fig. 2], and inside the valve's range;
 - T1: the rate doubles per about 10 C: a ratio 1.5 to 3.0 [S5, p. 1];
 - T2: a 40 % loss of activity cools the reactor by at least 1.7 K, open loop
   [S1, Fig. 3];
@@ -21,6 +22,12 @@ Contract, from the sources and the audit's tolerances, not from the code:
 - T8: open loop, a cooling step's 95 % time is 1.6 to 6.4 residence times
   [S1, Fig. 2];
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
+- the catalyst_loss scenario loses S1's 40 % of activity [S1, Fig. 3] as a
+  decay, since activity "is always expected to decay throughout the operation"
+  and S1's instant loss "is not likely to occur" [S1, p. 6]: it falls
+  monotonically over 90 min (ours: no source gives a rate inside 4 h, so the
+  slowest decay that ends inside the episode from the window's latest event,
+  240 - 150 min) and then stays at 60 %;
 - the episode starts on its steady state at the setpoint (rule 17).
 """
 
@@ -29,13 +36,16 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym import scenarios
 from target_gym.pc_gym.cstr.env import (
     CSTRParams,
     compute_next_state,
+    events,
     rate,
     steady_state,
 )
 from target_gym.pc_gym.cstr.env_jax import CSTR
+from target_gym.registry import REGISTRY
 
 ENV = CSTR()
 
@@ -67,7 +77,8 @@ def test_the_design_point_is_parsexs():
     C_a, T_j, F_w = (float(v) for v in steady_state(331.15, 297.15, p))
     assert 1.0 - 0.79 - 0.01 <= C_a / p.Caf <= 1.0 - 0.74 + 0.01
     assert T_j - 273.15 == pytest.approx(47.0, abs=1.0)
-    assert 40.0 <= F_w / 60.0 <= 110.0
+    assert 0.9 * 120.0 <= F_w / 60.0 <= 136.0
+    assert p.Fw_min <= F_w <= p.Fw_max
 
 
 def test_the_rate_doubles_per_ten_kelvin():
@@ -84,6 +95,29 @@ def test_a_loss_of_activity_cools_the_reactor():
     weak = p.replace(k0=0.6 * p.k0)
     traj = hold(weak, s, raw, int(30 * 34 / p.delta_t))
     assert float(s.T) - traj[-1, 1] >= 1.7
+
+
+def test_the_catalyst_loss_is_a_90_minute_decay_to_60_percent():
+    (loss,) = [
+        s for s in scenarios.suite(REGISTRY["cstr"]) if s.name == "catalyst_loss"
+    ]
+    p = scenarios.params_for(REGISTRY["cstr"], loss)
+    at = 60.0
+    s = rest(p).replace(event_at=jnp.asarray(at))
+
+    def activity(minute):
+        return float(events(s, p, minute)[2]) / p.k0
+
+    assert activity(at - p.delta_t) == pytest.approx(1.0)
+    during = [activity(at + m) for m in np.arange(p.delta_t, 90.0 + 1e-9, p.delta_t)]
+    assert all(b < a for a, b in zip([activity(at)] + during, during))
+    assert during[0] > 0.99  # not a step: one step in, under 1 % of it gone
+    assert during[-1] == pytest.approx(0.6)
+    assert activity(at + 90.0 + 60.0) == pytest.approx(0.6)
+    # The latest event's decay ends inside the episode.
+    end = p.max_steps_in_episode * p.delta_t
+    late = s.replace(event_at=jnp.asarray(p.event_window[1]))
+    assert float(events(late, p, end)[2]) / p.k0 == pytest.approx(0.6)
 
 
 def test_the_jacket_delays_a_cooling_move():

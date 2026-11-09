@@ -30,7 +30,8 @@ dT_j/dt = [F_w cp_w (T_w,in - T_j) + UA (T - T_j)] / (M_j cp_w)
 PARSEX's reactor recirculates through an external cooler with water on the
 shell side [S1, p. 3, Fig. 1]; here the cooler is lumped as a jacket of its own
 holdup. Its reaction is first order A to B [S1, p. 4]. The operator moves the
-fresh cooling water [S1, p. 4], within 40 to 110 g/s [S1, Table 1]. A high
+fresh cooling water [S1, p. 4], from S1's 40 g/s floor [S1, Table 1] to the
+136 g/s S1 logs [S1, Fig. 2]. A high
 reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 
 ---
@@ -47,8 +48,8 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `V` | 183.6 | L | derived: q x the 34 min residence [S1, p. 5] |
 | `rho`, `C` | 1000, 4.18 | g/L, J/(g K) | the aqueous feed as water, textbook |
 | `UA` | 46717 | J/(min K) | derived: the duty S1's design point leaves (58 C, feed 24 C, CA 0.31 mol/L), 8.56 kW, over the 11 K to the cooler's 47 C [S1, Tables 3, 4] |
-| `Fw_min`, `Fw_max` | 2400, 6600 | g/min | cited: 40 to 110 g/s [S1, Table 1] |
-| `Tw_in` | 297.15 | K | ours: mains at room temperature, the feed's 24 C [S1]; the design point then needs 89 g/s, inside S1's range |
+| `Fw_min`, `Fw_max` | 2400, 8160 | g/min | cited: the 40 g/s floor [S1, Table 1]; the top is the 136 g/s S1 logs [S1, Fig. 2], since the plant ran above Table 1's 110 g/s: "around 120 g/s" at the design point [S1, p. 6] |
+| `Tw_in` | 303.08 | K | derived: the 8.56 kW of `UA`'s row at S1's 120 g/s with the cooler at 47 C [S1, p. 6; Tables 3, 4] is a 17.1 K rise, so water enters at 29.9 C; the design point then needs 112 to 128 g/s over the feed's range |
 | `M_j` | 36720 | g | ours, family: 20 % of the reactor's mass, a jacket time constant of 2.2 min (derived), the scale of the 2 min jacket dead time of [S6] |
 | `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4] |
 | `T_setpoint` | 331.15 | K | cited: 58 C [S1, Tables 3, 4] |
@@ -57,6 +58,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `event_window` | 30, 150 | min | ours |
 | `setpoint_step` | 2 | K (scenario) | cited: a 2 C step [S1, Fig. 2] |
 | `k0_drop` | 0.4 | - (scenario) | cited: a 40 % drop [S1, Fig. 3] |
+| `k0_decay` | 90 | min (scenario) | ours: no source gives a rate inside hours; the slowest linear decay that ends inside the 240 min episode from the latest event, at 150 min |
 | `feed_rise` | 0.1 | - (scenario) | ours: feed build-up is sourced [S3], its size is not |
 | `cooling_loss` | 5 | min (scenario) | ours: cooling failures are sourced [S2; S3], their length is not |
 | readings | 0.04 K; lag 13 s; dead time 2 min | - | Pt100 scatter as before; thin-walled well about 13 s [S10, Fig. 2]; jacket outlet about 2 min [S6] |
@@ -68,7 +70,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | Limit | Kind | Model | Source |
 |---|---|---|---|
 | High reactor temperature | Trip | The interlock cuts the feed at 75 C; restart priced as 4 h of lost production (ours) | [S3, PDF p. 38]; setting ours |
-| Cooling water | Hardware | 40 to 110 g/s; none during a cooling loss | [S1, Table 1]; [S2; S3] |
+| Cooling water | Hardware | 40 to 136 g/s; none during a cooling loss | [S1, Table 1, Fig. 2]; [S2; S3] |
 
 ---
 
@@ -92,7 +94,7 @@ temperature, with the water where that needs it. `scenarios.py`:
 |---|---|---|
 | `normal` | none; the feed at 23 to 25 C | [S1, Tables 3, 4] |
 | `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
-| `catalyst_loss` | activity -40 % | [S1, Fig. 3] |
+| `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
 | `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
 | `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
 
@@ -128,7 +130,7 @@ restated on the family (Amendment 3):
 
 | Test | Range and source | Result |
 |---|---|---|
-| Design point | 74 to 79 % conversion, cooler near 47 C, water in 40 to 110 g/s [S1] | pass |
+| Design point | 74 to 79 % conversion, cooler near 47 C, water from 10 % under 120 g/s to 136 g/s [S1, p. 6, Fig. 2] | pass |
 | T1. Rate doubles per 10 C | 1.5 to 3.0 [S5] | pass |
 | T2. 40 % activity loss | cools at least 1.7 K [S1, Fig. 3] | pass |
 | T3. Jacket delay | at least 60 s to 10 % of the response [S6] | pass |
@@ -136,11 +138,11 @@ restated on the family (Amendment 3):
 | T5. Analyser | no composition reading (none found) | pass |
 | T6. Loss of circulation | 0.75 to 8 K/min over 3 min, pooled: Morton's 1 to 2 C/min [S4], Bayer's over 2 C/min [S3], the audit's factor 4 on top and 25 % below | pass (0.81) |
 | T7. 25 K rise | 3 to 48 min [S2; S3] | pass |
-| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 1.15** |
+| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 0.97** |
 | Runaway trips the interlock | [S3] | pass |
 | Starts at rest on its setpoint | rule 17 | pass |
 
-**Finding, T8.** Open loop, a cooling step settles in 1.15 residence times,
+**Finding, T8.** Open loop, a cooling step settles in 0.97 residence times,
 faster than the 1.6 the audit derived from PARSEX's closed loop (3.2, halved).
 The audit called it weak, kept for scale; the reactor's own temperature time
 constant is not documented (REALITY.md, "Time scales"). Not moved.
@@ -162,6 +164,29 @@ inhibitor, quench and dump [S5]. Effect: a narrower job.
 
 **D4. A simulated reaction.** PARSEX injects steam for the heat a reaction
 would release [S1]; the model is that reaction.
+
+**D5. The catalyst loss is a decay, not S1's step.** S1's 40 % loss was
+instantaneous, which its authors say "is not likely to occur" in operation,
+where activity "is always expected to decay throughout the operation"
+[S1, p. 6]. The owner chose the decay (2026-11-09): the same 40 % falls
+linearly over 90 min. No source gives a rate inside a 4 h window (real
+deactivation runs over a catalyst's life), so the rate is ours under the family
+ruling: the slowest that ends inside the episode from the window's latest
+event (240 - 150 min). S1 rode its step out on feed concentration, a handle
+this task lacks (D3). With S1's 120 g/s design water the steady water after the
+loss is 64 to 75 g/s, above the 40 g/s floor; with v5's 24 C water it sat at 50
+to 58 g/s and every rung quenched the reactor under the step.
+
+**Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
+I-only null on all 10 seeds (median J 403 against 124), almost all of it the
+catalyst loss (3045 against 248 per step): SIMC's loops gave the valve's span
+away over 16 min while the null, a relay at its gain, floored the valve in one
+step. Nothing in the row was wrong (sign, pairing, saturation). With the loss
+as a 90 min decay (D5) the cascade's median J is 90.7 and I-only's 88.5; the
+null wins 5 of 10 seeds, not more than half, so J2 passes, at its edge. The
+catalyst loss now costs the cascade 158 per step against I-only's 17, and the
+normal day 1.6 against 22.5. The I-only gain and the null table were fitted on
+v5 and are stale.
 
 ---
 

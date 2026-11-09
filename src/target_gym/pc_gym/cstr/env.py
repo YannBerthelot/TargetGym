@@ -54,13 +54,15 @@ class CSTRParams(EnvParams):
     #: Derived from S1's design point (T 58 C, cooler 47 C, CA 0.31 mol/L, feed
     #: 24 C): the heat the balance leaves, 8.56 kW, over 11 K.
     UA: float = 46717.0  # J/(min K)
-    #: Fresh cooling water, the move: 40 to 110 g/s [S1, Table 1].
+    #: Fresh cooling water, the move. The floor is S1's 40 g/s [S1, Table 1];
+    #: the top is the 136 g/s S1's Figure 2 logs, since the plant ran above
+    #: Table 1's 110 g/s: "around 120 g/s" at the design point [S1, p. 6].
     Fw_min: float = 40.0 * 60.0  # g/min
-    Fw_max: float = 110.0 * 60.0  # g/min
-    #: Fresh water inlet temperature. Ours: mains at room temperature, the
-    #: feed's 24 C [S1, Tables 3, 4]; with it the design point needs 89 g/s,
-    #: inside S1's range.
-    Tw_in: float = 297.15  # K
+    Fw_max: float = 136.0 * 60.0  # g/min
+    #: Fresh water inlet temperature, derived: the 8.56 kW the design point
+    #: leaves (UA's row) at S1's 120 g/s with the cooler at 47 C [S1, p. 6;
+    #: Tables 3, 4] is 17.1 K of rise, so water enters at 29.9 C.
+    Tw_in: float = 303.08  # K
     #: The jacket's water holdup. Ours, family: a jacket holds a fraction of
     #: its vessel; 20 % of the reactor's mass, which puts its time constant at
     #: 2.2 min (derived), the scale of the 2 min jacket dead time one plant
@@ -89,6 +91,9 @@ class CSTRParams(EnvParams):
     #: Scenario events, 0 when off (scenarios.py):
     setpoint_step: float = 0.0  # K, a setpoint move [S1, Fig. 2: 2 C]
     k0_drop: float = 0.0  # fraction lost [S1, Fig. 3: 40 %]
+    #: Minutes the loss takes, linear; 0 is S1's instant step. Activity decays
+    #: through operation [S1, p. 6] but no source gives a rate inside hours.
+    k0_decay: float = 0.0  # min
     feed_rise: float = 0.0  # fraction of Caf [S3: feed build-up], size ours
     cooling_loss: float = 0.0  # min the cooling water fails [S2; S3]
 
@@ -134,6 +139,7 @@ PARAM_UNITS = {
     "event_window": "min",
     "setpoint_step": "K",
     "k0_drop": "-",
+    "k0_decay": "min",
     "feed_rise": "-",
     "cooling_loss": "min",
     "reward_version": "-",
@@ -193,10 +199,16 @@ def events(state: CSTRState, params: CSTRParams, minute):
     p = params
     after = minute >= state.event_at
     lost = jnp.logical_and(after, minute < state.event_at + p.cooling_loss)
+    since = minute - state.event_at
+    decayed = jnp.where(
+        p.k0_decay > 0.0,
+        jnp.clip(since / jnp.maximum(p.k0_decay, 1e-9), 0.0, 1.0),
+        jnp.where(after, 1.0, 0.0),
+    )
     return (
         p.T_setpoint + jnp.where(after, p.setpoint_step, 0.0),
         p.Caf * (1.0 + jnp.where(after, p.feed_rise, 0.0)),
-        p.k0 * (1.0 - jnp.where(after, p.k0_drop, 0.0)),
+        p.k0 * (1.0 - p.k0_drop * decayed),
         jnp.logical_not(lost),
     )
 

@@ -34,9 +34,12 @@ def cstr_scenarios() -> tuple[dict, ...]:
         ),
         _row(
             "catalyst_loss",
-            {"k0_drop": 0.4},
-            source="[S1, Fig. 3]",
-            description="a 40 % loss of activity",
+            {"k0_drop": 0.4, "k0_decay": 90.0},
+            source="[S1, Fig. 3; p. 6]",
+            description=(
+                "S1's 40 % loss of activity as a decay over 90 min (rate ours:"
+                " the slowest that ends inside the episode)"
+            ),
             weight=0.1,
         ),
         _row(
