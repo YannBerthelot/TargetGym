@@ -101,7 +101,7 @@ times slower.
 | `design_life_years` | 20 | [S20] |
 | `dynamic_inflow` | 1 | 1 the lag on, 0 the quasi-steady tables |
 | `oye_k1`, `oye_k2` | 1.1, 1.3 | [S22], Oye's tau1 |
-| `fatigue_exponent` | 4 | ours, the review's m = 4, family range 3 to 5 for welded steel (not read) |
+| `fatigue_exponent` | 4 | cited: the average slope of the two regimes, 3 and 5, of the DNV-RP-C203 type E curve (Eurocode 3 detail category 80) for welded tower joints, FLOAT's default [S23, sec. 3.5.1, 3.7.1]. The bilinear curve itself can't be used: the DEL is on the tower-top deflection's base moment, not on stress, so there is no stress level to place its knee at 1e7 cycles |
 | `tower_damage_design` | 2.126e5 (MN m)^4 per step | ours: measured once, S1's controller, published gains, seeds 100 to 107 of the normal scenario |
 | `pitch_travel_design` | 0.1754 deg per step | ours: the same runs |
 | `restart_steps` | 28800 | ours, 2 h: an overspeed trip waits for a manual reset [S21]; family range from ROSCO's automatic 400 s [S9 Ex. 32] to a site visit (not found) |
@@ -249,14 +249,15 @@ loop of S5's form, which is what the score now pays for.
 
 ## 9. What the oracle needs
 
-The oracle builds. Its planner keeps the quasi-steady tables (five states; the
-env's `compute_velocity` takes the inflow as an optional sixth), so it should add
-the induced velocity before its room is read. Its plan prices lost production against the available power and the
-pitch travel, but not the tower's fatigue: the half-cycle count reads turning points of
-the history, which the smooth planner has not got. Before its room means anything it
-needs a smooth stand-in for the damage (for example the squared tower-base moment rate,
-scaled to the m = 4 damage on the design runs) and a re-measured widths file (the
-current one predates the feather extension).
+The oracle plans the env's own score: lost production against the available
+power, the pitch travel and, for the ceiling, the tower's fatigue. The
+half-cycle count reads turning points of the history, which a gradient planner
+can't plan through, so the ceiling counts them outside the solver on each plan,
+freezes them, and plans each frozen half-cycle as a smooth row of power m,
+re-solving until the turning points stop changing (online rainflow counting,
+Loew and Bottasso, WES 7, 1605, 2022). The registry's receding slot doesn't
+plan the tower. Its widths file still predates v5 (`measure_oracle_widths.py`
+marks the wind entry stale).
 
 ## Weights (charter J4)
 

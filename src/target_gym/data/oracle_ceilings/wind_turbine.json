@@ -1,7 +1,7 @@
 {
  "task": "wind_turbine",
  "protocol": "charter J3: the score's own reward planned with the true model, the true state and the episode's future, replayed on the env in float32 on seeds 100 to 109 at sensor noise 1; room = the kept reference's mean cost per step over the oracle's replayed one, on the same seeds",
- "solver": "shared shooting IPM, one plan over the 2400-step episode, block 1, cap 500, Cp and Ct tables through K7 rungs (pitch, tip-speed widths in cells) 1/0.1, 0.1/0.01 (cap 500); seeds 100 to 104 only (one solve is 10 to 25 min on the loaded host); overspeed backed off by the speed reading's sigma (5.2e-4 rad/s), and by the K11 back-off of data/oracle_widths (7.3e-3 rad/s) on all of near_rated and on any seed whose plan tripped at the smaller one (the tables' smoothing error over the episode exceeds 5.2e-4); the tower's fatigue is not planned, so the replayed ceiling bounds the true one above",
+ "solver": "shared shooting IPM, one plan over the 2400-step episode, block 1, cap 500, Cp and Ct tables through K7 rungs (pitch, tip-speed widths in cells) 1/0.1, 0.1/0.01; the tower's fatigue planned by online rainflow counting (Loew and Bottasso, WES 7, 1605, 2022): the plan's turning points counted outside the solver (wind_turbine.oracle.turning_points), frozen as absolute hinges of power m, re-solved at the last rung, recounted, twice; each plan replayed on the env in float32 and the cheapest replay without a trip kept (the turning points do not settle in two recounts, so this is the best of three plans, not a fixed point); seeds 100 to 104 only (one solve is 10 to 15 min on the loaded host); overspeed backed off by the speed reading's sigma (5.2e-4 rad/s), and by the K11 back-off of data/oracle_widths (7.3e-3 rad/s) on all of near_rated and on gusty_class_a seed 102, whose plans all tripped at the smaller one",
  "reference": "pi",
  "J_reference": 0.0050885850613188255,
  "J_ceiling": null,
@@ -14,8 +14,8 @@
   104
  ],
  "J_reference_subset": 0.006937985395380264,
- "J_ceiling_subset": 0.0007263394585092856,
- "room_J_subset": 9.551987454487946,
+ "J_ceiling_subset": 5.0975254524745294e-05,
+ "room_J_subset": 136.10496818632473,
  "scenarios": {
   "normal": {
    "weight": 0.4944824005472272,
@@ -27,239 +27,252 @@
     103,
     104
    ],
-   "ceiling_mean": 0.0007854108080336179,
+   "ceiling_mean": 5.657284213819422e-05,
    "ceiling_per_seed": [
-    0.00031171562863492217,
-    0.0017090692279222634,
-    0.00016209710078276756,
-    0.0008829777528931145,
-    0.0008611943299350223
+    3.249204048931677e-05,
+    0.00010315808928522543,
+    2.986473356958539e-05,
+    6.881692691407586e-05,
+    4.853242043276766e-05
    ],
-   "planned_mean": 7.671319514362927e-06,
+   "planned_mean": 1.9541024247875505e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.004714010942314868,
-   "room": 6.00196851647233,
+   "room": 83.32639415215594,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 4.174305907015767e-08,
-    "pitch": 7.67141208696857e-06,
-    "tower": 0.0007776976585488699
+    "lost": 3.16493081964353e-10,
+    "pitch": 1.6660936039509395e-05,
+    "tower": 3.991158960368012e-05
    },
    "solver": {
-    "max_kkt_error": 4.699149553158935e-10,
-    "max_iterations": 75,
+    "max_kkt_error": 4.0268147823024244e-09,
+    "max_iterations": 203,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.4350572508092796e-08,
-    "max_planned_limit_excess": -0.0005200160662841569
+    "max_violation": 1.3570011114794056e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 0.00031171562863492217,
-     "planned_cost_per_step": 8.617991671262994e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 3.799479485847949e-09,
-      "pitch": 8.617967342557931e-06,
-      "tower": 0.0003030938650066995
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5061012082891974e-09,
-       "iterations": 54,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 4.699149553158935e-10,
-       "iterations": 26,
-       "capped": false,
-       "failed": false,
-       "violation": 1.3925489872335106e-08
-      }
-     ]
-    },
-    {
-     "seed": 101,
-     "replay_cost_per_step": 0.0017090692279222634,
-     "planned_cost_per_step": 8.610025542713243e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 8.7171014197344e-08,
-      "pitch": 8.610180770797967e-06,
-      "tower": 0.0017003718792236548
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505908759347734e-09,
-       "iterations": 49,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 7.820239210820104e-11,
-       "iterations": 57,
-       "capped": false,
-       "failed": false,
-       "violation": 1.4350572508092796e-08
-      }
-     ]
-    },
-    {
-     "seed": 102,
-     "replay_cost_per_step": 0.00016209710078276756,
-     "planned_cost_per_step": 4.944995778766343e-06,
+     "replay_cost_per_step": 3.249204048931677e-05,
+     "planned_cost_per_step": 1.6274051019402082e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 4.944998660034542e-06,
-      "tower": 0.00015715210134260141
+      "pitch": 1.4236943646694182e-05,
+      "tower": 1.8255096851074267e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 6.856494316753725e-09,
-       "iterations": 70,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 6.569399655989896e-11,
-       "iterations": 30,
+       "error": 1.2231660135578048e-09,
+       "iterations": 179,
        "capped": false,
        "failed": false,
-       "violation": 1.3953662003629574e-08
+       "violation": 1.3515425001386916e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.00010315808928522543,
+     "planned_cost_per_step": 2.6552339760503226e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.4956598470838855e-09,
+      "pitch": 2.3195079506925787e-05,
+      "tower": 7.996151373061222e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 3.6451792212417447e-10,
+       "iterations": 180,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3570011114794056e-08
+      }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 2.986473356958539e-05,
+     "planned_cost_per_step": 1.3924057909189587e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 1.0543760458932942e-05,
+      "tower": 1.932097308050256e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 8.025230331658287e-11,
+       "iterations": 176,
+       "capped": false,
+       "failed": false,
+       "violation": 9.919748029953025e-09
+      }
+     ],
+     "kept_outer": 2,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.0008829777528931145,
-     "planned_cost_per_step": 9.033545584550805e-06,
+     "replay_cost_per_step": 6.881692691407586e-05,
+     "planned_cost_per_step": 2.0983924369146028e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 7.643490222160784e-08,
-      "pitch": 9.03367788312311e-06,
-      "tower": 0.0008738676525590028
+      "lost": 8.680556273787943e-11,
+      "pitch": 1.820599315604854e-05,
+      "tower": 5.061084726534551e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059040365149516e-09,
-       "iterations": 71,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.390910778487617e-10,
-       "iterations": 51,
+       "error": 3.8574305913407724e-09,
+       "iterations": 152,
        "capped": false,
        "failed": false,
-       "violation": 1.4171839257670626e-08
+       "violation": 1.3332746906513648e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 0.0008611943299350223,
-     "planned_cost_per_step": 7.1500389945212555e-06,
+     "replay_cost_per_step": 4.853242043276766e-05,
+     "planned_cost_per_step": 1.9970748181136593e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 4.1309899445988544e-08,
-      "pitch": 7.150235778329295e-06,
-      "tower": 0.0008540027946123909
+      "lost": 0.0,
+      "pitch": 1.7122903428945514e-05,
+      "tower": 3.1409517090866026e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505990364211515e-09,
-       "iterations": 47,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 5.378667615305071e-11,
-       "iterations": 75,
+       "error": 4.0268147823024244e-09,
+       "iterations": 203,
        "capped": false,
        "failed": false,
-       "violation": 1.4097346623387352e-08
+       "violation": 1.22237731048358e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     2,
+     1,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      627,
+      594
+     ],
+     [
+      null,
+      696,
+      696
+     ],
+     [
+      null,
+      530,
+      514
+     ],
+     [
+      null,
+      691,
+      667
+     ],
+     [
+      null,
+      665,
+      671
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      0.0003117156527935077,
+      3.249204048931677e-05,
+      3.608881259250776e-05
+     ],
+     [
+      0.0017090691643748975,
+      0.00010315808928522543,
+      0.00021219411434612165
+     ],
+     [
+      0.00016209710078276756,
+      2.6709169230292966,
+      2.986473356958539e-05
+     ],
+     [
+      0.0008829777528931145,
+      6.881692691407586e-05,
+      0.00010045448490651586
+     ],
+     [
+      0.0008611948197923214,
+      4.853242043276766e-05,
+      9.756698146520523e-05
+     ]
+    ]
+   }
   },
   "gusty_class_a": {
    "weight": 0.10988497789938381,
@@ -271,239 +284,252 @@
     103,
     104
    ],
-   "ceiling_mean": 0.0013162613738188574,
+   "ceiling_mean": 8.658533923353037e-05,
    "ceiling_per_seed": [
-    0.0005992358805741286,
-    0.002707138639711008,
-    0.0003043334698367603,
-    0.0013442657631569596,
-    0.0016263331158154302
+    4.814094130795216e-05,
+    0.00014204936013673775,
+    3.398105973447456e-05,
+    0.0001232545121534703,
+    8.550082283501707e-05
    ],
-   "planned_mean": 9.78428588560347e-06,
+   "planned_mean": 2.4052186502786372e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.005034319443372969,
-   "room": 3.824711066896192,
+   "room": 58.142862151233764,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 4.1205125018262124e-08,
-    "pitch": 9.784362435026376e-06,
-    "tower": 0.0013064358070003148
+    "lost": 1.1331598114653712e-09,
+    "pitch": 2.100928022659108e-05,
+    "tower": 6.557492767610468e-05
    },
    "solver": {
-    "max_kkt_error": 5.124194700161651e-09,
-    "max_iterations": 55,
+    "max_kkt_error": 6.92218549147583e-09,
+    "max_iterations": 250,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.4339117226924714e-08,
-    "max_planned_limit_excess": -0.0005200160777374396
+    "max_violation": 1.402037397291167e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 0.0005992358805741286,
-     "planned_cost_per_step": 1.030081105680195e-05,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 8.698221230544571e-08,
-      "pitch": 1.0300739005703792e-05,
-      "tower": 0.0005888481580023236
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059035779379757e-09,
-       "iterations": 56,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 5.124194700161651e-09,
-       "iterations": 24,
-       "capped": false,
-       "failed": false,
-       "violation": 1.404897131962457e-08
-      }
-     ]
-    },
-    {
-     "seed": 101,
-     "replay_cost_per_step": 0.002707138639711008,
-     "planned_cost_per_step": 1.1455589905233429e-05,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 5.236111539907995e-08,
-      "pitch": 1.1455680688646775e-05,
-      "tower": 0.002695630595503498
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505905597259534e-09,
-       "iterations": 55,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 8.683775057178922e-10,
-       "iterations": 33,
-       "capped": false,
-       "failed": false,
-       "violation": 1.4339117226924714e-08
-      }
-     ]
-    },
-    {
-     "seed": 102,
-     "replay_cost_per_step": 0.0003043334698367603,
-     "planned_cost_per_step": 5.8434729771710004e-06,
+     "replay_cost_per_step": 4.814094130795216e-05,
+     "planned_cost_per_step": 1.9741078110779488e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 5.843487241126525e-06,
-      "tower": 0.00029848998343625586
+      "pitch": 1.7426190570370887e-05,
+      "tower": 3.0714750801876126e-05
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.507046664681746e-09,
-       "iterations": 70,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309077e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.8506093671377677e-09,
-       "iterations": 35,
+       "error": 1.4003724586657953e-10,
+       "iterations": 160,
        "capped": false,
        "failed": false,
-       "violation": 1.3898368012021933e-08
+       "violation": 1.3654732677892412e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.00014204936013673775,
+     "planned_cost_per_step": 3.249889398811714e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 4.844618438637483e-09,
+      "pitch": 2.8811259071428453e-05,
+      "tower": 0.00011323326455979767
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 5.612288013908902e-10,
+       "iterations": 250,
+       "capped": false,
+       "failed": false,
+       "violation": 1.402037397291167e-08
+      }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 3.398105973447456e-05,
+     "planned_cost_per_step": 1.7264213163854263e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 1.4248505658254007e-05,
+      "tower": 1.9732554092389992e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 6.92218549147583e-09,
+       "iterations": 131,
+       "capped": false,
+       "failed": false,
+       "violation": 1.2062836063364557e-08
+      }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.0013442657631569596,
-     "planned_cost_per_step": 1.1852758046758398e-05,
+     "replay_cost_per_step": 0.0001232545121534703,
+     "planned_cost_per_step": 2.627548536266369e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 1.83159739967446e-10,
-      "pitch": 1.1852934218769724e-05,
-      "tower": 0.0013324126474648112
+      "lost": 7.282986672999906e-10,
+      "pitch": 2.3314130132741084e-05,
+      "tower": 9.993965288486513e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059036069003528e-09,
-       "iterations": 67,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 5.711986439393968e-11,
-       "iterations": 55,
+       "error": 1.0000591908724788e-11,
+       "iterations": 161,
        "capped": false,
        "failed": false,
-       "violation": 1.3568917323070195e-08
+       "violation": 1.3748090221810116e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 0.0016263331158154302,
-     "planned_cost_per_step": 9.468797442052568e-06,
+     "replay_cost_per_step": 8.550082283501707e-05,
+     "planned_cost_per_step": 2.4481261888517276e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 6.64991376468175e-08,
-      "pitch": 9.468971020885064e-06,
-      "tower": 0.0016167976505946854
+      "lost": 9.28819513893823e-11,
+      "pitch": 2.1246315700160962e-05,
+      "tower": 6.425441604159442e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059035624127365e-09,
-       "iterations": 62,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.0951156912996797e-10,
-       "iterations": 44,
+       "error": 1.0677460517705292e-09,
+       "iterations": 210,
        "capped": false,
        "failed": false,
-       "violation": 1.4085617339176792e-08
+       "violation": 1.2791014691870828e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      653,
+      640
+     ],
+     [
+      null,
+      712,
+      720
+     ],
+     [
+      null,
+      580,
+      538
+     ],
+     [
+      null,
+      701,
+      697
+     ],
+     [
+      null,
+      689,
+      672
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      0.0005992359089193723,
+      4.814094130795216e-05,
+      6.26397749277867e-05
+     ],
+     [
+      0.002707138639711008,
+      0.00014204936013673775,
+      0.0003167407151763729
+     ],
+     [
+      0.00030433305414085966,
+      3.398105973447456e-05,
+      4.193782400407705e-05
+     ],
+     [
+      0.0013431806235821098,
+      0.0001232545121534703,
+      0.00016938718565597354
+     ],
+     [
+      0.0016263329066254207,
+      8.550082283501707e-05,
+      0.00010889735983632978
+     ]
+    ]
+   }
   },
   "extreme_gust": {
    "weight": 4.670111560723812e-05,
@@ -515,239 +541,252 @@
     103,
     104
    ],
-   "ceiling_mean": 0.0008003825952256372,
+   "ceiling_mean": 7.180250806703267e-05,
    "ceiling_per_seed": [
-    0.00034747637434518467,
-    0.0017068422017608757,
-    0.00016841781224947514,
-    0.0009632575115109378,
-    0.0008159190762617125
+    3.5307125963912016e-05,
+    0.00010940737164016811,
+    3.546010328796193e-05,
+    0.00012937017497283927,
+    4.9467764470282005e-05
    ],
-   "planned_mean": 7.722528111225268e-06,
+   "planned_mean": 2.0253734230754867e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.004785024742026141,
-   "room": 5.978421782993903,
+   "room": 66.64147076253917,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 5.761615064447945e-08,
-    "pitch": 7.72262219402392e-06,
-    "tower": 0.0007926023584096428
+    "lost": 3.5104169260335994e-10,
+    "pitch": 1.703371363375702e-05,
+    "tower": 5.476844472863486e-05
    },
    "solver": {
-    "max_kkt_error": 5.297371305501564e-09,
-    "max_iterations": 68,
+    "max_kkt_error": 4.546318577457834e-09,
+    "max_iterations": 225,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.4418219951295441e-08,
-    "max_planned_limit_excess": -0.0005200159986311625
+    "max_violation": 1.3991793945677955e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 0.00034747637434518467,
-     "planned_cost_per_step": 8.835880867807689e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 7.699653423361615e-09,
-      "pitch": 8.835859945760898e-06,
-      "tower": 0.0003386328171039491
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059938462741783e-09,
-       "iterations": 54,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 2.407680226131997e-10,
-       "iterations": 27,
-       "capped": false,
-       "failed": false,
-       "violation": 1.3925489872335106e-08
-      }
-     ]
-    },
-    {
-     "seed": 101,
-     "replay_cost_per_step": 0.0017068422017608757,
-     "planned_cost_per_step": 8.71213724181337e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 1.0966841196428471e-07,
-      "pitch": 8.712283785595743e-06,
-      "tower": 0.001698020252510176
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059617139791605e-09,
-       "iterations": 49,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 6.186942198519575e-11,
-       "iterations": 68,
-       "capped": false,
-       "failed": false,
-       "violation": 1.4418219951295441e-08
-      }
-     ]
-    },
-    {
-     "seed": 102,
-     "replay_cost_per_step": 0.00016841781224947514,
-     "planned_cost_per_step": 4.949835059867685e-06,
+     "replay_cost_per_step": 3.5307125963912016e-05,
+     "planned_cost_per_step": 1.7804337167648687e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 4.949853972299097e-06,
-      "tower": 0.00016346795746738835
+      "pitch": 1.567763481822785e-05,
+      "tower": 1.962949116527613e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 8.893523348318944e-09,
-       "iterations": 68,
-       "capped": false,
-       "failed": false,
-       "violation": 8.893523348318944e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.5650911848892577e-11,
-       "iterations": 39,
+       "error": 3.6640399999326107e-11,
+       "iterations": 176,
        "capped": false,
        "failed": false,
-       "violation": 1.3953662891807994e-08
+       "violation": 1.3515427221832965e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.00010940737164016811,
+     "planned_cost_per_step": 2.7693218990431448e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 8.315972873281415e-10,
+      "pitch": 2.42100978339758e-05,
+      "tower": 8.519644285771619e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 4.790867681243021e-10,
+       "iterations": 178,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3786142449845329e-08
+      }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 3.546010328796193e-05,
+     "planned_cost_per_step": 1.458929026711043e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 1.114731574731985e-05,
+      "tower": 2.431278748773473e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 2.1149597507523244e-10,
+       "iterations": 225,
+       "capped": false,
+       "failed": false,
+       "violation": 1.3306477031349573e-08
+      }
+     ],
+     "kept_outer": 2,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.0009632575115109378,
-     "planned_cost_per_step": 8.960094215566796e-06,
+     "replay_cost_per_step": 0.00012937017497283927,
+     "planned_cost_per_step": 2.0238855106461183e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 8.436719455754786e-08,
-      "pitch": 8.960225745235546e-06,
-      "tower": 0.0009542129176084807
+      "lost": 9.236111756886582e-10,
+      "pitch": 1.611134152292193e-05,
+      "tower": 0.00011325791588990763
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505909607157895e-09,
-       "iterations": 73,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 5.297371305501564e-09,
-       "iterations": 49,
+       "error": 2.042394093566681e-09,
+       "iterations": 192,
        "capped": false,
        "failed": false,
-       "violation": 1.4171839479715231e-08
+       "violation": 1.3991793945677955e-08
       }
+     ],
+     "kept_outer": 2,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 0.0008159190762617125,
-     "planned_cost_per_step": 7.154693171070801e-06,
+     "replay_cost_per_step": 4.9467764470282005e-05,
+     "planned_cost_per_step": 2.0942969622122597e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 8.634549327720306e-08,
-      "pitch": 7.154887521228318e-06,
-      "tower": 0.0008086778473582194
+      "lost": 0.0,
+      "pitch": 1.802217824633967e-05,
+      "tower": 3.144558624253962e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505903987430681e-09,
-       "iterations": 47,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 8.145143343042164e-11,
-       "iterations": 62,
+       "error": 4.546318577457834e-09,
+       "iterations": 204,
        "capped": false,
        "failed": false,
-       "violation": 1.4097347067476562e-08
+       "violation": 1.233617608065174e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     2,
+     2,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      639,
+      592
+     ],
+     [
+      null,
+      718,
+      712
+     ],
+     [
+      null,
+      540,
+      516
+     ],
+     [
+      null,
+      685,
+      657
+     ],
+     [
+      null,
+      669,
+      659
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      0.0003474764153785186,
+      3.5307125963912016e-05,
+      4.501356239007662e-05
+     ],
+     [
+      0.0017068420964634634,
+      0.00010940737164016811,
+      0.0002028295538802844
+     ],
+     [
+      0.000168417811646778,
+      3.337415885337388,
+      3.546010328796193e-05
+     ],
+     [
+      0.0009632575067286047,
+      0.0002568497830891045,
+      0.00012937017497283927
+     ],
+     [
+      0.0008159190265816191,
+      4.9467764470282005e-05,
+      0.00010611788222375342
+     ]
+    ]
+   }
   },
   "near_rated": {
    "weight": 0.28844806698588255,
@@ -759,239 +798,252 @@
     103,
     104
    ],
-   "ceiling_mean": 0.00027571447893184,
+   "ceiling_mean": 1.9224210521898482e-05,
    "ceiling_per_seed": [
-    8.540898463510134e-05,
-    0.0007023047400951825,
-    5.7012857531956986e-05,
-    0.0004484365848401868,
-    8.540922755677242e-05
+    1.719947945249555e-05,
+    2.5970023733740227e-05,
+    1.6935557500478924e-05,
+    1.837173130849337e-05,
+    1.764426061428434e-05
    ],
-   "planned_mean": 4.7211716362542e-06,
+   "planned_mean": 1.2774724183273685e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.012773438305122864,
-   "room": 46.32850024637485,
+   "room": 664.4454028722022,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 1.9758682245315147e-08,
-    "pitch": 4.711650901241621e-06,
-    "tower": 0.0002709830720187262
+    "lost": 4.293837155759187e-09,
+    "pitch": 1.020597403520303e-05,
+    "tower": 9.013943588336787e-06
    },
    "solver": {
-    "max_kkt_error": 3.851593128828706e-09,
-    "max_iterations": 139,
+    "max_kkt_error": 4.095856918134374e-09,
+    "max_iterations": 231,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.3747527782825841e-08,
-    "max_planned_limit_excess": -0.007275028772802727
+    "max_violation": 1.3253743658125927e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 8.540898463510134e-05,
-     "planned_cost_per_step": 4.341601664355006e-06,
+     "replay_cost_per_step": 1.719947945249555e-05,
+     "planned_cost_per_step": 1.1071803572478869e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 4.341486213035965e-06,
-      "tower": 8.106749819113335e-05
+      "pitch": 8.774805753038207e-06,
+      "tower": 8.42467363965873e-06
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": -1.0,
-       "iterations": 500,
-       "capped": false,
-       "failed": true,
-       "violation": 0.017280665601451577
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 4.1736836746045306e-10,
-       "iterations": 81,
+       "error": 2.917084977320472e-10,
+       "iterations": 165,
        "capped": false,
        "failed": false,
-       "violation": 1.366508994848914e-08
+       "violation": 1.3253743658125927e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     },
     {
      "seed": 101,
-     "replay_cost_per_step": 0.0007023047400951825,
-     "planned_cost_per_step": 6.277593211036879e-06,
+     "replay_cost_per_step": 2.5970023733740227e-05,
+     "planned_cost_per_step": 1.494865409049455e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 6.2776722847649824e-06,
-      "tower": 0.0006960270752335736
+      "pitch": 1.257923971920418e-05,
+      "tower": 1.3390784002593656e-05
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505985229250749e-09,
-       "iterations": 109,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309077e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.0000010766551134e-11,
-       "iterations": 45,
+       "error": 4.442356973316157e-10,
+       "iterations": 160,
        "capped": false,
        "failed": false,
-       "violation": 1.3747527782825841e-08
+       "violation": 1.1384985620921384e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     },
     {
      "seed": 102,
-     "replay_cost_per_step": 5.7012857531956986e-05,
-     "planned_cost_per_step": 2.250184693664102e-06,
+     "replay_cost_per_step": 1.6935557500478924e-05,
+     "planned_cost_per_step": 1.269900623994402e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 9.581337632920869e-08,
-      "pitch": 2.202593616374473e-06,
-      "tower": 5.4714451042880974e-05
+      "lost": 2.083463711037107e-08,
+      "pitch": 9.220112222923521e-06,
+      "tower": 7.694613868281319e-06
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 4.560964883548735e-09,
-       "iterations": 306,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090907792e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 9.549346383063948e-10,
-       "iterations": 139,
+       "error": 1.936264482083061e-10,
+       "iterations": 231,
        "capped": false,
        "failed": false,
-       "violation": 1.3741744853135174e-08
+       "violation": 1.2312005415182625e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.0004484365848401868,
-     "planned_cost_per_step": 6.595002387159565e-06,
+     "replay_cost_per_step": 1.837173130849337e-05,
+     "planned_cost_per_step": 1.2541211199932616e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 2.9800348973670527e-09,
-      "pitch": 6.5950094064835355e-06,
-      "tower": 0.00044183860114831896
+      "lost": 6.34548668424865e-10,
+      "pitch": 1.0266684424992633e-05,
+      "tower": 8.104413857964452e-06
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 9.090909264879879e-10,
-       "iterations": 105,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090907661e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 3.851593128828706e-09,
-       "iterations": 36,
+       "error": 4.095856918134374e-09,
+       "iterations": 159,
        "capped": false,
        "failed": false,
-       "violation": 9.957831219389107e-09
+       "violation": 1.3139435539599731e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 8.540922755677242e-05,
-     "planned_cost_per_step": 4.14147622505545e-06,
+     "replay_cost_per_step": 1.764426061428434e-05,
+     "planned_cost_per_step": 1.2612945813518371e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 4.141492985549148e-06,
-      "tower": 8.126773447772391e-05
+      "pitch": 1.0189028055856605e-05,
+      "tower": 7.4552325731857845e-06
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 7.720095770991087e-09,
-       "iterations": 61,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090907661e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.0000200368395715e-11,
-       "iterations": 33,
+       "error": 1.432937950029605e-10,
+       "iterations": 186,
        "capped": false,
        "failed": false,
-       "violation": 1.35579574234157e-08
+       "violation": 1.1978097402831622e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.007275012103467589
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      517,
+      515
+     ],
+     [
+      null,
+      624,
+      576
+     ],
+     [
+      null,
+      446,
+      364
+     ],
+     [
+      null,
+      542,
+      520
+     ],
+     [
+      null,
+      573,
+      457
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      8.540885037155199e-05,
+      1.719947945249555e-05,
+      2.1097819708746503e-05
+     ],
+     [
+      0.0007023028888933001,
+      2.5970023733740227e-05,
+      4.5169746195273405e-05
+     ],
+     [
+      5.864029562506333e-05,
+      1.6935557500478924e-05,
+      2.4808550281368175e-05
+     ],
+     [
+      0.000448438860196336,
+      1.837173130849337e-05,
+      2.2556683637807224e-05
+     ],
+     [
+      8.498741470305153e-05,
+      1.764426061428434e-05,
+      2.3446807921329026e-05
+     ]
+    ]
+   }
   },
   "near_cut_out": {
    "weight": 0.035712617817299744,
@@ -1003,239 +1055,252 @@
     103,
     104
    ],
-   "ceiling_mean": 0.0018473070444932117,
+   "ceiling_mean": 0.00011375873392904447,
    "ceiling_per_seed": [
-    0.0025786038257251333,
-    0.0016520621920876218,
-    0.00167402204782882,
-    0.0019266724048783252,
-    0.0014051747519461591
+    0.000119239726219544,
+    0.00017364782502387287,
+    7.971774126356313e-05,
+    0.00010828927876520696,
+    8.78990983730354e-05
    ],
-   "planned_mean": 9.64959581806596e-06,
+   "planned_mean": 2.4786965027746322e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.0015528503982982593,
-   "room": 0.8406022176590934,
+   "room": 13.650383971984336,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 6.09605952811935e-08,
-    "pitch": 9.649829070519294e-06,
-    "tower": 0.0018375962568046727
+    "lost": 2.227777957442001e-09,
+    "pitch": 2.1496954688976723e-05,
+    "tower": 9.225955206169009e-05
    },
    "solver": {
-    "max_kkt_error": 5.170480474325778e-09,
-    "max_iterations": 75,
+    "max_kkt_error": 7.711778664158738e-09,
+    "max_iterations": 192,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.4371827283810035e-08,
-    "max_planned_limit_excess": -0.0005200160450449243
+    "max_violation": 1.392885340401051e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 0.0025786038257251333,
-     "planned_cost_per_step": 1.162970347797409e-05,
+     "replay_cost_per_step": 0.000119239726219544,
+     "planned_cost_per_step": 2.3991720619295977e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 1.8206598689785026e-08,
-      "pitch": 1.1629938878976453e-05,
-      "tower": 0.0025669556872490416
+      "lost": 7.647570077207178e-10,
+      "pitch": 2.1494347828303247e-05,
+      "tower": 9.774461206133123e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 3.923644753582793e-09,
-       "iterations": 53,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 8.21474711991197e-10,
-       "iterations": 44,
+       "error": 1.1561657462252897e-09,
+       "iterations": 160,
        "capped": false,
        "failed": false,
-       "violation": 1.4371827283810035e-08
+       "violation": 1.3796616737948852e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 101,
-     "replay_cost_per_step": 0.0016520621920876218,
-     "planned_cost_per_step": 8.866520633888064e-06,
+     "replay_cost_per_step": 0.00017364782502387287,
+     "planned_cost_per_step": 2.698190406389025e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 2.7911460574273997e-08,
-      "pitch": 8.866609735556085e-06,
-      "tower": 0.0016431676725722159
+      "lost": 4.394965625875713e-09,
+      "pitch": 2.361884739873754e-05,
+      "tower": 0.0001500245832368076
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059038932891244e-09,
-       "iterations": 67,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.0000000245799917e-11,
-       "iterations": 46,
+       "error": 4.26395687989815e-09,
+       "iterations": 172,
        "capped": false,
        "failed": false,
-       "violation": 1.42917684353705e-08
+       "violation": 1.392885340401051e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 102,
-     "replay_cost_per_step": 0.00167402204782882,
-     "planned_cost_per_step": 9.146657105109244e-06,
+     "replay_cost_per_step": 7.971774126356313e-05,
+     "planned_cost_per_step": 2.355613439089044e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 7.725781885422241e-08,
-      "pitch": 9.146950794590714e-06,
-      "tower": 0.0016647978506705873
+      "lost": 0.0,
+      "pitch": 2.0638591072013418e-05,
+      "tower": 5.9079150285706014e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059043101366558e-09,
-       "iterations": 59,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.8993582438349108e-10,
-       "iterations": 75,
+       "error": 1.2474812189594775e-09,
+       "iterations": 192,
        "capped": false,
        "failed": false,
-       "violation": 1.4202057085910269e-08
+       "violation": 1.3848082680567586e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.0019266724048783252,
-     "planned_cost_per_step": 1.03483723249722e-05,
+     "replay_cost_per_step": 0.00010828927876520696,
+     "planned_cost_per_step": 2.452450971412598e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 1.0852865475234157e-07,
-      "pitch": 1.0348602208402058e-05,
-      "tower": 0.0019162152723421174
+      "lost": 3.5685766682410264e-09,
+      "pitch": 2.0210137570617625e-05,
+      "tower": 8.807557650697332e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059035597107597e-09,
-       "iterations": 76,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 4.098761074138925e-09,
-       "iterations": 58,
+       "error": 5.713633439195962e-11,
+       "iterations": 136,
        "capped": false,
        "failed": false,
-       "violation": 1.4360511002564635e-08
+       "violation": 1.3611664684276548e-08
       }
+     ],
+     "kept_outer": 2,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 0.0014051747519461591,
-     "planned_cost_per_step": 8.256725548386201e-06,
+     "replay_cost_per_step": 8.78990983730354e-05,
+     "planned_cost_per_step": 2.4880556350528976e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 7.28984435353445e-08,
-      "pitch": 8.257043735071153e-06,
-      "tower": 0.001396844801189402
+      "lost": 2.4105904853725473e-09,
+      "pitch": 2.1522849575211778e-05,
+      "tower": 6.637383821763233e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505903773540314e-09,
-       "iterations": 61,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440309276e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 5.170480474325778e-09,
-       "iterations": 41,
+       "error": 7.711778664158738e-09,
+       "iterations": 167,
        "capped": false,
        "failed": false,
-       "violation": 9.699160051653154e-09
+       "violation": 1.2446698338663964e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     1,
+     2,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      707,
+      698
+     ],
+     [
+      null,
+      720,
+      708
+     ],
+     [
+      null,
+      708,
+      706
+     ],
+     [
+      null,
+      689,
+      682
+     ],
+     [
+      null,
+      711,
+      720
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      0.0025785817877071477,
+      0.000119239726219544,
+      0.00015805875468323104
+     ],
+     [
+      0.0016487420176219119,
+      0.00017364782502387287,
+      0.00018567025739235258
+     ],
+     [
+      0.0016740221055896916,
+      7.971774126356313e-05,
+      0.00015603566325830308
+     ],
+     [
+      0.0019266727668851972,
+      0.0001227800807998663,
+      0.00010828927876520696
+     ],
+     [
+      0.0014118086204792343,
+      8.78990983730354e-05,
+      0.00017593050990551785
+     ]
+    ]
+   }
   },
   "curtailment": {
    "weight": 0.07142523563459949,
@@ -1247,240 +1312,253 @@
     103,
     104
    ],
-   "ceiling_mean": 0.0006691112268844331,
+   "ceiling_mean": 5.425799167707593e-05,
    "ceiling_per_seed": [
-    0.0002105705248550692,
-    0.0015628985777792535,
-    0.00015616276465774462,
-    0.000716113363041004,
-    0.0006998109040890945
+    2.8659659615218302e-05,
+    0.00010988680878126743,
+    3.231921645181917e-05,
+    6.129830986354787e-05,
+    3.9125963673526864e-05
    ],
-   "planned_mean": 5.98739600958978e-06,
+   "planned_mean": 1.8139280729119737e-05,
    "replay_trips": 0,
    "reference_mean_same_seeds": 0.0043911715262365415,
-   "room": 6.56269294222285,
+   "room": 80.93133178189153,
    "terms_mean": {
     "failure": 0.0,
-    "lost": 1.6577779137105786e-08,
-    "pitch": 5.987528873876287e-06,
-    "tower": 0.0006631071214926959
+    "lost": 2.1909723998033332e-10,
+    "pitch": 1.5247591011764922e-05,
+    "tower": 3.901018142862824e-05
    },
    "solver": {
-    "max_kkt_error": 5.8282027317223924e-09,
-    "max_iterations": 63,
+    "max_kkt_error": 3.5604180424448042e-09,
+    "max_iterations": 244,
     "capped": 0,
     "failed": 0,
-    "max_violation": 1.4347157462069049e-08,
-    "max_planned_limit_excess": -0.0005200160696994249
+    "max_violation": 1.3449227065365221e-08
    },
    "per_seed": [
     {
      "seed": 100,
-     "replay_cost_per_step": 0.0002105705248550692,
-     "planned_cost_per_step": 7.283306790207259e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 1.565885543693598e-08,
-      "pitch": 7.2832944916428885e-06,
-      "tower": 0.00020327157222749988
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.5059036184912997e-09,
-       "iterations": 55,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440311818e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 3.780332424033985e-10,
-       "iterations": 36,
-       "capped": false,
-       "failed": false,
-       "violation": 1.401248317378645e-08
-      }
-     ]
-    },
-    {
-     "seed": 101,
-     "replay_cost_per_step": 0.0015628985777792535,
-     "planned_cost_per_step": 6.463474340817497e-06,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "lost": 5.4520837823313073e-08,
-      "pitch": 6.463682865776773e-06,
-      "tower": 0.0015563803736981536
-     },
-     "limit_backoffs": [
-      0.00052
-     ],
-     "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 9.837318758199043e-09,
-       "iterations": 63,
-       "capped": false,
-       "failed": false,
-       "violation": 9.837318758199043e-09
-      },
-      {
-       "widths": [
-        0.0,
-        0.1,
-        0.01
-       ],
-       "error": 1.8149277806874633e-11,
-       "iterations": 63,
-       "capped": false,
-       "failed": false,
-       "violation": 1.4347157462069049e-08
-      }
-     ]
-    },
-    {
-     "seed": 102,
-     "replay_cost_per_step": 0.00015616276465774462,
-     "planned_cost_per_step": 4.213183280353379e-06,
+     "replay_cost_per_step": 2.8659659615218302e-05,
+     "planned_cost_per_step": 1.5225623719444178e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
       "lost": 0.0,
-      "pitch": 4.213171332561605e-06,
-      "tower": 0.0001519495929374483
+      "pitch": 1.3113984260098485e-05,
+      "tower": 1.5545675358545686e-05
      },
-     "limit_backoffs": [
-      0.007275012103467589
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.0563093085797474e-09,
-       "iterations": 66,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090908007e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.0000018894835397e-11,
-       "iterations": 31,
+       "error": 1.2369895237843313e-09,
+       "iterations": 233,
        "capped": false,
        "failed": false,
-       "violation": 1.37969795588333e-08
+       "violation": 1.3449227065365221e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.00010988680878126743,
+     "planned_cost_per_step": 2.4052740331858673e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 1.0329861951004678e-09,
+      "pitch": 2.0705537991526263e-05,
+      "tower": 8.918023695849288e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 2.044798600647111e-09,
+       "iterations": 210,
+       "capped": false,
+       "failed": false,
+       "violation": 1.2516822023300733e-08
+      }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 3.231921645181917e-05,
+     "planned_cost_per_step": 1.247061196144844e-05,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "failure": 0.0,
+      "lost": 0.0,
+      "pitch": 9.295386802303957e-06,
+      "tower": 2.3023829664112432e-05
+     },
+     "certificates": [
+      {
+       "widths": [
+        0.0,
+        0.1,
+        0.01
+       ],
+       "error": 3.5604180424448042e-09,
+       "iterations": 239,
+       "capped": false,
+       "failed": false,
+       "violation": 1.2620641420824086e-08
+      }
+     ],
+     "kept_outer": 2,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 103,
-     "replay_cost_per_step": 0.000716113363041004,
-     "planned_cost_per_step": 7.071226934157047e-06,
+     "replay_cost_per_step": 6.129830986354787e-05,
+     "planned_cost_per_step": 1.946196500491748e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 5.286458785539831e-10,
-      "pitch": 7.071415549114353e-06,
-      "tower": 0.0007090414182525281
+      "lost": 6.250000480119885e-11,
+      "pitch": 1.6562934033288456e-05,
+      "tower": 4.473531347791734e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 2.505903560532996e-09,
-       "iterations": 67,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440311818e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 5.8282027317223924e-09,
-       "iterations": 43,
+       "error": 5.122230544153794e-10,
+       "iterations": 183,
        "capped": false,
        "failed": false,
-       "violation": 1.4171839479715231e-08
+       "violation": 1.3157452904977163e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     },
     {
      "seed": 104,
-     "replay_cost_per_step": 0.0006998109040890945,
-     "planned_cost_per_step": 4.905788702413717e-06,
+     "replay_cost_per_step": 3.9125963673526864e-05,
+     "planned_cost_per_step": 1.9485462627929913e-05,
      "replay_trips": 0,
      "replay_terms_per_step": {
       "failure": 0.0,
-      "lost": 1.2180556546725895e-08,
-      "pitch": 4.906080130285817e-06,
-      "tower": 0.0006948926503478497
+      "lost": 0.0,
+      "pitch": 1.656011197160745e-05,
+      "tower": 2.2565851684072888e-05
      },
-     "limit_backoffs": [
-      0.00052
-     ],
      "certificates": [
-      {
-       "widths": [
-        0.0,
-        1.0,
-        0.1
-       ],
-       "error": 9.090909115506446e-10,
-       "iterations": 52,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090908022e-09
-      },
       {
        "widths": [
         0.0,
         0.1,
         0.01
        ],
-       "error": 1.323247671370589e-09,
-       "iterations": 35,
+       "error": 9.020906797658399e-11,
+       "iterations": 244,
        "capped": false,
        "failed": false,
-       "violation": 1.4088042510351784e-08
+       "violation": 1.2947458438716808e-08
       }
+     ],
+     "kept_outer": 1,
+     "converged": false,
+     "limit_backoffs": [
+      0.00052
      ]
     }
-   ]
+   ],
+   "outer_loop": {
+    "converged": 0,
+    "kept_outer": [
+     1,
+     1,
+     2,
+     1,
+     1
+    ],
+    "changed_turns": [
+     [
+      null,
+      637,
+      606
+     ],
+     [
+      null,
+      690,
+      698
+     ],
+     [
+      null,
+      552,
+      526
+     ],
+     [
+      null,
+      675,
+      675
+     ],
+     [
+      null,
+      653,
+      634
+     ]
+    ],
+    "replay_per_outer": [
+     [
+      0.00021057060622281127,
+      2.8659659615218302e-05,
+      3.350766255487444e-05
+     ],
+     [
+      0.0015628986155343681,
+      0.00010988680878126743,
+      0.00021490901374904243
+     ],
+     [
+      1.3341288072605084,
+      2.6692897978229593,
+      3.231921645181917e-05
+     ],
+     [
+      0.0007161134078569209,
+      6.129830986354787e-05,
+      7.086449773484382e-05
+     ],
+     [
+      0.0006998109330386839,
+      3.9125963673526864e-05,
+      6.13475841203177e-05
+     ]
+    ]
+   }
   }
  },
- "generated": "2026-11-08, AMD EPYC 9454 (bob)"
+ "generated": "2026-11-09, AMD EPYC 9454 (bob)"
 }

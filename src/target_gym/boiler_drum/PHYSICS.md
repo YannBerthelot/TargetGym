@@ -175,6 +175,31 @@ to 63 % of the low margin and, when the standby pump delivers, rises to 93 % of
 the high one (S10's unit fell to 84 % of its low margin). Rule 23: the
 reference costs more than zero on 49 of 50 seeds.
 
+**Why the room is small (charter J5).** The ceiling (data/oracle_ceilings,
+seeds 100 to 109) costs zero on four of the five scenarios. The reference
+costs zero on `normal` and `low_load`. So room on `J` (5.3) rests on
+`id_fan_runback`, which is 0.04 % of the year. Two costs this family has and
+a level and firing controller sets were looked for, and neither is priced:
+
+- Wear per load follow. [S24] (Table 1-1, 2011 $) prices a "significant" load
+  follow, a swing of more than 15 to 20 % of capacity, at a median $1.92 per
+  MW of capacity for gas-fired steam units and $3.34 for small subcritical
+  coal. An episode holds one ramp of the load plan, and the plan sets whether
+  that ramp is significant. Every controller that follows the plan pays the
+  same count, so the term would add a constant and no room. What a controller
+  does change is how fast it ramps. [S24] gives that as a multiplier of 1.2
+  to 6 for ramps 1.1 to 2 times faster than typical. But it marks those
+  figures preliminary, and it states no typical rate to measure "faster"
+  from, so the multiplier can't be priced without a number of ours.
+- The drum's heating-rate limit. EN 12952-3 (formerly TRD 301) sets the
+  allowed rate of change of the drum's saturation temperature. The standard's
+  formula could not be fetched (it is sold, and the worked examples found
+  were not reachable), so no limit is added.
+
+Nothing unsourced is added. The boiler's room stays as measured: this family
+is close to solved by a three-element controller on its normal days, and its
+cost lies in rare upsets.
+
 ## 6. Behaviour tests (charter step 3, Amendment 3)
 
 `tests/boiler_drum/test_boiler_drum_reality.py` runs the cold review's eight
@@ -245,5 +270,7 @@ The two failures are known deviations (rule 13), on S1's own model:
 - Its horizon must cover a runback and the standby pump's delay (about 3 to 5
   min, 90 to 150 steps), and the trip's 10 s delay is not planned (the limit is
   held on every step, stricter than the plant).
-- `scripts/measure_oracle_widths.py` lists boiler guards of the old plant and
-  no longer imports; its boiler entry must be redone with the oracle run.
+- `scripts/measure_oracle_widths.py`'s boiler row is redone: no smoothed
+  sites and no back-offs, since the plant draws nothing after the reset. Both
+  the receding slot and the ceiling hold the steam under the water surface at
+  or above 0.

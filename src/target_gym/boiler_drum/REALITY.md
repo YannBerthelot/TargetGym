@@ -303,6 +303,13 @@ gas pass, fans or mills. The weights are therefore ours (PHYSICS.md).
   examples 12.4 to 12.6: ideal-cycle steam rates of 2.18, 3.85 and 4.51 kg/kWh.
   https://tbc-python.fossee.in/convert-notebook/Engineering_Thermodynamics/ch12.ipynb
   (fetched once, 2026-11-08). Textbook cycles, not plant data.
+- [S24] N. Kumar, P. Besuner, S. Lefton, D. Agan, D. Hilleman (Intertek
+  APTECH), "Power Plant Cycling Costs", NREL/SR-5500-55433, April 2012, Table
+  1-1 (pp. 12 to 13) and p. 11: lower-bound C&M cost per significant load
+  follow (more than 15 to 20 % of capacity), median $1.92/MW for gas-fired
+  steam units and $3.34/MW for small subcritical coal (2011 $); faster-ramp
+  multipliers preliminary (footnote 5).
+  https://docs.nlr.gov/docs/fy12osti/55433.pdf (fetched once, 2026-11-09).
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

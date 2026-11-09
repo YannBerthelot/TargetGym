@@ -159,8 +159,8 @@ class WindTurbineParams(EnvParams):
     design_life_years: float = 20.0
     #: Tower top height, m [S1 Table 6-2], the lever of the base moment.
     tower_height: float = 87.6
-    #: S-N slope of the tower's steel for the damage-equivalent load (ours,
-    #: the review's m = 4; the family uses 3 to 5 for welded steel).
+    #: S-N slope for the damage-equivalent load: the average of the welded
+    #: tower curve's two slopes, 3 and 5 (DNV-RP-C203 type E) [S23].
     fatigue_exponent: float = 4.0
     #: The design rates, (MN m)^m and deg per step: 20 years at these use the
     #: tower and the pitch system up exactly. Ours, measured once from S1's

@@ -22,10 +22,11 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   priced, so it rests at normal water level;
 - dropped guards (T4): the void, circulation, pressure and volume clips,
   which the level limits keep off their edges. Not the steam under the water
-  surface's floor at 0 (``compute_next_state``) on the ceiling's plans: a plan
-  over the whole episode drove it below 0 in its last steps, where the env
-  holds it at 0 and the level rose 0.19 m above the model's into a trip, so
-  the ceiling holds it at or above 0 as a limit (``ceiling=True``).
+  surface's floor at 0 (``compute_next_state``): a plan over the whole episode
+  drove it below 0 in its last steps, where the env holds it at 0 and the
+  level rose 0.19 m above the model's into a trip, so both the ceiling and
+  the receding slot hold it at or above 0 as a limit, with no back-off (the
+  env clips there, so the model is exact at the floor).
 
 The plant draws nothing after its reset, so the reset state is the whole
 future: ``ceiling_data`` is the solve's data for a plan over the episode, the
@@ -78,7 +79,7 @@ def boiler_model(env, p, rest: bool = True, ceiling: bool = False) -> TaskModel:
         off = steam_draw(q_demand, x1[0], p) - q_demand
         tracked = jnp.stack([level, x1[0]])
         cost = jnp.zeros((), x.dtype)
-        y = jnp.stack([off, level] + ([x1[3]] if ceiling else []))
+        y = jnp.stack([off, level, x1[3]])
         return jnp.concatenate([x1, held]), cost, y, tracked, ()
 
     price = float(trip_cost(p))
@@ -98,8 +99,10 @@ def boiler_model(env, p, rest: bool = True, ceiling: bool = False) -> TaskModel:
         hinges=(
             Hinge(weight=per_kg_s, absolute=True, tol=float(p.steam_resolution)),
         ),
-        limits=(Limit(p.level_trip_low, p.level_trip_high, price),)
-        + ((Limit(lo=0.0, price=price),) if ceiling else ()),
+        limits=(
+            Limit(p.level_trip_low, p.level_trip_high, price),
+            Limit(lo=0.0, price=price),
+        ),
         # G12: feedwater is a spare move, since the level is limited and not
         # priced; it rests at normal water level, 1 at the high trip.
         rest=(lambda x: drum_level(
