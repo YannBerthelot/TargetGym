@@ -18,11 +18,17 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 - objective: the score's lost production against the available power (the
   rating, timed curtailment included, or the wind at peak Cp), a one-sided
   epigraph row, and the pitch system's wear, an absolute row on the pitch's
-  travel, both in dollars on every visited state (T2). The tower's fatigue is
-  not in the plan: its half-cycle count reads turning points of the history,
-  which no smooth planner has got (PHYSICS.md, what the oracle needs); the
-  ceiling's replay charges it. The receding slot keeps the speed's resting
-  target at rated (G12); the ceiling plans the score alone;
+  travel, both in dollars on every visited state (T2). The tower's fatigue,
+  a half-cycle count between turning points of the base moment, is planned
+  by online rainflow counting (Loew and Bottasso, WES 7, 1605, 2022): the
+  turning points are counted outside the solver on a plan's own moments
+  (``turning_points``) and frozen in the data, where each one's half-cycle,
+  0.5 (range / 1 MN m)^m, is an absolute epigraph row of power m from the
+  last frozen turning point, carried as a seventh state; a driver re-solves
+  on the new plan's turning points until they stop changing. With no frozen
+  points (the registry's receding slot) the row is 0 and the fatigue is not
+  planned. The receding slot keeps the speed's resting target at rated
+  (G12); the ceiling plans the score alone;
 - limit: the rotor speed under the safety system's overspeed level on every
   visited state, elastic at the trip cost per unit (T3);
 - dropped guards (T4): the speed and wind floors, and the pitch and torque
@@ -33,6 +39,7 @@ The cold start holds the pitch and the torque where they are.
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.tree_util import Partial as partial
 
 from target_gym.energy.wind_turbine.cp_table import (
@@ -50,6 +57,8 @@ from target_gym.energy.wind_turbine.env import (
     omega_rated,
     pitch_system_cost,
     rotor_area,
+    tower_base_moment,
+    tower_cost,
     tower_damping,
     tower_stiffness,
     turbulence_time_constant,
@@ -167,7 +176,7 @@ def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:]
+    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
     after = (now + t + 1) * p.delta_t
     if path is None:
         decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
@@ -187,23 +196,59 @@ def wind_step(env, p, x, v, t, task, widths):
     return x1, v_wind, rating
 
 
+def turning_points(m0, turn0, dir0, moments):
+    """The turning points of a plan's base moments ``moments`` (N m, after
+    each step) as the env counts them (``env.count_half_cycles``) from the
+    state's moment ``m0``, last turning point ``turn0`` and direction ``dir0``:
+    (a mask over the steps, True where the moment after that step is a
+    turning point; the last turning point before the first step). A turn is
+    seen one step late, so the moment after the last step is never one."""
+    m = np.concatenate([[float(m0)], np.asarray(moments, float)])
+    mask, z0, prev = np.zeros(len(m) - 1, bool), float(turn0), float(dir0)
+    for j in range(len(m) - 1):
+        d = float(np.sign(m[j + 1] - m[j]))
+        if prev != 0.0 and d != 0.0 and d != prev:
+            if j == 0:
+                z0 = float(m[0])
+            else:
+                mask[j - 1] = True
+        if d != 0.0:
+            prev = d
+    return mask, z0
+
+
 def wind_model(env, p, rest: bool = True) -> TaskModel:
     per_W = float(1.0e-6 * p.delta_t / 3600.0)  # MWh per W per step
     rated = omega_rated(p)
     per_deg = float(pitch_system_cost(p) / (p.pitch_travel_design * life_steps(p)))
+    # $ per (MN m)^m of a half-cycle's range (``compute_reward_terms``).
+    per_range = float(0.5 * tower_cost(p) / (p.tower_damage_design * life_steps(p)))
 
     def step(d, x, u, t):
-        x1, v_wind, rating = wind_step(env, p, x, u, t, d["task"], d["widths"])
+        task = d["task"]
+        x1, v_wind, rating = wind_step(env, p, x[:6], u, t, task, d["widths"])
         power = electrical_power(x1[0], x1[2], p)
         available = jnp.minimum(rating, wind_power(v_wind, p))
-        y = jnp.stack([available - power, x1[1] - x[1], x1[0]])
+        moment = tower_base_moment(x1[3], p)
+        if len(task) > 7:  # turning points frozen by the outer loop
+            mask, z0 = task[7]
+            mask = jnp.asarray(mask)
+            z = jnp.where(t == 0, jnp.asarray(z0, x.dtype), x[6])
+            hit = mask[jnp.minimum(t, mask.shape[0] - 1)]
+            half = jnp.where(hit, (moment - z) / 1.0e6, 0.0)
+            z1 = jnp.where(hit, moment, z)
+        else:
+            half, z1 = jnp.zeros((), x.dtype), x[6]
+        y = jnp.stack([available - power, x1[1] - x[1], half, x1[0]])
+        x1 = jnp.concatenate([x1, z1[None]])
         return x1, jnp.zeros((), x.dtype), y, power[None], ()
 
     return TaskModel(
-        nx=6, nu=2, step=step,
-        state_x=lambda s: jnp.stack(
-            [s.omega, s.pitch, s.torque, s.x_tower, s.v_tower, s.w_induced]
-        ),
+        nx=7, nu=2, step=step,
+        state_x=lambda s: jnp.stack([
+            s.omega, s.pitch, s.torque, s.x_tower, s.v_tower, s.w_induced,
+            s.moment_turn,
+        ]),  # fmt: skip
         data=lambda s: (
             s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0, None
         ),
@@ -214,6 +259,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
         hinges=(
             Hinge(weight=per_W * float(p.energy_price)),
             Hinge(weight=per_deg, absolute=True),
+            Hinge(
+                weight=per_range, absolute=True, power=int(p.fatigue_exponent)
+            ),
         ),
         limits=(Limit(hi=p.overspeed_factor * rated, price=float(trip_cost(p))),),
         move_rows=lambda x, v, steps: reach(p, x[1:3], v, steps),

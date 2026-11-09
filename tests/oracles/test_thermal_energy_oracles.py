@@ -133,6 +133,50 @@ def test_wind_plan_costs_what_the_env_charges_bar_the_tower():
     np.testing.assert_allclose(planned, replayed - terms["tower"], rtol=1e-9)
 
 
+def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
+    """The outer loop's contract (Loew and Bottasso 2022, online rainflow): with
+    the tower's turning points frozen at the plan's own, the planned fatigue is
+    the env's half-cycle count, so the whole score, tower included, is what the
+    env charges. The env closes a half-cycle at each turning point of the base
+    moment, 0.5 (range / 1 MN m)^m at the tower's price per unit of design
+    damage (env.compute_reward_terms)."""
+    from target_gym.energy.wind_turbine.env import tower_base_moment
+    from target_gym.energy.wind_turbine.oracle import (
+        ceiling_data,
+        turning_points,
+        wind_model,
+    )
+
+    moves = np.random.default_rng(0).uniform(-1.0, 1.0, (40, 2))
+    spec = REGISTRY["wind_turbine"]
+    env = spec.make_env()
+    p = spec.make_test_params()
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    with enable_x64():
+        p64 = float64(p)
+        st = float64(env.reset_env(resets[0], p)[1])
+        tm = wind_model(env, p64)
+        task = float64(ceiling_data(env, p64, st, steps[:, 0], run_as=as_called))
+        d = {"task": task, "widths": jnp.zeros(5)}
+        x, moments = tm.state_x(st), []
+        for t, u in enumerate(moves):
+            x = tm.step(d, x, jnp.asarray(u), t)[0]
+            moments.append(float(tower_base_moment(x[3], p64)))
+    frozen = turning_points(
+        float(st.moment), float(st.moment_turn), float(st.moment_dir), moments
+    )
+    assert frozen[0].sum() >= 2  # the moves swing the tower
+
+    def data_of(env, p, st, keys):
+        return (*ceiling_data(env, p, st, keys, run_as=as_called), frozen)
+
+    planned, replayed, terms = plan_and_replay(
+        "wind_turbine", wind_model, data_of, moves.tolist()
+    )
+    assert terms["tower"] > 0.0 and terms["lost"] > 0.0
+    np.testing.assert_allclose(planned, replayed, rtol=1e-9)
+
+
 def test_wind_ceiling_plans_on_the_episodes_wind_even_where_a_held_run_trips():
     """From 1 % under the overspeed level the reset's pitch and torque held
     overspeed the rotor, and a trip redraws the turbulence. The wind does not
