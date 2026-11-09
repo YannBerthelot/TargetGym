@@ -45,10 +45,10 @@ def row() -> Row:
         return steady_state(o[3], T_f, p)[1]
 
     dt = float(p.delta_t)
-    # The reactor: a cooling step settles 95 % in 0.97 residence times open loop
+    # The reactor: a cooling step settles 95 % in 0.99 residence times open loop
     # (PHYSICS.md, T8), 33 min of the 34 min residence; the window is twice that.
     residence = float(p.V) / float(p.q)
-    window = math.ceil(2 * 0.97 * residence / dt)
+    window = math.ceil(2 * 0.99 * residence / dt)
     # The jacket: its time constant M_j / (F_w + UA / cp_w) is 2.2 min at the design
     # water, read 2 min late [S6]; its window is that dead time and five of it.
     _, _, F_design = steady_state(float(p.T_setpoint), T_f, p)

@@ -139,11 +139,11 @@ restated on the family (Amendment 3):
 | T5. Analyser | no composition reading (none found) | pass |
 | T6. Loss of circulation | 0.75 to 8 K/min over 3 min, pooled: Morton's 1 to 2 C/min [S4], Bayer's over 2 C/min [S3], the audit's factor 4 on top and 25 % below | pass (0.81) |
 | T7. 25 K rise | 3 to 48 min [S2; S3] | pass |
-| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 0.97** |
+| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 0.99** |
 | Runaway trips the interlock | [S3] | pass |
 | Starts at rest on its setpoint | rule 17 | pass |
 
-**Finding, T8.** Open loop, a cooling step settles in 0.97 residence times,
+**Finding, T8.** Open loop, a cooling step settles in 0.99 residence times (0.97 on v5),
 faster than the 1.6 the audit derived from PARSEX's closed loop (3.2, halved).
 The audit called it weak, kept for scale; the reactor's own temperature time
 constant is not documented (REALITY.md, "Time scales"). Not moved.

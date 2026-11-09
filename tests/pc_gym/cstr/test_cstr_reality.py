@@ -185,7 +185,10 @@ def test_loss_of_circulation_rises_25_kelvin_in_minutes():
 
 
 def test_an_open_loop_cooling_step_settles_in_a_few_residence_times():
-    p = quiet()
+    # A step test on a still feed: the day's drift (cstr-v6) would move the end
+    # point the 95 % is read against.
+    lo, hi = CSTRParams().feed_T_range
+    p = quiet(feed_T_range=(0.5 * (lo + hi),) * 2)
     s = rest(p)
     raw = float(ENV.initial_action(s, p)[0])
     traj = hold(p, s, raw - 0.1, 2000)
