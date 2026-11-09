@@ -17,7 +17,7 @@
     108,
     109
    ],
-   "reference_mean": 161.18468159226933,
+   "reference_mean": 154.56889945006813,
    "ceiling_mean": 0.002304720833975201,
    "ceiling_costs": [
     0.005739933698593328,
@@ -32,7 +32,7 @@
     0.004392452072352171
    ],
    "ceiling_trips": 0,
-   "room": 69936.74861447609,
+   "room": 67066.21347430893,
    "planned_minus_replayed_max": 1.4650169759988785e-05,
    "solver": {
     "status": [
@@ -94,7 +94,7 @@
     108,
     109
    ],
-   "reference_mean": 159.00412065703384,
+   "reference_mean": 160.35403695083224,
    "ceiling_mean": 32.312278376922094,
    "ceiling_costs": [
     21.842387702836035,
@@ -109,7 +109,7 @@
     17.775959467499828
    ],
    "ceiling_trips": 0,
-   "room": 4.920857601010176,
+   "room": 4.962634794127036,
    "planned_minus_replayed_max": 5.060853436589241e-05,
    "solver": {
     "status": [
@@ -171,7 +171,7 @@
     108,
     109
    ],
-   "reference_mean": 1361.0305163084483,
+   "reference_mean": 1360.4767855566943,
    "ceiling_mean": 1271.603478569337,
    "ceiling_costs": [
     1992.0055146668494,
@@ -186,7 +186,7 @@
     1125.2237466198587
    ],
    "ceiling_trips": 0,
-   "room": 1.0703261977859044,
+   "room": 1.0698907391220314,
    "planned_minus_replayed_max": 0.0240395886087299,
    "solver": {
     "status": [
@@ -248,7 +248,7 @@
     108,
     109
    ],
-   "reference_mean": 3.4294585151462043,
+   "reference_mean": 3.521286103501916,
    "ceiling_mean": 6.970308216599128e-05,
    "ceiling_costs": [
     4.901269373173515e-05,
@@ -263,7 +263,7 @@
     2.56145722232759e-05
    ],
    "ceiling_trips": 0,
-   "room": 49200.959392000404,
+   "room": 50518.37012194536,
    "planned_minus_replayed_max": 2.894848876167089e-07,
    "solver": {
     "status": [
@@ -325,7 +325,7 @@
     108,
     109
    ],
-   "reference_mean": 42.94567634921055,
+   "reference_mean": 44.02575808162452,
    "ceiling_mean": 0.8636765855112267,
    "ceiling_costs": [
     0.8477376218807573,
@@ -340,7 +340,7 @@
     0.8419245620374568
    ],
    "ceiling_trips": 0,
-   "room": 49.72425682211841,
+   "room": 50.974819533361355,
    "planned_minus_replayed_max": 3.2287397577102084e-05,
    "solver": {
     "status": [
@@ -390,9 +390,9 @@
   }
  },
  "weights_covered": 0.9999999999999999,
- "J_reference": 98.81538860302443,
+ "J_reference": 98.36590715099693,
  "J_ceiling": 65.282434770105,
- "room_J": 1.513659668960069,
+ "room_J": 1.5067744868492858,
  "method": "pc_gym.foresight.solve: L-BFGS-B in float32 on env.step_env and the reward's smooth terms (CEILING_TERMS), the step terms as margins (ceiling_margins), the seed's own keys, from two starts (the reset's hold and the kept reference's actions), the cheaper replayed; replayed through benchmark.run_policy at sensor noise 1 on seeds 100-109.",
  "replay": "PlanPolicy (open loop)",
  "convergence": "status is L-BFGS-B's at float32 resolution; two_starts_*_rel_gap is how far the two starts' plans ended apart, per seed",
