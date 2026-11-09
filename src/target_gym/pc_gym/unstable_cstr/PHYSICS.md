@@ -46,6 +46,7 @@ at fixed T), since decomposition grows stiff near the trip.
 | residence | 31.1 | s | derived; inside the family's 20 to 90 s [L2] |
 | `mw` | 28.05 | kg/kmol | ethylene, textbook |
 | `T_feed` | 353 | K | cited [L1, p. 3] |
+| `feed_T_wander`, `feed_T_wander_period` | 1, 600 | K, s | ours: a slow wander of the cold feed around 353 K on every day, a fifth of the 5 K upset over 10 min; no figure found. It moves the unstable point [L1, p. 2] on the normal day |
 | `P` | 1600 atm | Pa | cited [L1, p. 3]; family 1250 to 1950 bar [L2] |
 | `kp0`, `Ep`, `Vp` | 1.0e6, 27.1 kJ/mol, -23.1 cm3/mol | - | cited: Ham et al.'s autoclave set in [L2, Table 4] |
 | `kt0`, `Et` | 6.0e8 (3e8 each way), 16.5 kJ/mol | - | cited, as above |
@@ -91,7 +92,7 @@ would hold. `scenarios.py`, each event once at a second drawn in 120 to 900:
 
 | Scenario | Event | Source | Weight |
 |---|---|---|---|
-| `normal` | none | [L1, p. 3] | 0.7 |
+| `normal` | the feed's 1 K wander only (size ours) | [L1, p. 3] | 0.7 |
 | `grade_change` | setpoint +24 K | [L1]; [L2, section 3.2] | 0.1 |
 | `feed_temperature` | the feed 5 K warmer | [L1, p. 3] | 0.1 |
 | `initiator_efficiency` | 20 % fewer radicals | [L2, pp. 21-22] | 0.05 |
@@ -194,7 +195,7 @@ event held from the state. Not run.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 9 |
+| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 10 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

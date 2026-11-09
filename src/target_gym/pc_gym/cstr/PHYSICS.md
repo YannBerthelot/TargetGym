@@ -51,7 +51,8 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `Fw_min`, `Fw_max` | 2400, 8160 | g/min | cited: the 40 g/s floor [S1, Table 1]; the top is the 136 g/s S1 logs [S1, Fig. 2], since the plant ran above Table 1's 110 g/s: "around 120 g/s" at the design point [S1, p. 6] |
 | `Tw_in` | 303.08 | K | derived: the 8.56 kW of `UA`'s row at S1's 120 g/s with the cooler at 47 C [S1, p. 6; Tables 3, 4] is a 17.1 K rise, so water enters at 29.9 C; the design point then needs 112 to 128 g/s over the feed's range |
 | `M_j` | 36720 | g | ours, family: 20 % of the reactor's mass, a jacket time constant of 2.2 min (derived), the scale of the 2 min jacket dead time of [S6] |
-| `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4] |
+| `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4]; the feed at room temperature swings across it |
+| `feed_T_period` | 1440 | min | ours: room temperature cycles once a day; the phase is drawn per episode, so an episode sees up to about 0.9 K of drift |
 | `T_setpoint` | 331.15 | K | cited: 58 C [S1, Tables 3, 4] |
 | `T_trip` | 348.15 | K | ours: 75 C, 17 K over the setpoint and short of the 81 C adiabatic rise, so a runaway trips; the interlock is cited [S3], its setting for this chemistry is not found |
 | `delta_t`, `max_steps_in_episode` | 0.25, 960 | min, steps | ours: 4 h, over twice the 110 min a 2 C step took to settle [S1, Fig. 2] |
@@ -92,7 +93,7 @@ temperature, with the water where that needs it. `scenarios.py`:
 
 | Scenario | Event | Source |
 |---|---|---|
-| `normal` | none; the feed at 23 to 25 C | [S1, Tables 3, 4] |
+| `normal` | the feed drifts with the room, 23 to 25 C over a day | [S1, Tables 3, 4] |
 | `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
 | `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
 | `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
@@ -235,7 +236,7 @@ draws them.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 26 |
+| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 27 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

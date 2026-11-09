@@ -20,6 +20,7 @@ from target_gym.pc_gym.cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    feed_temperature,
     get_obs,
     steady_state,
 )
@@ -131,9 +132,8 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         # Established operation (charter rule 17): the reactor on the steady
         # state that holds its setpoint for the feed it meets today, the
         # cooling water where that needs it.
-        T_feed = jax.random.uniform(
-            feed_key, minval=params.feed_T_range[0], maxval=params.feed_T_range[1]
-        )
+        phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
+        T_feed = feed_temperature(phase, params, 0.0)
         T = jnp.asarray(params.T_setpoint)
         C_a, T_j, F_w = steady_state(T, T_feed, params)
         lo, hi = params.event_window
@@ -145,6 +145,7 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
             F_w=jnp.clip(F_w, params.Fw_min, params.Fw_max),
             T_j=T_j,
             T_feed=T_feed,
+            feed_phase=phase,
             event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
         )
 

@@ -16,7 +16,12 @@ the code (tolerances fixed before any run):
 - the temperature either climbs or falls until polymerisation stops [L1]:
   with no initiator the reactor cools toward its feed; with full initiator it
   trips at its high temperature [L2; L3];
-- the episode starts at rest on its setpoint (rule 17).
+- the episode starts at rest on its setpoint (rule 17);
+- the cold monomer feed, the reactor's only cooling [L1, p. 1], wanders
+  slowly around its 353 K [L1, p. 3] on the normal day too: within 1 K of it
+  (size ours, none found), so a reactor whose initiator is held at the
+  reset's leaves its setpoint by more than the 1 K score floor within the
+  episode, as an unstable point does [L1, p. 2].
 """
 
 import jax
@@ -28,6 +33,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     UnstableCSTRParams,
     compute_next_state,
     compute_velocity,
+    events,
     rate_constant,
     residence,
     steady_state,
@@ -129,9 +135,31 @@ def test_with_full_initiator_it_trips_at_its_high_temperature():
 
 
 def test_an_episode_starts_at_rest_on_its_setpoint():
+    # At rest for the feed it meets at the reset: its balances' rates are 0 there.
+    # Held, it stays put while nothing moves it (the feed's wander off), since
+    # with the wander on an unstable point leaves by design.
     p = quiet()
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
-    Ts = _run(p, s, lambda T: raw, 30)
+    _, T_f, f, scale = events(s, p, 0.0)
+    rates = compute_velocity(jnp.array([s.I, s.M, s.T]), s.I_f, p, (T_f, f, scale))[0]
+    np.testing.assert_allclose(np.asarray(rates), 0.0, atol=1e-6)
+    still = quiet(feed_T_wander=0.0)
+    s = rest(still)
+    raw = float(ENV.initial_action(s, still)[0])
+    Ts = _run(still, s, lambda T: raw, 30)
     assert float(s.T) == pytest.approx(p.T_setpoint)
     assert np.abs(Ts - p.T_setpoint).max() < 0.05
+
+
+def test_the_monomer_feed_wanders_and_a_held_reactor_leaves_its_point():
+    p = quiet()
+    for seed in range(5):
+        _, s = ENV.reset_env(jax.random.PRNGKey(seed), p)
+        s = s.replace(event_at=jnp.asarray(1e9))
+        seconds = np.arange(0.0, p.max_steps_in_episode * p.delta_t, 10.0)
+        feed = np.array([float(events(s, p, t)[1]) for t in seconds])
+        assert np.abs(feed - 353.0).max() <= 1.0 + 1e-6
+        assert feed.max() - feed.min() > 0.5, seed
+        raw = float(ENV.initial_action(s, p)[0])
+        T = _run(p, s, lambda T: raw, p.max_steps_in_episode * p.delta_t)
+        assert np.abs(T - p.T_setpoint).max() > p.e_floor, seed

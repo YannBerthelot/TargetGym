@@ -49,6 +49,10 @@ class UnstableCSTRParams(EnvParams):
     mw: float = 28.05
     #: The cold monomer feed, 353 K [L1, p. 3].
     T_feed: float = 353.0  # K
+    #: Its slow wander around that, every day: amplitude and period ours (no
+    #: figure found), a fifth of the feed_temperature upset's 5 K, over 10 min.
+    feed_T_wander: float = 1.0  # K
+    feed_T_wander_period: float = 600.0  # s
     #: Pressure, 1600 atm [L1, p. 3], inside the family's 1250 to 1950 bar [L2].
     P: float = 1600.0 * 101325.0  # Pa
 
@@ -125,6 +129,8 @@ PARAM_UNITS = {
     "rho": "kg/m^3",
     "mw": "kg/kmol",
     "T_feed": "K",
+    "feed_T_wander": "K",
+    "feed_T_wander_period": "s",
     "P": "Pa",
     "kp0": "m^3/(kmol*s)",
     "Ep": "J/mol",
@@ -167,8 +173,18 @@ class UnstableCSTRState(EnvState):
     I_f: float  # kmol/m3, the initiator feed as it ran last step
     #: The scenario's event second (a never time for none).
     event_at: float = struct.field(default=1.0e9, kw_only=True)
+    #: The feed's wander's phase at the episode's start (rad).
+    feed_phase: float = struct.field(default=0.0, kw_only=True)
 
     actuator_held: jax.Array = actuator_field(1)
+
+
+def feed_temperature(phase, params: UnstableCSTRParams, second):
+    """The monomer feed's temperature at ``second`` with no event: its 353 K
+    plus the wander from ``phase``."""
+    p = params
+    turn = jnp.where(p.feed_T_wander_period > 0.0, second / p.feed_T_wander_period, 0.0)
+    return p.T_feed + p.feed_T_wander * jnp.sin(phase + 2.0 * jnp.pi * turn)
 
 
 def rate_constant(k0, E, T, params: UnstableCSTRParams, V_act=0.0):
@@ -214,7 +230,8 @@ def events(state: UnstableCSTRState, params: UnstableCSTRParams, second):
     on = second >= state.event_at
     return (
         p.T_setpoint + jnp.where(on, p.setpoint_step, 0.0),
-        p.T_feed + jnp.where(on, p.feed_T_step, 0.0),
+        feed_temperature(state.feed_phase, p, second)
+        + jnp.where(on, p.feed_T_step, 0.0),
         p.f_eff * (1.0 - jnp.where(on, p.efficiency_drop, 0.0)),
         1.0 + jnp.where(on, p.feed_flow_step, 0.0),
     )

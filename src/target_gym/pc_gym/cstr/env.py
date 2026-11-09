@@ -70,7 +70,11 @@ class CSTRParams(EnvParams):
     M_j: float = 36720.0  # g
 
     # ---- Feed (S1, Tables 3, 4: 23.1 and 24.9 C on two days) ----
-    feed_T_range: Tuple[float, float] = (296.25, 298.05)  # K, drawn per episode
+    #: The feed sits at room temperature, so it follows the day: a cycle
+    #: across S1's two days' range [S1, Tables 3, 4], its phase drawn per
+    #: episode. The period is ours: room temperature cycles once a day.
+    feed_T_range: Tuple[float, float] = (296.25, 298.05)  # K
+    feed_T_period: float = 1440.0  # min; 0 holds the feed where it starts
 
     # ---- Setpoint and interlock ----
     #: The normal day's reactor temperature, 58 C [S1, Tables 3, 4].
@@ -132,6 +136,7 @@ PARAM_UNITS = {
     "Tw_in": "K",
     "M_j": "g",
     "feed_T_range": "K",
+    "feed_T_period": "min",
     "T_setpoint": "K",
     "T_trip": "K",
     "delta_t": "min",
@@ -162,8 +167,10 @@ class CSTRState(EnvState):
 
     F_w: float  # g/min, the cooling water as it ran last step
     T_j: float = struct.field(default=320.15, kw_only=True)  # K, jacket
-    #: The feed's temperature this episode (K), HIDDEN.
+    #: The feed's temperature now (K), HIDDEN, and its daily cycle's phase
+    #: at the episode's start (rad).
     T_feed: float = struct.field(default=297.15, kw_only=True)
+    feed_phase: float = struct.field(default=0.0, kw_only=True)
     #: The scenario's event minute (a long-past or never time for none).
     event_at: float = struct.field(default=1.0e9, kw_only=True)
 
@@ -192,6 +199,14 @@ def compute_velocity(position, action, params: CSTRParams, extra=None):
     )
     dTj = (action * CP_WATER * (p.Tw_in - T_j) + p.UA * (T - T_j)) / (p.M_j * CP_WATER)
     return jnp.array([dC, dT, dTj]), None
+
+
+def feed_temperature(phase, params: CSTRParams, minute):
+    """The feed's temperature at ``minute``: the middle of ``feed_T_range``
+    plus half its width along the day's cycle, from ``phase``."""
+    lo, hi = params.feed_T_range
+    turn = jnp.where(params.feed_T_period > 0.0, minute / params.feed_T_period, 0.0)
+    return 0.5 * (lo + hi) + 0.5 * (hi - lo) * jnp.sin(phase + 2.0 * jnp.pi * turn)
 
 
 def events(state: CSTRState, params: CSTRParams, minute):
@@ -243,6 +258,7 @@ def compute_next_state(
             T_j=T_j,
             F_w=F_w,
             target_T=target_next,
+            T_feed=feed_temperature(state.feed_phase, p, minute + p.delta_t),
             time=state.time + 1,
         ),
         metrics,

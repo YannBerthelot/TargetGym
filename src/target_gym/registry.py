@@ -843,7 +843,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # interlock, temperature as the job, scenarios.
         # v6: cooling water enters at 29.9 C and runs to 136 g/s, so the design
         # point takes S1's 120 g/s [S1, p. 6, Fig. 2]; catalyst_loss is S1's
-        # 40 % as a 90 min decay, not a step [S1, p. 6].
+        # 40 % as a 90 min decay, not a step [S1, p. 6]; the feed follows the
+        # room through the day across S1's 23.1 to 24.9 C [S1, Tables 3, 4].
         version=6,
         scenarios=_scenarios(
             "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
@@ -1143,7 +1144,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v5 (charter Amendment 3): an LDPE-like adiabatic autoclave at its
         # documented unstable steady state, initiator flow as the move, a
         # high-temperature trip, temperature as the job, scenarios.
-        version=5,
+        # v6: the cold monomer feed wanders 1 K around its 353 K over 10 min
+        # (size and period ours), so the normal day moves the unstable point.
+        version=6,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
         scenarios=_scenarios(

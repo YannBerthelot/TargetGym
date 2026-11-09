@@ -20,6 +20,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    feed_temperature,
     get_obs,
     steady_state,
 )
@@ -112,8 +113,11 @@ class UnstableCSTR(
         holds it [L1]. The scenario's event comes later."""
         if params is None:
             params = self.default_params
+        event_key, feed_key = jax.random.split(key)
+        phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
         T = jnp.asarray(params.T_setpoint)
-        I, M, I_f = steady_state(T, params)
+        T_f = feed_temperature(phase, params, 0.0)
+        I, M, I_f = steady_state(T, params.replace(T_feed=T_f))
         lo, hi = params.event_window
         state = UnstableCSTRState(
             time=0,
@@ -122,7 +126,8 @@ class UnstableCSTR(
             T=T,
             target_T=T,
             I_f=I_f,
-            event_at=jax.random.uniform(key, minval=lo, maxval=hi),
+            event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
+            feed_phase=phase,
         )
         return self.get_obs(state, params), state
 

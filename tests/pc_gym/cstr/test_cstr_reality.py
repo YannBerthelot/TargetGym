@@ -22,6 +22,11 @@ Contract, from the sources and the audit's tolerances, not from the code:
 - T8: open loop, a cooling step's 95 % time is 1.6 to 6.4 residence times
   [S1, Fig. 2];
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
+- the feed sits at room temperature, 23.1 and 24.9 C on S1's two days
+  [S1, Tables 3, 4], so within an episode it drifts and never leaves that
+  range; the drift is slow (ours: no faster than that 1.8 K swing over a
+  day's cycle allows, under 0.01 K a step) but moves the reactor off its
+  setpoint when nothing acts, so holding the reset's water is not free;
 - the catalyst_loss scenario loses S1's 40 % of activity [S1, Fig. 3] as a
   decay, since activity "is always expected to decay throughout the operation"
   and S1's instant loss "is not likely to occur" [S1, p. 6]: it falls
@@ -213,3 +218,23 @@ def test_an_episode_starts_at_rest_on_its_setpoint():
     traj = hold(p, s, raw, 40)
     assert float(s.T) == pytest.approx(p.T_setpoint, abs=1e-3)
     assert np.abs(traj[:, 1] - p.T_setpoint).max() < 0.05
+
+
+def test_the_feed_drifts_inside_s1s_range_and_moves_a_held_reactor():
+    p = quiet()
+    lo, hi = p.feed_T_range
+    for seed in range(10):
+        s = rest(p, seed)
+        raw = jnp.asarray(ENV.initial_action(s, p)[0])
+
+        def body(s, _):
+            s = compute_next_state(raw, s, p)[0]
+            return s, jnp.stack([s.T_feed, s.T])
+
+        feed, T = np.asarray(
+            jax.lax.scan(body, s, None, length=int(p.max_steps_in_episode))[1]
+        ).T
+        assert lo - 1e-6 <= feed.min() and feed.max() <= hi + 1e-6
+        assert np.abs(np.diff(feed)).max() < 0.01
+        assert feed.max() - feed.min() > 0.05, seed
+        assert np.abs(T - p.T_setpoint).max() > 0.01, seed
