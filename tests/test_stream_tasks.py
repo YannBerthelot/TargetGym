@@ -8,7 +8,8 @@ refuses the others. For each wired task:
 - the observation is the task's own: its shape, and finite.
 
 The rates here are the test's, raised so a short run switches and has events; the
-contract holds for any rates.
+contract holds for any rates. A task with one scenario has nothing to switch, and a
+task with no ``start_event`` hook has no events: each is checked on what it has.
 """
 
 from __future__ import annotations
@@ -37,17 +38,24 @@ WIRED = _wired()
 
 
 def test_a_task_not_wired_is_refused():
-    unwired = next(n for n in REGISTRY if n not in WIRED)
+    unwired = [n for n in REGISTRY if n not in WIRED]
+    if not unwired:
+        pytest.skip("every task is wired")
     with pytest.raises(ValueError, match="not wired"):
-        make_stream(unwired)
+        make_stream(unwired[0])
+
+
+def _has_events(env) -> bool:
+    return callable(getattr(env, "start_event", None))
 
 
 def _busy(name):
-    """The task's stream with its scenarios switching every ~0.1 h and two events
-    an hour in each, so a short run sees both."""
+    """The task's stream with its scenarios switching every ~0.1 h and, where the
+    task has events, two an hour in each, so a short run sees both."""
     stream = make_stream(name)
+    rate = 2.0 if _has_events(stream.env) else 0.0
     fast = [
-        dataclasses.replace(s, dwell_h=0.1, events_per_h=2.0) for s in stream.scenarios
+        dataclasses.replace(s, dwell_h=0.1, events_per_h=rate) for s in stream.scenarios
     ]
     return StreamEnv(stream.env, stream.default_params, fast)
 
@@ -78,7 +86,10 @@ def test_a_wired_task_never_ends_and_both_policies_meet_one_world(name):
         assert not bool(run[0].any()) and not bool(run[1].any())
     np.testing.assert_array_equal(low[2], high[2])
     np.testing.assert_array_equal(low[3], high[3])
-    assert int(low[3].sum()) > 0 and len(set(np.asarray(low[2]).tolist())) > 1
+    if _has_events(stream.env):
+        assert int(low[3].sum()) > 0
+    if len(stream.scenarios) > 1:
+        assert len(set(np.asarray(low[2]).tolist())) > 1
     for field in stream.env.OUTSIDE_WORLD:
         np.testing.assert_array_equal(
             np.asarray(low[4][field]), np.asarray(high[4][field]), err_msg=field
