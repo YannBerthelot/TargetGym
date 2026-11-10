@@ -73,6 +73,8 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
 | `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
 | `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
+| `event_hold` | 3600 | s (stream, upsets) | Ours: how long a runback holds the unit back before it ramps up at its plan's rate, the hour each runback's weight counts; no source gives it; a window never sets it, so its runback holds to the end |
+| `window_ramp` | on | - | The window's one planned ramp; a stream turns it off and plans each load change as an event |
 | `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
 | `imbalance_price` | 80 | GBP/MWh | Ours, family range 30 to 156: 59 % of 2018's periods in 30 to 60, short-system mean 78.84 [S22]; annual means 44.61 (2017 to 2020) and 156.20 (2021 to 2022) [S22b] |
 | `steam_resolution` | 0.047 | kg/s | The steam meter's scatter (Readings): off-plan steam it cannot see is not counted |
@@ -150,6 +152,30 @@ runback 3, feed pump trip 2. All are ours, with the family ranges in
 pump trip happens. The bad days weigh 0.06 % of the headline together, so it
 is mostly a normal day's; the per-scenario savings and the worst scenario
 show the rest.
+
+**The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
+(`target_gym.stream`) a stream starts on a flat plan with neither of the
+window's events, and the scenario's event starts through `start_event`:
+
+- In normal load following (a day on average, four load changes in it) and in
+  the industrial swing and low-load regimes (a shift on average, one load
+  change a visit), the event is a planned load change, as the window's one
+  ramp: announced 300 to 900 s ahead, from where the plan stands to a load in
+  the regime's `load_range`, at a rate in its `ramp_rate_range`.
+- In the ID fan runback and feed pump trip regimes (an hour on average, one
+  upset a visit, as the weights count them), the event is the window's upset.
+  It carries its kind and its return in the state, so it runs to its return
+  through a switch: the runback holds `event_hold` (1 h), then the fans are
+  back and the unit ramps up to its plan at the plan's rate.
+- While a runback still holds the load down the unit master takes no new
+  event (ours).
+- Plan times count from `plan_t0`, the step the plan was last rebased at
+  (each event), so float32 keeps them exact however long the plant runs.
+
+[S3]'s "several times during every 24 h" is the only source for any of these
+numbers; four a day, the dwells and the hold are ours, set once without
+tuning and open for the owner. In a window nothing changes: a scored window is
+bit-identical to what it was.
 
 **Score** (rule 15), in GBP: each step charges the steam delivered off the plan
 beyond the steam meter's resolution, as generation at `steam_rate`, at the

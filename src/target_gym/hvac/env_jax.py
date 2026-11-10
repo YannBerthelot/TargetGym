@@ -55,6 +55,9 @@ class BuildingHVAC(
         "T_out_hist",
         "weather_dev",
     )
+    #: Runs as a continuing plant (``target_gym.stream``): its day wraps on a step
+    #: count, and its scenarios are regimes with no event of their own.
+    STREAM_READY = True
 
     registry_name: str = "hvac"
 
@@ -168,6 +171,13 @@ class BuildingHVAC(
             frost=jnp.zeros(()),
         )
         return self.get_obs(state), state
+
+    def start_event(self, state: HVACState, key, params: HVACParams) -> HVACState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1). The
+        building's scenarios are regimes of weather and gains with no event of
+        their own, so nothing starts: the state is returned as it is."""
+        del key, params
+        return state
 
     def initial_action(self, state: HVACState, params: HVACParams):
         """The raw action that keeps the reset's supply water."""
