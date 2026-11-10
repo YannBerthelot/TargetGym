@@ -28,7 +28,9 @@ reports, which is the episode's. Without a tail the plan closes the valve on its
 knot, whose fuel first moves the canal's fining 5.4 h later, and spends the fining the
 furnace needs after the cut. With a tail whose fuel is free, the plan drops the knot
 before the last and buys its fining back with that fuel (about 0.6 point of the room,
-measured 2026-11-09).
+measured 2026-11-09). Charged for it, the plan pays for the fining it leaves: over the
+episode's last day it spends 0.26 point of the room more than the cascade, which leaves
+its furnace as it is (measured 2026-11-10).
 
 The planner runs in the env's float32: under x64, ``jax.random.normal`` draws other walk
 innovations from the same keys, so a float64 plan would be planned on another episode.
@@ -40,16 +42,21 @@ differentiation through the episode. Convergence is shown by a certificate the
 solver does not grade itself: the KKT stationarity of the plan, from non-negative
 multipliers on its active limits and bounds (``kkt``), and its worst violation.
 
-On the registered plant it does not converge (measured 2026-11-09 with the tail, seeds
-100 to 104, ``data/oracle_ceilings/glass_furnace.json``): none of 50 starts did. SLSQP
-stops at its iteration cap or on a failed line search, with the KKT certificate near 1.
+On the registered plant it does not converge (measured 2026-11-10 with the charged
+tail, seeds 100 to 104, ``data/oracle_ceilings/glass_furnace.json``): none of 50 starts
+did, two per seed, 300 iterations each. SLSQP stops at its iteration cap or on a failed
+line search, with the KKT certificate near 1.
 The plant is not smooth in the valve: the fining band has two ends
 (``physical.fining_done``), and the refiner's cooling loop clamps at zero, so the
-limits' Jacobians jump. The iterates drop the valve for a knot every 12 to 20 h. A
-solve's plan is then its cheapest iterate that loses no glass, or its last one raised until it loses none,
-whichever costs less. It is replayed and its replayed cost reported, an upper bound on
-the ceiling, so the room from it is a lower bound. On three scenario-seeds (pull_down 100
-and 102, pull_up 102) it costs more than the reference ladder's kept rung.
+limits' Jacobians jump. The iterates drop the valve for a knot every 12 to 20 h, and
+the last one mostly loses glass. A solve's plan is then its cheapest iterate that loses
+no glass, or its last one repaired, whichever costs less. The repair raises the knots
+cheapest to first order, or every knot alike, whichever costs less. On the 50 starts the
+first was kept on 47, at most 0.07 EUR per step over the last iterate, where raising
+alike had cost 0.7 to 4.4 EUR on 26 of them; the other three last iterates lost glass
+far past the limits and were raised alike. The plan is replayed and its replayed cost reported, an upper bound on the ceiling, so the room
+from it is a lower bound. On no scenario-seed does it cost more than the reference
+ladder's kept rung.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
 plan made with full foresight. Without one it plans on the walks' mean path from the
