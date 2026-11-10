@@ -23,11 +23,15 @@ _POSITION = "position along the track; no hold task's cost reads it"
 _FUEL = "fuel burnt is history: a monotone burn, not a mode that decays"
 _PLANE = {".x": _POSITION, ".m": _FUEL, ".fuel": _FUEL}
 _PLANE3D = {**_PLANE, ".y": _POSITION}
+_PATROL = {".x": _POSITION, ".y": _POSITION, ".m": _FUEL, ".fuel": _FUEL}
 IGNORE: dict[str, dict[str, str]] = {
     "plane": _PLANE,
     "plane_energy": _PLANE,
     "plane_sine": _PLANE,
     **{f"plane3d_{k}": _PLANE3D for k in ("heading", "circle", "racetrack", "figure8")},
+    "patrol": _PATROL,
+    "patrol_range_bearing": _PATROL,
+    "formation": _PATROL,
     "compressor_surge": {
         ".surge_times": "a log of past surge times, counted only inside "
         "surge_window (env.py:688), so its effect expires on its own"
@@ -37,6 +41,9 @@ IGNORE: dict[str, dict[str, str]] = {
         "current one acts through soc and period_response"
     },
 }
+
+#: Angles compared on the circle, so a whole turn is no gap.
+ANGLES = (".psi", ".target_heading")
 
 SEEDS = range(100, 110)
 
@@ -65,6 +72,7 @@ def measure(
             low=low,
             high=high,
             bias=bias,
+            angles=ANGLES,
         )
         for k in SEEDS
     ]
@@ -77,6 +85,7 @@ def measure(
         "never_forgot": list(result.never_forgot),
         "start_excess": result.start_excess,
         "tripped_pairs": result.tripped_pairs,
+        "start_gap": float(result.gap[0]),
         "pre": pre,
         "bias": bias,
         "offset": offset_share,

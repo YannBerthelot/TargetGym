@@ -54,7 +54,7 @@ def hold_zero(params):
     return lambda obs, state: np.zeros(1)
 
 
-def measure(plant, length, seeds=(0, 1, 2), ignore=(".total",), bias=False):
+def measure(plant, length, seeds=(0, 1, 2), ignore=(".total",), bias=False, offset=1.0):
     pairs = [
         coupled_pair(
             plant,
@@ -64,7 +64,7 @@ def measure(plant, length, seeds=(0, 1, 2), ignore=(".total",), bias=False):
             seed=k,
             pre=30,
             length=length,
-            offset=np.ones(1),
+            offset=offset * np.ones(1),
             low=-np.ones(1) * 5,
             high=np.ones(1) * 5,
         )
@@ -109,3 +109,20 @@ def test_an_ignored_name_matches_whole_fields_only():
     # itself, so the fast mode is all that is left.
     result = measure(TwoModePlant(0.8, 0.98), length=400, ignore=(".total", ".slow"))
     assert result.t_s == pytest.approx(-1 / np.log(0.8), rel=0.02)
+
+
+def test_an_excursion_that_barely_moves_the_plant_gives_no_t_s():
+    # Run B stays where A is: no start gap, nothing to fit, and no number.
+    result = measure(TwoModePlant(0.8, 0.98), length=200, offset=0.0)
+    assert np.isnan(result.t_s)
+
+
+def test_angles_are_compared_on_the_circle():
+    # Two headings a whole turn apart are the same heading.
+    from target_gym.slow_mode import wrapped_gap
+
+    gap = wrapped_gap(np.array([0.1, 2 * np.pi + 0.1]), np.array([0.1, 0.1]))
+    np.testing.assert_allclose(gap, [0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(
+        wrapped_gap(np.array([3.0]), np.array([-3.0])), [2 * np.pi - 6.0]
+    )

@@ -27,6 +27,20 @@ import numpy as np
 
 #: The fit reads the median gap from ``e^-1`` to ``e^-5`` of its value at hand-over.
 FIT_FROM, FIT_TO = np.exp(-1.0), np.exp(-5.0)
+#: The largest scaled gap at hand-over must reach this share of an element's spread
+#: over the run; below it the excursion did not move the plant and nothing is fitted.
+MIN_START = 0.05
+
+
+def wrapped_gap(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``|a - b|`` for angles in radians, on the circle: a whole turn is no gap."""
+    return np.abs((a - b + np.pi) % (2 * np.pi) - np.pi)
+
+
+def _matches(names, entries) -> np.ndarray:
+    """Whether each element's name, less any ``[i]`` index, ends with an entry."""
+    base = [n.split("[")[0] for n in names]
+    return np.array([any(b.endswith(e) for e in entries) for b in base], bool)
 
 
 class Pair(NamedTuple):
@@ -43,7 +57,8 @@ class Pair(NamedTuple):
 
 
 class SlowMode(NamedTuple):
-    t_s: float  # steps; ``inf`` when the gap never fell to ``e^-1``
+    t_s: float  # steps; ``inf`` when the gap never fell to ``e^-1``; ``nan`` when
+    # the excursion did not move the plant (start gap under ``MIN_START``)
     gap: np.ndarray  # median over pairs of the largest scaled gap, per step
     slowest: str  # the element that is largest at the end of the fit
     never_forgot: tuple[str, ...]  # elements whose gap stayed above e^-1 of its start
@@ -75,18 +90,20 @@ def coupled_pair(
     low: np.ndarray,
     high: np.ndarray,
     bias: bool = False,
+    angles: tuple[str, ...] = (),
 ) -> Pair:
     """Run A and B on ``PRNGKey(seed)``: ``pre`` steps with B in manual mode, then
     ``length`` steps with both under a fresh ``make_policy(params)``. A policy is
     called as ``policy(obs, state)`` and returns the action. With ``bias``, B's
     excursion is its own reference plus ``offset`` instead of a held action, so a
-    plant that runs away open loop stays in its envelope."""
+    plant that runs away open loop stays in its envelope. Elements named in
+    ``angles`` (as ``slow_mode``'s ``ignore``) are compared on the circle."""
     reset_key, step_key = jax.random.split(jax.random.PRNGKey(seed))
     step = jax.jit(env.step_env)
     obs, state = env.reset_env(reset_key, params)
     obs_a, s_a, obs_b, s_b = obs, state, obs, state
     policy_a, policy_b, held = make_policy(params), None, None
-    values, gaps, excess, names, trips = [], [], [], None, [0, 0]
+    values, gaps, excess, names, trips, circle = [], [], [], None, [0, 0], None
     for t in range(pre + length):
         u_a = np.asarray(policy_a(np.asarray(obs_a), s_a), dtype=float)
         if held is None:
@@ -109,8 +126,9 @@ def coupled_pair(
         if t >= pre:
             names, v_a = _leaves(s_a)
             v_b = _leaves(s_b)[1]
+            circle = _matches(names, angles) if circle is None else circle
             values.append(v_a)
-            gaps.append(np.abs(v_a - v_b))
+            gaps.append(np.where(circle, wrapped_gap(v_a, v_b), np.abs(v_a - v_b)))
             excess.append(float(r_a) - float(r_b))  # reward is minus the cost
     return Pair(
         np.array(values), np.array(gaps), tuple(names), np.array(excess), *trips
@@ -124,8 +142,7 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     any ``[i]`` index, ends with an entry (``".x"`` skips ``.lead.x``, not ``.x_dot``).
     """
     names = pairs[0].names
-    base = [n.split("[")[0] for n in names]
-    acc = np.array([any(b.endswith(i) for i in ignore) for b in base], bool)
+    acc = _matches(names, ignore)
     stuck = np.zeros(len(names), bool)
     largest, argmax = [], []
     for p in pairs:
@@ -143,7 +160,9 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     g0 = gap[0]
     t = np.arange(len(gap))
     fit = (gap <= g0 * FIT_FROM) & (gap >= g0 * FIT_TO)
-    if g0 <= 0 or stuck.any() or not np.any(gap <= g0 * FIT_FROM):
+    if g0 < MIN_START:
+        t_s, end = np.nan, 0
+    elif stuck.any() or not np.any(gap <= g0 * FIT_FROM):
         t_s, end = np.inf, len(gap) - 1
     else:
         last = np.argmax(gap < g0 * FIT_TO) if np.any(gap < g0 * FIT_TO) else len(gap)
