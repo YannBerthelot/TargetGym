@@ -65,7 +65,8 @@ class Pair(NamedTuple):
 
 class SlowMode(NamedTuple):
     #: Steps for the extra cost still to come from B's start to decay: the bias a
-    #: burn-in removes. ``inf`` if it never does; ``nan`` if the start cost nothing.
+    #: burn-in removes. ``inf`` if it never does; ``nan`` if the start cost nothing
+    #: above its own noise, or every pair tripped (a trip's cost swamps the bias).
     t_s: float
     gap: np.ndarray  # median over pairs of the largest scaled gap, per step
     slowest: str  # the element that forgets last
@@ -219,12 +220,16 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
         state_t_s = np.nan
     # The extra cost still to come from B's start, averaged over the pairs; for an
     # exponential it decays at the cost's own time constant.
-    excess = np.mean([p.excess_cost for p in pairs], axis=0)
-    remaining = np.abs(np.cumsum(excess[::-1])[::-1])
+    # A trip's lump cost would swamp the start's bias, so tripped pairs sit out.
+    clean = [p for p in pairs if p.trips_a + p.trips_b == 0]
+    excess = np.mean([p.excess_cost for p in clean], axis=0) if clean else None
+    remaining = np.abs(np.cumsum(excess[::-1])[::-1]) if clean else np.zeros(1)
     # A lasting offset falls to zero only because the run ends; if the last third
     # still carries more than e^-3 of the bias, the cost never forgot.
-    last_third = abs(float(excess[2 * len(excess) // 3 :].sum()))
-    if remaining[0] <= 0:
+    last_third = abs(float(excess[2 * len(excess) // 3 :].sum())) if clean else 0.0
+    if not clean or remaining[0] <= FIT_FROM * np.abs(excess).sum():
+        # No pair without a trip, or no net bias: a bias is a cost of one sign,
+        # so it is most of the excess; flicker about zero is not.
         t_s = np.nan
     elif last_third > FORGOT * remaining[0]:
         t_s = np.inf

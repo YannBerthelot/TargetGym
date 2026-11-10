@@ -190,3 +190,29 @@ def test_a_gap_that_keeps_swinging_back_never_forgot():
     result = measure(Oscillator(), length=400, ignore=())
     assert result.state_t_s == np.inf
     assert result.floor > 0.5
+
+
+def _pair(excess, trips=0):
+    """A pair with a decaying state gap and the given excess cost per step."""
+    from target_gym.slow_mode import Pair
+
+    t = np.arange(len(excess), dtype=float)
+    gap = np.exp(-t / 10.0)[:, None]
+    values = np.sin(t)[:, None]
+    return Pair(values, gap, (".x",), np.asarray(excess, float), 0, trips)
+
+
+def test_a_pair_that_trips_is_left_out_of_the_cost():
+    # A trip's lump cost would swamp the start's bias; the clean pairs decide.
+    t = np.arange(400, dtype=float)
+    clean = [_pair(np.exp(-t / 20.0)) for _ in range(3)]
+    tripped = _pair(np.where(t == 300, 1e9, np.exp(-t / 20.0)), trips=1)
+    result = slow_mode(clean + [tripped])
+    assert result.t_s == pytest.approx(20.0, rel=0.02)
+
+
+def test_a_start_bias_lost_in_its_own_noise_is_no_bias():
+    # Excess that only flickers about zero: nothing for a burn-in to remove.
+    rng = np.random.default_rng(0)
+    pairs = [_pair(1e-3 * rng.standard_normal(400)) for _ in range(3)]
+    assert np.isnan(slow_mode(pairs).t_s)
