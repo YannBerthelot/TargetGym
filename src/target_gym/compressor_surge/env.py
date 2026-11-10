@@ -34,9 +34,15 @@ and the schedule)
 ``phi_min``          soft minimum of Phi over the last step's substeps, hidden
 ``setpoint_levels``  the episode's four header-pressure levels (Pa)
 ``demand_levels``    the episode's six consumer-opening levels, hidden
-``block_clock``      steps since the schedule started, hidden
+``block_clock``      steps since the schedule started, hidden; the plant's clock
+``demand_ramp``      the schedule's ramp (s), as its scenario set it, hidden
 ``valve_cmds``       the recent valve commands, behind the positioner's dead time
 ``surge_times``      the last surges' times, read as the surge count
+
+As a continuing plant the schedule renews when its six demand blocks have run
+(``renew_schedule``): five fresh blocks from the level it holds, the clock five
+blocks back. The valve's and the counter's times count on ``block_clock``, so no
+clock in the plant grows without bound (long-strata draft 4, S1).
 """
 
 from typing import Tuple
@@ -61,6 +67,8 @@ KPA = 1000.0
 #: Commands the valve's dead time remembers: enough for 0.3 s, the top of
 #: [C7]'s range, at a 5 ms step.
 VALVE_HISTORY = 64
+#: Salt for a schedule renewal's draw, apart from the deviation's.
+RENEW = 0x52454E57
 
 
 @struct.dataclass
@@ -261,8 +269,9 @@ class CompressorSurgeState(EnvState):
     setpoint_levels: jnp.ndarray
     #: The six consumer-opening levels. Hidden.
     demand_levels: jnp.ndarray
-    #: Steps since the schedule started. Hidden. ``reset_env`` sets it to 0, so
-    #: a trip's fresh draw restarts the schedule while ``time`` runs on.
+    #: Steps since the schedule started. Hidden. The clock the valve's and the
+    #: surge counter's times count on, so it is ``time`` in a window; a renewal
+    #: (``renew_schedule``) moves it and them back together.
     block_clock: int
     #: The valve command through the positioner's dead time [C7]: the recent
     #: commands with the time (s) each was issued, newest first.
@@ -282,6 +291,10 @@ class CompressorSurgeState(EnvState):
     #: The reset's own pressure above level 0 (Pa), so that the first move ramps
     #: like the others. 0 on a state built at its target.
     setpoint_lead: float = 0.0
+    #: The demand schedule's ramp (s), set with its levels from the scenario's
+    #: ``demand_ramp_s``, so a ramp in progress at a switch keeps its rate. A
+    #: state built by hand has none and reads the params'.
+    demand_ramp: float = struct.field(default=-1.0, kw_only=True)
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -426,17 +439,60 @@ def live_target(state: CompressorSurgeState, params: CompressorSurgeParams, xp=j
     )
 
 
-def scheduled_demand(demand_levels, tau, params: CompressorSurgeParams, xp=jnp):
+def scheduled_demand(
+    demand_levels, tau, params: CompressorSurgeParams, xp=jnp, ramp=None
+):
     """The scheduled consumer opening at ``tau`` seconds from the schedule's
-    start (``ramped_levels``)."""
+    start (``ramped_levels``), at the schedule's ``ramp`` (s), the params' by
+    default. Where the two agree the params' is read, so a window computes
+    exactly what it did before the schedule carried its ramp."""
     block_s = params.demand_block_steps * params.delta_t
-    return ramped_levels(demand_levels, tau, block_s, params.demand_ramp_s, xp)
+    out = ramped_levels(demand_levels, tau, block_s, params.demand_ramp_s, xp)
+    if ramp is None:
+        return out
+    own = ramped_levels(demand_levels, tau, block_s, ramp, xp)
+    return xp.where(ramp == params.demand_ramp_s, out, own)
 
 
-def demand_opening(demand_levels, tau, dev, params: CompressorSurgeParams, xp=jnp):
+def demand_opening(
+    demand_levels, tau, dev, params: CompressorSurgeParams, xp=jnp, ramp=None
+):
     """The consumers' total opening: the schedule plus the deviation, clipped."""
     lo, hi = params.demand_clip
-    return xp.clip(scheduled_demand(demand_levels, tau, params, xp) + dev, lo, hi)
+    scheduled = scheduled_demand(demand_levels, tau, params, xp, ramp)
+    return xp.clip(scheduled + dev, lo, hi)
+
+
+def schedule_ramp(state: CompressorSurgeState, params: CompressorSurgeParams):
+    """The demand ramp (s) the state's schedule was drawn with; the params' for
+    a state built by hand."""
+    return jnp.where(state.demand_ramp > 0.0, state.demand_ramp, params.demand_ramp_s)
+
+
+def renew_schedule(state: CompressorSurgeState, params, key, clock=None):
+    """The schedule renewed (long-strata draft 4, S1): from the opening and the
+    header setpoint it holds at ``clock`` (its own, by default), five fresh
+    demand blocks drawn in ``demand_range`` at ``demand_ramp_s``, the clock at
+    the start of the first of them. The valve's and the counter's times move
+    back with the clock, so the dynamics see no change."""
+    p = params
+    clock = state.block_clock if clock is None else clock
+    tau = clock * p.delta_t
+    held = scheduled_demand(state.demand_levels, tau, p, ramp=schedule_ramp(state, p))
+    setpoint = scheduled_setpoint(state.setpoint_levels, state.setpoint_lead, tau, p)
+    u_lo, u_hi = p.demand_range
+    fresh = jax.random.uniform(key, (N_DEMAND_BLOCKS - 1,), minval=u_lo, maxval=u_hi)
+    start = jnp.asarray(p.demand_block_steps, jnp.int32)
+    back = (state.block_clock - start) * p.delta_t
+    return state.replace(
+        demand_levels=jnp.concatenate([jnp.reshape(held, (1,)), fresh]),
+        setpoint_levels=jnp.full_like(state.setpoint_levels, setpoint),
+        setpoint_lead=jnp.zeros_like(state.setpoint_lead),
+        demand_ramp=jnp.asarray(p.demand_ramp_s, jnp.float32),
+        block_clock=start,
+        valve_cmd_times=state.valve_cmd_times - back,
+        surge_times=state.surge_times - back,
+    )
 
 
 def draw_schedule(key, params: CompressorSurgeParams):
@@ -456,7 +512,9 @@ def draw_schedule(key, params: CompressorSurgeParams):
 # ---------------------------------------------------------------------------
 
 
-def compute_velocity(position, action, N_ramp, x, dev, demand_levels, params):
+def compute_velocity(
+    position, action, N_ramp, x, dev, demand_levels, params, ramp=None
+):
     """d/dt of ``[m_c, dp, N, tau]``.
 
     Duct:    dm_c/dt = (A_c / L_c) (rho01 U^2 Psi_c(Phi) - dp),
@@ -473,7 +531,7 @@ def compute_velocity(position, action, N_ramp, x, dev, demand_levels, params):
     U = N * params.U_r
     phi = m_c / (rho * params.A_c * U)
     dp_c = rho * U**2 * characteristic(phi, params)
-    opening = demand_opening(demand_levels, tau, dev, params)
+    opening = demand_opening(demand_levels, tau, dev, params, ramp=ramp)
     outflow = consumer_flow(dp, opening, params) + recycle_flow(dp, x, params)
     return (
         jnp.stack(
@@ -544,6 +602,16 @@ def compute_next_state(
              raw 0 is 87.5 % speed and a half-open recycle.
     """
     n_sub = _substeps(integration_method)
+    # Past its six demand blocks the schedule renews, so the demand keeps
+    # moving; a window never gets there (its N is the schedule's length).
+    run_out = N_DEMAND_BLOCKS * params.demand_block_steps
+    renewed = renew_schedule(
+        state, params, jax.random.fold_in(jax.random.fold_in(key, RENEW), state.time)
+    )
+    state = jax.tree_util.tree_map(
+        lambda a, b: jnp.where(state.block_clock >= run_out, a, b), renewed, state
+    )
+    ramp = schedule_ramp(state, params)
     action = jnp.reshape(action, (2,))
     N_cmd = convert_raw_action_to_range(action[0], params.N_min, params.N_max)
     x_cmd = convert_raw_action_to_range(action[1], 0.0, 1.0)
@@ -551,7 +619,7 @@ def compute_next_state(
     rho = suction_density(params)
     tau_0 = state.block_clock * params.delta_t
 
-    t0 = state.time * params.delta_t
+    t0 = state.block_clock * params.delta_t
     cmds = jnp.concatenate([jnp.reshape(x_cmd, (1,)), state.valve_cmds[:-1]])
     issued = jnp.concatenate([jnp.reshape(t0, (1,)), state.valve_cmd_times[:-1]])
 
@@ -584,6 +652,7 @@ def compute_next_state(
             dev=state.demand_dev,
             demand_levels=state.demand_levels,
             params=params,
+            ramp=ramp,
         )
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, tau_0 + j * h]),
@@ -602,7 +671,7 @@ def compute_next_state(
         jnp.arange(n_sub),
     )
     surged = jnp.any(reversals)
-    now = (state.time + 1) * params.delta_t
+    now = (state.block_clock + 1) * params.delta_t
     surge_times = jnp.where(
         surged,
         jnp.concatenate([jnp.reshape(now, (1,)), state.surge_times[:-1]]),
@@ -667,6 +736,7 @@ def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
         state.block_clock * params.delta_t,
         state.demand_dev,
         params,
+        ramp=schedule_ramp(state, params),
     )
     return jnp.array(
         [
@@ -684,7 +754,7 @@ def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
 
 def surge_count(state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp):
     """Surges within the last ``surge_window`` seconds, as the counter reads."""
-    now = state.time * params.delta_t
+    now = state.block_clock * params.delta_t
     return xp.sum(state.surge_times > now - params.surge_window)
 
 

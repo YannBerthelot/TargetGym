@@ -26,6 +26,7 @@ from target_gym.compressor_surge.env import (
     draw_schedule,
     equilibrium_phi,
     get_obs,
+    renew_schedule,
     suction_density,
 )
 from target_gym.compressor_surge.rendering import _render
@@ -50,9 +51,18 @@ class CompressorSurge(
         "setpoint_levels",
         "demand_levels",
         "block_clock",
+        "demand_ramp",
         "surge_times",
         "surges",
     )
+    #: Ready to run as a continuing plant (``target_gym.stream``): its demand
+    #: schedule renews, its clocks count on the schedule, and ``start_event``
+    #: moves the demand now. Not opted in (``STREAM_READY``) while the shared
+    #: conformance suite runs 2 events an hour over 2 N steps, 0.13 events on
+    #: this 0.1 s plant, and reads every ``OUTSIDE_WORLD`` field as untouched by
+    #: the policy, which the surge record is not;
+    #: tests/compressor_surge/test_compressor_surge_stream.py checks its S2
+    #: contract at rates scaled to its window, the record aside.
 
     registry_name: str = "compressor_surge"
 
@@ -222,10 +232,17 @@ class CompressorSurge(
             demand_levels=demand_levels,
             block_clock=0,
             valve_cmds=jnp.full((VALVE_HISTORY,), params.x_reset),
+            demand_ramp=jnp.asarray(params.demand_ramp_s, jnp.float32),
         )
 
         obs = self.get_obs(state, params)
         return obs, state
+
+    def start_event(self, state, key, params: CompressorSurgeParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        consumers' demand moves now, from the opening it holds, onto a fresh
+        schedule drawn from ``key`` in the scenario's range."""
+        return renew_schedule(state, params, key)
 
     def action_space(self, params: CompressorSurgeParams | None = None) -> spaces.Box:
         """Action space of the environment."""
