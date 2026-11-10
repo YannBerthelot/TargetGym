@@ -893,6 +893,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # point with an extra upper outlet and a cup. 6: failure_cost 0, as
         # for every plant with no trip (charter B5).
         version=6,
+        # One scenario, the window as scored, declared for the stream's event
+        # rate (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "four_tank_scenarios", module="target_gym.pc_gym.four_tank.scenarios"
+        ),
     ),
     EnvSpec(
         name="ph_neutralization",
