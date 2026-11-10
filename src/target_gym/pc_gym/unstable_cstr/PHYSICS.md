@@ -61,6 +61,7 @@ at fixed T), since decomposition grows stiff near the trip.
 | `event_window` | 120, 900 | s | ours |
 | `setpoint_step` | 24 | K (scenario) | cited: zones at 513 and 537 K [L1] |
 | `feed_T_step`, `efficiency_drop`, `feed_flow_step` | 5 K, 0.2, 0.1 (scenarios) | - | ours: the events are the family's, their sizes are not found |
+| `event_hold` | 8, 2, 24, 8 | h (stream, per scenario) | ours: how long a grade change, a warm feed (until its cooler recovers), a lost initiator efficiency (until its batch is changed) and a throughput step last before they return; no source gives these; a window never sets it, so its events hold to the end |
 | reading | 0.5 K, lag 2 s | - | ours, family: a zone thermocouple |
 | derived at 513 K | conversion 12 %, initiator 1.4e-5 kmol/m3 in the reactor | - | from the balances |
 
@@ -100,6 +101,18 @@ would hold. `scenarios.py`, each event once at a second drawn in 120 to 900:
 
 The weights are ours: no source says how often each occurs. Family range for
 the normal day's share: 0.5 to 0.9, the rest split between the upsets.
+
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
+and each upset regime a shift, 8 h, with one event per visit on average
+(`events_per_h` 1/8). Each event carries the size it started with, so it runs to
+its return through a switch of regime (`event_hold` above), and the feed's wander
+reads a step count wrapped on whole periods, so it keeps its period however long
+the plant runs. No source gives how often or how long (`REALITY.md`), so these
+numbers are ours, set once without tuning and open for the owner. In a window
+nothing changes: `event_hold` is never reached, the wrap covers the window, and a
+scored window is bit-identical to v6's.
 
 ---
 
@@ -195,7 +208,7 @@ event held from the state. Not run.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 10 |
+| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 15 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
