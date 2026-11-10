@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from multiprocessing import Pool
+import multiprocessing as mp
 
 import numpy as np
 
@@ -73,7 +73,7 @@ def main() -> None:
     ap.add_argument("--out", default="slow_modes.json")
     args = ap.parse_args()
     jobs = [(t, args.windows, args.offset) for t in args.tasks]
-    with Pool(args.workers) as pool:
+    with mp.get_context("spawn").Pool(args.workers) as pool:
         rows = []
         for row in pool.starmap(measure, jobs):
             print(json.dumps(row), flush=True)
