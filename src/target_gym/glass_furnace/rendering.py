@@ -48,12 +48,12 @@ def _round(xc, y, zc, r, n=24):
 
 def _profile(length, n=14):
     """A flame's run across the bath: ``(t, y offset, centre z, half height)``,
-    rooted in the port's mouth, swelling as it leaves, then tapering and
-    dipping toward the glass."""
+    rooted in the port's mouth, swelling as it leaves, then tapering, level
+    and straight out from the wall, as the bath's slices run."""
     t = np.linspace(0.0, 1.0, n)
     root = 0.65 * _PORT_R * _PORT_FLAT
     half = (root + 0.45 * t**0.6) * (1.0 - t) ** 0.6
-    return t, length * t, _PORT_Z - 0.55 * t**1.3, half
+    return t, length * t, np.full_like(t, _PORT_Z), half
 
 
 def _sail(xc, y0, length, size=1.0):
