@@ -739,6 +739,14 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
 
     rows = _rollout(env, params, keys[1], action, steps=8)
     eager = np.stack([np.asarray(o) for o, *_ in rows[1:]])
-    # atol: a channel derived from 15 km coordinates has a 1 mm float32 step.
-    np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=2e-3)
-    np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=2e-3)
+    # atol: a channel derived from km-scale coordinates (an error to a path
+    # 36 km out, say) inherits their float32 step: 1 mm at 15 km, 3.9 mm at
+    # 36 km. Two such steps at the farthest coordinate, never under 2 mm.
+    state = env.reset_env(keys[1], params)[1]
+    far = max(
+        [abs(float(getattr(state, f))) for f in ("x", "y", "z") if hasattr(state, f)]
+        + [0.0]
+    )
+    atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
+    np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=atol)
+    np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=atol)

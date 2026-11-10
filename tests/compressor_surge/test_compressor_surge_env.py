@@ -523,9 +523,10 @@ def test_demand_deviation_is_a_zero_mean_ou_process(env, params):
 def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     """Full travel low (70 %, recycle shut) trips. The step is charged
     ``restart_steps x failure_cost`` in version 2 and exactly
-    ``-restart_steps`` in version 1, and the window continues from the state
-    ``reset_env`` draws from the step's key (new schedule, new deviation,
-    block clock 0), with ``time`` running on."""
+    ``-restart_steps`` in version 1, and the window continues from the plant
+    ``reset_env`` draws from the step's key, with ``time`` running on. The
+    outside world (``OUTSIDE_WORLD``: the schedule, its clock, the demand and
+    the surge record) runs on as if no trip had happened (long-strata S2)."""
     key = jax.random.PRNGKey(3)
     v1 = params.replace(reward_version=1)
     _, state = env.reset_env(key, params)
@@ -546,15 +547,18 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(
         time=new.time, sensor_key=new.sensor_key
     )
+    # The proposal the step made before the trip, whose outside world carries on.
+    _, proposal, _, _, _ = step(key, state, low, params.replace(continuing=False))
     for name in CompressorSurgeState.__dataclass_fields__:
+        source = proposal if name in env.OUTSIDE_WORLD else fresh
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),
-            np.asarray(getattr(fresh, name)),
+            np.asarray(getattr(source, name)),
             rtol=1e-6,
             err_msg=name,
         )
     assert int(new.time) == n
-    assert int(new.block_clock) == 0
+    assert int(new.block_clock) == int(state.block_clock) + 1
     assert float(r2) == pytest.approx(
         -params.restart_steps * params.failure_cost, rel=1e-6
     )
