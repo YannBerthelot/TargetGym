@@ -1,11 +1,110 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: the EDF rebuild of 2026-11-08 is the current design (next section); the rest of
-the page is the first attempt, 2026-11-07, on branch
+Status: Amendment 3 (reactor-v6) is the current design (next section); the EDF rebuild
+of 2026-11-08 and the first attempt of 2026-11-07 below it are history, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
+
+## Amendment 3, 2026-11-08 to 2026-11-10 (reactor-v6)
+
+This section supersedes everything below it. The owner's Amendment 3 decisions 1 to 10,
+then option A for the reference, are in the code on this branch; sources are S1 to S17 in
+[`REALITY.md`](../../src/target_gym/reactor/REALITY.md), and every unsourced number is
+labelled `ours` with its family range in
+[`PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md).
+
+### What changed
+
+| Change | Source or rule | Decided by |
+|---|---|---|
+| Offset band as a penalty clock: 1 h in 24 h free, then a derate to 50 % priced at $80/MWh | D.C. Cook and RAOC technical specifications; EDF scope | owner, decision 3 |
+| Rod insertion limit, 22 % in at full power to 78 % at half, 2 h, then hot standby | KAIST's Bank D line; STS 3.1.6 | owner, decision 5 |
+| Tavg's DNB limit, full-power program plus 5.1 F (2.833 K), 2 h, then hot standby | STS LCO 3.4.1; Braidwood COLR (search summary, nrc.gov blocks readers) | owner, "source the hot side" |
+| Tavg above its program costs nothing below the DNB limit | charter: not lost output | owner, decision 7 |
+| Trips as lost production: scram 48 h ($3.84M), timed overrun 15 h ($1.2M) | `ours`, family 22 to 70 h | owner, decision 6 |
+| Boronmeter 20 min late; obs[10] is the power the starting xenon is balanced with | Areva US 8,489,338 | owner, decision 8 |
+| Six scenarios, weighted from EDF's 250 h a year of load following | IEA 2019 (Mercel, slide 7) | owner, decisions 9 and "weights from the record" |
+| Reference: bank D on delta I with a +-2.5 % action band, boron on Tavg (1.6 K dead band) with plan and xenon feedforwards | Westinghouse/Krsko procedure, NENE 2022 | owner, option A; the band fixed before any run |
+| Retired: the scram test, the null-exception test, the two-moves scorer test | TESTING.md section 10 | owner, 2026-11-08 |
+
+### Reference and nulls, seeds 100 to 109
+
+| Scenario | Weight | Reference | Null (rods parked, no boron) |
+|---|---:|---:|---|
+| edf_daily | 0.0216 | $2,479 | $8.40M, trips on all 10 seeds |
+| edf_short_hold | 0.0216 | $2,320 | $8.40M, trips on all 10 |
+| krsko_slow | 0.0216 | $1,307 | $7.08M, trips on all 10 |
+| krsko_shallow | 0.0216 | $627 | $5.40M, trips on all 10 |
+| fast_return | 0.0216 | $4,409 | $8.52M, trips on all 10 |
+| baseload | 0.892 | $90 | **$1, wins 10 of 10** |
+
+The reference trips nowhere and never sits past the rod insertion limit. Every other rung
+of the ladder trips or costs over $600,000 a day on edf_daily.
+
+Finding: on baseload the null wins. With no load move, the boron trim borates on the hot
+side as xenon burns out (Tavg up to 2.4 K over program, under the 2.83 K limit), then
+overshoots cold, and its rod steps and effluent cost $40 to $150 a day against the null's
+$1. On the weighted headline baseload carries 89 % of the weight, so the question is which
+family member the task represents: the load-follow share runs from 0.11 (EDF fleet
+average, the weight used) to about 1.0 (Cattenom 2, 1.4 TWh curtailed in 2025, per Kpler).
+This is a choice for the owner, not a tuning question (J1).
+
+### Ceilings and convergence
+
+IPOPT (multiple shooting, exact Hessian) on edf_daily's four corner seeds, 300 iterations
+per width rung and 1500 on the last; Adam (3000 iterations, surrogate hinges, the DNB
+limit priced at `failure_cost` per K) on all six scenarios. Both replay on the env.
+
+| Seed | Reference | IPOPT replayed | KKT error | Capped |
+|---|---:|---:|---:|---|
+| 100 | 2,455 | 1,298 | 5.7e-3 | yes |
+| 102 | 2,481 | 1,357 | 8.7e-9 | no, converged |
+| 108 | 2,575 | 1,298 | 0.67 | yes |
+| 109 | 2,468 | 1,332 | 7.7e-9 | no, converged |
+
+All four plans are feasible (violation 1e-6) and replay with no trip. Seeds 100 and 108
+stopped at the 1500-iteration cap, so their costs are true but possibly not optimal. Adam
+sits about 33 % above IPOPT on edf_daily (mean $1,762 against $1,321 on the same seeds), so
+the rooms on Adam-only scenarios are lower bounds.
+
+### Room, with sensitivity
+
+Room is the reference cost over the ceiling, the cheaper of each seed's plan and the
+reference (`scripts/reactor_sensitivity.py`). Each price is moved to a third and three
+times, one at a time.
+
+| Scenario | Nominal | Rod step x1/3 | x3 | Effluent x1/3 | x3 | Derate x1/3 or x3 |
+|---|---:|---:|---:|---:|---:|---:|
+| edf_daily | 1.62 | 1.65 | 1.56 | 1.92 | 1.51 | 1.62 |
+| edf_short_hold | 1.39 | 1.41 | 1.36 | 1.72 | 1.27 | 1.39 |
+| krsko_slow | 2.68 | 2.95 | 2.19 | 2.53 | 2.78 | 2.68 |
+| krsko_shallow | 5.42 | 7.73 | 3.18 | 3.13 | 7.89 | 5.42 |
+| fast_return | 1.32 | 1.34 | 1.27 | 1.51 | 1.18 | 1.32 |
+| baseload | 24.4 | 60.6 | 9.5 | 8.2 | 73.0 | 24.4 |
+
+The derate price never moves the room: neither the reference nor the plans overrun the
+offset clock. On the four EDF and fast days the room is 1.2 to 1.9 at any price; the
+hard limits (insertion line, DNB) leave little between a good procedure and foresight.
+On the Krsko days and baseload the room is large and price-driven, because the ceiling
+there is a few hundred dollars or less.
+
+Weighted over the suite (Adam ceilings, nominal prices): reference $321 a day, ceiling
+$168, room 1.9. Baseload is a quarter of the reference's weighted cost; at a load-follow
+share of 1.0 the weighted room would be about 1.5.
+
+### Still open
+
+- The baseload null win (above): the owner's call on the family member or the weight.
+- Rule 4 acceptance and a learning check: not run. No shared baseline, null table or
+  record was re-recorded.
+- `scripts/reference_ladder.py`'s reactor row needs are in PHYSICS.md; the script was not
+  edited.
+- Unsourced numbers, labelled `ours` with family ranges: the trip durations (48 h, family
+  24 to 70 h) and the 900 s floor allowance (family 15 to 30 min) in PHYSICS.md; the equal
+  split of the five load-follow days in REALITY.md section 7; the 600 s feedforward lead;
+  and the 2.5 % action band, half the published +-5 % band, set by the owner.
 
 ## EDF rebuild, 2026-11-08
 
