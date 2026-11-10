@@ -135,6 +135,9 @@ class BoilerDrumParams(EnvParams):
     #: When the planned ramp starts, s after the episode starts. Ours: early
     #: enough that the slowest full ramp ends inside the hour.
     ramp_start_range: Tuple[float, float] = (300.0, 900.0)
+    #: The window's one planned ramp. A stream turns it off: it starts on a flat
+    #: plan and plans each load change as an event (``start_event``).
+    window_ramp: bool = True
 
     # -- upsets, the family's bad days (REALITY.md sec. 5; scenarios.py) ------
     #: 0 none, 1 an ID fan runback, 2 a feed pump trip.
@@ -155,6 +158,10 @@ class BoilerDrumParams(EnvParams):
     #: Until the standby pump delivers, s: "may take more than 30 seconds to
     #: start, come up to speed and pressure" [S11]. Ours, 30 to 60 s.
     standby_delay_range: Tuple[float, float] = (30.0, 60.0)
+    #: How long a runback holds before the unit ramps back at its plan's rate, s.
+    #: Only a stream sets it (scenarios.py); in a window the runback holds to the
+    #: end.
+    event_hold: float = 1.0e9
 
     # -- actuators, fuel then feedwater (PHYSICS.md, Actuators) ----------------
     actuator_rate: Tuple[float, float] = (0.007, 0.05)
@@ -186,6 +193,8 @@ PARAM_UNITS = {
     "runback_rate_range": "% of nominal per minute",
     "feed_trip_capacity": "fraction of nominal steam",
     "standby_delay_range": "s",
+    "event_hold": "s",
+    "window_ramp": "-",
     "e_floor_level": "m",
     "e_floor_pressure": "bar",
     "level_precision_floor": "m",
@@ -245,6 +254,14 @@ class BoilerDrumState(EnvState):
     event_time: jnp.ndarray  # s, 1e9 with no upset
     event_rate: jnp.ndarray  # kg/s per s
     standby_delay: jnp.ndarray  # s
+    # The upset carries its own kind (``event_kind``'s 0, 1, 2) and the time it
+    # returns, so it runs to its return whatever the params do meanwhile
+    # (docs/proposals/long-strata.md, S1).
+    event_kind: jnp.ndarray = struct.field(default=0, kw_only=True)
+    event_until: jnp.ndarray = struct.field(default=1.0e9, kw_only=True)  # s
+    # The step the plan's clock counts from: plan times above are seconds since
+    # it. 0 in a window; a stream rebases it at each event, so they stay small.
+    plan_t0: jnp.ndarray = struct.field(default=0, kw_only=True)
     # How long the level has stayed past each trip, s (``level_trip_delay``).
     time_high: jnp.ndarray
     time_low: jnp.ndarray
@@ -444,25 +461,34 @@ def _base_plan(state: BoilerDrumState, seconds):
     return state.load_from + jnp.sign(span) * jnp.minimum(moved, jnp.abs(span))
 
 
+def plan_seconds(state: BoilerDrumState, params: BoilerDrumParams, ahead=0):
+    """Seconds on the plan's clock, ``ahead`` steps on: from ``plan_t0``, so
+    float32 counts them exactly however long the plant runs."""
+    return (state.time + ahead - state.plan_t0) * params.delta_t
+
+
 def runback_target(params: BoilerDrumParams):
     return params.runback_load * params.q_steam_nominal
 
 
 def load_plan(state: BoilerDrumState, seconds, params: BoilerDrumParams):
-    """What the turbine valve passes at ``p_nominal`` at time ``seconds``.
+    """What the turbine valve passes at ``p_nominal`` at ``seconds`` on the
+    plan's clock (``plan_seconds``).
 
     The plan ramps from ``load_from`` to ``load_to`` at ``ramp_rate`` from
     ``ramp_start``. An upset runs the unit back from where the plan stood,
     at ``event_rate``, to ``runback_load``, and holds it there: an ID fan
-    runback [S10], or the runback a feed pump trip drives [S10, S9].
+    runback [S10], or the runback a feed pump trip drives [S10, S9]. At
+    ``event_until`` the unit ramps back to its plan at the plan's rate.
     """
     base = _base_plan(state, seconds)
     struck = _base_plan(state, state.event_time)
+    held = jnp.minimum(seconds, state.event_until)
     back = jnp.maximum(
         runback_target(params),
-        struck - state.event_rate * jnp.maximum(seconds - state.event_time, 0.0),
-    )
-    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+        struck - state.event_rate * jnp.maximum(held - state.event_time, 0.0),
+    ) + state.ramp_rate * jnp.maximum(seconds - state.event_until, 0.0)
+    upset = (state.event_kind > 0) & (seconds >= state.event_time)
     return jnp.where(upset, jnp.minimum(base, back), base)
 
 
@@ -471,16 +497,17 @@ def actuator_caps(state: BoilerDrumState, seconds, params: BoilerDrumParams):
 
     After an ID fan trip the fans hold firing to what the runback load needs
     [S10]. After a feed pump trip one pump is left until the standby delivers
-    [S10, S11].
+    [S10, S11]. The fans are back at ``event_until``.
     """
     pr = params
     after = seconds >= state.event_time
     h_s = steam_enthalpy(pr.p_nominal, pr)
     fan_cap = runback_target(pr) * (h_s - pr.h_feedwater)
-    Q_cap = jnp.where((pr.event_kind == 1) & after, fan_cap, pr.Q_max)
+    fan_out = after & (seconds < state.event_until)
+    Q_cap = jnp.where((state.event_kind == 1) & fan_out, fan_cap, pr.Q_max)
     pump_out = after & (seconds < state.event_time + state.standby_delay)
     q_cap = jnp.where(
-        (pr.event_kind == 2) & pump_out,
+        (state.event_kind == 2) & pump_out,
         pr.feed_trip_capacity * pr.q_steam_nominal,
         pr.q_feed_max,
     )
@@ -505,8 +532,8 @@ def compute_next_state(
     q_feed = convert_raw_action_to_range(
         action_raw[1], min_action=0.0, max_action=pr.q_feed_max
     )
-    q_demand = load_plan(state, (state.time + 1) * pr.delta_t, pr)
-    Q_cap, q_cap = actuator_caps(state, state.time * pr.delta_t, pr)
+    q_demand = load_plan(state, plan_seconds(state, pr, 1), pr)
+    Q_cap, q_cap = actuator_caps(state, plan_seconds(state, pr), pr)
     Q_fuel = jnp.minimum(Q_fuel, Q_cap)
     q_feed = jnp.minimum(q_feed, q_cap)
 
@@ -565,9 +592,13 @@ def get_obs(state: BoilerDrumState, params: BoilerDrumParams):
     feedwater the plant can still deliver, as the fan and pump trip alarms
     tell the control room.
     """
-    seconds = state.time * params.delta_t
+    seconds = plan_seconds(state, params)
     Q_cap, q_cap = actuator_caps(state, seconds, params)
-    upset = (params.event_kind > 0) & (seconds >= state.event_time)
+    upset = (
+        (state.event_kind > 0)
+        & (seconds >= state.event_time)
+        & (seconds < state.event_until)
+    )
     planned = jnp.where(
         upset, jnp.minimum(state.load_to, runback_target(params)), state.load_to
     )

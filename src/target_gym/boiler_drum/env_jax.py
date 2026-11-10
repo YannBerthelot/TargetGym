@@ -15,11 +15,14 @@ from target_gym.base import (
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
+    _base_plan,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
     get_obs,
+    load_plan,
+    plan_seconds,
     steady_state,
 )
 from target_gym.boiler_drum.rendering import _render
@@ -53,7 +56,14 @@ class BoilerDrum(
         "event_time",
         "event_rate",
         "standby_delay",
+        "event_kind",
+        "event_until",
+        "plan_t0",
     )
+    #: Runs as a continuing plant (``target_gym.stream``): its load changes and
+    #: upsets start through ``start_event``, a runback returns, and the plan's
+    #: clock is rebased at each event.
+    STREAM_READY = True
 
     registry_name: str = "boiler_drum"
 
@@ -148,6 +158,9 @@ class BoilerDrum(
             minval=params.ramp_start_range[0],
             maxval=params.ramp_start_range[1],
         )
+        # A stream starts on a flat plan: its load changes are events.
+        load_to = jnp.where(params.window_ramp, load_to, load_from)
+        ramp_start = jnp.where(params.window_ramp, ramp_start, 0.0)
         event_time = jnp.where(
             params.event_kind > 0,
             jax.random.uniform(
@@ -193,8 +206,68 @@ class BoilerDrum(
             standby_delay=standby + zero,
             time_high=zero,
             time_low=zero,
+            event_kind=jnp.asarray(params.event_kind, jnp.int32),
+            event_until=event_time + params.event_hold + zero,
+            plan_t0=jnp.zeros((), jnp.int32),
         )
         return self.get_obs(state), state
+
+    def start_event(
+        self, state: BoilerDrumState, key, params: BoilerDrumParams
+    ) -> BoilerDrumState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now, drawn from its ranges.
+
+        - ``event_kind`` 0: a planned load change. From where the plan stands it
+          ramps to a load in ``load_range`` at a rate in ``ramp_rate_range``,
+          announced ``ramp_start_range`` ahead, as the window's one ramp is.
+        - ``event_kind`` 1 or 2: an ID fan runback or a feed pump trip, as the
+          window's, that returns ``event_hold`` later.
+
+        The plan's clock is rebased on now, the ramp in progress going on from
+        where it stands. While a runback is still holding the load down, the
+        unit master takes no new event: the draw is absorbed (ours).
+        """
+        p = params
+        now = plan_seconds(state, p)
+        base = _base_plan(state, now)
+        busy = (
+            (state.event_kind > 0)
+            & (now >= state.event_time)
+            & ((now < state.event_until) | (load_plan(state, now, p) < base))
+        )
+        rebased = state.replace(
+            plan_t0=jnp.asarray(state.time, jnp.int32),
+            load_from=base,
+            ramp_start=jnp.maximum(state.ramp_start - now, 0.0),
+        )
+        k_to, k_rate, k_start, k_back, k_wait = jax.random.split(key, 5)
+        nominal = p.q_steam_nominal
+
+        def draw(k, bounds):
+            return jax.random.uniform(k, minval=bounds[0], maxval=bounds[1])
+
+        ramp = rebased.replace(
+            load_to=nominal * draw(k_to, p.load_range),
+            ramp_rate=draw(k_rate, p.ramp_rate_range) / 100.0 * nominal / 60.0,
+            ramp_start=draw(k_start, p.ramp_start_range),
+            event_kind=jnp.zeros((), jnp.int32),
+            event_time=jnp.full((), 1.0e9),
+            event_until=jnp.full((), 1.0e9),
+        )
+        upset = rebased.replace(
+            event_kind=jnp.asarray(p.event_kind, jnp.int32),
+            event_time=jnp.zeros(()),
+            event_rate=draw(k_back, p.runback_rate_range) / 100.0 * nominal / 60.0,
+            standby_delay=draw(k_wait, p.standby_delay_range),
+            event_until=jnp.asarray(p.event_hold, jnp.float32),
+        )
+        started = jax.tree_util.tree_map(
+            lambda u, r: jnp.where(p.event_kind > 0, u, r), upset, ramp
+        )
+        return jax.tree_util.tree_map(
+            lambda old, new: jnp.where(busy, old, new), state, started
+        )
 
     def initial_action(self, state: BoilerDrumState, params: BoilerDrumParams):
         """The raw action that keeps the reset's firing and feedwater."""
