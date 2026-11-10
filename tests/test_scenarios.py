@@ -27,8 +27,13 @@ def declaring(*suite):
     return dataclasses.replace(REGISTRY["first_order"], scenarios=lambda: suite)
 
 
+#: A task that declares no suite: a registry entry with its suite taken away, so
+#: the default holds whatever the registry's tasks declare.
+NO_SUITE = dataclasses.replace(REGISTRY["first_order"], scenarios=None)
+
+
 def test_a_task_with_no_declared_suite_has_one_normal_scenario():
-    (only,) = scenarios.suite(REGISTRY["first_order"])
+    (only,) = scenarios.suite(NO_SUITE)
     assert only.name == "normal"
     assert dict(only.overrides) == {}
 
@@ -66,7 +71,7 @@ def test_weights_are_shares_of_operating_time():
 
 
 def test_a_task_with_no_declared_suite_runs_its_normal_scenario_all_the_time():
-    assert scenarios.weights(REGISTRY["first_order"]) == {"normal": 1.0}
+    assert scenarios.weights(NO_SUITE) == {"normal": 1.0}
 
 
 @pytest.mark.parametrize("weight", [0.0, -1.0, float("nan")])

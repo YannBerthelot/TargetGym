@@ -115,11 +115,9 @@ A window starts off target and draws the target once. As a continuing plant
 (`target_gym.stream`) the lag starts on its target (`start_on_target` 1), a
 trip's restart puts it back on the target it is held to then (`restart_plant`),
 and the target changes as events (`start_event`), each a fresh draw over
-`target_x_range`. The proposed rate is one change per 7.5 s window on average
-(480 an hour), ours: this abstract plant has no plant hours. The task is not
-opted in yet: the shared conformance suite runs 2 events an hour, which its 15 s
-run never sees, and declaring its one-scenario suite on the registry would take
-away `tests/test_scenarios.py`'s example of a task with none. In a window
+`target_x_range`. `scenarios.py` declares the one scenario, the window as scored
+(weight 1), only to carry the rate: one change per 7.5 s window on average (480
+an hour), ours, since this abstract plant has no plant hours. In a window
 nothing changes and a scored window is bit-identical.
 
 ---

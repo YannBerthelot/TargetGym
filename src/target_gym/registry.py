@@ -867,6 +867,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="first_order",
         oracle_data=_shared_oracle("first_order"),
         version=4,
+        # One scenario, the window as scored, declared for the stream's target
+        # changes (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "first_order_scenarios", module="target_gym.pc_gym.first_order.scenarios"
+        ),
     ),
     EnvSpec(
         name="four_tank",

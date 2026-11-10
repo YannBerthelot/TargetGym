@@ -8,10 +8,6 @@ Contract:
 - a trip's restart puts the plant back on the target it is held to then;
 - two policies on one seed meet one target sequence (S2).
 
-The task is not opted in (``STREAM_READY``): the shared conformance suite's 2
-events an hour give its 15 s run 0.008 events. The stream here is built with the
-scenario the task would declare, at a rate scaled to its 7.5 s window.
-
 Oracles: the declared target range, and the plant on its target.
 """
 
@@ -21,17 +17,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from target_gym.registry import REGISTRY
-from target_gym.scenarios import Scenario
-from target_gym.stream import StreamEnv
+from target_gym.stream import make_stream
 
-SPEC = REGISTRY["first_order"]
-ENV = SPEC.make_env()
-#: The stream's normal day: on target, a target change every window on average.
-NORMAL = Scenario(
-    "normal", {}, events_per_h=480.0, stream_overrides={"start_on_target": 1.0}
-)
-STREAM = StreamEnv(ENV, SPEC.make_test_params(), [NORMAL])
+STREAM = make_stream("first_order")
+ENV = STREAM.env
 PARAMS = STREAM.scenario_params(STREAM.default_params, 0)
 
 
