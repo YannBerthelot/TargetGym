@@ -28,27 +28,32 @@ _WALL = 0.8  # m of refractory, decor
 _CANAL = (5.0, 1.0)  # m long and half-wide, decor
 _SLAB = 0.8  # m of floor under the bath, decor
 _SPLIT = 2.0  # m: long solids are cut this short for the depth sort
+_PORT_R, _PORT_Z = 0.75, 1.0  # m: a port's radius and its centre over the glass
+#: A port's height over its width, so it reads round: a metre of length's
+#: screen size over a metre of height's.
+_PORT_FLAT = _XS / _ZX
 
 
 def _glow(T):
     return rk.incandescence(T, *_MELT)
 
 
-def _arch(xc, y, z0, half_w, wall_h, rise, n=10):
-    """An arched opening on the plane ``y``: straight jambs from ``z0`` up
-    ``wall_h``, then an elliptic arch rising ``rise``."""
-    ts = np.linspace(0.0, np.pi, n)
-    top = [(xc + half_w * np.cos(t), y, z0 + wall_h + rise * np.sin(t)) for t in ts]
-    return [(xc + half_w, y, z0)] + top + [(xc - half_w, y, z0)]
+def _round(xc, y, zc, r, n=24):
+    """A port that reads round on screen, on the plane ``y``: ``r`` m across,
+    its height divided by the drawing's stretch of heights over lengths."""
+    rz = r * _PORT_FLAT
+    ts = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+    return [(xc + r * np.cos(t), y, zc + rz * np.sin(t)) for t in ts]
 
 
 def _profile(length, n=14):
     """A flame's run across the bath: ``(t, y offset, centre z, half height)``,
-    rooted in the full height of the port mouth (z 0.45 to 1.6) and tapering
-    and dipping toward the glass."""
+    rooted in the port's mouth, swelling as it leaves, then tapering and
+    dipping toward the glass."""
     t = np.linspace(0.0, 1.0, n)
-    half = 0.55 * (1.0 - t) ** 0.6 * (1.0 + 0.15 * np.sin(3.0 * np.pi * t))
-    return t, length * t, 1.02 - 0.6 * t**1.3, half
+    root = 0.65 * _PORT_R * _PORT_FLAT
+    half = (root + 0.45 * t**0.6) * (1.0 - t) ** 0.6
+    return t, length * t, _PORT_Z - 0.55 * t**1.3, half
 
 
 def _sail(xc, y0, length, size=1.0):
@@ -155,37 +160,32 @@ def _draw_furnace(ax, state, params):
         ax, (-_WALL, 0.0), (yc - half[0] - _WALL, yc), (-D, H), color=_BRICK, zorder=1
     )
 
-    # A burner port per melter bay in the back wall: an arched mouth in a
-    # brick surround, glowing inside as hard as the bay fires.
+    # A burner port per melter bay in the back wall: a small round mouth in
+    # a brick ring, glowing inside as hard as the bay fires. The bias puts it
+    # over any piece of the wall it sits on, whatever the piece's depth.
     bay_w = xs[nm] / g.n_bays
     yb = yc - half[0]
     fire = rk.clamp01(
         (float(state.fuel) - params.fuel_min) / (params.fuel_max - params.fuel_min)
     )
     shares = np.asarray(params.plant.port_shares, dtype=float)
+    on_wall = 0.725 * _SPLIT + 0.2  # past the depth spread of one wall piece
     for k in range(g.n_bays):
         xc, f = (k + 0.5) * bay_w, fire * shares[k] / shares.max()
+        ember = rk.lerp_hex("#0a0606", "#d04a10", f)
         for scale, col, bias in (
-            (1.25, rk.shade(_BRICK, 1.35), 0.4),
-            (1.0, "#0a0606", 0.5),
+            (1.45, rk.shade(_BRICK, 1.35), 0.0),
+            (1.0, "#0a0606", 0.05),
+            (0.65, ember, 0.1),
         ):
             iso.poly(
                 ax,
-                _arch(xc, yb, 0.45, 1.0 * scale, 0.75 * scale, 0.4 * scale),
+                _round(xc, yb, _PORT_Z, scale * _PORT_R),
                 fc=col,
                 ec=col,
                 lw=0.5,
-                bias=bias,
+                bias=on_wall + bias,
             )
-        ember = rk.lerp_hex("#0a0606", "#c0400c", f)
-        iso.poly(
-            ax,
-            _arch(xc, yb, 0.45, 0.8, 0.35, 0.0),
-            fc=ember,
-            ec=ember,
-            lw=0.5,
-            bias=0.55,
-        )
 
     # Floor slab, cut at the centreline.
     for j in range(len(dx)):
@@ -259,11 +259,11 @@ def _draw_furnace(ax, state, params):
             fc=outer,
             ec="none",
             alpha=0.15 + 0.25 * f,
-            bias=0.6,
+            bias=on_wall + 0.3,
         )
         for size, col, alpha, bias in (
-            (1.0, outer, 0.35 + 0.45 * f, 0.65),
-            (0.55, core, 0.5 + 0.4 * f, 0.7),
+            (1.0, outer, 0.35 + 0.45 * f, on_wall + 0.4),
+            (0.55, core, 0.5 + 0.4 * f, on_wall + 0.5),
         ):
             iso.poly(
                 ax,
