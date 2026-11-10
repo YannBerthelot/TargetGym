@@ -182,6 +182,17 @@ discharge assay report. The axial profile is hidden.
 
 **Reward** = free-lime tracking band − fuel.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+A window draws the free-lime target once. As a continuing plant
+(`target_gym.stream`) the target changes as events (`start_event`), each a fresh
+draw over `target_lime_range`, so the target keeps the range as its long-run law
+rather than one value held. `scenarios.py` declares the one scenario, the normal
+kiln as scored (weight 1), only to carry the rate: once a shift (8 h) on average.
+No source gives how often a kiln's free-lime target is revised, so the rate is
+ours, set once without tuning and open for the owner. The raw meal is already
+mean-reverting. In a window nothing changes and a scored window is bit-identical.
+
 ---
 
 ## 5. Baselines
