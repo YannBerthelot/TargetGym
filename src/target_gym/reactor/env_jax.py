@@ -27,8 +27,11 @@ from target_gym.reactor.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    flux_tilt,
     get_obs,
+    moderator_tilt,
     rod_balance,
+    rod_tilt,
     rod_worth,
     scheduled_load,
     steady_state_precursors,
@@ -278,6 +281,14 @@ class Reactor(
             minval=params.carried_days_range[0],
             maxval=params.carried_days_range[1],
         )
+        # Yesterday's axial xenon: one end-of-day pair from the table (finding 3).
+        tilts = jnp.asarray(params.initial_tilts, dtype=jnp.float32)
+        row = jax.random.randint(jax.random.fold_in(key, 9), (), 0, tilts.shape[0])
+        follow = (
+            jax.random.uniform(jax.random.fold_in(key, 10)) < params.initial_tilt_share
+        )
+        I_tilt0 = jnp.where(follow, tilts[row, 0], 0.0)
+        Xe_tilt0 = jnp.where(follow, tilts[row, 1], 0.0)
         # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
         shift = (
             carried * params.boron_worth / (params.alpha_coolant + params.alpha_fuel)
@@ -309,8 +320,8 @@ class Reactor(
             T_sg=as_state(T_sg),
             I_hat=as_state(I_hat),
             Xe_hat=as_state(Xe_hat),
-            I_tilt=as_state(0.0),
-            Xe_tilt=as_state(0.0),
+            I_tilt=as_state(I_tilt0),
+            Xe_tilt=as_state(Xe_tilt0),
             target_n=as_state(load),
             T_ref=as_state(tavg_program(load, params)),
             load_wobble=as_state(0.0),
@@ -321,7 +332,17 @@ class Reactor(
             rho_ext=as_state(rod_worth(params.rod_park, params)),
             rho_ext_cmd=as_state(0.0),
             boron=as_state(boron),
-            delta_I=as_state(0.0),
+            delta_I=as_state(
+                load
+                * flux_tilt(
+                    Xe_tilt0,
+                    Xe_hat,
+                    load,
+                    rod_tilt(params.rod_park, params)
+                    + moderator_tilt(T_hot, T_cold, params),
+                    params,
+                )
+            ),
             boron_queue=jnp.zeros(BORON_QUEUE, dtype),
             boron_delay=delay,
             rod_moved=as_state(0.0),

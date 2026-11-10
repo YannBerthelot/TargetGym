@@ -655,7 +655,7 @@
   {
     "name": "reactor",
     "group": "industrial",
-    "version": 8,
+    "version": 9,
     "display_name": "Reactor",
     "params_cls": [
       "target_gym.reactor.env",

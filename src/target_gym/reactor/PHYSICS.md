@@ -166,6 +166,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `ramp_down_range` | 0.5 to 2 h | s | | ours |
 | `demand_theta`, `demand_sigma` | 300 s, 0.5 % | | A small frequency-control wobble | ours |
 | `burnup_range` | 2.3 to 3.3 | ppm/day | BEAVRS (MIT), Table 24: letdown 623 to 0 ppm over 52 to 326 EFPD in cycle 1 (2.27 a day), 918 to 104 ppm over 13 to 257 EFPD in cycle 2 (3.34 a day) | read |
+| `initial_tilts`, `initial_tilt_share` | ten pairs, 0.108 | | Yesterday's end-of-day iodine and xenon tilts, from the reference on training seeds, drawn on load following's share of days | derived |
 | `carried_days_range` | 0 to 1 | day | Burnup not yet diluted at reset: the operator dilutes at least once a day | ours |
 | `max_steps_in_episode` | 2880 | steps | A day, so the xenon's swing shows after the return | design |
 
@@ -191,8 +192,13 @@ weigh baseload days against five kinds of load-follow day (REALITY.md sections 6
 and 7).
 
 Each episode starts at full load, rods parked, xenon at the balance of a recent power
-of 0.9 to 1.0 and no tilt, and Tavg lined out below its program by 0 to 1 day of
-burnup not yet diluted. On a load-follow day the load starts down in 0.5 to 2 h,
+of 0.9 to 1.0, and Tavg lined out below its program by 0 to 1 day of burnup not yet
+diluted. Yesterday's axial xenon carries over (the physics review's finding 3): on
+10.8 % of days, load following's share (REALITY.md section 7), yesterday was a
+load-follow day and the iodine and xenon tilts start as one of ten end-of-day pairs
+the reference left on training seeds 0 to 9 (`scripts/reactor_tilt_table.py`,
+xenon tilts -0.0067 to +0.0085); otherwise yesterday was baseload, whose days end
+with tilts under 3.1e-4, and the tilts start at 0. On a load-follow day the load starts down in 0.5 to 2 h,
 holds at 50 % and comes back, at the scenario's rate, with a small wobble.
 
 | obs | meaning |

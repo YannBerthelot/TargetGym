@@ -231,6 +231,20 @@ class ReactorParams(EnvParams):
     #: Days of burnup not yet diluted at reset: ours, the operator dilutes at least
     #: once a day. The day starts lined out that much below its Tavg program.
     carried_days_range: Tuple[float, float] = (0.0, 1.0)
+    #: Yesterday's axial iodine and xenon tilts (physics review, finding 3;
+    #: PHYSICS.md section 4): on a share of days equal to load following's,
+    #: yesterday was a load-follow day and one ``(I_tilt, Xe_tilt)`` pair is
+    #: drawn from the reference's ends of those days (scripts/reactor_tilt_table.py,
+    #: training seeds); otherwise yesterday was baseload, which ends with no tilt
+    #: to speak of (under 3.1e-4).
+    initial_tilts: Tuple[Tuple[float, float], ...] = (
+        (-0.010964, -0.004986), (-0.007372, -0.003397),  # edf_daily
+        (-0.009495, -0.006722), (-0.003252, -0.001931),  # edf_short_hold
+        (-0.010433, 0.007226), (-0.009624, 0.008357),  # krsko_slow
+        (-0.008858, 0.008466), (-0.01091, 0.005141),  # krsko_shallow
+        (-6.8e-05, 8.3e-05), (-0.009142, -0.006335),  # fast_return
+    )  # fmt: skip
+    initial_tilt_share: float = 250.0 / (5.5 + 50.0 / 60.0) / 365.0  # REALITY.md 7
 
     # ---- Time discretization ----
     # One control step applies the action for Reactor.control_period physics
@@ -377,6 +391,8 @@ PARAM_UNITS = {
     "demand_theta": "1/s",
     "burnup_range": "ppm/day",
     "carried_days_range": "day",
+    "initial_tilts": "-",
+    "initial_tilt_share": "-",
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
@@ -389,7 +405,6 @@ PARAM_UNITS = {
     "rod_step_price": "$/step",
     "failure_cost": "reward",
     "restart_steps": "steps",
-
     "standby_steps": "steps",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",

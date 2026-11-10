@@ -16,7 +16,7 @@ env, params = tg.make("reactor")
 | Observation space | `Box((11,))` |
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
-| Cite as | `reactor-v8` |
+| Cite as | `reactor-v9` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -152,6 +152,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
 | `imbalance_factor` | 3 | - |
+| `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |
 | `e_tol` | 1.6 | K |
