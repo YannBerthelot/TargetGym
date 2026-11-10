@@ -270,7 +270,7 @@ open for the owner. In a window nothing changes: the window's upsets run as draw
 the schedules count from step 0, and a scored window is bit-identical.
 
 The permit monitor's excursion clock is a record, not part of the outside world:
-a trip's restart keeps it through `restart_plant`, as before, and `OUTSIDE_WORLD`
+a trip's restart keeps it as a record (`RECORDS`), as before, and `OUTSIDE_WORLD`
 names only what a policy cannot move (long-strata S2).
 
 <!-- BEGIN GENERATED FACTS -->
