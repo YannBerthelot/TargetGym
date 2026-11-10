@@ -85,3 +85,16 @@ def test_the_boron_bump_keeps_the_plant_inside_its_limits(plant):
         assert np.max(ladder.tavg(tr)) <= float(tavg_dnb_limit(q)) + 0.05
         assert np.max(np.asarray(tr.T_coolant)) < q.T_coolant_max
         assert float(ladder.tavg(tr)[-1]) > float(ladder.tavg(s)) + 0.5  # it moved
+
+
+@pytest.mark.medium
+def test_a_bump_that_trips_the_plant_is_refused():
+    """A run that trips restarts the plant, and a fit across the restart reads it as
+    the response (the v9 sweep's sign flip). The recipe stops instead of reading it.
+    The old step, 20 % dilution for an hour at full power, reaches the 610 K hot leg."""
+    env = Reactor()
+    p = ReactorParams(demand_sigma=0.0, sensor_noise_scale=0.0)
+    q, s = ladder.points(env, p, 100)[0]
+    a = jnp.array([1.0 - 2.0 * s.rod_in, -0.2])
+    with pytest.raises(ladder.TrippedDuringTest):
+        ladder.closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)

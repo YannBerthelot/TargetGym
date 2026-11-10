@@ -81,9 +81,16 @@ def reactor(table):
     for i, d in enumerate(draws(table)):
         p = ReactorParams(**d)
         rest, rest_trips = at_rest_cost(env, p)
-        tune, _ = L.bumps(env, p)
         row = {"draw": i, "values": d, "at_rest_cost": rest,
                "at_rest_trips": rest_trips, "scenarios": {}}  # fmt: skip
+        try:
+            tune, _ = L.bumps(env, p)
+        except L.TrippedDuringTest as e:
+            # The recipe cannot be run on this member: the property fails here.
+            row.update(holds=False, tune_refused=str(e))
+            print(json.dumps(row), flush=True)
+            report.append(row)
+            continue
         for sc in suite:
             q = ReactorParams(**{**sc.overrides, **d})
             act, memory = L.procedure(q, tune)

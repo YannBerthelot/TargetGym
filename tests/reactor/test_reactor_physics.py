@@ -77,9 +77,11 @@ def test_moderator_coefficient_is_a_start_of_cycle_value(params):
     coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power at 975
     and 1405 ppm, and technical specifications keep it at or below 0 above 50 %
     power. A late-cycle value (-30 pcm/K and beyond, about -64 to -79 pcm/K at end
-    of life) does not belong here. Bounds: below 0, above -20 pcm/K (ours: hot full
-    power is more negative than hot zero power, by an amount not found in a source)."""
-    assert -20e-5 <= params.alpha_coolant < 0.0
+    of life) does not belong here. Bounds: -9 to -18 pcm/K, the physics review's
+    judgment for hot full power at the start of a cycle (finding 2), taken by the owner
+    on 2026-11-10 when the family sweep showed the weak end (0 to -7) cannot carry
+    the 5 %/min returns the member runs."""
+    assert -18e-5 <= params.alpha_coolant <= -9e-5
 
 
 def test_boron_worth_is_in_the_start_of_cycle_range(params):

@@ -346,16 +346,26 @@ def published(p, tune):
 # ---------------------------------------------------------------------------
 
 
+class TrippedDuringTest(RuntimeError):
+    """A bump test tripped the plant. The restart would be read as the response."""
+
+
 def closed(env, q, s, act, memory, n):
-    """``n`` steps of ``act`` on ``q`` from ``s``; the states."""
+    """``n`` steps of ``act`` on ``q`` from ``s``; the states. A trip raises
+    ``TrippedDuringTest``: a test that trips the plant reads its restart, not its
+    response (the v9 sweep's sign flip), so it is refused, never fitted."""
 
     def step(carry, _):
         s, m = carry
         a, m = act(m, env.get_obs(s, q))
-        _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, q)
-        return (s, m), s
+        _, s, _, _, info = env.step_env(jax.random.PRNGKey(0), s, a, q)
+        return (s, m), (s, info["tripped"])
 
-    return jax.lax.scan(step, (s, memory), None, length=n)[1]
+    states, tripped = jax.lax.scan(step, (s, memory), None, length=n)[1]
+    if np.any(np.asarray(tripped)):
+        first = int(np.argmax(np.asarray(tripped)))
+        raise TrippedDuringTest(f"the plant tripped at step {first} of {n}")
+    return states
 
 
 def offset(tr):
