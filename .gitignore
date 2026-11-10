@@ -199,3 +199,7 @@ test_readme.py
 
 # XLA persistent compilation cache (see tests/conftest.py)
 .jax_cache/
+
+# Oracle-horizon evidence: written by scripts/measure_oracle_horizons.py, kept
+# out of git (owner, 2026-11-10); the summaries in src/target_gym/data ship.
+evidence/

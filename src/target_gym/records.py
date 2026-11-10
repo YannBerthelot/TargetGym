@@ -8,7 +8,7 @@ file per task (``env_versions`` one per version, ``<task>-vN.json``)::
     data/hold_measurements/<task>.json   scripts/measure_hold.py
     data/env_versions/<task>-vN.json     scripts/stamp_env_versions.py
     data/oracle_horizons/<task>.json     scripts/measure_oracle_horizons.py (summary;
-                                         the evidence is in evidence/oracle_horizons/)
+                                         the evidence is written to evidence/oracle_horizons/, out of git)
 
 They used to be one file per kind, which every recording PR rewrote, so each
 merge broke every other open one. One file per task means re-recording a task

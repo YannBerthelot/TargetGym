@@ -5,7 +5,7 @@ It runs docs/proposals/oracle-horizon-protocol.md, with Amendments 1 and 2, on t
 14 process and industrial tasks and writes one file per task,
 ``src/target_gym/data/oracle_horizons/<task>.json``, a compact summary that
 ships in the wheel, and ``evidence/oracle_horizons/<task>.json`` at the
-repository root, every test, retest and fit, in git but not in the wheel
+repository root, every test, retest and fit, kept out of git and the wheel
 (H13, H19). The 10
 aircraft tasks are skipped: their tests fly through ArduPlane 4.0.9's default
 loops (decision D6), which PR D builds.
