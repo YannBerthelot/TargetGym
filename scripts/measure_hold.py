@@ -56,6 +56,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym import records  # noqa: E402
 from target_gym.eval import anticipations  # noqa: E402
+from target_gym.identification import TrippedDuringTest  # noqa: E402
 from target_gym.registry import REGISTRY, control_step_seconds  # noqa: E402
 from target_gym.runners.runners import (  # noqa: E402
     _as_tuple,
@@ -479,6 +480,10 @@ def measure(name, seeds, controllers=("pid", "mpc")):
         for seed in range(seeds):
             e, c, tg, ended = _episode(spec, env, params, kind, seed, err_fn, cons_fn)
             term += int(ended)
+            if ended:
+                # The steps after a trip hold the restart, not the controller,
+                # so a seed that trips demonstrates no hold and is left out.
+                continue
             m, settle, bounds, antic = split_seed(e, tg, burn_in, settle=fixed_settle)
             leads.extend(antic[:-1])
             E.append(e[m])
@@ -488,6 +493,8 @@ def measure(name, seeds, controllers=("pid", "mpc")):
             h = len(idx) // 2
             half1.append(e[idx[:h]].mean(axis=0))
             half2.append(e[idx[h:]].mean(axis=0))
+        if not E:
+            raise TrippedDuringTest(f"{name} {kind}: every seed tripped")
         per_seed = [e.mean(axis=0).tolist() for e in E]
         E = np.concatenate(E)
         C = np.concatenate(C)

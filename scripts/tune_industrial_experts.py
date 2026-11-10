@@ -49,6 +49,7 @@ from target_gym.identification import (  # noqa: E402
     Instrument,
     Loop,
     Plant,
+    TrippedDuringTest,
     rga,
 )
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
@@ -77,7 +78,8 @@ SOURCE = (
 def step_response(name, seed, act, n_settle, n_test, delta):
     """One run (N1): the shipped expert settles, ``act(expert, obs, t, delta) ->
     raw`` holds through the baseline and then steps. The response is observation
-    channel ``act.channel`` less the baseline's mean."""
+    channel ``act.channel`` less the baseline's mean. A run that trips raises
+    ``TrippedDuringTest``: what follows a trip is the restart, not the response."""
     spec = REGISTRY[name]
     env = spec.make_env()
     n = n_settle + BASELINE + n_test
@@ -92,7 +94,11 @@ def step_response(name, seed, act, n_settle, n_test, delta):
     for t in range(n):
         d = delta if t >= n_settle + BASELINE else 0.0
         a = act(expert, np.asarray(obs), t - n_settle, d)
-        obs, state, *_ = step(jax.random.fold_in(key, t), state, jnp.asarray(a), p)
+        obs, state, _, _, info = step(
+            jax.random.fold_in(key, t), state, jnp.asarray(a), p
+        )
+        if bool(info["tripped"]):
+            raise TrippedDuringTest(f"{name}: seed {seed} tripped at step {t}")
         if t >= n_settle:
             ys.append(float(np.asarray(obs)[act.channel]))
     ys = np.array(ys)

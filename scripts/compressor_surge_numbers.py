@@ -1167,7 +1167,10 @@ def section_invariance():
     k7 = key
     for _ in range(600):
         k7, sub = jax.random.split(k7)
-        _, state, _, _, _ = step(sub, state, action, P)
+        _, state, _, _, info = step(sub, state, action, P)
+        # As the test does: a trip restarts the plant, a reset and not growth.
+        if bool(info["tripped"]):
+            break
         traj.append(np.array([float(getattr(state, f)) for f in fields]))
     tr = np.stack(traj)
     inc = np.abs(np.diff(tr, axis=0))

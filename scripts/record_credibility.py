@@ -111,13 +111,16 @@ def i_gains(name: str, n_act: int, n_out: int, step: float) -> np.ndarray | None
 
 def settled_points(rollout: dict) -> tuple[np.ndarray, np.ndarray]:
     """(targets, actions): the mean of each over the last quarter of every
-    target cycle, where the controller has settled if it ever does."""
+    target cycle, where the controller has settled if it ever does. A cycle
+    with a trip in it is left out: after the trip the plant is a restart, and
+    its tail would pair the target with a re-settling action."""
     targets, actions = [], []
+    tripped = np.asarray(rollout["tripped"], bool)
     for i in range(len(rollout["length"])):
         cycle = np.flatnonzero(rollout["target_change"][i])
         cuts = [0, *cycle, int(rollout["length"][i])]
         for a, b in zip(cuts[:-1], cuts[1:]):
-            if b <= a:  # a target set on the first step
+            if b <= a or tripped[i, a:b].any():  # set on the first step, or tripped
                 continue
             tail = slice(b - max((b - a) // 4, 1), b)
             targets.append(rollout["target"][i, tail].mean(axis=0))

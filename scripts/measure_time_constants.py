@@ -29,71 +29,82 @@ import numpy as np  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 from target_gym.runners.runners import _as_tuple  # noqa: E402
 
-out = {}
-print(f"  {'environment':20s} {'dt':>8s} {'tau_63':>10s} {'steps':>7s}  shape")
-for name, spec in REGISTRY.items():
-    params = spec.make_test_params()
-    env = spec.make_env()
-    dt = float(getattr(params, "delta_t", 1.0))
+
+def step_test(env, params, level):
+    """The tracked output over one open-loop episode at raw action ``level``,
+    from reset. It stops at a trip, as at a termination: under the continuing
+    default the plant restarts there, and the restart is not the response."""
     idx = list(_as_tuple(env.obs_value_index))[:1]
     step = jax.jit(env.step_env)
     adim = int(
         np.atleast_1d(env.action_space(params).sample(jax.random.PRNGKey(0))).shape[0]
     )
-    n = int(params.max_steps_in_episode)
+    key = jax.random.PRNGKey(0)
+    obs, state = env.reset_env(key, params)
+    ys = [float(np.asarray(obs)[idx][0])]
+    a = jnp.full((adim,), level, dtype=jnp.float32)
+    for _ in range(int(params.max_steps_in_episode)):
+        key, sub = jax.random.split(key)
+        obs, state, _, term, info = step(sub, state, a, params)
+        if bool(info["tripped"]):
+            break
+        ys.append(float(np.asarray(obs)[idx][0]))
+        if bool(term):
+            break
+    return np.array(ys)
 
-    def run(level):
-        key = jax.random.PRNGKey(0)
-        obs, state = env.reset_env(key, params)
-        ys = [float(np.asarray(obs)[idx][0])]
-        a = jnp.full((adim,), level, dtype=jnp.float32)
-        for _ in range(n):
-            key, sub = jax.random.split(key)
-            obs, state, _, term, _ = step(sub, state, a, params)
-            ys.append(float(np.asarray(obs)[idx][0]))
-            if bool(term):
-                break
-        return np.array(ys)
 
-    try:
-        lo, hi = run(-0.4), run(0.4)
-    except Exception as exc:
-        print(f"  {name:20s} step test failed: {type(exc).__name__}")
-        continue
+def main():
+    out = {}
+    print(f"  {'environment':20s} {'dt':>8s} {'tau_63':>10s} {'steps':>7s}  shape")
+    for name, spec in REGISTRY.items():
+        params = spec.make_test_params()
+        env = spec.make_env()
+        dt = float(getattr(params, "delta_t", 1.0))
+        n = int(params.max_steps_in_episode)
 
-    m = min(len(lo), len(hi))
-    d = hi[:m] - lo[:m]  # differential response kills drift
-    if m < 5 or not np.isfinite(d).all():
-        print(f"  {name:20s} unusable response")
-        continue
-    total = d[-1] - d[0]
-    if abs(total) < 1e-12:
-        print(f"  {name:20s} {dt:8.2f}  no response to the actuator")
-        continue
+        try:
+            lo, hi = step_test(env, params, -0.4), step_test(env, params, 0.4)
+        except Exception as exc:
+            print(f"  {name:20s} step test failed: {type(exc).__name__}")
+            continue
 
-    # Integrating if the response is still climbing at a near-constant rate at
-    # the end: compare the last quarter's slope with the first quarter's.
-    q = max(m // 4, 2)
-    early = (d[q] - d[0]) / (q * dt)
-    late = (d[-1] - d[-q]) / (q * dt)
-    integrating = abs(late) > 0.5 * abs(early) and abs(late) > 1e-12
+        m = min(len(lo), len(hi))
+        d = hi[:m] - lo[:m]  # differential response kills drift
+        if m < 5 or not np.isfinite(d).all():
+            print(f"  {name:20s} unusable response")
+            continue
+        total = d[-1] - d[0]
+        if abs(total) < 1e-12:
+            print(f"  {name:20s} {dt:8.2f}  no response to the actuator")
+            continue
 
-    target = d[0] + 0.632 * total
-    cross = np.argmax((d - d[0]) / total >= 0.632) if total != 0 else 0
-    tau = float(cross * dt) if cross > 0 else float("nan")
-    shape = "integrating" if integrating else "first-order-ish"
-    out[name] = {
-        "dt": dt,
-        "tau": tau,
-        "steps": tau / dt if tau == tau else None,
-        "shape": shape,
-        "episode": n,
-    }
-    print(
-        f"  {name:20s} {dt:8.2f} {tau:10.1f} {tau/dt if tau==tau else float('nan'):7.1f}  {shape}"
-    )
+        # Integrating if the response is still climbing at a near-constant rate at
+        # the end: compare the last quarter's slope with the first quarter's.
+        q = max(m // 4, 2)
+        early = (d[q] - d[0]) / (q * dt)
+        late = (d[-1] - d[-q]) / (q * dt)
+        integrating = abs(late) > 0.5 * abs(early) and abs(late) > 1e-12
 
-print("\n  gamma = 1 - 1/N per the protocol; five time constants must fit in N:")
-for n, r in out.items():
-    if r["steps"] and 5 * r["steps"] > r["episode"]:
-        print(f"    {n:20s} needs {5 * r['steps'] / r['episode']:.1f}x its episode")
+        cross = np.argmax((d - d[0]) / total >= 0.632) if total != 0 else 0
+        tau = float(cross * dt) if cross > 0 else float("nan")
+        shape = "integrating" if integrating else "first-order-ish"
+        out[name] = {
+            "dt": dt,
+            "tau": tau,
+            "steps": tau / dt if tau == tau else None,
+            "shape": shape,
+            "episode": n,
+        }
+        print(
+            f"  {name:20s} {dt:8.2f} {tau:10.1f} {tau/dt if tau==tau else float('nan'):7.1f}  {shape}"
+        )
+
+    print("\n  gamma = 1 - 1/N per the protocol; five time constants must fit in N:")
+    for n, r in out.items():
+        if r["steps"] and 5 * r["steps"] > r["episode"]:
+            print(f"    {n:20s} needs {5 * r['steps'] / r['episode']:.1f}x its episode")
+
+
+if __name__ == "__main__":
+    main()
