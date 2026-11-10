@@ -5,7 +5,8 @@ The pygame half of the render kit: everything the aircraft panels share.
 draw with. The aircraft draw with pygame instead, because they project a solid
 model every frame and matplotlib is too slow for that. So they need their own
 kit, and this is it: the palette, the console chrome (header strip, gauge
-stack, world grid), the A320 mesh and the three projections of it.
+stack, world grid), the aircraft models (the A320 and the F/A-18 Hornet) and
+the three projections that draw them.
 
 It lives here rather than in ``plane3d/rendering.py`` because four modules draw
 aircraft -- ``plane3d`` (side and top-down), ``patrol`` (rear and top-down),
@@ -24,8 +25,13 @@ modules inside an environment package, and this module is not in one, so moving
 code between the aircraft renderers never marks a recorded baseline stale.
 """
 
+from dataclasses import dataclass
+from functools import cached_property, lru_cache
+from typing import NamedTuple
+
 import numpy as np
 
+from target_gym.plane3d import hornet
 from target_gym.render_kit import format_clock, render_extra
 
 pygame = render_extra("pygame")
@@ -218,194 +224,373 @@ def header(surf, panel_w, step, status=None, clock=None):
         surf.blit(lab, (x, 10))
 
 
-def build_plane_faces():
-    """A320-ish geometry in body frame (x=forward, y=left, z=up).
+# ── Aircraft models ───────────────────────────────────────────────────────
+# A model is a set of flat faces in body axes (x forward, y left, z up, metres)
+# plus its nav lights. Each is put together from the three part builders below
+# (a body of revolution, a lifting surface, a flat plate), and every projection
+# takes the model it draws as an argument. A new airframe is therefore one new
+# builder in ``MODEL_BUILDERS``; ``model_for`` then picks it for any params
+# whose wingspan is its own.
 
-    Returns ``(faces, L, fw, fh, nav_lights)``; each face is
-    ``(vertices_Nx3, base_color, name)``. Windings are normalised outward at
-    the end so the renderer can light them with a signed Lambert term.
+
+class Face(NamedTuple):
+    """One flat facet of a model, in body axes."""
+
+    verts: np.ndarray
+    color: tuple
+    name: str
+    #: A single polygon standing in for a thin surface (wing, tail, fin). It
+    #: has no interior, so it is lit from either side.
+    plate: bool = False
+
+
+def body_faces(stations, color, name, *, y=0.0, n=N_RING, apex=None, cap=None):
+    """A fuselage, nacelle or canopy: elliptic rings joined by quads.
+
+    ``stations`` are ``(x, half_width, half_height, centre_z)``, tail first.
+    ``color`` is an RGB, or ``color(angle)`` for a tone that varies round the
+    ring. ``apex`` closes the last ring to a point (a nose cone); ``cap``
+    closes the first ring with a flat face of that colour (a nozzle, a tail).
     """
-    L = 37.57  # A320 length
-    hl, fw, fh = L / 2, 2.0, 2.0
-    faces = []
-
-    # -- fuselage: a tapered prism rather than four flat sides ---------------
-    cz, ry, rz = -0.2 * fh, fw, 0.8 * fh
-    stations = [
-        (-hl, 0.55),
-        (-hl * 0.72, 0.92),
-        (-hl * 0.3, 1.0),
-        (hl * 0.2, 1.0),
-        (hl * 0.5, 0.95),
-        (hl * 0.68, 0.80),
-        (hl * 0.78, 0.46),
-    ]
-    ang = np.linspace(0, 2 * np.pi, N_RING, endpoint=False)
+    shade = color if callable(color) else (lambda _a: color)
+    ang = np.linspace(0, 2 * np.pi, n, endpoint=False)
     rings = [
-        np.stack(
-            [np.full(N_RING, x), ry * k * np.cos(ang), cz + rz * k * np.sin(ang)], 1
-        )
-        for x, k in stations
+        np.stack([np.full(n, x), y + ry * np.cos(ang), cz + rz * np.sin(ang)], 1)
+        for x, ry, rz, cz in stations
     ]
-    # Nose cap: a fan to a single apex. The last station used to be a ring at
-    # 0.12 of radius, which is almost a point, so the cone collapsed and the
-    # nose read as a blunt wedge at shallow angles.
-    apex = np.array([hl * 0.86, 0.0, cz * 0.35])
-    last = rings[-1]
-    for i in range(N_RING):
-        j = (i + 1) % N_RING
-        tone = int(198 + 40 * (0.5 + 0.5 * np.sin(ang[i])))
-        faces.append(
-            (
-                np.array([last[i], last[j], apex]),
-                (tone, tone, min(255, tone + 3)),
-                f"nose_{i}",
-            )
-        )
-
+    faces = []
     for a, b in zip(rings[:-1], rings[1:]):
-        for i in range(N_RING):
-            j = (i + 1) % N_RING
-            # Slightly lighter over the crown, the way a white livery reads.
-            tone = int(196 + 42 * (0.5 + 0.5 * np.sin(ang[i])))
+        for i in range(n):
+            j = (i + 1) % n
             faces.append(
-                (
-                    np.array([a[i], a[j], b[j], b[i]]),
-                    (tone, tone, min(255, tone + 3)),
-                    f"fuse_{i}",
-                )
+                Face(np.array([a[i], a[j], b[j], b[i]]), shade(ang[i]), f"{name}_{i}")
             )
-
-    def _surface(root, tip, z0, z1, name, color, panels):
-        """Subdivide a lifting surface spanwise into *panels* quads."""
-        (rle, rte), (tle, tte) = root, tip
-        for i in range(panels):
-            t0, t1 = i / panels, (i + 1) / panels
-
-            def at(t, le, te):
-                return [
-                    (
-                        (1 - t) * rle[0] + t * tle[0]
-                        if le
-                        else (1 - t) * rte[0] + t * tte[0]
-                    ),
-                    (
-                        (1 - t) * rle[1] + t * tle[1]
-                        if le
-                        else (1 - t) * rte[1] + t * tte[1]
-                    ),
-                    (1 - t) * z0 + t * z1,
-                ]
-
+    if apex is not None:
+        last, tip = rings[-1], np.asarray(apex, dtype=float)
+        for i in range(n):
+            j = (i + 1) % n
             faces.append(
-                (
-                    np.array(
-                        [
-                            at(t0, True, False),
-                            at(t0, False, False),
-                            at(t1, False, False),
-                            at(t1, True, False),
-                        ]
-                    ),
-                    color,
-                    f"{name}_{i}",
-                )
+                Face(np.array([last[i], last[j], tip]), shade(ang[i]), f"{name}_nose")
             )
+    if cap is not None:
+        faces.append(Face(rings[0][::-1].copy(), cap, f"{name}_cap"))
+    return faces
+
+
+def surface_faces(root, tip, color, name, panels=SPAN_PANELS):
+    """A wing, tailplane or fin: a flat plate split spanwise into *panels*.
+
+    ``root`` and ``tip`` are each the two ends of a chord, as 3D points, so
+    sweep, taper, dihedral and cant all come from where they are placed.
+    """
+    (ra_, rb), (ta, tb) = np.asarray(root, float), np.asarray(tip, float)
+    faces = []
+    for i in range(panels):
+        t0, t1 = i / panels, (i + 1) / panels
+        quad = [ra_ + t0 * (ta - ra_), rb + t0 * (tb - rb)]
+        quad += [rb + t1 * (tb - rb), ra_ + t1 * (ta - ra_)]
+        faces.append(Face(np.array(quad), color, f"{name}_{i}", plate=True))
+    return faces
+
+
+def plate_face(points, color, name):
+    """One flat polygon of a thin part: a fin, a strake."""
+    return Face(np.asarray(points, dtype=float), color, name, plate=True)
+
+
+def outward(faces):
+    """Wind every face to point away from the model's centre.
+
+    Lighting is signed, so a face wound inward would light on the wrong side.
+    The first hand-written model had eight of fourteen faces wound inward,
+    which left the two sides of the fuselage with the *same* normal: nothing in
+    the picture said which side you were looking at.
+    """
+    centroid = np.vstack([f.verts for f in faces]).mean(axis=0)
+
+    def points_in(f):
+        v = f.verts
+        normal = np.cross(v[1] - v[0], v[2] - v[0])
+        return np.dot(normal, v.mean(axis=0) - centroid) < 0
+
+    return tuple(f._replace(verts=f.verts[::-1]) if points_in(f) else f for f in faces)
+
+
+@dataclass(frozen=True, eq=False)
+class AircraftModel:
+    """A low-poly aircraft, as every projection in this module draws it.
+
+    ``nav_lights`` are ``(point, rgb, name)`` in body axes. ``windows`` are body
+    points drawn as small dark dots on the side facing the camera.
+    ``light_radius`` is a nav light's core in metres; its halo is twice that.
+    """
+
+    name: str
+    faces: tuple
+    nav_lights: tuple
+    windows: tuple = ()
+    light_radius: float = 0.95
+
+    @cached_property
+    def _verts(self):
+        return np.vstack([f.verts for f in self.faces])
+
+    @property
+    def length(self) -> float:
+        """Nose to tail, metres."""
+        return float(np.ptp(self._verts[:, 0]))
+
+    @property
+    def span(self) -> float:
+        """Wingtip to wingtip, metres."""
+        return float(np.ptp(self._verts[:, 1]))
+
+    @cached_property
+    def reach(self) -> float:
+        """Farthest any face or light lies from the origin, halo included."""
+        lights = [p for p, _c, _n in self.nav_lights]
+        r = np.linalg.norm(np.vstack([self._verts, *lights]), axis=1).max()
+        return float(r) + 2.0 * self.light_radius
+
+
+def build_a320():
+    """The A320 of ``plane``, the ``plane3d`` tasks and ``wake_surf``."""
+    hl, fw, fh = 37.57 / 2, 2.0, 2.0
+    cz = -0.2 * fh
+
+    def livery(a):
+        # Lighter over the crown, the way a white livery reads.
+        tone = int(196 + 42 * (0.5 + 0.5 * np.sin(a)))
+        return (tone, tone, min(255, tone + 3))
+
+    # A tapered prism rather than four flat sides. The nose closes to a single
+    # apex: a last ring at 0.12 of radius collapsed the cone, and the nose read
+    # as a blunt wedge at shallow angles.
+    stations = [(-hl, 0.55), (-hl * 0.72, 0.92), (-hl * 0.3, 1.0), (hl * 0.2, 1.0)]
+    stations += [(hl * 0.5, 0.95), (hl * 0.68, 0.80), (hl * 0.78, 0.46)]
+    faces = body_faces(
+        [(x, fw * k, 0.8 * fh * k, cz) for x, k in stations],
+        livery,
+        "fuse",
+        apex=(hl * 0.86, 0.0, cz * 0.35),
+    )
 
     ws, wcr, wct = 17.9, 6.0, 2.5
-    for sgn, nm in ((1, "wing_port"), (-1, "wing_stbd")):
-        _surface(
-            ((-wcr * 0.3, sgn * fw), (wcr * 0.7, sgn * fw)),
-            ((-wct * 0.3, sgn * ws), (wct * 0.7, sgn * ws)),
-            -fh * 0.3,
-            -fh * 0.3 + 0.9,
-            nm,
-            (198, 200, 204),
-            SPAN_PANELS,
-        )
     hs, hcr, hct = 6.3, 3.5, 1.5
-    for sgn, nm in ((1, "hstab_port"), (-1, "hstab_stbd")):
-        _surface(
-            ((-hl + 1, 0), (-hl + 1 + hcr, 0)),
-            ((-hl + 1, sgn * hs * 0.8), (-hl + 1 + hct, sgn * hs)),
-            fh * 0.6,
-            fh * 0.6 + 0.25,
-            nm,
-            (196, 198, 205),
-            3,
+    wz, hz = -fh * 0.3, fh * 0.6
+    for sgn, side in ((1, "port"), (-1, "stbd")):
+        y_root = sgn * fw
+        faces += surface_faces(
+            ((-wcr * 0.3, y_root, wz), (wcr * 0.7, y_root, wz)),
+            ((-wct * 0.3, sgn * ws, wz + 0.9), (wct * 0.7, sgn * ws, wz + 0.9)),
+            (198, 200, 204),
+            f"wing_{side}",
         )
-
+        faces += surface_faces(
+            ((-hl + 1, 0, hz), (-hl + 1 + hcr, 0, hz)),
+            (
+                (-hl + 1, sgn * hs * 0.8, hz + 0.25),
+                (-hl + 1 + hct, sgn * hs, hz + 0.25),
+            ),
+            (196, 198, 205),
+            f"hstab_{side}",
+            panels=3,
+        )
     fin_h, fin_b = 5.5, 6.0
     faces.append(
-        (
-            np.array(
-                [
-                    [-hl, 0, fh * 0.6],
-                    [-hl + fin_b, 0, fh * 0.6],
-                    [-hl + fin_b * 0.4, 0, fh * 0.6 + fin_h],
-                    [-hl, 0, fh * 0.6 + fin_h * 0.8],
-                ]
-            ),
+        plate_face(
+            [
+                [-hl, 0, hz],
+                [-hl + fin_b, 0, hz],
+                [-hl + fin_b * 0.4, 0, hz + fin_h],
+                [-hl, 0, hz + fin_h * 0.8],
+            ],
             (204, 206, 214),
             "vert_stab",
         )
     )
-
-    # -- engines: short prisms slung under and ahead of the wing -------------
-    n_nac = 8
-    a2 = np.linspace(0, 2 * np.pi, n_nac, endpoint=False)
+    # Engines: short nacelles slung under and ahead of the wing.
+    nacelle = [(-4.6, 1.25), (-1.0, 1.45), (2.4, 1.15)]
     for sgn in (1, -1):
-        ey = sgn * 7.4
-        for x0, x1, r0, r1 in ((-4.6, -1.0, 1.25, 1.45), (-1.0, 2.4, 1.45, 1.15)):
-            for i in range(n_nac):
-                j = (i + 1) % n_nac
-
-                def pt(x, r, k):
-                    return [x, ey + r * np.cos(a2[k]), -fh * 0.85 + r * np.sin(a2[k])]
-
-                faces.append(
-                    (
-                        np.array(
-                            [pt(x0, r0, i), pt(x0, r0, j), pt(x1, r1, j), pt(x1, r1, i)]
-                        ),
-                        (150, 154, 160),
-                        f"eng_{sgn}_{i}",
-                    )
-                )
-
-    # Normalise every winding to point outward, so lighting can be signed.
-    # The old hand-written model had eight of fourteen faces wound inward,
-    # which left the two sides of the fuselage with the *same* normal: nothing
-    # in the picture said which side you were looking at, and the ``abs()``
-    # that hid it also made a receding aircraft and an approaching one shade
-    # identically.
-    centroid = np.vstack([v for v, _c, _n in faces]).mean(axis=0)
-    faces = [
-        (
-            (
-                v[::-1]
-                if np.dot(np.cross(v[1] - v[0], v[2] - v[0]), v.mean(axis=0) - centroid)
-                < 0
-                else v
-            ),
-            c,
-            n,
+        faces += body_faces(
+            [(x, r, r, -fh * 0.85) for x, r in nacelle],
+            (150, 154, 160),
+            f"eng_{sgn}",
+            y=sgn * 7.4,
+            n=8,
         )
-        for v, c, n in faces
-    ]
 
     # Port is +y: with x forward and z up, a right-handed frame puts y left.
-    nav_lights = [
+    nav_lights = (
         (np.array([-wct * 0.15, ws - 0.2, -fh * 0.3]), (255, 50, 50), "nav_port"),
         (np.array([-wct * 0.15, -ws + 0.2, -fh * 0.3]), GOOD, "nav_stbd"),
-        (
-            np.array([-hl + fin_b * 0.4, 0, fh * 0.6 + fin_h]),
-            (255, 255, 255),
-            "nav_tail",
-        ),
+        (np.array([-hl + fin_b * 0.4, 0, hz + fin_h]), (255, 255, 255), "nav_tail"),
         (np.array([hl * 0.8, 0, 0]), (255, 240, 200), "nav_nose"),
-    ]
-    return faces, L, fw, fh, nav_lights
+    )
+    n_win, length = 14, 2 * hl
+    windows = tuple(
+        np.array([-hl * 0.3 + i * length * 0.55 / n_win, sgn * fw, fh * 0.15])
+        for sgn in (-1, 1)
+        for i in range(n_win)
+    )
+    return AircraftModel("a320", outward(faces), nav_lights, windows)
+
+
+def build_hornet():
+    """The F/A-18 Hornet of ``patrol``, ``patrol_range_bearing`` and ``formation``.
+
+    True scale, our own low-poly silhouette. The wing is hornet.py's: its span
+    and area [HARV], 26.7 deg of leading-edge sweep and a taper of 0.35, which
+    give a 4.82 m root chord and HARV's 3.51 m MAC. The rest is placed by eye to
+    public F/A-18C figures: 56 ft nose to tail (AFF's own limit), 4.7 m tall on
+    its gear, leading-edge extensions from the cockpit to the wing, all-moving
+    stabilators 6.6 m across, and twin fins canted 20 deg outboard.
+    """
+    nose, tail = 0.5 * 56.0 * hornet.FT, -0.5 * 56.0 * hornet.FT  # +-8.53 m
+
+    def grey(a):
+        # Navy light grey, a shade lighter over the spine.
+        tone = int(184 + 34 * (0.5 + 0.5 * np.sin(a)))
+        return (tone, tone + 2, min(255, tone + 6))
+
+    # Fuselage: widest over the side-by-side engines, narrowing to the cockpit
+    # and the radome, closed at the back by the nozzle face.
+    faces = body_faces(
+        [
+            (-7.9, 0.95, 0.55, 0.05),
+            (-6.0, 1.25, 0.70, 0.10),
+            (-3.0, 1.45, 0.80, 0.10),
+            (0.0, 1.40, 0.85, 0.10),
+            (2.5, 1.05, 0.85, 0.05),
+            (4.3, 0.70, 0.80, 0.10),
+            (6.2, 0.52, 0.58, 0.00),
+            (7.6, 0.30, 0.32, -0.05),
+        ],
+        grey,
+        "fuse",
+        apex=(nose, 0.0, -0.08),
+        cap=(96, 98, 104),
+    )
+    faces += body_faces(
+        [(3.2, 0.30, 0.25, 0.80), (4.4, 0.42, 0.40, 0.88), (5.7, 0.26, 0.24, 0.78)],
+        (64, 78, 98),
+        "canopy",
+        n=8,
+        apex=(6.2, 0.0, 0.72),
+    )
+
+    half_span = 0.5 * hornet.SPAN
+    taper, tan_le = 0.35, np.tan(np.radians(26.7))
+    c_root = 2.0 * hornet.WING_AREA / (hornet.SPAN * (1.0 + taper))  # 4.82 m
+    le0 = 0.6  # leading edge on the centreline (ours, by eye)
+
+    def chord(y, z):
+        """Leading and trailing edge of the wing's chord at span station y."""
+        le = le0 - abs(y) * tan_le
+        return (le, y, z), (
+            le - c_root * (1.0 - (1.0 - taper) * abs(y) / half_span),
+            y,
+            z,
+        )
+
+    wing, wz = (186, 190, 198), 0.3
+    for sgn, side in ((1, "port"), (-1, "stbd")):
+        faces += surface_faces(
+            chord(sgn * 1.3, wz), chord(sgn * half_span, wz), wing, f"wing_{side}"
+        )
+        # Leading-edge extension: from beside the cockpit out to the wing's
+        # leading edge, which it meets 2.1 m from the centreline.
+        lex_le, _ = chord(sgn * 2.1, wz)
+        root_le, _ = chord(sgn * 1.3, wz)
+        faces.append(
+            plate_face(
+                [
+                    (5.4, sgn * 0.55, wz),
+                    (2.6, sgn * 1.15, wz),
+                    (0.8, sgn * 1.65, wz),
+                    lex_le,
+                    root_le,
+                ],
+                wing,
+                f"lex_{side}",
+            )
+        )
+        # All-moving stabilators, 6.58 m tip to tip, a little anhedral.
+        faces += surface_faces(
+            ((-5.6, sgn * 1.0, 0.1), (-8.05, sgn * 1.0, 0.1)),
+            ((-7.66, sgn * 3.29, 0.0), (tail, sgn * 3.29, 0.0)),
+            wing,
+            f"stab_{side}",
+            panels=2,
+        )
+        # Twin fins, canted 20 deg outboard, 2.3 m from root to tip.
+        cant = np.radians(20.0)
+        ty, tz = sgn * (0.95 + 2.3 * np.sin(cant)), 0.75 + 2.3 * np.cos(cant)
+        faces += surface_faces(
+            ((-3.0, sgn * 0.95, 0.75), (-6.3, sgn * 0.95, 0.75)),
+            ((-4.6, ty, tz), (-5.8, ty, tz)),
+            (192, 196, 204),
+            f"fin_{side}",
+            panels=2,
+        )
+        # Engine intakes under the strakes, listed front first so the cap
+        # closes the mouth and the apex fairs the duct into the fuselage.
+        faces += body_faces(
+            [(2.0, 0.50, 0.55, -0.35), (-1.0, 0.48, 0.52, -0.35)],
+            (176, 180, 188),
+            f"intake_{side}",
+            y=sgn * 1.15,
+            n=8,
+            apex=(-3.0, sgn * 0.9, -0.2),
+            cap=(48, 52, 60),
+        )
+        faces += body_faces(
+            [(-8.35, 0.40, 0.40, 0.05), (-7.7, 0.46, 0.46, 0.05)],
+            (112, 108, 104),
+            f"nozzle_{side}",
+            y=sgn * 0.52,
+            n=8,
+            cap=(40, 40, 44),
+        )
+
+    tip_le, _ = chord(half_span, wz)
+    nav_lights = (
+        (np.array([tip_le[0] - 0.8, half_span - 0.1, wz]), (255, 50, 50), "nav_port"),
+        (np.array([tip_le[0] - 0.8, -half_span + 0.1, wz]), GOOD, "nav_stbd"),
+    )
+    return AircraftModel("hornet", outward(faces), nav_lights, light_radius=0.45)
+
+
+#: Model builders by name. A new airframe is one more entry here.
+MODEL_BUILDERS = {"a320": build_a320, "hornet": build_hornet}
+
+
+@lru_cache(maxsize=None)
+def aircraft_model(name: str) -> AircraftModel:
+    """The registered model *name*, built once."""
+    return MODEL_BUILDERS[name]()
+
+
+def register_model(name: str, builder) -> None:
+    """Add or replace the model built by ``builder()`` under *name*."""
+    MODEL_BUILDERS[name] = builder
+    aircraft_model.cache_clear()
+
+
+def model_for(params, default: str = "a320") -> AircraftModel:
+    """The model of the airframe *params* fly: the registered one nearest its
+    wingspan, or *default* for params that carry none. Read off the span rather
+    than a params field of its own, because params values are fingerprinted."""
+    span = getattr(params, "wingspan", None)
+    if span is None:
+        return aircraft_model(default)
+    span = float(span)
+    models = [aircraft_model(name) for name in MODEL_BUILDERS]
+    return min(models, key=lambda m: abs(np.log(m.span / span)))
+
+
+def _as_model(model) -> AircraftModel:
+    return aircraft_model(model) if isinstance(model, str) else model
 
 
 #: Direction *toward* the light: high, and on the camera's side so the near
@@ -416,17 +601,18 @@ LIGHT = np.array([-0.35, -0.55, 0.76]) / np.linalg.norm([-0.35, -0.55, 0.76])
 SUPERSAMPLE = 3
 
 
-def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
+def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn, model="a320"):
     """
-    Render the 3D plane model onto a surface.
+    Render an aircraft model onto a surface.
 
     R:          3x3 rotation matrix
     scale_px:   pixels per body-frame meter
     camera_dir: the direction the camera looks along (sets the depth sort)
     project_fn: callable(rotated_pt) -> (screen_x, screen_y)
                 maps a rotated 3D point to 2D screen coords
+    model:      the :class:`AircraftModel` to draw, or its registered name
     """
-    faces, L, fw, fh, nav_lights = build_plane_faces()
+    model = _as_model(model)
     s = scale_px
 
     # Draw into a supersampled scratch surface, then shrink it. pygame's
@@ -445,7 +631,7 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
         )
         / 1000.0
     )
-    half = int(max(28.0, scale_px * 34.0) * SUPERSAMPLE)
+    half = int(max(28.0, scale_px * model.reach) * SUPERSAMPLE)
     canvas = pygame.Surface((2 * half, 2 * half), pygame.SRCALPHA)
     surf, project_fn = canvas, (
         lambda pt, sc: (
@@ -466,7 +652,7 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
     depth_axis = int(np.argmax(np.abs(camera_dir)))
 
     transformed = []
-    for verts, base_color, name in faces:
+    for verts, base_color, name, plate in model.faces:
         rotated = (R @ verts.T).T
         center = rotated.mean(axis=0)
         depth = center[depth_axis]
@@ -488,24 +674,22 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
         # is invariant to which way the aircraft faces, so it cannot convey a
         # turn; a fixed light makes the lit side change as the aircraft comes
         # round, which is what the side panel is for. Signed, not ``abs()``:
-        # the windings are normalised outward in build_plane_faces, so a face
-        # turned away from the light is genuinely dark.
+        # the windings are normalised outward (``outward``), so a face turned
+        # away from the light is genuinely dark. Plates are lit from either face.
         lambert = float(np.dot(normal, LIGHT))
-        if name.startswith(("wing", "hstab", "vert_stab")):
-            # Single polygons standing in for thin plates: no interior, so
-            # they are lit from either face.
+        if plate:
             lambert = abs(lambert)
         shade = 0.30 + 0.70 * max(lambert, 0.0)
         color = tuple(int(c * shade) for c in base_color)
 
         screen_pts = [project_fn(pt, s) for pt in rotated]
-        transformed.append((depth, screen_pts, color, name))
+        transformed.append((depth, screen_pts, color, plate))
 
     # Painter's algorithm — sort by camera_dir sign
     cam_sign = np.sign(camera_dir[depth_axis])
     transformed.sort(key=lambda t: -cam_sign * t[0])
 
-    for _, screen_pts, color, name in transformed:
+    for _, screen_pts, color, plate in transformed:
         if len(screen_pts) >= 3:
             gfxdraw.filled_polygon(surf, screen_pts, color)
             # Antialias the edge in the face's own colour. It used to be
@@ -514,23 +698,21 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
             # hundred small ones. The supersampled downscale does the real
             # smoothing; this only fills the edge pixels.
             gfxdraw.aapolygon(surf, screen_pts, color)
+            if plate:
+                # A plate seen edge-on, as every wing and fin is from dead
+                # astern, has no area, and its one-pixel outline in the
+                # supersampled canvas shrank to a third of a pixel: a Hornet
+                # from behind was two nozzles and nothing else. One screen
+                # pixel keeps the surface a line, as it looks.
+                pygame.draw.polygon(surf, color, screen_pts, SUPERSAMPLE)
 
-    # Passenger windows
-    hl = L / 2
-    n_win = 14
-    win_spacing = L * 0.55 / n_win
-    for side_sign in [-1, 1]:
-        for i in range(n_win):
-            wx = -hl * 0.3 + i * win_spacing
-            wy = side_sign * fw
-            wz = fh * 0.15
-            pt = R @ np.array([wx, wy, wz])
-            sx, sy = project_fn(pt, s)
-            # Only draw if facing camera
-            if camera_dir[depth_axis] * pt[depth_axis] < 0:
-                pygame.draw.circle(
-                    surf, (100, 100, 120), (sx, sy), max(1, int(s * 0.3))
-                )
+    # Passenger windows, on the side facing the camera.
+    for wpt in model.windows:
+        pt = R @ wpt
+        if camera_dir[depth_axis] * pt[depth_axis] < 0:
+            pygame.draw.circle(
+                surf, (100, 100, 120), project_fn(pt, s), max(1, int(s * 0.3))
+            )
 
     # Navigation lights — drawn last so they sit on top regardless of depth.
     # Each light gets a soft halo + a bright core so it remains visible when
@@ -543,9 +725,9 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
     # core and 6 px of halo at the current glyph scale: the port and starboard
     # lights are the clearest cue for whether the aircraft is coming or going,
     # and at the previous factors they shrank to about a pixel and a half.
-    light_r_core = max(2 * SUPERSAMPLE, int(s * 0.95 * SUPERSAMPLE))
-    light_r_halo = max(4 * SUPERSAMPLE, int(s * 1.9 * SUPERSAMPLE))
-    for pt_body, color, _name in nav_lights:
+    light_r_core = max(2 * SUPERSAMPLE, int(s * model.light_radius * SUPERSAMPLE))
+    light_r_halo = max(4 * SUPERSAMPLE, int(s * 2 * model.light_radius * SUPERSAMPLE))
+    for pt_body, color, _name in model.nav_lights:
         pt = R @ pt_body
         sx, sy = project_fn(pt, s)
         # Halo (semi-transparent)
@@ -598,7 +780,7 @@ def rotation_matrix(theta, phi, psi):
     return Rz @ Ry @ Rx
 
 
-def draw_plane_sideview(surf, cx, cy, theta, phi, psi, scale_px=1.0):
+def draw_plane_sideview(surf, cx, cy, theta, phi, psi, scale_px=1.0, model="a320"):
     """Draw the 3D plane projected onto x-z plane, viewed from the south.
 
     The camera direction is ``+y``, not ``-y``, and the two have to agree with
@@ -621,10 +803,10 @@ def draw_plane_sideview(surf, cx, cy, theta, phi, psi, scale_px=1.0):
     def project(pt, s):
         return (int(cx + pt[0] * s), int(cy - pt[2] * s))
 
-    render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project)
+    render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project, model)
 
 
-def draw_plane_topdown(surf, cx, cy, theta, phi, psi, scale_px=1.0):
+def draw_plane_topdown(surf, cx, cy, theta, phi, psi, scale_px=1.0, model="a320"):
     """Draw the 3D plane projected onto x-y plane (top-down view, camera along -z)."""
     R = rotation_matrix(theta, phi, psi)
     camera_dir = np.array([0, 0, -1])
@@ -632,7 +814,7 @@ def draw_plane_topdown(surf, cx, cy, theta, phi, psi, scale_px=1.0):
     def project(pt, s):
         return (int(cx + pt[0] * s), int(cy - pt[1] * s))
 
-    render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project)
+    render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project, model)
 
 
 def draw_heading_dashed(surf, cx, cy, heading, length, color, dash=10, gap=8):
