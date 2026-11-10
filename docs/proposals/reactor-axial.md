@@ -84,6 +84,37 @@ releases little reactivity, and the plant's own feedback holds Tavg less, so the
 program alone is not enough. Not fixed: whether that end of the range is a member that
 runs 5 %/min returns at all is the owner's call (amendment 5, B5 scenarios).
 
+### The trip guard and the narrowed MTC (owner, 2026-11-10)
+
+The trip flag was raised during the bad bump; the recipe dropped it. Each step returns
+`info["tripped"]`, and `closed()` kept only the states. It now raises
+`TrippedDuringTest`, the sweep counts a refused tune as a failed draw, and a test checks
+that the old 20 % step is refused. The same audit across the other tasks ran in its own
+session (11 sites fixed, branch `claude/awesome-snyder-910825`; the cement kiln's
+shipped inner loop was fitted across a restart).
+
+The owner narrowed the MTC to -9 to -18 pcm/K, the physics review's judgment for this
+member (finding 2, in PHYSICS.md before the sweep), still drawn with the boron worth.
+
+**Re-sweep on the narrowed range: the property holds on 8 of 8 draws.** No tune was
+refused, the null at rest costs nothing on every draw, and the reference has no trip
+outside fast_return. fast_return still trips at the weak end:
+
+| Draw | MTC, pcm/K | fast_return trips (of 10) | fast_return, reference / null medians |
+|---:|---:|---:|---|
+| 0 | -17.6 | 0 | $5,856 / $84.8M |
+| 1 | -11.8 | 2 | $10,408 / $90.4M |
+| 2 | -13.4 | 0 | $8,300 / $36.2M |
+| 3 | -14.8 | 0 | $7,322 / $79.3M |
+| 4 | -10.4 | 6 | $30.8M / $59.1M |
+| 5 | -16.3 | 0 | $6,538 / $73.7M |
+| 6 | -9.9 | 10 | $45.9M / $50.0M |
+| 7 | -14.0 | 0 | $7,829 / $51.1M |
+
+So at -10 pcm/K and weaker, the rods-on-Tavg mode loses most fast returns, and the
+property holds there only because the null loses them all. Draw 4's edf_daily median is
+$274,567 with no trip (other days about $4,000), not yet read. Both left as findings.
+
 Also found: `test_a_plan_on_the_loads_ramp_replays_on_the_env` (medium tier, never run
 in this rebuild) fails with a replay gap of 0.86 to 0.99, already on reactor-v6, before
 any of today's changes. The IPOPT ceilings replay their plans on the env, so their
