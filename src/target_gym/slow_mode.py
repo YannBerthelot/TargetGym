@@ -74,10 +74,13 @@ def coupled_pair(
     offset: np.ndarray,
     low: np.ndarray,
     high: np.ndarray,
+    bias: bool = False,
 ) -> Pair:
     """Run A and B on ``PRNGKey(seed)``: ``pre`` steps with B in manual mode, then
     ``length`` steps with both under a fresh ``make_policy(params)``. A policy is
-    called as ``policy(obs, state)`` and returns the action."""
+    called as ``policy(obs, state)`` and returns the action. With ``bias``, B's
+    excursion is its own reference plus ``offset`` instead of a held action, so a
+    plant that runs away open loop stays in its envelope."""
     reset_key, step_key = jax.random.split(jax.random.PRNGKey(seed))
     step = jax.jit(env.step_env)
     obs, state = env.reset_env(reset_key, params)
@@ -88,10 +91,15 @@ def coupled_pair(
         u_a = np.asarray(policy_a(np.asarray(obs_a), s_a), dtype=float)
         if held is None:
             held = np.clip(u_a + offset, low, high)
-        if t < pre:
+        if t < pre and not bias:
             u_b = held
         else:
             policy_b = make_policy(params) if policy_b is None else policy_b
+            u_b = np.asarray(policy_b(np.asarray(obs_b), s_b), dtype=float)
+            if t < pre:
+                u_b = np.clip(u_b + offset, low, high)
+        if t == pre and bias:
+            policy_b = make_policy(params)  # the hand-over starts a fresh reference
             u_b = np.asarray(policy_b(np.asarray(obs_b), s_b), dtype=float)
         k = jax.random.fold_in(step_key, t)
         obs_a, s_a, r_a, _, info_a = step(k, s_a, u_a, params)
@@ -112,9 +120,12 @@ def coupled_pair(
 def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     """``t_s`` from coupled pairs: ``-1 / slope`` of ``log`` of the median largest
     scaled gap, fitted where it lies between ``e^-1`` and ``e^-5`` of its start.
-    ``ignore`` names bookkeeping fields (substrings of the element names)."""
+    ``ignore`` names bookkeeping fields: an element is skipped when its name, less
+    any ``[i]`` index, ends with an entry (``".x"`` skips ``.lead.x``, not ``.x_dot``).
+    """
     names = pairs[0].names
-    acc = np.array([any(i in n for i in ignore) for n in names], bool)
+    base = [n.split("[")[0] for n in names]
+    acc = np.array([any(b.endswith(i) for i in ignore) for b in base], bool)
     stuck = np.zeros(len(names), bool)
     largest, argmax = [], []
     for p in pairs:

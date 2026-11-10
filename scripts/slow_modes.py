@@ -19,12 +19,31 @@ import numpy as np
 
 #: Bookkeeping per task, never plant state: name -> reason. Filled from the first
 #: run's ``never_forgot`` lists, each entry checked against the task's env code.
-IGNORE: dict[str, dict[str, str]] = {}
+_POSITION = "position along the track; no hold task's cost reads it"
+_FUEL = "fuel burnt is history: a monotone burn, not a mode that decays"
+_PLANE = {".x": _POSITION, ".m": _FUEL, ".fuel": _FUEL}
+_PLANE3D = {**_PLANE, ".y": _POSITION}
+IGNORE: dict[str, dict[str, str]] = {
+    "plane": _PLANE,
+    "plane_energy": _PLANE,
+    "plane_sine": _PLANE,
+    **{f"plane3d_{k}": _PLANE3D for k in ("heading", "circle", "racetrack", "figure8")},
+    "compressor_surge": {
+        ".surge_times": "a log of past surge times, counted only inside "
+        "surge_window (env.py:688), so its effect expires on its own"
+    },
+    "battery": {
+        ".baselines": "declared per period; past entries are history and the "
+        "current one acts through soc and period_response"
+    },
+}
 
 SEEDS = range(100, 110)
 
 
-def measure(name: str, windows: float, offset_share: float, pre: float) -> dict:
+def measure(
+    name: str, windows: float, offset_share: float, pre: float, bias: bool
+) -> dict:
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
     from target_gym.slow_mode import coupled_pair, slow_mode
@@ -45,6 +64,7 @@ def measure(name: str, windows: float, offset_share: float, pre: float) -> dict:
             offset=offset_share * (high - low),
             low=low,
             high=high,
+            bias=bias,
         )
         for k in SEEDS
     ]
@@ -58,6 +78,7 @@ def measure(name: str, windows: float, offset_share: float, pre: float) -> dict:
         "start_excess": result.start_excess,
         "tripped_pairs": result.tripped_pairs,
         "pre": pre,
+        "bias": bias,
         "offset": offset_share,
         "ignored": IGNORE.get(name, {}),
         "windows": windows,
@@ -73,10 +94,11 @@ def main() -> None:
     ap.add_argument("--windows", type=float, default=3.0)
     ap.add_argument("--offset", type=float, default=0.1, help="share of the span")
     ap.add_argument("--pre", type=float, default=0.5, help="share of a window")
+    ap.add_argument("--bias", action="store_true", help="closed-loop excursion")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", default="slow_modes.json")
     args = ap.parse_args()
-    jobs = [(t, args.windows, args.offset, args.pre) for t in args.tasks]
+    jobs = [(t, args.windows, args.offset, args.pre, args.bias) for t in args.tasks]
     with mp.get_context("spawn").Pool(args.workers) as pool:
         rows = []
         for row in pool.starmap(measure, jobs):

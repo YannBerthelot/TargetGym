@@ -54,12 +54,13 @@ def hold_zero(params):
     return lambda obs, state: np.zeros(1)
 
 
-def measure(plant, length, seeds=(0, 1, 2), ignore=("total",)):
+def measure(plant, length, seeds=(0, 1, 2), ignore=(".total",), bias=False):
     pairs = [
         coupled_pair(
             plant,
             None,
             hold_zero,
+            bias=bias,
             seed=k,
             pre=30,
             length=length,
@@ -95,3 +96,16 @@ def test_a_plant_integrator_that_never_forgets_gives_no_finite_t_s():
     result = measure(TwoModePlant(0.8, 1.0), length=100)
     assert result.t_s == np.inf
     assert [n for n in result.never_forgot if "slow" in n]
+
+
+def test_a_closed_loop_excursion_finds_the_same_decay():
+    # The decay rate is the plant's under the reference, not the excursion's.
+    result = measure(TwoModePlant(0.8, 0.98), length=400, bias=True)
+    assert result.t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
+
+
+def test_an_ignored_name_matches_whole_fields_only():
+    # ".slow" must not skip a field merely starting with it; here it skips "slow"
+    # itself, so the fast mode is all that is left.
+    result = measure(TwoModePlant(0.8, 0.98), length=400, ignore=(".total", ".slow"))
+    assert result.t_s == pytest.approx(-1 / np.log(0.8), rel=0.02)
