@@ -323,6 +323,178 @@ def gradient_bar(ax, x, y, w, h, values, cmap_fn, *, ec=FRAME, lw=1.0, zorder=2)
 
 
 # ---------------------------------------------------------------------------
+# Isometric drawing
+# ---------------------------------------------------------------------------
+
+
+def shade(color, f: float) -> tuple:
+    """``color`` darkened (f < 1) or lightened (f > 1), for an isometric face."""
+    r, g, b = mcolors.to_rgb(color)
+    if f <= 1.0:
+        return (r * f, g * f, b * f)
+    t = f - 1.0
+    return (r + (1 - r) * t, g + (1 - g) * t, b + (1 - b) * t)
+
+
+#: Light on an isometric solid: its top, its front (+y) and its side (+x).
+TOP, FRONT, SIDE = 1.0, 0.72, 0.55
+
+
+class Iso:
+    """A parallel (axonometric) projection of plant coordinates into a schematic.
+
+    ``x`` runs along the plant, down to the right on screen at ``x_deg``, ``y``
+    across it toward the viewer, down to the left at ``y_deg`` and foreshortened
+    by ``y_scale``, and ``z`` up. 30, 30 and 1 are true isometric; a long plant
+    reads better flatter, with ``x`` near the horizontal. The viewer sits on the
+    +x, +y, +z side whatever the angles, so the faces it sees are the top, the +y
+    front and the +x end. ``zx`` exaggerates heights, as a stylised plant
+    drawing does, and ``x_scale`` shortens a long one. The projection is
+    fitted so the given extent fills ``box``.
+    """
+
+    def __init__(
+        self,
+        xlim,
+        ylim,
+        zlim,
+        *,
+        zx=1.0,
+        box=(0.02, 0.98, 0.08, 0.92),
+        x_deg=30.0,
+        y_deg=30.0,
+        y_scale=1.0,
+        x_scale=1.0,
+    ):
+        self.zx = zx
+        ax_, ay_ = np.radians(x_deg), np.radians(y_deg)
+        self._xc, self._xs = x_scale * np.cos(ax_), x_scale * np.sin(ax_)
+        self._yc, self._ys = y_scale * np.cos(ay_), y_scale * np.sin(ay_)
+        corners = np.array(
+            [(x, y, z) for x in xlim for y in ylim for z in zlim], dtype=float
+        )
+        u, v = self._raw(corners[:, 0], corners[:, 1], corners[:, 2])
+        k = min((box[1] - box[0]) / np.ptp(u), (box[3] - box[2]) / np.ptp(v))
+        self._k = k
+        self._u0 = 0.5 * (box[0] + box[1]) - k * 0.5 * (u.min() + u.max())
+        self._v0 = 0.5 * (box[2] + box[3]) - k * 0.5 * (v.min() + v.max())
+
+    def _raw(self, x, y, z):
+        x, y, z = (np.asarray(a, dtype=float) for a in (x, y, z))
+        u = x * self._xc - y * self._yc
+        return u, -x * self._xs - y * self._ys + self.zx * z
+
+    def p(self, x, y, z):
+        """Screen ``(u, v)`` of a plant point (arrays broadcast)."""
+        u, v = self._raw(x, y, z)
+        return self._u0 + self._k * u, self._v0 + self._k * v
+
+    def poly(self, ax, pts, *, fc, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, **kw):
+        """A face through 3D points ``pts``, as one polygon."""
+        pts = np.asarray(pts, dtype=float)
+        u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
+        patch = mpatches.Polygon(
+            np.column_stack([u, v]),
+            closed=True,
+            fc=fc,
+            ec=ec,
+            lw=lw,
+            alpha=alpha,
+            zorder=zorder,
+            **kw,
+        )
+        ax.add_patch(patch)
+        return patch
+
+    def box(
+        self, ax, x, y, z, *, color, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, hatch=None
+    ):
+        """A solid over ``x = (x0, x1)``, ``y``, ``z``: its three visible faces."""
+        (x0, x1), (y0, y1), (z0, z1) = x, y, z
+        faces = (
+            ([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)], TOP),
+            ([(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)], FRONT),
+            ([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], SIDE),
+        )
+        for pts, f in faces:
+            self.poly(
+                ax,
+                pts,
+                fc=shade(color, f),
+                ec=ec,
+                lw=lw,
+                alpha=alpha,
+                zorder=zorder,
+                hatch=hatch,
+            )
+
+    def revolve(
+        self,
+        ax,
+        p0,
+        p1,
+        r0,
+        r1,
+        colour,
+        *,
+        n=28,
+        lw=0.3,
+        zorder=3,
+        alpha=1.0,
+        cap=False,
+    ):
+        """A solid of revolution from ``p0`` (radius ``r0``) to ``p1`` (``r1``):
+        a tube, a tyre, a cone. ``colour(theta)`` paints each facet by its
+        angle around the axis, 0 toward +y (the viewer) for a horizontal axis
+        and pi / 2 at its top; facets facing away are culled and the rest lit
+        from the top front. ``cap`` closes the ``p1`` end where it faces the
+        viewer."""
+        p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+        axis = (p1 - p0) / np.linalg.norm(p1 - p0)
+        ref = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([0, 1, 0])
+        e2 = ref - axis * (ref @ axis)
+        e2 = e2 / np.linalg.norm(e2)  # "up" around the axis
+        e1 = np.cross(e2, axis)  # toward the viewer for an axis along +x
+        if e1[1] < 0:
+            e1 = -e1
+        light = np.array([-0.3, 0.6, 0.75])
+        light = light / np.linalg.norm(light)
+        # Toward the viewer: the direction the projection flattens.
+        view = np.array(
+            [self._yc, self._xc, (self._xs * self._yc + self._ys * self._xc) / self.zx]
+        )
+        ts = np.linspace(-np.pi, np.pi, n + 1)
+        for t0, t1 in zip(ts[:-1], ts[1:]):
+            tm = 0.5 * (t0 + t1)
+            normal = np.cos(tm) * e1 + np.sin(tm) * e2
+            if normal @ view <= 0.0:
+                continue
+            ring = lambda p, r, t: p + r * (np.cos(t) * e1 + np.sin(t) * e2)  # noqa
+            pts = [
+                ring(p0, r0, t0),
+                ring(p1, r1, t0),
+                ring(p1, r1, t1),
+                ring(p0, r0, t1),
+            ]
+            lit = 0.5 + 0.5 * max(float(normal @ light), 0.0)
+            c = shade(colour(tm), 0.55 + 0.6 * lit)
+            self.poly(ax, pts, fc=c, ec=c, lw=lw, alpha=alpha, zorder=zorder)
+        if cap and axis @ view > 0.0:
+            rim = [p1 + r1 * (np.cos(t) * e1 + np.sin(t) * e2) for t in ts]
+            c = shade(colour(0.5 * np.pi), TOP)
+            self.poly(ax, rim, fc=c, ec=FRAME, lw=lw, alpha=alpha, zorder=zorder)
+
+    def text(self, ax, x, y, z, s, **kw):
+        u, v = self.p(x, y, z)
+        return label(ax, float(u), float(v), s, **kw)
+
+    def line(self, ax, pts, **kw):
+        pts = np.asarray(pts, dtype=float)
+        u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
+        ax.plot(u, v, **kw)
+
+
+# ---------------------------------------------------------------------------
 # Instrument gauges
 # ---------------------------------------------------------------------------
 

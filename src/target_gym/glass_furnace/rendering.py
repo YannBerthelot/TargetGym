@@ -1,11 +1,12 @@
 """Control-room rendering for the float glass furnace.
 
-The schematic is a side section of a cross-fired regenerative furnace, drawn to
-the model's own lengths: the batch charger at the back wall, the melter under its
-crown with a burner port per bay, the unfired zone, the waist, the working end
-and the canal that feeds the float bath. The crown is tinted by each bay's hot
-face, the flames by each bay's gas, the melt cell by cell by its temperature, and
-the batch blanket lies on the melt as far as it reaches. The agent reads only the
+The schematic is an isometric cutaway of a cross-fired regenerative furnace,
+drawn to the model's own lengths and cut along its centreline so the melt shows
+in section: the batch charger at the back wall, the melter under its crown with
+a burner port per bay, the unfired zone, the waist, the working end and the canal
+that feeds the float bath. The crown is tinted by each bay's hot face, the flames
+by each bay's gas, the melt cell by cell by its temperature, and the batch
+blanket lies on the melt as far as it reaches. The agent reads only the
 instruments marked so: the crown couple, not the hottest face that the plant's
 override protects against the crown limit.
 """
@@ -18,26 +19,14 @@ from target_gym.glass_furnace import physical as P
 HISTORY_KEYS = ("t", "crown", "canal", "fining", "pass", "fuel", "reward")
 
 _MELT = (1300.0, 1900.0)  # K, the colour scale of the melt and the crown
-_BRICK, _BRICK_EDGE = "#3a2824", "#5c4038"  # refractory, muted for the dark console
-_CANAL_M = 4.0  # m of canal drawn past the working end, decor
-_X0, _X1 = 0.07, 0.95  # the furnace's extent in the schematic
-_FLOOR, _SURF = 0.26, 0.42  # the bath's floor and surface (depth exaggerated)
-
-
-def _brick(ax, x, y, w, h, zorder=2):
-    """A block of refractory, hatched in courses."""
-    ax.add_patch(
-        rk.patches.Rectangle(
-            (x, y),
-            w,
-            h,
-            fc=_BRICK,
-            ec=_BRICK_EDGE,
-            lw=0.8,
-            hatch="--",
-            zorder=zorder,
-        )
-    )
+_BRICK = "#5a3f36"  # refractory, muted for the dark console
+_STEEL = "#4a5866"
+_BATCH = "#b8b0a4"
+_ZX = 3.0  # heights exaggerated, as a stylised plant drawing
+_XS = 0.45  # lengths shortened, so the long plant fills the panel
+_WALL = 0.8  # m of refractory, decor
+_CANAL = (5.0, 1.0)  # m long and half-wide, decor
+_SLAB = 0.8  # m of floor under the bath, decor
 
 
 def _glow(T):
@@ -52,270 +41,315 @@ def _draw_furnace(ax, state, params):
     roof = np.asarray(plant.T_roof)[0]
     gas = np.asarray(plant.T_gas)
     dx, dz = np.asarray(a.dx), np.asarray(a.dz)
-    edges = np.concatenate([[0.0], np.cumsum(dx)])
-    total = edges[-1] + _CANAL_M
-    X = lambda m: _X0 + (_X1 - _X0) * m / total  # noqa: E731
-    zone_ends = np.cumsum([a.nm, g.n_refiner, g.n_waist, g.n_end])
-    melter_end, refiner_end, waist_end, end_end = (edges[k] for k in zone_ends)
+    half = 0.5 * np.asarray(a.wc)  # each column's half width
+    W, D = float(a.width), float(dz.sum())
+    H = 2.4  # m of gas space over the melter (physical._layout)
+    xs = np.concatenate([[0.0], np.cumsum(dx)])
+    end = xs[-1]
+    total = end + _CANAL[0]
+    yc = 0.5 * W  # the cut, along the centreline
+    nm, nr = a.nm, a.nm + g.n_refiner
+    nw = nr + g.n_waist
+    iso = rk.Iso(
+        (-4.0, total + 6.0),
+        (-_WALL - 3.0, yc),
+        (-D - _SLAB, H + 5.0),
+        zx=_ZX,
+        box=(0.0, 1.0, 0.12, 0.95),
+        x_deg=10.0,
+        x_scale=_XS,
+        y_deg=25.0,
+        y_scale=0.8,
+    )
+    zones = (  # (first column, last column + 1, wall height, name)
+        (0, nm, H, "MELTER"),
+        (nm, nr, H, "UNFIRED"),
+        (nr, nw, 1.3, "WAIST"),
+        (nw, len(dx), 1.6, "WORKING END"),
+    )
 
-    # Ground, floor and back wall.
-    ax.axhspan(0.0, 0.17, color=rk.PANEL, zorder=0)
-    _brick(ax, X(0) - 0.02, 0.17, X(end_end) - X(0) + 0.02, _FLOOR - 0.17)
-    _brick(ax, X(0) - 0.02, _FLOOR, 0.02, 0.38)
+    # The stack, behind the unfired zone (decor), and the back walls.
+    iso.box(
+        ax,
+        (xs[nm] + 6.0, xs[nm] + 8.5),
+        (-_WALL - 3.0, -_WALL - 0.5),
+        (-D, H + 4.0),
+        color=_BRICK,
+        zorder=1,
+    )
+    iso.text(ax, xs[nm] + 7.2, -_WALL - 1.7, H + 4.6, "STACK", color=rk.DIM, size=6)
+    for j0, j1, h, _ in zones:
+        yb = yc - half[j0]
+        iso.box(ax, (xs[j0], xs[j1]), (yb - _WALL, yb), (-D, h), color=_BRICK, zorder=1)
+    # The charger's hopper behind the back end wall, standing over it.
+    iso.box(
+        ax,
+        (-4.0, -_WALL - 0.3),
+        (yc - 3.5, yc - 0.5),
+        (0.0, H + 1.6),
+        color=_STEEL,
+        zorder=1,
+    )
+    iso.text(ax, -2.2, yc - 2.0, H + 2.6, "CHARGER", color=rk.DIM, size=6, zorder=8)
+    # The back end wall, in front of the charger.
+    iso.box(
+        ax, (-_WALL, 0.0), (yc - half[0] - _WALL, yc), (-D, H), color=_BRICK, zorder=1
+    )
 
-    # The melt, cell by cell.
-    zs = _SURF - (_SURF - _FLOOR) * np.concatenate([[0.0], np.cumsum(dz)]) / dz.sum()
-    for j in range(T.shape[1]):
+    # A burner port per melter bay in the back wall.
+    bay_w = xs[nm] / g.n_bays
+    yb = yc - half[0]
+    for k in range(g.n_bays):
+        xc = (k + 0.5) * bay_w
+        iso.poly(
+            ax,
+            [
+                (xc - 1.0, yb, 0.5),
+                (xc + 1.0, yb, 0.5),
+                (xc + 1.0, yb, 1.5),
+                (xc - 1.0, yb, 1.5),
+            ],
+            fc="#0a0a0a",
+            ec=rk.DIM,
+            lw=0.8,
+            zorder=2,
+        )
+
+    # Floor slab, cut at the centreline.
+    for j in range(len(dx)):
+        iso.box(
+            ax,
+            (xs[j], xs[j + 1]),
+            (yc - half[j] - _WALL, yc),
+            (-D - _SLAB, -D),
+            color=_BRICK,
+            ec="none",
+            zorder=2,
+        )
+
+    # The melt: its surface, and its section on the cut, cell by cell.
+    zs = -np.concatenate([[0.0], np.cumsum(dz)])
+    for j in range(len(dx)):
+        x0, x1, y0 = xs[j], xs[j + 1], yc - half[j]
+        iso.poly(
+            ax,
+            [(x0, y0, 0), (x1, y0, 0), (x1, yc, 0), (x0, yc, 0)],
+            fc=_glow(T[0, j]),
+            ec="none",
+            zorder=3,
+        )
         for i in range(T.shape[0]):
-            ax.add_patch(
-                rk.patches.Rectangle(
-                    (X(edges[j]), zs[i + 1]),
-                    X(edges[j + 1]) - X(edges[j]),
-                    zs[i] - zs[i + 1],
-                    fc=_glow(T[i, j]),
-                    ec="none",
-                    zorder=3,
-                )
+            iso.poly(
+                ax,
+                [
+                    (x0, yc, zs[i + 1]),
+                    (x1, yc, zs[i + 1]),
+                    (x1, yc, zs[i]),
+                    (x0, yc, zs[i]),
+                ],
+                fc=_glow(T[i, j]),
+                ec="none",
+                zorder=3,
             )
-
-    # The batch blanket floating on the melter's surface, and the foam.
+    # The batch blanket, as far as it reaches.
     cover = np.asarray(P.cover(plant.m))
     for j, c in enumerate(cover):
         if c > 0.02:
-            ax.add_patch(
-                rk.patches.Rectangle(
-                    (X(edges[j]), _SURF),
-                    (X(edges[j + 1]) - X(edges[j])) * c,
-                    0.014,
-                    fc="#b8b0a4",
-                    ec="none",
-                    zorder=4,
-                )
-            )
-    rk.label(
-        ax,
-        X(0) + 0.01,
-        _SURF + 0.03,
-        "batch",
-        color="#b8b0a4",
-        size=6,
-        ha="left",
-        zorder=7,
-    )
-
-    # Charger at the back wall, with its hopper.
-    ax.add_patch(
-        rk.patches.Polygon(
-            [
-                (X(0) - 0.065, 0.60),
-                (X(0) - 0.015, 0.60),
-                (X(0) - 0.03, 0.50),
-                (X(0) - 0.05, 0.50),
-            ],
-            fc=rk.WELL,
-            ec=rk.DIM,
-            lw=1.0,
-            zorder=4,
-        )
-    )
-    rk.flow_arrow(
-        ax, X(0) - 0.04, 0.49, X(0) + 0.01, _SURF + 0.02, color="#b8b0a4", lw=1.4
-    )
-    rk.label(ax, X(0) - 0.04, 0.63, "CHARGER", color=rk.DIM, size=6)
-
-    # Breast walls and the crown arch over the melter and the unfired zone,
-    # each melter bay tinted by its hot face.
-    wall_top = 0.60
-    _brick(ax, X(0) - 0.02, _SURF, 0.02, wall_top - _SURF)
-    bay_w = melter_end / g.n_bays
-    for k in range(g.n_bays):
-        xa, xb = X(k * bay_w), X((k + 1) * bay_w)
-        ax.add_patch(
-            rk.patches.Rectangle(
-                (xa, wall_top),
-                xb - xa,
-                0.035,
-                fc=_glow(roof[k]),
-                ec=_BRICK_EDGE,
-                lw=0.8,
-                alpha=0.9,
+            x1 = xs[j] + (xs[j + 1] - xs[j]) * c
+            iso.box(
+                ax,
+                (xs[j], x1),
+                (yc - half[j], yc),
+                (0.0, 0.12),
+                color=_BATCH,
+                ec="none",
                 zorder=4,
             )
-        )
-    arch_x = np.linspace(X(0) - 0.02, X(refiner_end), 60)
-    mid, half = 0.5 * (arch_x[0] + arch_x[-1]), 0.5 * (arch_x[-1] - arch_x[0])
-    rise = 0.14 * np.sqrt(np.clip(1.0 - ((arch_x - mid) / half) ** 2, 0.0, 1.0))
-    top = wall_top + 0.035 + rise
-    ax.fill_between(
-        arch_x,
-        wall_top + 0.035,
-        top,
-        color=_BRICK,
-        ec=_BRICK_EDGE,
-        lw=0.8,
-        hatch="--",
-        zorder=3,
-    )
-    ax.plot(arch_x, top + 0.02, color=_BRICK_EDGE, lw=1.0, zorder=3)
-    hot = int(np.argmax(roof))
-    rk.label(
-        ax,
-        X((hot + 0.5) * bay_w),
-        top.max() + 0.045,
-        "▼ hottest face ●",
-        color=rk.RED,
-        size=6.5,
-    )
-    tc = X((P.COUPLE_BAY + 0.5) * bay_w)
-    ax.plot(
-        [tc, tc], [wall_top + 0.04, wall_top + 0.10], color=rk.CYAN, lw=1.6, zorder=6
-    )
-    rk.label(ax, tc, wall_top + 0.115, "TC", color=rk.CYAN, size=6.5, zorder=7)
-    # The flue gas leaves through the regenerators to the stack (decor).
-    sx = X(refiner_end) + 0.012
-    _brick(ax, sx, 0.57, 0.03, 0.36, zorder=1)
-    rk.label(ax, sx + 0.015, 0.95, "STACK", color=rk.DIM, size=6)
+    iso.text(ax, 2.0, yc + 1.2, 0.3, "batch", color=_BATCH, size=6, zorder=8)
 
-    # A burner port per bay, its flame across the melt by the bay's gas and share.
+    # Flames from each port across the bath, by the bay's gas and its share.
     fire = rk.clamp01(
         (float(state.fuel) - params.fuel_min) / (params.fuel_max - params.fuel_min)
     )
     shares = np.asarray(params.plant.port_shares, dtype=float)
     for k in range(g.n_bays):
-        xc = X((k + 0.5) * bay_w)
-        pw = 0.55 * (X(bay_w) - X(0))
-        ax.add_patch(
-            rk.patches.FancyBboxPatch(
-                (xc - pw / 2, wall_top - 0.045),
-                pw,
-                0.03,
-                boxstyle=rk.patches.BoxStyle("Round", pad=0.006),
-                fc="#0a0a0a",
-                ec=rk.DIM,
-                lw=1.0,
-                zorder=5,
-            )
-        )
-        strength = fire * shares[k] / shares.max()
-        rk.glow(
+        xc, f = (k + 0.5) * bay_w, fire * shares[k] / shares.max()
+        reach = yb + (0.4 + 0.5 * f) * half[0]
+        iso.poly(
             ax,
-            xc,
-            _SURF + 0.06,
-            0.06,
-            color=rk.ORANGE,
-            strength=1.4 * strength,
-            zorder=5,
+            [
+                (xc - 1.0, yb, 1.0),
+                (xc + 1.0, yb, 1.0),
+                (xc + 0.3, reach, 0.5),
+                (xc - 0.3, reach, 0.5),
+            ],
+            fc=_glow(gas[k]),
+            ec="none",
+            alpha=0.35 + 0.55 * f,
+            zorder=4,
         )
-        ax.add_patch(
-            rk.patches.Polygon(
-                [
-                    (xc - 0.4 * pw, wall_top - 0.05),
-                    (xc + 0.4 * pw, wall_top - 0.05),
-                    (xc + 0.15 * pw, _SURF + 0.025 + 0.06 * (1.0 - strength)),
-                    (xc - 0.15 * pw, _SURF + 0.025 + 0.06 * (1.0 - strength)),
-                ],
-                closed=True,
-                fc=_glow(gas[k]),
-                ec="none",
-                alpha=0.3 + 0.55 * strength,
-                zorder=5,
-            )
+
+    # The crown's back half, translucent, each melter bay tinted by its hot face.
+    ys = np.linspace(yb, yc, 12)
+    rise = 0.45 * np.sqrt(np.clip(1.0 - ((yc - ys) / half[0]) ** 2, 0.0, 1.0))
+    for k in range(g.n_bays + 1):
+        x0 = k * bay_w if k < g.n_bays else xs[nm]
+        x1 = (k + 1) * bay_w if k < g.n_bays else xs[nr]
+        col = _glow(roof[k]) if k < g.n_bays else _BRICK
+        arch = [(x0, y, H + r) for y, r in zip(ys, rise)]
+        arch += [(x1, y, H + r) for y, r in zip(ys[::-1], rise[::-1])]
+        iso.poly(
+            ax, arch, fc=col, ec=rk.shade(_BRICK, 1.3), lw=0.6, alpha=0.55, zorder=5
         )
-    rk.label(
+    iso.line(
         ax,
-        X(0.5 * (melter_end + refiner_end)),
-        0.53,
-        "◄ BURNER PORTS",
-        color=rk.DIM,
-        size=6,
+        [(0.0, yc, H + 0.45), (xs[nr], yc, H + 0.45)],
+        color=rk.shade(_BRICK, 1.5),
+        lw=1.6,
+        zorder=6,
+    )
+    hot = int(np.argmax(roof))
+    iso.text(
+        ax,
+        (hot + 0.5) * bay_w,
+        yc - 2.0,
+        H + 2.2,
+        "▼ hottest face ●",
+        color=rk.RED,
+        size=6.5,
+        zorder=8,
+    )
+    tc = (P.COUPLE_BAY + 0.5) * bay_w
+    iso.line(
+        ax,
+        [(tc, yc - 1.5, H + 0.4), (tc, yc - 1.5, H + 1.3)],
+        color=rk.CYAN,
+        lw=1.6,
         zorder=7,
     )
+    iso.text(ax, tc + 1.5, yc - 1.5, H + 1.3, "TC", color=rk.CYAN, size=6.5, zorder=8)
 
-    # Waist and working end: lower, flat roofs, the working end cooled by air.
-    for x0m, x1m, roof_y in (
-        (refiner_end, waist_end, 0.50),
-        (waist_end, end_end, 0.54),
-    ):
-        _brick(ax, X(x0m), roof_y, X(x1m) - X(x0m), 0.035)
-        _brick(ax, X(x0m), _SURF + 0.03, 0.006, roof_y - _SURF - 0.03)
+    # Waist and working end: flat roofs over the back half, the working end
+    # cooled by air blown in through its roof.
+    for j0, j1, h, _ in zones[2:]:
+        iso.box(
+            ax,
+            (xs[j0], xs[j1]),
+            (yc - half[j0] - _WALL, yc),
+            (h, h + 0.35),
+            color=_BRICK,
+            alpha=0.9,
+            zorder=5,
+        )
     cool = rk.clamp01(float(state.cooling) / params.cooling_max)
-    xm = X(0.5 * (waist_end + end_end))
-    for dxs in (-0.03, 0.0, 0.03):
+    xm = 0.5 * (xs[nw] + end)
+    for dxs in (-4.0, 0.0, 4.0):
+        u0, v0 = iso.p(xm + dxs, yc - 2.0, 4.6)
+        u1, v1 = iso.p(xm + dxs, yc - 2.0, 2.1)
         rk.flow_arrow(
             ax,
-            xm + dxs,
-            0.64,
-            xm + dxs,
-            0.585,
+            float(u0),
+            float(v0),
+            float(u1),
+            float(v1),
             color=rk.BLUE,
             lw=0.8 + 1.8 * cool,
             alpha=0.4 + 0.5 * cool,
+            zorder=7,
         )
-    rk.label(
+    iso.text(
         ax,
         xm,
-        0.665,
+        yc - 2.0,
+        5.3,
         f"cooling {float(state.cooling) / 1e6:.2f} MW",
         color=rk.BLUE,
         size=6.5,
+        zorder=8,
     )
-    _brick(ax, X(end_end) - 0.006, _SURF + 0.03, 0.006, 0.54 - _SURF - 0.03)
 
-    # Canal to the float bath.
-    canal_y = _SURF - 0.04
-    _brick(ax, X(end_end), 0.17, X(total) - X(end_end), canal_y - 0.17)
-    ax.add_patch(
-        rk.patches.Rectangle(
-            (X(end_end), canal_y),
-            X(total) - X(end_end),
-            0.018,
-            fc=_glow(T[0, -1]),
-            ec="none",
-            zorder=3,
-        )
+    # The canal to the float bath.
+    cw = _CANAL[1]
+    iso.box(
+        ax,
+        (end, total),
+        (yc - cw - _WALL, yc),
+        (-D - _SLAB, -0.3),
+        color=_BRICK,
+        ec="none",
+        zorder=5,
     )
+    iso.poly(
+        ax,
+        [
+            (end, yc - cw, -0.3),
+            (total, yc - cw, -0.3),
+            (total, yc, -0.3),
+            (end, yc, -0.3),
+        ],
+        fc=_glow(T[0, -1]),
+        ec="none",
+        zorder=6,
+    )
+    # The canal's back wall, standing over its glass.
+    iso.box(
+        ax,
+        (end, total),
+        (yc - cw - _WALL, yc - cw),
+        (-0.3, 0.6),
+        color=_BRICK,
+        zorder=6,
+    )
+    # Along the line, out of the canal's end.
+    u0, v0 = iso.p(total - 2.0, yc - 0.5, -0.3)
+    u1, v1 = iso.p(total + 6.0, yc - 0.5, -0.3)
     rk.flow_arrow(
         ax,
-        X(end_end) + 0.005,
-        canal_y + 0.03,
-        X(total) + 0.03,
-        canal_y + 0.03,
+        float(u0),
+        float(v0),
+        float(u1),
+        float(v1),
         color=rk.AMBER,
         lw=1.4,
+        zorder=8,
     )
-    rk.label(
+    iso.text(
         ax,
-        X(total) + 0.005,
-        canal_y + 0.075,
+        total + 3.0,
+        yc - 0.5,
+        -1.6,
         f"to float bath\n{float(state.pull) * 86.4:.0f} t/d",
         color=rk.AMBER,
         size=6.5,
+        zorder=8,
     )
 
-    # Zone names along the floor.
-    for x0m, x1m, name in (
-        (0.0, melter_end, "MELTER"),
-        (melter_end, refiner_end, "UNFIRED"),
-        (refiner_end, waist_end, "WAIST"),
-        (waist_end, end_end, "WORKING END"),
-        (end_end, total, "CANAL"),
-    ):
-        rk.label(
-            ax, X(0.5 * (x0m + x1m)), 0.135, name, color=rk.DIM, size=6.5, weight="bold"
+    # Zone names on the cut, under the floor.
+    for j0, j1, _, name in zones:
+        iso.text(
+            ax,
+            0.5 * (xs[j0] + xs[j1]),
+            yc + 1.0,
+            -D - _SLAB - 1.2,
+            name,
+            color=rk.DIM,
+            size=6.5,
+            weight="bold",
+            zorder=8,
         )
-    stretch = ((_SURF - _FLOOR) / dz.sum()) / ((_X1 - _X0) / total)
     rk.label(
         ax,
-        X(0.5 * end_end),
-        0.09,
-        f"melt field ● hidden  ·  depth ×{stretch:.0f}",
+        0.02,
+        0.98,
+        f"cut on the centreline  ·  melt ● hidden  ·  lengths ×{_XS:g}, heights ×{_ZX:g}",
         color=rk.PURPLE,
         size=6.5,
+        ha="left",
     )
     rk.caption(
         ax,
         f"melt {T.min() - 273.15:.0f} to {T.max() - 273.15:.0f} C"
-        f"  ·  {edges[-1]:.0f} m charger to canal",
+        f"  ·  {end:.0f} m charger to canal",
     )
 
 
@@ -405,7 +439,7 @@ def render_glass_furnace(state, params, step, history):
         step=step,
         elapsed_s=step * params.delta_t,
         schematic=lambda ax: _draw_furnace(ax, state, params),
-        schematic_title="LONG  SECTION",
+        schematic_title="CUTAWAY",
         gauges=gauges,
         strips=strips,
         status=status,
