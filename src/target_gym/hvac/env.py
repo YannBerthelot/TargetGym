@@ -274,7 +274,11 @@ def total_heat_loss_coefficient(params: HVACParams) -> float:
 
 
 def hour_of_day(time, params: HVACParams):
-    return jnp.mod(time * params.delta_t, SECONDS_PER_DAY) / SECONDS_PER_HOUR
+    """The hour at step ``time``, from the step count wrapped on the day
+    (``DAY_STEPS`` steps of 15 min): float32 holds the seconds exactly only to
+    about 16.7 million, 194 days, so the day stays exact however long the plant
+    runs (docs/proposals/long-strata.md, S1)."""
+    return (time % DAY_STEPS) * params.delta_t / SECONDS_PER_HOUR
 
 
 def is_occupied(time, params: HVACParams):

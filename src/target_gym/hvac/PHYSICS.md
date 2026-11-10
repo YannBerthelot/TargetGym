@@ -137,6 +137,17 @@ season (`scenarios.py`): normal 6, shoulder season 4, sunny spell 1.5, cold
 snap 1, low gains 0.5. All are ours, with family ranges in `scenarios.py`;
 REALITY.md has no weather statistics.
 
+**The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
+(`target_gym.stream`) each regime lasts a fortnight on average (`dwell_h` 336),
+the fortnight the suite defines it as, and brings no event of its own
+(`events_per_h` 0): the building's scenarios are weather and gains, not upsets.
+No source gives how long a cold snap or a sunny spell lasts (REALITY.md), so
+the dwell is ours, set once without tuning and open for the owner. The day
+(weather cycle, sun, office hours, tariff) reads a step count wrapped on
+`DAY_STEPS`, exact however long the plant runs; the weather's deviation is
+already mean-reverting from its long-run law. In a window nothing changes: a
+scored window is bit-identical to what it was.
+
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
