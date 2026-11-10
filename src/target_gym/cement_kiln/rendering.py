@@ -231,22 +231,32 @@ def render_cement_kiln(state, params, step, history):
     history["reward"].append(float(compute_reward(state, params)))
 
     err = abs(lime - float(state.target_lime) * 100.0)
-    status = rk.NOMINAL if err < 0.3 else (rk.WATCH if err < 1.0 else rk.ALARM)
+    band = params.lime_band * 100.0
+    lime_max = params.lime_max * 100.0
+    if lime >= 0.8 * lime_max:
+        status, status_text = rk.ALARM, "RUNNING RAW"
+    else:
+        status = (
+            rk.NOMINAL if err < 0.5 * band else (rk.WATCH if err < band else rk.ALARM)
+        )
+        status_text = None
     T_bz = float(burning_zone_temperature(state))
     bz_span = params.T_bz_max - params.T_bz_min
+    lime_span = 1.2 * lime_max  # the gauge's full scale, past the trip
 
     gauges = [
         rk.Gauge(
             "FREE LIME",
             f"{lime:.3f} %",
-            rk.clamp01(lime / 6.0),
+            rk.clamp01(lime / lime_span),
             rk.PINK,
-            target_frac=float(state.target_lime) * 100.0 / 6.0,
+            limit_frac=lime_max / lime_span,
+            target_frac=float(state.target_lime) * 100.0 / lime_span,
         ),
         rk.Gauge(
             "TARGET",
             f"{float(state.target_lime) * 100:.3f} %",
-            float(state.target_lime) * 100.0 / 6.0,
+            float(state.target_lime) * 100.0 / lime_span,
             rk.DIM,
         ),
         rk.Gauge(
@@ -301,7 +311,8 @@ def render_cement_kiln(state, params, step, history):
                 ),
             ],
             ylabel="free lime  [%]",
-            bands=[(0.5, 2.0, rk.GREEN)],
+            bands=[tuple(100.0 * v for v in params.target_lime_range) + (rk.GREEN,)],
+            lines=[(lime_max, rk.RED, "raw trip")],
         ),
         rk.Strip(
             history["t"],
@@ -326,6 +337,7 @@ def render_cement_kiln(state, params, step, history):
         gauges=gauges,
         strips=strips,
         status=status,
+        status_text=status_text,
         subtitle="transport delay ~25 min  ·  64 states behind 8 measurements",
     )
     return rk.finish(fig), history

@@ -334,7 +334,8 @@ class Gauge:
     ``frac`` is 0..1, or -1..1 when ``bipolar`` (zero at the bar centre, which
     is how a signed quantity like rod reactivity or battery power should read).
     ``limit_frac`` draws a red trip line; ``target_frac`` a white setpoint
-    marker.
+    marker. ``band`` is a ``(lo, hi)`` pair in the same units as ``frac``,
+    drawn as two green ticks: an allowed zone such as a dead band.
     """
 
     label: str
@@ -346,6 +347,21 @@ class Gauge:
     bipolar: bool = False
     neg_color: Optional[str] = None
     hidden: bool = False  # mark quantities the controller cannot measure
+    band: Optional[tuple] = None
+
+
+def cost_gauge(rewards: Sequence[float], params, unit: str = "", label="STEP COST"):
+    """The last step's cost, for a task scored as ``reward = -cost``.
+
+    The bar is the cost over the task's per-step failure cost, which every
+    surviving step stays below, so a full bar reads as "as dear as a trip".
+    A task with no trip cost scales by the dearest step seen so far.
+    """
+    cost = -float(rewards[-1])
+    scale = float(getattr(params, "failure_cost", 0.0) or 0.0)
+    if scale <= 0.0:
+        scale = max([-float(r) for r in rewards] + [1e-12])
+    return Gauge(label, f"{cost:.3g} {unit}".rstrip(), cost / scale, ORANGE)
 
 
 def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
@@ -407,6 +423,19 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
             ls="--",
             alpha=0.75,
         )
+    if g.band is not None:
+        for b in g.band:
+            if g.bipolar:
+                bx = x0 + bw / 2 * (1.0 + float(np.clip(b, -1, 1)))
+            else:
+                bx = x0 + bw * clamp01(b)
+            ax.plot(
+                [bx, bx],
+                [y - 0.004, y + bar_h + 0.004],
+                color=GREEN,
+                lw=1.4,
+                alpha=0.85,
+            )
     if g.target_frac is not None:
         tx = x0 + bw * clamp01(g.target_frac)
         s = 0.013

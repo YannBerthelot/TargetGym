@@ -3,6 +3,8 @@
 The schematic is a long section: the crown's hot face over each bay, and the melt's
 temperature field from the charger to the canal, with the fining pass mark beside the
 share the glass leaving it has done. The agent reads only the instruments marked so.
+The crown couple is what the agent reads; the plant's override protects the hottest
+face, which the agent does not see, against the crown limit.
 """
 
 import numpy as np
@@ -22,6 +24,9 @@ def _draw_furnace(ax, state, params):
     colour = lambda v: rk.thermal_hex(v, *_MELT)
     rk.gradient_bar(ax, x, 0.78, w * 0.5, 0.06, roof, colour)
     rk.label(ax, x + 0.25 * w, 0.88, "CROWN FACE, BY BAY")
+    hot = int(np.argmax(roof))
+    hx = x + w * 0.5 * (hot + 0.5) / len(roof)
+    rk.label(ax, hx, 0.755, "▲ hottest", color=rk.ORANGE, size=6.5)
     rows = T.shape[0]
     h = 0.40 / rows
     for i in range(rows):
@@ -46,6 +51,9 @@ def render_glass_furnace(state, params, step, history):
     fining, canal = float(read["fining"]), float(read["canal"])
     short = fining < params.fining_pass or canal < params.canal_target
     status = rk.ALARM if short else rk.NOMINAL
+    status_text = None
+    if not short and float(read["hot"]) >= params.crown_high - params.override_margin:
+        status, status_text = rk.WATCH, "CROWN OVERRIDE"
     to_frac = lambda T: (float(T) - _MELT[0]) / (_MELT[1] - _MELT[0])
     span = params.fuel_max - params.fuel_min
     gauges = [
@@ -54,7 +62,15 @@ def render_glass_furnace(state, params, step, history):
             f"{float(read['crown']) - 273.15:.0f} C",
             to_frac(read["crown"]),
             rk.ORANGE,
+        ),
+        rk.Gauge(
+            "HOTTEST FACE",
+            f"{float(read['hot']) - 273.15:.0f} C",
+            to_frac(read["hot"]),
+            rk.RED,
             limit_frac=to_frac(params.crown_high),
+            target_frac=to_frac(params.crown_high - params.override_margin),
+            hidden=True,
         ),
         rk.Gauge(
             "CANAL",
@@ -109,6 +125,7 @@ def render_glass_furnace(state, params, step, history):
         gauges=gauges,
         strips=strips,
         status=status,
+        status_text=status_text,
         subtitle="float glass  ·  fining read a transit late  ·  hours-long lags",
     )
     return rk.finish(fig), history
