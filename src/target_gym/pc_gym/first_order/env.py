@@ -45,6 +45,10 @@ class FirstOrderParams(EnvParams):
 
     target_x_range: Tuple[float, float] = (0.5, 1.5)
     initial_x_range: Tuple[float, float] = (-0.5, 0.5)
+    #: 0: a reset starts off target, the window's step. 1, which only a stream
+    #: sets: a reset (its start, a trip's restart) starts on the target, in
+    #: established operation (docs/proposals/long-strata.md, S1).
+    start_on_target: float = 0.0
     delta_t: float = 0.05
     # Twice the SIMC expert's 63-step settle (v3; 100 in v2).
     max_steps_in_episode: int = 150
@@ -67,6 +71,7 @@ PARAM_UNITS = {
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
     "precision_floor": "-",
+    "start_on_target": "-",
 }
 
 
