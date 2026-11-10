@@ -21,7 +21,7 @@ tilt. On seeds 100 to 109 the reference and null moved by a few dollars from v8.
 `scripts/family_sweep.py` draws the four `ours` numbers that have ranges
 (`reactor/ours.json`) on a Latin hypercube (seed 20261110). On each draw the reference
 is re-tuned by its recipe's bump tests, and run against the null on seeds 100 to 109 in
-every scenario. **The property holds on 2 of 8 draws**, 2 and 5, and draw 5 holds only
+every scenario. **The first sweep held on 2 of 8 draws**, 2 and 5, and draw 5 holds only
 on medians: its reference trips on 1 to 10 seeds in every scenario.
 
 | Draw | MTC, pcm/K | Boron worth, pcm/ppm | Reference beats null | Reference trips (of 10 seeds) |
@@ -37,24 +37,57 @@ on medians: its reference trips on 1 to 10 seeds in every scenario.
 
 The null at rest costs nothing on every draw (`at_rest_cost` 2e-6 dollars, no trip).
 
-**Why the reference trips:** on draws 1, 3 and 7 (checked on seed 100, edf_daily and
-baseload) the boron loop on Tavg has the wrong sign. Its bump test reads Tavg's slope
-over an hour after a step of boration, with no paired run without the step, so the
-day's own drift (xenon, burnup, the starting tilt) is read as the response. With a
-strong MTC, a ppm moves Tavg little (`boron_worth / (alpha_coolant + alpha_fuel)`) and
-the drift wins: `t_Kc` comes out +0.015 to +0.024 instead of the nominal -0.021. Then a
-cold Tavg brings more boration, Tavg runs 30 to 58 K cold with boron at full flow, and
-the floor's time limit trips the plant, again after each restart. The nominal draw is
-a lucky one, not a robust one.
+**Why the reference tripped (corrected):** the recipe's bump test for boron on Tavg
+stepped 20 % of full dilution for an hour. That heats Tavg about 0.2 K a step, so the
+plant tripped mid-test (the 610 K hot leg at full power, the DNB clock at half power on
+some seeds), and the slope fit read across the restart. The gain then came out with
+either sign: +0.015 to +0.024 instead of about -0.021 on draws 1, 3 and 7, so a cold
+Tavg brought more boration and the floor's clock tripped the plant. The nominal plant
+passed only because the design takes the gentler of the two operating points, and its
+half-power reading was clean. The 610 K envelope came from the v8 fixes; the bump test
+was never re-checked against it, which is amendment 5's inherited-limit case. A first
+reading blamed the day's drift; a run without the step showed the drift is about 0.07 K
+an hour and changes nothing.
 
-Two setup gaps, ours:
+### The fixes, owner's picks, and the re-sweep
 
-- The sweep draws MTC and boron worth independently, over the MTC range of the whole
-  cycle (-1 to -20 pcm/K). Amendment 5 asks for the member's range and coupled numbers
-  moved together. `ours.json` predates the amendment's reading and was not revised.
-- The bump test's lack of a paired no-step run is a recipe fault. A practitioner
-  steps from a lined-out plant or subtracts the drift. Fixing it changes the recipe
-  after seeing results, so it waits for the owner (J1).
+- **The bump is sized from the curve book** (`tavg_bump` in `scripts/reactor_ladder.py`):
+  the operator knows the boron worth and the MTC, so the dilution step makes the
+  predicted rise over the hour after the line's delay end at the DNB limit, at most
+  20 % of full flow. About 2.6 % on the nominal plant at full power. A paired run without
+  the step takes out the drift. `tests/reactor/test_reactor_bumps.py` checks the slope
+  against the hand value within 20 % and that the plant stays inside its limits.
+- **MTC and boron worth move together** in the sweep, on one shared coordinate: the most
+  negative MTC (-20 pcm/K) with the largest worth (-10.9 pcm/ppm), since both follow the
+  core's boron (ours, from the physics). `tests/test_family_sweep.py` checks it.
+
+The nominal gain barely moved (t_Kc -0.0209 to -0.0212), and the nominal ladder moved
+under 1 % (edf_daily $4,581, baseload $239, fast_return still 2 trips). The room and
+sensitivity below stand.
+
+**Re-sweep: the property holds on 6 of 8 draws.**
+
+| Draw | MTC, pcm/K | Worth, pcm/ppm | Holds | Reference trips (of 10) | fast_return, reference against null |
+|---:|---:|---:|---|---|---|
+| 0 | -19.1 | -10.7 | yes | none | $5,667 / $84.8M |
+| 1 | -7.0 | -8.0 | no | fast_return 10, edf 1 | $95.74M / $95.74M |
+| 2 | -10.2 | -8.7 | yes | fast_return 2 | $10,155 / $37.2M |
+| 3 | -13.3 | -9.4 | yes | none | $7,762 / $84.0M |
+| 4 | -4.0 | -7.4 | yes, on medians | fast_return 10, edf 3 | $62.6M / $64.3M |
+| 5 | -16.3 | -10.1 | yes | none | $6,524 / $75.8M |
+| 6 | -2.9 | -7.1 | no | fast_return 10, edf 5 | $50.02M / $50.02M |
+| 7 | -11.5 | -9.0 | yes | none | $8,807 / $48.2M |
+
+The failures sit at the weak-MTC, high-boron end (-2.9 to -7 pcm/K): the rods-on-Tavg
+mode trips on every fast_return seed there, as the null does. With a weak MTC a load cut
+releases little reactivity, and the plant's own feedback holds Tavg less, so the rod
+program alone is not enough. Not fixed: whether that end of the range is a member that
+runs 5 %/min returns at all is the owner's call (amendment 5, B5 scenarios).
+
+Also found: `test_a_plan_on_the_loads_ramp_replays_on_the_env` (medium tier, never run
+in this rebuild) fails with a replay gap of 0.86 to 0.99, already on reactor-v6, before
+any of today's changes. The IPOPT ceilings replay their plans on the env, so their
+costs stand; the planner's model is not exact on that test.
 
 ### Ceilings, room and price sensitivity on reactor-v9
 
