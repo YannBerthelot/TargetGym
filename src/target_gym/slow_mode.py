@@ -1,11 +1,13 @@
-"""A task's slow mode ``t_s``: how long the plant takes to forget where it started.
+"""A task's slow mode ``t_s``: how long the cost takes to forget where the plant started.
 
 docs/proposals/long-strata.md, rule R1. Two runs of the reference share one seed, so
 every outside process (events, walks, prices, noise) is identical between them. Run A
 is the reference throughout. Run B is first in manual mode, holding the reference's
 first action moved by ``offset`` for ``pre`` steps, which puts its plant in another
 state the plant can visit; then the reference takes over. From that hand-over the two
-plants differ only by where they were, and ``t_s`` is the decay time of their gap.
+plants differ only by where they were. ``t_s`` is the decay time of the extra cost
+B still has to pay for its start, the bias a burn-in removes (owner, 2026-11-10);
+the state's own decay is reported beside it.
 
 The gap is taken over every element of the state, each scaled by its spread in run A,
 and the largest element is kept, so the slowest state sets ``t_s`` whether or not it
@@ -62,14 +64,18 @@ class Pair(NamedTuple):
 
 
 class SlowMode(NamedTuple):
-    t_s: float  # steps; ``inf`` when the gap never fell to ``e^-1``; ``nan`` when
-    # the excursion did not move the plant (start gap under ``MIN_START``)
+    #: Steps for the extra cost still to come from B's start to decay: the bias a
+    #: burn-in removes. ``inf`` if it never does; ``nan`` if the start cost nothing.
+    t_s: float
     gap: np.ndarray  # median over pairs of the largest scaled gap, per step
     slowest: str  # the element that forgets last
     never_forgot: tuple[str, ...]  # elements whose gap stayed above e^-1 of its start
     start_excess: float  # median of B's summed excess cost after the hand-over
     tripped_pairs: int = 0  # pairs where either run tripped
     floor: float = 0.0  # the slowest element's gap over the last third, over its start
+    #: The state's own decay time, the slowest element's (a diagnostic: dead
+    #: bands, limit cycles and neutral modes keep it long where the cost is not).
+    state_t_s: float = np.nan
 
 
 def _leaves(state) -> tuple[list[str], np.ndarray]:
@@ -208,9 +214,22 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     tripped = sum(p.trips_a + p.trips_b > 0 for p in pairs)
     g0 = gap[0]
     slowest_i = int(np.argmax(per_element))
-    t_s = per_element[slowest_i]
+    state_t_s = per_element[slowest_i]
     if g0 < MIN_START:
+        state_t_s = np.nan
+    # The extra cost still to come from B's start, averaged over the pairs; for an
+    # exponential it decays at the cost's own time constant.
+    excess = np.mean([p.excess_cost for p in pairs], axis=0)
+    remaining = np.abs(np.cumsum(excess[::-1])[::-1])
+    # A lasting offset falls to zero only because the run ends; if the last third
+    # still carries more than e^-3 of the bias, the cost never forgot.
+    last_third = abs(float(excess[2 * len(excess) // 3 :].sum()))
+    if remaining[0] <= 0:
         t_s = np.nan
+    elif last_third > FORGOT * remaining[0]:
+        t_s = np.inf
+    else:
+        t_s = _decay_time(remaining)
     never_forgot = tuple(n for n, t in zip(names, per_element) if t == np.inf)
     s0 = np.median([st[slowest_i] for st in starts])
     tail = np.median(
@@ -222,5 +241,12 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     )
     floor_ratio = float(tail) if s0 > 0 else 0.0
     return SlowMode(
-        float(t_s), gap, names[slowest_i], never_forgot, start, tripped, floor_ratio
+        float(t_s),
+        gap,
+        names[slowest_i],
+        never_forgot,
+        start,
+        tripped,
+        floor_ratio,
+        float(state_t_s),
     )

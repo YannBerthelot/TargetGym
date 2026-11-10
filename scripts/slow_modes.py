@@ -148,6 +148,7 @@ def measure(
         "task": name,
         "N": n,
         "t_s": result.t_s,
+        "state_t_s": result.state_t_s,
         "slowest": result.slowest,
         "never_forgot": list(result.never_forgot),
         "start_excess": result.start_excess,

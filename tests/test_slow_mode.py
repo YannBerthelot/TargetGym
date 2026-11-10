@@ -2,8 +2,10 @@
 
 Contract (docs/proposals/long-strata.md, R1):
 - two runs share the seed, so outside processes are identical and leave no gap;
-- ``t_s`` is the decay time of the largest scaled state gap after the hand-over;
-- the slowest state sets ``t_s``, observed or not;
+- ``t_s`` is the decay time of the extra cost still to come from B's start
+  (the burn-in's bias), however the state carries it;
+- the state's own decay is reported beside it: the slowest element, observed
+  or not, and the elements that never forget;
 - bookkeeping named in ``ignore`` is not fitted;
 - an element that never forgets is named, and gives ``t_s = inf`` unless ignored.
 
@@ -33,8 +35,8 @@ class State(NamedTuple):
 class TwoModePlant:
     """``fast`` and ``slow`` decay at ``a_fast`` and ``a_slow``; the action drives both."""
 
-    def __init__(self, a_fast=0.8, a_slow=0.98):
-        self.a_fast, self.a_slow = a_fast, a_slow
+    def __init__(self, a_fast=0.8, a_slow=0.98, slow_costs=True):
+        self.a_fast, self.a_slow, self.slow_costs = a_fast, a_slow, slow_costs
 
     def reset_env(self, key, params):
         s = State(*(jnp.zeros(()) for _ in range(4)))
@@ -47,7 +49,9 @@ class TwoModePlant:
         slow = self.a_slow * s.slow + u + 0.1 * walk
         total = s.total + jnp.abs(fast)
         new = State(fast, slow, walk, total)
-        return jnp.stack([fast]), new, -jnp.abs(fast), False, {}
+        # A cost linear in the states, so the cost gap is the state gap.
+        cost = fast + (slow if self.slow_costs else 0.0)
+        return jnp.stack([fast]), new, -cost, False, {}
 
 
 def hold_zero(params):
@@ -86,7 +90,17 @@ def test_the_slowest_hidden_state_sets_t_s_at_its_closed_form_decay():
     result = measure(TwoModePlant(0.8, 0.98), length=400)
     # -1 / ln(0.98) = 49.50 steps; the fit is on exact exponentials, so 1 % covers it.
     assert result.t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
+    assert result.state_t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
     assert "slow" in result.slowest
+
+
+def test_a_hidden_state_the_cost_never_reads_does_not_hold_the_burn_in():
+    # The burn-in removes bias in the cost; a state that never reaches the cost
+    # is reported, but t_s is the fast mode the cost reads.
+    result = measure(TwoModePlant(0.8, 0.98, slow_costs=False), length=400)
+    assert result.t_s == pytest.approx(-1 / np.log(0.8), rel=0.02)
+    assert "slow" in result.slowest
+    assert result.state_t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
 
 
 def test_a_faster_plant_forgets_faster():
@@ -94,16 +108,18 @@ def test_a_faster_plant_forgets_faster():
     assert result.t_s == pytest.approx(-1 / np.log(0.9), rel=0.01)
 
 
-def test_an_unnamed_cumulative_cost_is_reported_and_blocks_a_finite_t_s():
+def test_an_unnamed_cumulative_cost_is_reported_and_blocks_a_finite_state_t_s():
     result = measure(TwoModePlant(0.8, 0.98), length=400, ignore=())
-    assert result.t_s == np.inf
+    assert result.state_t_s == np.inf
     assert [n for n in result.never_forgot if "total" in n]
     assert not [n for n in result.never_forgot if "walk" in n]
 
 
 def test_a_plant_integrator_that_never_forgets_gives_no_finite_t_s():
+    # It costs on every step, so its bias never leaves the cost either.
     result = measure(TwoModePlant(0.8, 1.0), length=100)
     assert result.t_s == np.inf
+    assert result.state_t_s == np.inf
     assert [n for n in result.never_forgot if "slow" in n]
 
 
@@ -115,9 +131,9 @@ def test_a_closed_loop_excursion_finds_the_same_decay():
 
 def test_an_ignored_name_matches_whole_fields_only():
     # ".slow" must not skip a field merely starting with it; here it skips "slow"
-    # itself, so the fast mode is all that is left.
+    # itself, so the fast mode is all the state diagnostic has left.
     result = measure(TwoModePlant(0.8, 0.98), length=400, ignore=(".total", ".slow"))
-    assert result.t_s == pytest.approx(-1 / np.log(0.8), rel=0.02)
+    assert result.state_t_s == pytest.approx(-1 / np.log(0.8), rel=0.02)
 
 
 def test_an_excursion_that_barely_moves_the_plant_gives_no_t_s():
@@ -146,7 +162,7 @@ def test_a_derived_quantity_stands_in_for_the_raw_state_it_replaces():
         ignore=(".total", ".slow"),
         observe=lambda state, params: {"slow_error": 2.0 * state.slow},
     )
-    assert result.t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
+    assert result.state_t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
     assert result.slowest == "path.slow_error"
 
 
@@ -172,5 +188,5 @@ class Oscillator:
 
 def test_a_gap_that_keeps_swinging_back_never_forgot():
     result = measure(Oscillator(), length=400, ignore=())
-    assert result.t_s == np.inf
+    assert result.state_t_s == np.inf
     assert result.floor > 0.5
