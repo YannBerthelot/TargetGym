@@ -893,6 +893,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # point with an extra upper outlet and a cup. 6: failure_cost 0, as
         # for every plant with no trip (charter B5).
         version=6,
+        # One scenario, the window as scored, declared for the stream's event
+        # rate (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "four_tank_scenarios", module="target_gym.pc_gym.four_tank.scenarios"
+        ),
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -1051,6 +1056,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # mean (``plan_params``) rather than on one fixed noise path.
         oracle_data=_shared_oracle("cement_kiln"),
         noise_fields=("feed_noise_std",),
+        # One scenario, the normal kiln as scored, declared for the stream's
+        # target-change rate (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "cement_kiln_scenarios", module="target_gym.cement_kiln.scenarios"
+        ),
     ),
     EnvSpec(
         name="boiler_drum",

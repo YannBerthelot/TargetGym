@@ -20,6 +20,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    event_sizes,
     feed_temperature,
     get_obs,
     steady_state,
@@ -45,7 +46,12 @@ class UnstableCSTR(
         "target_T",
         "event_at",
         "feed_phase",
+        "event_until",
+        "event_size",
     )
+    #: Runs as a continuing plant (``target_gym.stream``): its events end, carry
+    #: their own size and start through ``start_event``; its wander wraps.
+    STREAM_READY = True
 
     registry_name: str = "unstable_cstr"
 
@@ -127,6 +133,7 @@ class UnstableCSTR(
         T_f = feed_temperature(phase, params, 0.0)
         I, M, I_f = steady_state(T, params.replace(T_feed=T_f))
         lo, hi = params.event_window
+        event_at = jax.random.uniform(event_key, minval=lo, maxval=hi)
         state = UnstableCSTRState(
             time=0,
             I=I,
@@ -134,10 +141,25 @@ class UnstableCSTR(
             T=T,
             target_T=T,
             I_f=I_f,
-            event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
+            event_at=event_at,
             feed_phase=phase,
+            event_until=event_at + params.event_hold,
+            event_size=event_sizes(params),
         )
         return self.get_obs(state, params), state
+
+    def start_event(
+        self, state: UnstableCSTRState, key, params: UnstableCSTRParams
+    ) -> UnstableCSTRState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now with its size, and returns ``event_hold``
+        seconds later. Sizes are the scenario's own, so ``key`` is unused."""
+        now = state.time * params.delta_t
+        return state.replace(
+            event_at=now,
+            event_until=now + params.event_hold,
+            event_size=event_sizes(params),
+        )
 
     def action_space(self, params: UnstableCSTRParams | None = None) -> spaces.Box:
         return spaces.Box(

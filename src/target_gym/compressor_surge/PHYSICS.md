@@ -1046,6 +1046,27 @@ window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
+and each upset regime a shift, 8 h. No regime brings events of its own
+(`events_per_h` 0): its demand moves are its 20 s blocks, and when the six blocks
+have run the schedule renews (`renew_schedule`), five fresh levels drawn in the
+scenario's range from the level it holds, so the demand keeps moving at the
+scenario's own rate. The schedule carries the ramp it was drawn with
+(`demand_ramp`), so a ramp in progress at a switch keeps its rate. The valve's
+dead time and the surge counter read the schedule's clock, which a renewal moves
+back with them, so no clock in the plant grows without bound. `start_event`
+moves the demand now, for a stream given event rates. No source gives how often
+or how long (`REALITY.md`), so these numbers are ours, set once without tuning
+and open for the owner. In a window nothing changes: the schedule never runs out
+inside it, its clock is the window's, and a scored window is bit-identical.
+
+The task is not opted in (`STREAM_READY`) yet: the shared conformance suite runs
+2 events an hour over 2 N steps, 0.13 events on this 0.1 s plant, and reads the
+surge record (`surge_times`, `surges`, in `OUTSIDE_WORLD` so a trip's restart
+carries it) as outside world, which a policy moves.
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
@@ -1056,7 +1077,7 @@ draws them.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 153 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 154 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

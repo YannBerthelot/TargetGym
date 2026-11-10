@@ -17,6 +17,16 @@ def _row(name, overrides, **kw):
     return dict(name=name, overrides=overrides, **kw)
 
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
+#: how often each window occurs or how long it lasts (REALITY.md, "How often each
+#: window occurs": not found), so every number here is ours, set once without
+#: tuning and open for the owner. A normal day lasts a day; an upset regime lasts a
+#: shift. No regime brings events of its own: its demand moves are its 20 s blocks,
+#: which keep coming as the schedule renews (``env.renew_schedule``), so the
+#: window's event-free suite carries over as it is.
+_DAY_H, _SHIFT_H = 24.0, 8.0
+
+
 def compressor_surge_scenarios() -> tuple[dict, ...]:
     return (
         _row(
@@ -26,6 +36,7 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             description="demand high, the point right of the control line, "
             "the recycle shut or nearly",
             weight=0.7,
+            dwell_h=_DAY_H,
         ),
         _row(
             "slow_approach",
@@ -33,6 +44,7 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             source="[C3, p. 2]",
             description="demand falls slowly toward the control line",
             weight=0.1,
+            dwell_h=_SHIFT_H,
         ),
         _row(
             "fast_approach",
@@ -40,6 +52,7 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             source="[C3, p. 2]",
             description="demand falls fast; rate action or the backup line",
             weight=0.05,
+            dwell_h=_SHIFT_H,
         ),
         _row(
             "load_swings",
@@ -47,5 +60,6 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             source="[C3, pp. 2-4]",
             description="demand swings across the map, both approaches",
             weight=0.15,
+            dwell_h=_SHIFT_H,
         ),
     )

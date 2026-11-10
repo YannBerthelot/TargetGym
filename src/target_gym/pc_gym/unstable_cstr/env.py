@@ -101,6 +101,10 @@ class UnstableCSTRParams(EnvParams):
     feed_T_step: float = 0.0  # K, the feed's temperature moves
     efficiency_drop: float = 0.0  # fraction of f lost (impurities), ours
     feed_flow_step: float = 0.0  # fraction of the feed flow, ours
+    #: Seconds an event lasts before it returns: the grade changed back, the
+    #: feed cooled, the initiator batch changed, the feed rate restored. Only a
+    #: stream sets it (scenarios.py); in a window the event holds to the end.
+    event_hold: float = 1.0e9  # s
 
     # ---- Score (charter rule 15) ----
     # The job is the temperature held at its setpoint, within a short time
@@ -152,6 +156,7 @@ PARAM_UNITS = {
     "feed_T_step": "K",
     "efficiency_drop": "-",
     "feed_flow_step": "-",
+    "event_hold": "s",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -175,6 +180,13 @@ class UnstableCSTRState(EnvState):
     event_at: float = struct.field(default=1.0e9, kw_only=True)
     #: The feed's wander's phase at the episode's start (rad).
     feed_phase: float = struct.field(default=0.0, kw_only=True)
+    #: When the event returns (s), and its size as it started (``event_sizes``):
+    #: an event carries its own size, so it runs to its return whatever the
+    #: params do meanwhile (docs/proposals/long-strata.md, S1).
+    event_until: float = struct.field(default=1.0e9, kw_only=True)
+    event_size: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(4), kw_only=True
+    )
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -185,6 +197,27 @@ def feed_temperature(phase, params: UnstableCSTRParams, second):
     p = params
     turn = jnp.where(p.feed_T_wander_period > 0.0, second / p.feed_T_wander_period, 0.0)
     return p.T_feed + p.feed_T_wander * jnp.sin(phase + 2.0 * jnp.pi * turn)
+
+
+def wander_second(state: UnstableCSTRState, params: UnstableCSTRParams):
+    """The second the feed's wander reads at this step, from a step count
+    wrapped on the whole number of its periods that covers a window: float32
+    counts seconds exactly only to about 16 million, so the wander keeps its
+    period however long the plant runs, and inside a window the count is the
+    window's own clock."""
+    p = params
+    period = jnp.maximum(jnp.round(p.feed_T_wander_period / p.delta_t), 1.0)
+    cover = period * jnp.ceil(p.max_steps_in_episode / period)
+    return (state.time % cover.astype(jnp.int32)) * p.delta_t
+
+
+def event_sizes(params: UnstableCSTRParams):
+    """An event's size as it starts, from the scenario's params: the setpoint
+    move, the feed's warming, the efficiency lost and the feed's rise."""
+    p = params
+    return jnp.array(
+        [p.setpoint_step, p.feed_T_step, p.efficiency_drop, p.feed_flow_step]
+    )
 
 
 def rate_constant(k0, E, T, params: UnstableCSTRParams, V_act=0.0):
@@ -224,16 +257,19 @@ def compute_velocity(position, action, params: UnstableCSTRParams, extra=None):
     return jnp.array([dI, dM, dT]), None
 
 
-def events(state: UnstableCSTRState, params: UnstableCSTRParams, second):
-    """The scenario's event at ``second``: ``(setpoint, T_f, f, flow scale)``."""
+def events(state: UnstableCSTRState, params: UnstableCSTRParams, second, wander=None):
+    """The event at ``second``: ``(setpoint, T_f, f, flow scale)``, with the size
+    it started with, active from ``event_at`` until ``event_until``. The feed's
+    wander reads ``wander`` (``wander_second``), ``second`` by default."""
     p = params
-    on = second >= state.event_at
+    step, warm, drop, rise = (state.event_size[i] for i in range(4))
+    on = jnp.logical_and(second >= state.event_at, second < state.event_until)
+    wander = second if wander is None else wander
     return (
-        p.T_setpoint + jnp.where(on, p.setpoint_step, 0.0),
-        feed_temperature(state.feed_phase, p, second)
-        + jnp.where(on, p.feed_T_step, 0.0),
-        p.f_eff * (1.0 - jnp.where(on, p.efficiency_drop, 0.0)),
-        1.0 + jnp.where(on, p.feed_flow_step, 0.0),
+        p.T_setpoint + jnp.where(on, step, 0.0),
+        feed_temperature(state.feed_phase, p, wander) + jnp.where(on, warm, 0.0),
+        p.f_eff * (1.0 - jnp.where(on, drop, 0.0)),
+        1.0 + jnp.where(on, rise, 0.0),
     )
 
 
@@ -287,7 +323,7 @@ def compute_next_state(
     p = params
     second = state.time * p.delta_t
     I_f = convert_raw_action_to_range(raw, min_action=p.I_f_min, max_action=p.I_f_max)
-    _, T_f, f, scale = events(state, p, second)
+    _, T_f, f, scale = events(state, p, second, wander_second(state, p))
     x = jnp.stack([state.I, state.M, state.T])
     I, M, T = advance(x, I_f, p, (T_f, f, scale), integration_method)
     target, *_ = events(state, p, second + p.delta_t)
