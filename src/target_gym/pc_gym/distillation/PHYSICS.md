@@ -102,6 +102,7 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | `feed_step` | 0.2 | - | cited: F 1 to 1.2 [D1, Fig. 18] |
 | `zF_step` | 0.1 | - | cited: zF 0.5 to 0.6 [D1, Fig. 18] |
 | `step_window` | 30, 300 | min | ours: each step once, with room after it for the 40 min recovery of [D1, Fig. 18] |
+| `event_hold` | 480 | min (stream) | ours: how long a feed step holds before the feed returns to nominal (a shift, until the upstream unit's rate or crude is restored); no source gives it; a window never sets it, so its steps hold to the end |
 | `L_min`, `L_max` | 1.85, 3.11 | kmol/min | ours: hold both specs after any sourced feed step, plus 5 % |
 | `V_min`, `V_max` | 2.18, 3.83 | kmol/min | ours: as `L`; flooding [D6] has no figure |
 | `D_min`, `D_max` | 0.1, 0.9 | kmol/min | ours: keeps the balance physical at the box's corners (deviation D5) |
@@ -347,6 +348,18 @@ window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
+and each upset regime a shift, 8 h, with one event per visit on average
+(`events_per_h` 1/8): it steps every feed its scenario moves, at the scenario's
+size with a drawn sign. Each step carries its own size and returns after
+`event_hold`, so it runs to its return through a switch of regime, and a step of
+one kind never ends one of the other. No source gives how often or how long
+(`REALITY.md`), so these numbers are ours, set once without tuning and open for
+the owner. In a window nothing changes: `event_hold` is never reached and a
+scored window is bit-identical.
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
@@ -357,7 +370,7 @@ draws them.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 8 | 110 |
+| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 8 | 112 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
