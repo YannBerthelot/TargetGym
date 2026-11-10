@@ -77,6 +77,21 @@ class SlowMode(NamedTuple):
     #: The state's own decay time, the slowest element's (a diagnostic: dead
     #: bands, limit cycles and neutral modes keep it long where the cost is not).
     state_t_s: float = np.nan
+    #: The largest summed excess cost over the pairs that did not trip: the
+    #: reference's bias difference between two starts, so a lower bound on the
+    #: span of its bias (long-strata R1), which the trip check reads (R8).
+    span: float = np.nan
+    #: The share of the clean pairs' mean excess still to come, per step after
+    #: the hand-over: 1 at the hand-over.
+    to_come: np.ndarray | None = None
+
+    def residual(self, steps) -> float:
+        """The share of the start's bias still to come ``steps`` after the
+        hand-over, measured rather than assumed (long-strata R1, R2); ``nan``
+        past the run, where the pairs cannot say."""
+        if self.to_come is None or not 0 <= steps < len(self.to_come):
+            return np.nan
+        return float(self.to_come[int(steps)])
 
 
 def _leaves(state) -> tuple[list[str], np.ndarray]:
@@ -245,6 +260,8 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
         ]
     )
     floor_ratio = float(tail) if s0 > 0 else 0.0
+    span = max((abs(float(p.excess_cost.sum())) for p in clean), default=np.nan)
+    to_come = remaining / remaining[0] if clean and remaining[0] > 0 else None
     return SlowMode(
         float(t_s),
         gap,
@@ -254,4 +271,6 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
         tripped,
         floor_ratio,
         float(state_t_s),
+        float(span),
+        to_come,
     )

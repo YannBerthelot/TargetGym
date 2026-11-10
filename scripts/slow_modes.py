@@ -5,8 +5,10 @@
 For each task: ten coupled pairs under the shipped reference (``pid``), on seeds
 100 to 109, run B in manual mode for half a window, then ``--windows`` windows of
 the reference on both. Prints and writes ``t_s``, the slowest element, the
-elements that never forgot (to name in ``IGNORE`` if they are bookkeeping) and the
-start-up excess cost. Heavy on the slow plants: run it on bob.
+elements that never forgot (to name in ``IGNORE`` if they are bookkeeping), the
+start-up excess cost, the pairs left out for a trip, the span of the reference's bias
+over the starts, the residual left after ``5 t_s`` and the trip check (R8): whether a
+trip costs more than that span. Heavy on the slow plants: run it on bob.
 """
 
 from __future__ import annotations
@@ -117,6 +119,7 @@ def measure(
     name: str, windows: float, offset_share: float, pre: float, bias: bool
 ) -> dict:
     from target_gym.registry import REGISTRY
+    from target_gym.reward import trip_cost
     from target_gym.runners.runners import baseline_policy
     from target_gym.slow_mode import coupled_pair, slow_mode
 
@@ -144,6 +147,12 @@ def measure(
     ]
     ignored = {**COMMON, **IGNORE.get(name, {})}
     result = slow_mode(pairs, ignore=tuple(ignored))
+    # R8's trip check: a trip must cost more than the largest bias gap a recovery
+    # pays, or it is a cheaper reset than recovering. The span covers only the
+    # sampled starts, so a pass is necessary, not proof.
+    has_price = hasattr(params, "restart_steps") and hasattr(params, "failure_cost")
+    price = float(trip_cost(params)) if has_price else np.nan
+    checked = np.isfinite(price) and np.isfinite(result.span)
     return {
         "task": name,
         "N": n,
@@ -153,6 +162,13 @@ def measure(
         "never_forgot": list(result.never_forgot),
         "start_excess": result.start_excess,
         "tripped_pairs": result.tripped_pairs,
+        "span": result.span,
+        # Measured at the burn-in's t_s term, B_min = 5 t_s (R2), not assumed e^-5.
+        "residual_5ts": (
+            result.residual(5 * result.t_s) if np.isfinite(result.t_s) else np.nan
+        ),
+        "trip_price": price,
+        "trip_check": bool(price > result.span) if checked else None,
         "start_gap": float(result.gap[0]),
         "pre": pre,
         "bias": bias,

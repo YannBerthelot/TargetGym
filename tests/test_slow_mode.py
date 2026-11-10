@@ -216,3 +216,52 @@ def test_a_start_bias_lost_in_its_own_noise_is_no_bias():
     rng = np.random.default_rng(0)
     pairs = [_pair(1e-3 * rng.standard_normal(400)) for _ in range(3)]
     assert np.isnan(slow_mode(pairs).t_s)
+
+
+def _geometric(amplitude, tau, start, stop):
+    """``sum over start <= t < stop of amplitude * exp(-t / tau)``, in closed form."""
+    q = np.exp(-1.0 / tau)
+    return amplitude * (q**start - q**stop) / (1.0 - q)
+
+
+def test_the_span_is_the_largest_integrated_gap_over_clean_pairs():
+    # Contract (long-strata R1, R8): each pair's summed excess is the reference's
+    # bias difference between its two starts; the span is the largest of them,
+    # with tripped pairs left out like the fit. Oracle: geometric sums.
+    t = np.arange(400, dtype=float)
+    clean = [_pair(a * np.exp(-t / 20.0)) for a in (1.0, 3.0, 2.0)]
+    tripped = _pair(np.where(t == 300, 1e9, np.exp(-t / 20.0)), trips=1)
+    result = slow_mode(clean + [tripped])
+    assert result.span == pytest.approx(_geometric(3.0, 20.0, 0, 400), rel=1e-9)
+
+
+def test_the_residual_of_an_exponential_bias_is_its_closed_form_share():
+    # The share of the bias still to come k steps after the hand-over.
+    t = np.arange(400, dtype=float)
+    result = slow_mode([_pair(np.exp(-t / 20.0)) for _ in range(3)])
+    whole = _geometric(1.0, 20.0, 0, 400)
+    assert result.residual(100) == pytest.approx(
+        _geometric(1.0, 20.0, 100, 400) / whole, rel=1e-6
+    )
+    assert result.residual(0) == pytest.approx(1.0)
+
+
+def test_a_slow_tail_too_small_for_the_fit_shows_in_the_residual():
+    # A tail holding about 3 % of the bias is under the fit's e^-3, so t_s stays
+    # near the fast mode's 5 (by hand the crossings fall near 5.3 and 18.3 steps,
+    # so about 6.5), far under the tail's 100. Five fast time constants then leave
+    # far more than e^-5 of the bias to come.
+    t = np.arange(2000, dtype=float)
+    excess = np.exp(-t / 5.0) + 0.0017 * np.exp(-t / 100.0)
+    result = slow_mode([_pair(excess) for _ in range(3)])
+    whole = _geometric(1.0, 5.0, 0, 2000) + _geometric(0.0017, 100.0, 0, 2000)
+    left = _geometric(1.0, 5.0, 25, 2000) + _geometric(0.0017, 100.0, 25, 2000)
+    assert result.t_s < 10.0
+    assert result.residual(25) == pytest.approx(left / whole, rel=1e-6)
+    assert result.residual(25) > 3 * np.exp(-5.0)
+
+
+def test_a_residual_past_the_run_is_not_measured():
+    t = np.arange(400, dtype=float)
+    result = slow_mode([_pair(np.exp(-t / 20.0)) for _ in range(3)])
+    assert np.isnan(result.residual(400))
