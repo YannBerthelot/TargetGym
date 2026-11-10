@@ -230,3 +230,34 @@ def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
         assert float(compute_reward_terms(s, p)["failure"]) == pytest.approx(
             1.2e6, rel=1e-4
         )
+
+
+# --- a plant at rest stays at rest ---
+# Not a benchmark scenario: a check that the plant, lined out at full load with nothing
+# moving (no load wobble, xenon in balance, no burnup, no debt carried in, no sensor
+# noise), holds itself for a whole day with the rods parked and no boron. Nothing
+# drives it off its program or its offset, so doing nothing costs nothing.
+
+
+def test_a_plant_at_rest_needs_nothing_for_a_day():
+    env, p, obs, s = reset(
+        demand_sigma=0.0,
+        initial_xenon_power_range=(1.0, 1.0),
+        ramp_down_range=(1e6, 1e6),
+        burnup_range=(0.0, 0.0),
+        carried_days_range=(0.0, 0.0),
+        sensor_noise_scale=0.0,
+    )
+    null = jax.numpy.array([1.0 - 2.0 * p.rod_park, 0.0])
+    keys = jax.random.split(jax.random.PRNGKey(1), p.max_steps_in_episode)
+
+    def step(s, k):
+        _, s1, r, _, info = env.step_env(k, s, null, p)
+        tavg = 0.5 * (s1.T_coolant + s1.T_cold)
+        return s1, (-r, info["tripped"], tavg - s1.T_ref, s1.delta_I / s1.n)
+
+    _, (cost, tripped, error, offset) = jax.lax.scan(step, s, keys)
+    assert not bool(np.any(tripped))
+    assert float(np.max(np.abs(error))) < p.e_tol  # inside the dead band all day
+    assert float(np.max(np.abs(offset - p.ao_ref))) < p.ao_band
+    assert float(np.sum(cost)) < 1.0  # dollars over the day
