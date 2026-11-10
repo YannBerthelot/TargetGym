@@ -277,8 +277,12 @@ def hour_of_day(time, params: HVACParams):
     """The hour at step ``time``, from the step count wrapped on the day
     (``DAY_STEPS`` steps of 15 min): float32 holds the seconds exactly only to
     about 16.7 million, 194 days, so the day stays exact however long the plant
-    runs (docs/proposals/long-strata.md, S1)."""
-    return (time % DAY_STEPS) * params.delta_t / SECONDS_PER_HOUR
+    runs (docs/proposals/long-strata.md, S1). The seconds-of-day mod is a no-op
+    on the wrapped count, kept so a window compiles to the same arithmetic: with
+    params as compile-time constants XLA would fold the scale differently."""
+    return jnp.mod((time % DAY_STEPS) * params.delta_t, SECONDS_PER_DAY) / (
+        SECONDS_PER_HOUR
+    )
 
 
 def is_occupied(time, params: HVACParams):
