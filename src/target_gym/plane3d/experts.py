@@ -209,10 +209,12 @@ def plane3d_heading_step(params, state, obs, xp=jnp):
 
 
 def plane3d_heading_select_step(params, state, obs, xp=jnp):
-    """The heading task's course hold (Amendment 3): as ``plane3d_heading_step``,
-    which the patrol's lead also flies, with TECS on the observed airspeed."""
-    v = _ground_speed(obs, xp)
-    turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
+    """The heading task's heading hold (Amendment 3): as ``plane3d_heading_step``,
+    which the patrol's lead also flies, with TECS on the observed airspeed and
+    the turn on the IRS heading, a coordinated turn's rate being g tan(bank)
+    over the airspeed."""
+    v = obs[..., 16]
+    turn_rate = _wrap_angle(obs[..., 11] - obs[..., 18], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
     return _fly(
         params,
@@ -343,7 +345,9 @@ def make_plane3d_figure8_pid_controller() -> Controller:
 # seeds 100-109 and checked on held-out seeds 200-209, never on the scored
 # seeds 0-9 (scripts/tune_aircraft_guidance.py).
 _HEADING = Plane3DGuidanceParams()
-_PATH = Plane3DGuidanceParams()
+# The circle flies the amended plant since Amendment 4: its protected 30 deg
+# bank and the amended speed floor, as the hold's.
+_PATH = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96.0)
 # The amended tasks (heading, racetrack; Amendment 3): the plant's protected
 # 30 deg bank (plane3d/PHYSICS.md), and the slowest speed 1.2 times the model's
 # clean 1 g stall, 80 m/s EAS: "20% higher than level flight stall speed"
@@ -354,6 +358,8 @@ _AMENDED = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas
 # gain 25% off. Its lobe tips are flown with a quarter of the bank in hand. PR 9
 # replaces these with the shared tune.
 _FIGURE8 = Plane3DGuidanceParams(
+    max_bank_rad=float(np.deg2rad(30.0)),
+    v_min_eas=96.0,
     turn_bank_margin=0.75,
     tecs=AIRLINER.replace(time_const=1.5, ptch_damp=2.0),
 )

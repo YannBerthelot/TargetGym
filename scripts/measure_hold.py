@@ -116,6 +116,20 @@ def _patrol_errors(obs, state, params):
     )
 
 
+def _wake_surf_errors(obs, state, params):
+    """The distance to the station, the box's argument."""
+    from target_gym.patrol.env import slot_error
+
+    return np.array([float(slot_error(state))])
+
+
+def _wake_surf_economy(obs, state, params):
+    """The follower's operator cost, fuel and time by the cost index."""
+    from target_gym.patrol.env import compute_reward_terms_wake_surf
+
+    return float(compute_reward_terms_wake_surf(state, params)["economy"])
+
+
 def _formation_errors(obs, state, params):
     """The lead's altitude and heading errors, then each wingman's slot error
     and heading misalignment with the lead: the terms of the team cost."""
@@ -212,6 +226,8 @@ PLANTS = {
     # The same plant, reward and oracle (which reads the true state), so the
     # same window: the protocol then scores both variants after the capture.
     "patrol_range_bearing": (_patrol_errors, None, 70, "phugoid ~1 min", None),
+    # The patrol's plant on two A320s: the same phugoid window.
+    "wake_surf": (_wake_surf_errors, _wake_surf_economy, 70, "phugoid ~1 min", None),
     "cstr": (None, None, 4, "residence ~1 min at 15 s steps", 100),
     "first_order": (None, None, 10, "tau = 0.5 s at 0.05 s steps", 100),
     "four_tank": (None, None, 90, "tank tau ~1.5 min at 1 s steps", 300),

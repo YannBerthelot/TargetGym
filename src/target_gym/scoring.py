@@ -121,6 +121,7 @@ TRACKED_TERMS = {
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
     "patrol_range_bearing": (_SLOT, _HEADING),
+    "wake_surf": (_SLOT,),
     "formation": (
         _ALTITUDE,
         _HEADING,
@@ -162,7 +163,7 @@ CONSUMPTION = {
 _RVSM = 65.0 * 0.3048  # m
 _RVSM_BAND = "+-65 ft about an acquired altitude, 14 CFR 91 App. G, 2(c)(2)(i)"
 _ALTITUDE_BAND = "the autopilot's +-20 m altitude tolerance, plane/PHYSICS.md"
-_SLOT_BAND = "the expert's 8.5 m slot, patrol/PHYSICS.md"
+_SLOT_BAND = "AFF's 10 ft one sigma on the Hornet, NASA/TM-2002-210729"
 
 #: Per environment, the tolerance on each tracked output, in the observation's
 #: units, with where it comes from: a secondary source says so, and a figure no
@@ -178,9 +179,10 @@ SPEC_BAND = {
     "plane3d_heading": ((_RVSM,), _RVSM_BAND),
     "plane3d_circle": ((_RVSM,), _RVSM_BAND),
     "plane3d_racetrack": ((_RVSM,), _RVSM_BAND),
-    "patrol": ((8.5,), _SLOT_BAND),
-    "patrol_range_bearing": ((8.5,), _SLOT_BAND),
-    "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
+    "patrol": ((3.048,), _SLOT_BAND),
+    "patrol_range_bearing": ((3.048,), _SLOT_BAND),
+    "wake_surf": ((30.0,), "ours: the station box, a span (plane3d/PHYSICS.md)"),
+    "formation": ((20.0, 3.048, 3.048), _ALTITUDE_BAND + "; " + _SLOT_BAND),
     "ph_neutralization": (
         (1.0,),
         "the permit range pH 7 +-1, the example spec of Faanes and Skogestad "

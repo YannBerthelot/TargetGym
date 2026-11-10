@@ -1,0 +1,46 @@
+{
+  "burn_in": 210,
+  "cpu": "AMD EPYC 9454 48-Core Processor",
+  "generated": "2026-11-10T19:02:29+00:00",
+  "pid": {
+    "anticipation": 0,
+    "anticipation_share": 0.0,
+    "c_hold": 0.9869144876735515,
+    "cycles_per_episode": 1,
+    "e_hold": [
+      113.22060642912203
+    ],
+    "e_hold_first_half": [
+      108.13632859763861
+    ],
+    "e_hold_min": [
+      97.45303177023834
+    ],
+    "e_hold_per_seed": [
+      [
+        97.45303177023834
+      ],
+      [
+        103.73276955106724
+      ],
+      [
+        138.4760179660605
+      ]
+    ],
+    "e_hold_rms": [
+      121.99529180251433
+    ],
+    "e_hold_second_half": [
+      118.30488426060545
+    ],
+    "hold_steps_scored": 4770,
+    "seconds": 50.4,
+    "settle": 0.0,
+    "trips": 1
+  },
+  "seeds": 3,
+  "step_seconds": 1.0,
+  "steps": 1800,
+  "tau_cost_source": "phugoid ~1 min",
+  "tau_cost_steps": 70
+}

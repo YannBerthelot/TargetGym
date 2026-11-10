@@ -21,7 +21,7 @@ fig = plot_profile({**references(), "mine": out["profile"]})
 fig.savefig("profile.png")
 ```
 
-Leave out `tasks` to run all 24, and use 10 seeds for a result you report.
+Leave out `tasks` to run all 25, and use 10 seeds for a result you report.
 `references()` gives the expert and the oracle profiles from the recorded
 results, so they cost nothing to draw.
 

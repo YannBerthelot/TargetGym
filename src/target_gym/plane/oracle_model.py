@@ -9,14 +9,16 @@ which K8's replay checks on every plan.
 The sites smoothed by K2's softplus (T5), in the order of ``Sites``:
 
 - ``buffet``, the wing's lift capped at the buffet line;
-- ``cl_stall``, the stall clip of the section lift, read by wing, tail and elevator;
+- ``cl_stall``, the stall clip of the section lift, read by wing and tail;
 - ``separation``, ``abs(incidence)`` in the separated-flow blend;
 - ``surface_clip``, the attitude loop's output, and its integral's freeze, which
   blends by the softplus's slope (K2's switch);
 - ``surface_rate``, the rate limit of a surface. T1r's bound is empty: the reach
   over a hold of one step, the rate times the step and the lag, already passes a
   surface's whole travel, so any command is inside it (``surface_reach``);
-- ``tropopause``, the switch of the sound speed at 11 km.
+- ``tropopause``, the switch of the sound speed at 11 km;
+- ``protection``, the clip of the pitch demand to its protected bounds
+  (``pitch_demand_bounds``), which the autopilot's 0.2 g binds on every capture.
 
 Dropped guards (T4), which each task's step checks along every plan: the Mach
 switches past ``M_crit`` (shock stall, drag rise), the section's lift and drag
@@ -35,12 +37,17 @@ import jax.numpy as jnp
 from target_gym.oracles.controller import softplus_clip
 from target_gym.plane.dynamics import (
     buffet_line,
+    compressibility,
     compute_drag,
+    downwash,
+    engine_response_rate,
+    pitch_demand_bounds,
+    tail_section,
 )
 
 #: The smoothed sites, name order, as in ``data/oracle_widths``.
 SITE_NAMES = ("buffet", "cl_stall", "separation", "surface_clip", "surface_rate")
-SITE_NAMES += ("tropopause",)
+SITE_NAMES += ("tropopause", "protection")
 #: The sound speed's temperature at the tropopause (K).
 T11 = 216.65
 #: Past these the env's clips of the angular accelerations bind (rad/s^2) and the
@@ -57,6 +64,7 @@ class Sites(NamedTuple):
     surface_clip: jnp.ndarray
     surface_rate: jnp.ndarray
     tropopause: jnp.ndarray
+    protection: jnp.ndarray
 
 
 def sites(values) -> Sites:
@@ -97,7 +105,7 @@ def section(aoa_deg, mach, p, w, d):
     lift = lift * jax.nn.sigmoid(-(aoa_deg - centre) * sharp)
     lift = softplus_clip(lift, p.CL_min, p.CL_max, w.cl_stall) + d.cl_stall
     drag = p.cd0 + p.k * lift**2
-    lift = lift / jnp.sqrt(1.0 - mach**2)
+    lift = lift * compressibility(mach, p.aspect_ratio, p.sweep_half_chord)
     incidence = soft_abs(aoa_deg, w.separation) + d.separation
     separated = jax.nn.sigmoid((incidence - centre) * sharp)
     rad = jnp.deg2rad(aoa_deg)
@@ -121,9 +129,8 @@ class Airframe(NamedTuple):
 
 
 def airframe(alpha, speed, mach, rho, q, stick, p, w, d) -> Airframe:
-    """The wing, the stabiliser and the elevator (``compute_acceleration``)."""
-    deg = jnp.rad2deg(alpha)
-    cz_w, cx_w = section(deg, mach, p, w, d)
+    """The wing-body and the horizontal tail (``longitudinal_airframe``)."""
+    cz_w, cx_w = section(jnp.rad2deg(alpha), mach, p, w, d)
     cap = buffet_line(mach, p)
     v = jnp.where(w.buffet > 0.0, w.buffet, 1.0)
     capped = cz_w - v * jax.nn.softplus((cz_w - cap) / v)
@@ -132,24 +139,22 @@ def airframe(alpha, speed, mach, rho, q, stick, p, w, d) -> Airframe:
     drag_w = compute_drag(S=p.wings_surface, C=cx_w, V=speed, rho=rho)
     moment = (lift_w * jnp.cos(alpha) + drag_w * jnp.sin(alpha)) * p.moment_arm_wings
 
-    tail_deg = jnp.rad2deg(jnp.arctan2(q * p.moment_arm_stabilizer, speed))
-    aoa_s = deg - 3.0 + tail_deg
-    cz_s, cx_s = section(aoa_s, mach, p, w, d)
-    lift_s = compute_drag(S=p.stabilizer_surface, C=cz_s, V=speed, rho=rho)
-    drag_s = compute_drag(S=p.stabilizer_surface, C=cx_s, V=speed, rho=rho)
-    rad_s = jnp.deg2rad(aoa_s)
-    normal_s = lift_s * jnp.cos(rad_s) + drag_s * jnp.sin(rad_s)
-
-    aoa_e = aoa_s - jnp.rad2deg(stick)
-    cz_e, cx_e = section(aoa_e, mach, p, w, d)
-    lift_e = compute_drag(S=p.elevator_surface, C=cz_e, V=speed, rho=rho)
-    drag_e = compute_drag(S=p.elevator_surface, C=cx_e, V=speed, rho=rho)
-    rad_e = jnp.deg2rad(aoa_e)
-    normal_e = lift_e * jnp.cos(rad_e) + drag_e * jnp.sin(rad_e)
-
-    moment = moment - (normal_s + normal_e) * p.moment_arm_stabilizer
-    peak = jnp.max(jnp.abs(jnp.stack([cz_s, cz_e])))
-    return Airframe(lift_w + lift_s + lift_e, drag_w + drag_s + drag_e, moment, peak)
+    swept = jnp.arctan2(q * p.moment_arm_stabilizer, speed)
+    tail = (
+        alpha
+        - downwash(cz_w, p)
+        + p.stabilizer_setting
+        - p.elevator_effectiveness * stick
+        + swept
+    )
+    cz_t, cx_t = section(jnp.rad2deg(tail), mach, tail_section(p), w, d)
+    area = p.tail_efficiency * p.stabilizer_surface
+    lift_t = compute_drag(S=area, C=cz_t, V=speed, rho=rho)
+    drag_t = compute_drag(S=area, C=cx_t, V=speed, rho=rho)
+    moment = moment - (lift_t * jnp.cos(tail) + drag_t * jnp.sin(tail)) * (
+        p.moment_arm_stabilizer
+    )
+    return Airframe(lift_w + lift_t, drag_w + drag_t, moment, jnp.abs(cz_t))
 
 
 def attitude(kp, ki, kd, error, rate, integral, scaler, dt, width, delta):
@@ -164,6 +169,12 @@ def attitude(kp, ki, kd, error, rate, integral, scaler, dt, width, delta):
     return surface, integral + free * ki * scaler**2 * error * dt
 
 
+def protected(demand, gamma_air, speed, z, mass, p, w, d):
+    """``protected_pitch_demand``, its clip smoothed."""
+    lo, hi = pitch_demand_bounds(gamma_air, speed, z, mass, p)
+    return softplus_clip(demand, lo, hi, w.protection) + d.protection
+
+
 def surface_step(requested, current, dt, response_rate, rate_limit, width, delta):
     """``compute_next_surface``, its rate limit smoothed."""
     move = (requested - current) * (1.0 - jnp.exp(-response_rate * dt))
@@ -171,7 +182,8 @@ def surface_step(requested, current, dt, response_rate, rate_limit, width, delta
     return current + softplus_clip(move, -most, most, width) + delta
 
 
-def engine(lever, power, dt, p):
-    """``compute_next_power`` with the lever's clip removed (T1)."""
+def engine(lever, power, dt, p, z):
+    """``compute_next_power`` with the lever's clip removed (T1), at height ``z``."""
     requested = p.idle_power + (1.0 - p.idle_power) * lever
-    return requested + (power - requested) * jnp.exp(-p.power_response_rate * dt)
+    rate = engine_response_rate(z, p.power_response_rate)
+    return requested + (power - requested) * jnp.exp(-rate * dt)

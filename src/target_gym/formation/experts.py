@@ -21,13 +21,13 @@ from target_gym.formation.env import (
 )
 from target_gym.patrol.experts import (
     HOLD,
+    HORNET_TECS,
     FormationHoldParams,
     FormationHoldState,
+    HornetGuidanceParams,
     patrol_hold_step,
 )
-from target_gym.plane.experts_tecs import AIRLINER
 from target_gym.plane3d.experts import (
-    Plane3DGuidanceParams,
     Plane3DGuidanceState,
     _cruise_speed,
     _fly,
@@ -39,7 +39,7 @@ from target_gym.plane3d.experts import (
 
 
 @struct.dataclass
-class FormationLeadParams(Plane3DGuidanceParams):
+class FormationLeadParams(HornetGuidanceParams):
     """The lead's autopilot: the heading task's course hold and TECS on
     height and the 3D tasks' speed schedule. A formation lead flies smooth and
     predictable, and with the engine's 1.7 s lag TECS's throttle does."""
@@ -96,7 +96,7 @@ def formation_team_step(params, state, obs, xp=jnp):
 #: height alone (the airliner's ``spd_weight`` 0), a little faster than the
 #: heading task's (``time_const`` 1.5 against 2). Every other autopilot value is
 #: the 3D heading task's (scripts/tune_aircraft_guidance.py).
-LEAD = FormationLeadParams(tecs=AIRLINER.replace(time_const=1.5))
+LEAD = FormationLeadParams(tecs=HORNET_TECS.replace(time_const=1.5))
 
 
 def make_formation_pid_controller(num_wingmen: int = 2) -> Controller:

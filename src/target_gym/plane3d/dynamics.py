@@ -15,13 +15,12 @@ import jax.numpy as jnp
 from gymnax.environments import EnvParams
 
 from target_gym.plane.dynamics import (
-    aero_coefficients,
-    buffet_line,
     compute_air_density_from_altitude,
-    compute_drag,
     compute_Mach_from_velocity_and_speed_of_sound,
     compute_speed_of_sound_from_altitude,
     compute_weight,
+    longitudinal_airframe,
+    pitch_inertia,
     read_angles,
 )
 from target_gym.utils import compute_norm_from_coordinates
@@ -217,52 +216,9 @@ def compute_acceleration_3d(
 
     P = compute_weight(m, params.gravity)
 
-    # ====================================================
-    # WINGS
-    # ====================================================
-    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
-    C_z_w = xp.minimum(C_z_w, buffet_line(M, params))
-    lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
-    drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
-    # Body-normal component, not lift alone. Past the stall drag exceeds lift,
-    # so the omitted term is the larger one. Ported from plane/dynamics.py,
-    # which carries the same three corrections; this file is a parallel copy.
-    F_wings = lift_wings * xp.cos(alpha) + drag_wings * xp.sin(alpha)
-    M_wings = F_wings * params.moment_arm_wings
-
-    # ====================================================
-    # STABILIZER
-    # ====================================================
-    # Pitch-rate damping: the tail sweeps at q*l, so it meets the air at
-    # arctan(q*l / V) more incidence and makes a moment opposing the rotation.
-    tail_rate_deg = xp.rad2deg(
-        xp.arctan2(theta_dot * params.moment_arm_stabilizer, xp.maximum(V, 1e-3))
+    lift_total, drag_total, M_pitch, (C_x_e, C_z_e) = longitudinal_airframe(
+        alpha, V, M, rho, theta_dot, stick, params
     )
-    C_z_s, C_x_s = aero_coefficients(
-        xp.rad2deg(alpha) - 3.0 + tail_rate_deg, M, params=params
-    )
-    lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
-    drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
-    # ``lift - drag`` reverses sign once the tail's drag exceeds its lift, which
-    # turned the damping moment into a driving one exactly when it was needed.
-    tail_incidence = xp.deg2rad(xp.rad2deg(alpha) - 3.0 + tail_rate_deg)
-    F_stab = lift_stab * xp.cos(tail_incidence) + drag_stab * xp.sin(tail_incidence)
-    M_stabilizer = -F_stab * params.moment_arm_stabilizer
-
-    # ====================================================
-    # ELEVATOR
-    # ====================================================
-    C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg, M, params=params
-    )
-    lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
-    drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
-    # Projected with the elevator's own incidence, not the stick deflection.
-    elev_incidence = xp.deg2rad(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg
-    )
-    F_elev = lift_elev * xp.cos(elev_incidence) + drag_elev * xp.sin(elev_incidence)
-    M_elevator = -F_elev * params.moment_arm_stabilizer
 
     # ====================================================
     # AILERON (roll moment from differential lift)
@@ -296,11 +252,7 @@ def compute_acceleration_3d(
     # ====================================================
     # TOTAL MOMENTS & FORCES
     # ====================================================
-    M_pitch = M_wings + M_stabilizer + M_elevator
     M_roll = M_aileron + M_roll_damping
-
-    drag_total = drag_wings + drag_stab + drag_elev
-    lift_total = lift_wings + lift_stab + lift_elev
 
     F_x, F_y, F_z = newton_second_law_3d(
         thrust=thrust,
@@ -319,8 +271,8 @@ def compute_acceleration_3d(
             F_x / m,
             F_y / m,
             F_z / m,
-            M_pitch / params.I,
-            M_roll / params.I_x,
+            M_pitch / pitch_inertia(m, params),
+            M_roll / (m * params.roll_gyration_radius**2),
         ]
     )
 

@@ -1,5 +1,9 @@
 # Formation: physics model, provenance and validation
 
+> **Amendment 4 (2026-11-10): the formation flies F/A-18 Hornets**, as the patrol
+> does (patrol/PHYSICS.md, Amendment 4): its V's ranks are 17 to 45 m apart, the
+> separation one Hornet length, and the wingmen's limit AFF's 10 ft one sigma.
+
 A lead and two wingmen in a V, every aircraft flown by the learner. The lead
 flies a patrol route, an altitude and a heading that turns onto a new rate
 every leg; each wingman holds a slot fixed in the lead's body frame. The team
@@ -204,7 +208,7 @@ was already the expert's weakness on the old plant.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 81 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 231 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

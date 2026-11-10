@@ -90,7 +90,9 @@ def test_full_pull_in_full_bank_is_protected_not_tripped():
     assert np.rad2deg([float(s.alpha) for s in states]).max() < params.aoa_stall
 
 
-@pytest.mark.parametrize("name", (HEADING, RACETRACK))
+@pytest.mark.parametrize(
+    "name", (HEADING, RACETRACK, "plane3d_circle", "plane3d_figure8")
+)
 def test_bank_and_overspeed_are_not_trips(name):
     """Normal law protects bank; VMO is a warning [BEA447, TCDS]."""
     env, _ = tg.make(name)
@@ -102,7 +104,9 @@ def test_bank_and_overspeed_are_not_trips(name):
     assert not bool(env.is_terminated(fast, params))
 
 
-@pytest.mark.parametrize("name", (HEADING, RACETRACK))
+@pytest.mark.parametrize(
+    "name", (HEADING, RACETRACK, "plane3d_circle", "plane3d_figure8")
+)
 def test_a_full_bank_demand_is_held_at_the_protected_bank(name):
     """Rule 14, Amendment 3: the autopilot's bank is a protected limit, 25 to 30
     deg in the family [IFH ch. 10's 30 deg holding bank; the 25 deg of ICAO Doc
@@ -174,6 +178,12 @@ def test_the_aircraft_starts_established_and_reads_air_data(name):
 # -- The heading score (rule 15) --------------------------------------------------
 
 
+def _band_cost(env, state, params):
+    """The bands' cost, every term but the operator's economy (rule 15)."""
+    terms = env.reward_terms(state, params)
+    return float(sum(v for k, v in terms.items() if k != "economy"))
+
+
 def _heading_state(time, heading_deg, z_off=0.0):
     """Heading task at 5 000 m, cleared at reset onto 90 deg from 0 deg."""
     env, _ = tg.make(HEADING)
@@ -198,13 +208,13 @@ def _heading_state(time, heading_deg, z_off=0.0):
 def test_a_heading_inside_its_bands_costs_nothing():
     """5 deg and 15 m off, long after the turn: inside every band."""
     env, params, state = _heading_state(300, 85.0, z_off=15.0)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
+    assert _band_cost(env, state, params) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_the_clearance_itself_costs_nothing():
     """At the clearance the whole turn is still allowed."""
     env, params, state = _heading_state(0, 0.0)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
+    assert _band_cost(env, state, params) == pytest.approx(0.0, abs=1e-6)
 
 
 def _clearances(seed, steps=600):
@@ -225,7 +235,7 @@ def _clearances(seed, steps=600):
                 (float(new.heading_change), float(new.target_heading), float(new.psi))
             )
         targets.append(float(new.target_heading))
-        costs.append(float(-reward))
+        costs.append(_band_cost(env, new, params))
         state = new
     return params, np.array(targets), np.array(costs), sizes
 
@@ -259,9 +269,7 @@ def test_not_turning_is_charged_past_the_holding_turn_rate():
     v = float(scheduled_airspeed(5000.0, params.target_cas, params.target_mach))
     rate = min(3.0, np.rad2deg(G * np.tan(np.deg2rad(30.0)) / v))
     expected = ((rate * 30.0 - 10.0) / 10.0) ** 2
-    assert float(-env.compute_reward(state, params)) == pytest.approx(
-        expected, rel=1e-3
-    )
+    assert _band_cost(env, state, params) == pytest.approx(expected, rel=1e-3)
 
 
 @pytest.mark.medium
@@ -408,3 +416,76 @@ def test_the_reference_l1_sits_in_its_documented_ranges():
 
     assert 0.7 <= _PATH.damping <= 0.85
     assert _PATH.period >= 20.0
+
+
+# ---------------------------------------------------------------------------
+# Heading, not track, and a hold flyable in its wind (owner, 2026-11-10)
+# ---------------------------------------------------------------------------
+
+
+def _crosswind_state(track_on_target):
+    """The heading task 300 s after a clearance onto 90 deg, in a 50 kt wind
+    blowing along x. The aircraft flies either the cleared heading (its nose
+    on 90 deg, drifting) or the cleared track (its nose crabbed into the wind)."""
+    env, _ = tg.make(HEADING)
+    wind = 50.0 * KT
+    params = _params(
+        HEADING,
+        wind_x=wind,
+        target_altitude_range=(5000.0, 5000.0),
+        target_heading_range=(np.pi / 2, np.pi / 2),
+        e_floor_heading=float(np.deg2rad(1.0)),
+        e_tol_heading=float(np.deg2rad(1.0)),
+    )
+    _, state = env.reset_env(KEY, params)
+    v = float(jnp.hypot(state.x_dot - wind, state.y_dot))
+    # Nose on 90 deg: air velocity (0, v). Track on 90 deg: crab by asin(w / v).
+    crab = np.arcsin(wind / v) if track_on_target else 0.0
+    air_x, air_y = -v * np.sin(crab), v * np.cos(crab)
+    state = state.replace(
+        time=jnp.int32(300),
+        x_dot=jnp.float32(air_x + wind),
+        y_dot=jnp.float32(air_y),
+        psi=jnp.float32(np.arctan2(air_y, air_x + wind)),
+    )
+    return env, params, state
+
+
+def test_a_vector_is_scored_on_the_heading_flown_not_the_track():
+    """ATC vectors are headings [IFH ch. 7]. At 50 kt across 193 m/s the drift
+    is asin(25.7 / 193) = 7.7 deg: holding the heading costs nothing on a 1 deg
+    band, and holding the track instead is 6.7 deg past it, (6.7 / 1)^2 = 45
+    a second."""
+    env, params, nose = _crosswind_state(track_on_target=False)
+    _, _, crab = _crosswind_state(track_on_target=True)
+    on_heading = float(env.reward_terms(nose, params)["tracking"])
+    on_track = float(env.reward_terms(crab, params)["tracking"])
+    assert on_heading == pytest.approx(0.0, abs=1e-3)
+    assert on_track == pytest.approx(45.0, rel=0.15)
+
+
+def test_the_irs_heading_reads_the_nose_and_psi_the_track():
+    env, params, state = _crosswind_state(track_on_target=False)
+    obs = env.get_obs(state, params)
+    assert np.rad2deg(float(obs[env.obs_index["heading"]])) == pytest.approx(
+        90.0, abs=0.05
+    )
+    assert np.rad2deg(float(obs[env.obs_index["psi"]])) < 90.0 - 5.0
+
+
+@pytest.mark.parametrize("wind_kt", [0.0, 50.0, 67.0])
+def test_the_holds_downwind_turn_is_flyable_in_its_wind(wind_kt):
+    """An RNAV hold sizes its turns for the greatest ground speed at the AIM's
+    25 deg (Garmin, RNAV holding): the downwind turn's bank, atan(GS^2 / g r)
+    with GS the airspeed plus the wind, is 25 deg, inside the 30 deg protected
+    bank. In still air that is the plain holding turn."""
+    env, _ = tg.make(RACETRACK)
+    level = 10_000.0 * FT
+    params = _params(RACETRACK, target_altitude_range=(level, level))
+    params = params.replace(wind_x=wind_kt * KT)
+    _, state = env.reset_env(KEY, params)
+    cas = float(env.assigned_cas(state, params))
+    tas = float(scheduled_airspeed(level, cas, 0.99))
+    ground = tas + wind_kt * KT
+    bank = np.rad2deg(np.arctan(ground**2 / (G * float(state.target_radius))))
+    assert bank == pytest.approx(25.0, abs=0.1)

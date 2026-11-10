@@ -95,6 +95,7 @@ CAPABILITIES = {
     "plane3d_figure8": ("moving_target",),
     "patrol": ("moving_target",),
     "patrol_range_bearing": ("moving_target", "partial_observability"),
+    "wake_surf": ("economic", "safety"),
     "formation": ("multi_agent", "moving_target"),
 }
 

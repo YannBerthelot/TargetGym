@@ -1,7 +1,7 @@
 <h1 align="center">TargetGym</h1>
 
 <h3 align="center">
-  24 JAX environments for setpoint tracking,<br/>
+  25 JAX environments for setpoint tracking,<br/>
   with tuned PID and MPC baselines.
 </h3>
 
@@ -28,8 +28,9 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
-- **Baselines included.** Every environment ships a tuned PID and an MPC
-  with full state access, which serves as an upper bound. Both are recorded
+- **Baselines included.** Every environment ships a tuned PID, and all but
+  `wake_surf`, whose oracle is not built yet, an MPC with full state access,
+  which serves as an upper bound. Both are recorded
   over ten seeds in `src/target_gym/data/baseline_returns/`.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
   parameter table, published validation targets asserted by tests, and its
@@ -93,7 +94,7 @@ print("Expert return:", total)
 baselines are scored on, as `gymnax.make` does, and `reset` and `step` follow
 the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
 change single fields, as in `tg.make("plane", max_steps_in_episode=500)`, and
-`tg.list_envs()` gives the 24 names.
+`tg.list_envs()` gives the 25 names.
 
 The expert's memory is its PID's integral and last error. You carry it as
 you carry `state`, so the same `expert.step` also runs under `jit`, `vmap`
@@ -157,7 +158,7 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 
 | Family | Count | Environments |
 |---|---|---|
-| **Aircraft** | 10 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; two formation-patrol variants; a multi-agent formation |
+| **Aircraft** | 11 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; an A320 surfing another's wake; two F/A-18 formation-patrol variants; a multi-agent F/A-18 formation |
 | **Process control** | 6 | CSTR, first-order lag, four-tank, pH neutralisation, binary distillation, CSTR on its unstable steady state |
 | **Industrial / energy** | 6 | Glass furnace, nuclear reactor, building HVAC, boiler drum, cement kiln, compressor held off its surge line |
 | **Renewable energy** | 2 | Wind turbine, grid battery |
@@ -220,7 +221,7 @@ can also anchor on the ceiling and gives the numbers.
   <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/latest/images/results-vs-expert.svg" width="680">
 </picture>
 
-Every environment ships a tuned PID and an MPC. On `patrol_range_bearing`, which
+Every environment ships a tuned PID, and all but `wake_surf`, whose oracle is not built yet, an MPC. On `patrol_range_bearing`, which
 withholds the slot error a planner would read, the MPC slot holds `patrol`'s
 oracle reading the true state, labelled a full-state bound.
 
@@ -280,7 +281,7 @@ Tests assert consequences rather than formulas: ISA table values, L/D ratios,
 thermal time constants, energy balances, equilibria. A test that recomputes the
 implementation's own expression would pass on a wrong one.
 
-All 24 environments are covered by eighteen contracts, since aircraft variants
+All 25 environments are covered by eighteen contracts, since aircraft variants
 share a plant. A shared conformance suite additionally checks determinism, PRNG
 handling, `jit`/`vmap`/`scan` compatibility and numerical health over full
 episodes.

@@ -53,7 +53,8 @@ from target_gym.patrol.env import slot_error, wrap_angle  # noqa: E402
 
 TRAIN, HELD_OUT = range(100, 110), range(200, 210)
 PATROL = ("patrol", "patrol_range_bearing")
-SLOT_RMS_M, ALTITUDE_M = 8.5, 2.0
+#: AFF's 10 ft one-sigma on the Hornet [AFF]; the lead's altitude, 2 m.
+SLOT_RMS_M, ALTITUDE_M = 10.0 * 0.3048, 2.0
 _ROLLOUTS = {}
 
 
@@ -164,11 +165,11 @@ def _flown(name, seed):
     return np.sqrt((slot**2).mean(axis=0)), alt.mean(), hdg.mean(), tripped
 
 
-def check():
+def check(names=(*PATROL, "formation")):
     """The held-out check, flown as tests/patrol/test_formation_hold.py
     flies it, so it prints what the tests assert."""
     print("held-out seeds 200-209: worst seed (which), median, trips")
-    for name in (*PATROL, "formation"):
+    for name in names:
         runs = [_flown(name, s) for s in HELD_OUT]
         rms = np.array([r[0].max() for r in runs])
         worst = HELD_OUT[int(rms.argmax())]
@@ -177,6 +178,8 @@ def check():
             f"{np.median(rms):5.2f} m, limit {SLOT_RMS_M}, "
             f"{sum(r[3] for r in runs)} trips"
         )
+    if "formation" not in names:
+        return
     alt, hdg = np.array([r[1] for r in runs]), np.array([r[2] for r in runs])
     print(
         f"  {'formation lead':20s} altitude {alt.max():.2f} m (limit {ALTITUDE_M}), "
@@ -187,9 +190,17 @@ def check():
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="the held-out check only")
-    if ap.parse_args().check:
+    ap.add_argument(
+        "--wake-surf",
+        action="store_true",
+        help="wake_surf's hold alone: the A320's own set, from its shipped values",
+    )
+    args = ap.parse_args()
+    if args.check:
         check()
         return 0
+    if args.wake_surf:
+        return tune_wake_surf()
     hold = tg.make_expert("patrol").params
     team = tg.make_expert("formation").params
     followers = {
@@ -237,6 +248,50 @@ def main() -> int:
         measure="altitude",
     )
     check()
+    return 0
+
+
+def tune_wake_surf() -> int:
+    """Steps 1 to 3 on ``wake_surf`` alone, from its shipped values: the A320
+    3 km in trail is its own follower, with an engine 6 s slow at cruise, so
+    the energy step also searches TECS's time constant. Its limit is the
+    station box, not the patrol's 10 ft."""
+    hold = tg.make_expert("wake_surf").params
+    flown = {"wake_surf": lambda g: g}
+    search(
+        "engine and energy",
+        hold,
+        {
+            "tecs.spd_weight": (0.0, 0.5, 1.0),
+            "tecs.thr_damp": (0.5, 2.0, 6.0),
+            "tecs.time_const": (5.0, 8.0, 12.0),
+            "k_ref": (0.3, 1.0),
+        },
+        flown,
+    )
+    search(
+        "slot loops",
+        hold,
+        {
+            "k_x": (0.01, 0.02, 0.05),
+            "a_x": (0.05, 0.1, 0.2),
+            "k_y": (0.02, 0.05, 0.1),
+            "tau_hdg": (3.0, 5.0),
+        },
+        flown,
+    )
+    search(
+        "integrals and filter",
+        hold,
+        {
+            "k_xi": (0.0, 0.001),
+            "k_yi": (0.0, 0.001),
+            "x_band+y_band": (30.0, 60.0),
+            "k_omega": (0.1, 0.3),
+        },
+        flown,
+    )
+    check(("wake_surf",))
     return 0
 
 

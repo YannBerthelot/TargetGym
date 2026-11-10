@@ -28,6 +28,8 @@ from target_gym.plane.dynamics import (
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
     compute_velocity_from_horizontal_and_vertical_speed,
+    economy_cost,
+    engine_response_rate,
     in_zone,
     protected_pitch_demand,
     scheduled_airspeed,
@@ -116,18 +118,21 @@ class PlaneParams(EnvParams):
     initial_fuel_quantity: float = 23860 / 1.25
     specific_fuel_consumption: float = 17.5 / 1000
 
-    # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
-    #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,
-    #   e = 0.85  ->  5.034 /rad = 0.0879 /deg.
-    # Was 0.04 /deg (-54%), which both inflated cruise trim AoA to 4.06 deg
-    # (A320 flies ~2 deg) and disagreed with `k`, which correctly encodes the
-    # same AR. With the derived slope, cl0 + cl_alpha*aoa_stall = 1.52 ~ CL_max,
-    # so cl0/aoa_stall/CL_max/cl_alpha become mutually consistent.
-    cl_alpha: float = 0.08786  # per deg
+    # The swept wing's lift-curve slope at Mach 0, derived (PHYSICS.md 4):
+    # DATCOM's 2 pi A / (2 + sqrt(A^2 (1 + tan^2 L) + 4)) with A = 34.1^2/122.6
+    # = 9.48 and the half-chord sweep L below, 4.80 /rad = 0.0838 /deg. It grows
+    # with Mach by ``compressibility``. The unswept Prandtl slope it replaced,
+    # 0.0879 /deg grown by 1/beta, overstated the slope at M 0.78 by 26 %.
+    cl_alpha: float = 0.08378  # per deg
+    #: The wing's half-chord sweep, rad: 21.9 deg, from 25 deg at the quarter
+    #: chord and a taper of 0.24 [Jenkinson, A320-200].
+    sweep_half_chord: float = 0.38186
     cl0: float = 0.2  # zero-lift AoA
     cd0: float = 0.02  # zero-lift drag
     k: float = 0.045  # induced drag factor
-    aoa_stall: float = 15.0  # deg
+    # Ours: where the swept wing's linear lift, 0.2 + 0.0838 x 15.5, reaches
+    # CL_max, so the four lift constants describe one wing.
+    aoa_stall: float = 15.5  # deg
     CL_max: float = 1.5
     # Negative-stall limit. A cambered wing stalls asymmetrically: the negative
     # branch bottoms out near -10 deg AoA. Without this the corrected (steeper)
@@ -183,17 +188,60 @@ class PlaneParams(EnvParams):
     # falling from ``buffet_mach`` at ``buffet_slope`` per unit of Mach (ours).
     load_factor_max: float = 2.5
     load_factor_min: float = -1.0
+    #: The autopilot's manoeuvre limit, g either side of the load the flight
+    #: path needs (``protected_pitch_demand``): ours, the top of the 0.1 to
+    #: 0.2 g the record's autopilots hold a capture to [KFC 500,
+    #: TM 1-1510-225-10]. Every controller flies through it.
+    ap_load_increment: float = 0.2
     vmo_eas: float = 350.0 * 1852.0 / 3600.0
     mmo: float = 0.82
     buffet_mach: float = 0.3
     buffet_slope: float = 1.4
     k_drag: float = 5.0
 
-    I: float = 9_000_000
-    moment_arm_stabilizer: float = 15.0
-    moment_arm_wings: float = 1.5
-    stabilizer_surface: float = 27
-    elevator_surface: float = 10
+    # ---- The longitudinal airframe (PHYSICS.md 3 and 4) ----
+    #: Pitch radius of gyration, m: JSBSim's A320 inertia over its empty mass,
+    #: 3.78e6 kg m^2 over 50.3 t, applied at the all-up mass (5.5e6 at 73.5 t).
+    pitch_gyration_radius: float = 8.666
+    #: The wing-body's aerodynamic centre ahead of the centre of gravity, m:
+    #: (0.29 - 0.098) of the 4.29 m MAC [Jenkinson]. The wing's quarter chord
+    #: moved forward 0.152 MAC by the fuselage (Torenbeek's 1.8 b h l / (a S c),
+    #: its 3.95 x 4.14 m section [Jenkinson] and 13 m of nose ahead of the wing
+    #: root, ours), and the centre of gravity at 29 % MAC (ours).
+    moment_arm_wings: float = 0.822
+    #: The tail's aerodynamic centre behind the centre of gravity, m: the
+    #: 13.53 m tail arm from the wing's quarter chord [Jenkinson], less the
+    #: centre of gravity's 0.04 MAC behind it.
+    moment_arm_stabilizer: float = 13.36
+    #: Horizontal tail area, m^2, elevators included [Jenkinson].
+    stabilizer_surface: float = 31.0
+    #: The tail's slope at Mach 0, per deg: DATCOM's, as the wing's, for its
+    #: aspect ratio of 5.0 and 23.6 deg of half-chord sweep (29 deg at the
+    #: quarter chord, taper 0.256) [Jenkinson].
+    tail_cl_alpha: float = 0.07021
+    tail_aspect_ratio: float = 5.0
+    tail_sweep_half_chord: float = 0.41100
+    #: The tail's induced drag factor, 1 / (pi A e) with e = 0.8 (ours).
+    tail_k: float = 0.0796
+    #: The tail's stall: a symmetric section at +-15 deg, CL 1.0 (ours).
+    tail_CL_max: float = 1.0
+    tail_aoa_stall: float = 15.0
+    #: The tail's dynamic pressure over the free stream's (ours: 0.85 to 0.95 is
+    #: the textbook range for a fuselage-mounted tail).
+    tail_efficiency: float = 0.9
+    #: How much of an elevator deflection turns the tail's incidence (ours: a
+    #: flap of about 30 % chord, 0.66 by thin-aerofoil theory, reduced to the
+    #: 0.5 measured flaps reach).
+    elevator_effectiveness: float = 0.5
+    #: The downwash at the tail over lifting-line's far field (``downwash``):
+    #: 1, the far field itself, on the A320's long wing and high-set tail.
+    downwash_ratio: float = 1.0
+    #: The tail's fixed setting against the body, rad: the trimmable
+    #: stabiliser at the reference cruise's trim, so the elevator holds it at
+    #: zero there (FL330, M 0.78, 73.5 t; calibrated, PHYSICS.md 4). The
+    #: stabiliser's own travel is not modelled: the attitude loop's integral
+    #: trims on the elevator.
+    stabilizer_setting: float = 0.02417
 
     max_steps_in_episode: int = 10_000
 
@@ -337,6 +385,18 @@ class PlaneParams(EnvParams):
     #: [AIM 4-4-12].
     speed_band: float = 10.0 * 1852.0 / 3600.0
     mach_band: float = 0.02
+    # ---- What the operator pays inside the bands (owner, 2026-11-10) ----
+    #: Cost index, kg of fuel a minute of time is worth: ours, family range
+    #: 6 (an operator's) to 40 (the A320 QRH's long-range cruise equivalent),
+    #: both secondary (pprune, plane/REALITY.md).
+    cost_index: float = 30.0
+    #: Weight of the economy term (``economy_cost``): 0 leaves it out; ``plane``
+    #: sets 1, so a second of the reference cruise costs 1, as a second one
+    #: band width past a band does.
+    economy_weight: float = 0.0
+    #: The reference cruise's operating cost, kg/s: fuel at FL330, M 0.78,
+    #: 73.5 t (0.742 kg/s in the model) plus the cost index's 0.5.
+    economy_scale: float = 1.242
     # ---- Clearances (``target_pattern = 5``, ``plane_energy``) ----
     #: One clearance per tread, s (ours: a 2 000 ft change at the 500 fpm
     #: minimum takes 240 s, plus a minute held at the new level).
@@ -400,11 +460,22 @@ PARAM_UNITS = {
     "buffet_mach": "-",
     "buffet_slope": "-",
     "k_drag": "-",
-    "I": "kg.m^2",
+    "pitch_gyration_radius": "m",
     "moment_arm_stabilizer": "m",
     "moment_arm_wings": "m",
     "stabilizer_surface": "m^2",
-    "elevator_surface": "m^2",
+    "tail_cl_alpha": "1/deg",
+    "tail_aspect_ratio": "-",
+    "tail_sweep_half_chord": "rad",
+    "tail_k": "-",
+    "tail_CL_max": "-",
+    "tail_aoa_stall": "deg",
+    "tail_efficiency": "-",
+    "elevator_effectiveness": "-",
+    "downwash_ratio": "-",
+    "stabilizer_setting": "rad",
+    "sweep_half_chord": "rad",
+    "ap_load_increment": "g",
     "precision_floor": "m",
     "reward_version": "-",
     "tracking_exponent": "-",
@@ -446,6 +517,9 @@ PARAM_UNITS = {
     "zone_duration_range": "s",
     "speed_band_cost": "-",
     "speed_band": "m/s",
+    "cost_index": "kg/min",
+    "economy_weight": "-",
+    "economy_scale": "kg/s",
     "mach_band": "-",
     "clearance_period": "s",
     "level_change_rate_min": "m/s",
@@ -599,6 +673,9 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     near = error < p.level_off_height
     terms["level_off"] = xp.where(
         (p.target_pattern == 5) & near, (fast / p.level_off_rate_band) ** 2, 0.0
+    )
+    terms["economy"] = economy_cost(
+        state.power, state.z, airspeed(state, p, xp), target_airspeed(state, p), p, xp
     )
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
@@ -853,7 +930,7 @@ def compute_next_state(
             power_requested,
             power,
             dt,
-            params.power_response_rate,
+            engine_response_rate(z, params.power_response_rate),
             params.idle_power,
         )
         thrust = compute_thrust_output(

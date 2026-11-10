@@ -6,8 +6,9 @@ Contract, each from a published figure:
 - The 2D aircraft's flight controls protect the limit load factors of 14 CFR
   25.337, +2.5 and -1, and its AoA; VMO 350 kt and MMO 0.82 [TCDS] are a
   warning (``overspeed``), not a trip (plane/REALITY.md, limits;
-  tests/plane/test_plane_reality.py). The 3D aircraft still trips on them and
-  on 60 deg of bank until its own Amendment 2 change.
+  tests/plane/test_plane_reality.py). The unamended 3D plant, PlaneParams3D's
+  default, still trips on them and on 60 deg of bank; every registered 3D task
+  flies the amended one, which protects them (plane3d/PHYSICS.md, Amendment 4).
 - The wing's lift stops at a buffet line that falls with Mach, instead of rising
   with Prandtl-Glauert as it did. The tail keeps its own limit.
 - The ``plane`` family's airspeed demand is a schedule of 290 kt CAS and M 0.78
@@ -50,10 +51,11 @@ def _state_2d(z, speed, load_factor=1.0):
 
 
 def _state_3d(z, speed, phi_deg=0.0, load_factor=1.0):
-    # The unamended 3D plant (plane3d_circle, Extra); the heading and racetrack
-    # tasks protect these limits (tests/plane3d/test_plane3d_reality.py).
+    # The unamended 3D plant, PlaneParams3D's default: every registered task
+    # protects these limits since Amendment 4 (tests/plane3d/test_plane3d_reality.py),
+    # and the unamended trips are checked on the circle with the flag off.
     env = Plane3DCircle()
-    params = env.default_params.replace(turbulence_sigma=0.0)
+    params = env.default_params.replace(turbulence_sigma=0.0, amended=False)
     _, state = env.reset_env(KEY, params)
     return params, state.replace(
         z=jnp.float32(z),
@@ -167,8 +169,11 @@ def test_the_buffet_line_falls_with_mach():
 
 def test_the_wing_stops_at_the_buffet_line_at_high_mach():
     """At 3500 m and 230 m/s (M 0.704) an incidence of 14 deg asks for
-    CL = (0.2 + 0.08786 * 14) / 0.710 = 2.0 of the wing, the old limit. The line
-    is 1.5 - 1.4 * 0.404 = 0.934 there, so the line takes off 1.07 of it."""
+    CL = (0.2 + 0.08378 * 14) * 1.242 = 1.706 of the wing (the swept wing's slope,
+    grown 1.242 times by M 0.704). The line is 1.5 - 1.4 * 0.404 = 0.934 there,
+    so it takes 0.771 off the wing. With less lift the wing sends 2 x 0.771 /
+    (pi 9.48) = 0.052 rad less downwash to the tail, whose slope there is 4.75
+    /rad: it gains 0.246 on 0.9 x 31 m^2, 0.056 in wing units. Net, 0.715."""
     params = PlaneParams()
     no_line = params.replace(buffet_slope=-100.0)
     velocities = jnp.array([230.0, 0.0, 0.0])
@@ -178,7 +183,7 @@ def test_the_wing_stops_at_the_buffet_line_at_high_mach():
     _, free = compute_acceleration(velocities, positions, action, no_line)
     q = 0.5 * 0.8634 * 230.0**2
     lost = (float(free[1]) - float(kept[1])) / (q * params.wings_surface)
-    assert lost == pytest.approx(1.07, abs=0.05)
+    assert lost == pytest.approx(0.715, abs=0.05)
 
 
 def test_the_tail_keeps_its_authority_at_high_mach():

@@ -37,18 +37,22 @@ from target_gym.plane.dynamics import (
     BANK_DEMAND_MAX,
     PITCH_DEMAND_MAX,
     STICK_TRAVEL,
+    InnerLoop,
     advance_gust,
     compute_air_density_from_altitude,
+    economy_cost,
     scheduled_airspeed,
     step_key,
     total_wind_3d,
-    trim_stick,
+    trim_level,
 )
 from target_gym.plane.experts_tecs import TECSParams
+from target_gym.plane3d import hornet
 from target_gym.plane3d.dynamics import compute_velocity_3d, rolling_gust
 from target_gym.plane3d.env import (
     PlaneParams3D,
     PlaneState3D,
+    airspeed_3d,
     check_is_terminal_3d,
     compute_next_state_3d,
     get_obs_heading,
@@ -92,14 +96,20 @@ LEAD_AUTOPILOT = Plane3DGuidanceParams(
     tau_hdg=10.0,
     alpha_max=0.19,
     k_bank_comp=0.15,
-    cruise_cas=290.0 * 1852.0 / 3600.0,
-    cruise_mach=0.78,
-    v_min_eas=104.0,
+    # The Hornet lead flies AFF's Class B speed, 250 KCAS [AFF], the Mach
+    # branch past it ours and never reached in the band.
+    cruise_cas=hornet.CLASS_B_CAS,
+    cruise_mach=0.70,
+    # 1.2 times the Hornet's clean 1 g stall, 61.9 m/s EAS at its 15.1 t and
+    # CL_max 1.70 [HARV] (ArduPilot's ARSPD_FBW_MIN rule [P409]).
+    v_min_eas=74.0,
     gravity=9.81,
     dt=1.0,
     tecs=TECSParams(
-        climb_max=8.0,
-        sink_min=23.0,
+        # Full military power climbs 25 m/s and idle sinks 15 m/s at the AFF
+        # point (the model's own excess thrust, 23 kN and -12 kN, over 148 kN).
+        climb_max=25.0,
+        sink_min=15.0,
         sink_max=10.0,
         thr_trim=0.2,
         time_const=2.0,
@@ -119,9 +129,28 @@ LEAD_AUTOPILOT = Plane3DGuidanceParams(
     ),
 )
 
-#: Samples of the lead's gust the air keeps, newest first. The largest V's last
-#: rank sits 600 m back, 3.5 steps at the schedule's slowest 170 m/s.
-GUST_MEMORY = 5
+#: An airliner lead, for the wake-surfing task: the 3D heading expert on its
+#: 2026-11-06 values (the lead the patrol flew before it moved to the Hornet).
+AIRLINER_LEAD = LEAD_AUTOPILOT.replace(
+    cruise_cas=290.0 * 1852.0 / 3600.0,
+    cruise_mach=0.78,
+    v_min_eas=104.0,
+    tecs=LEAD_AUTOPILOT.tecs.replace(climb_max=8.0, sink_min=23.0),
+)
+
+
+def lead_autopilot(params):
+    """The scripted lead's autopilot for the airframe ``params`` flies."""
+    airliner = getattr(params, "airliner_lead", False)
+    return jax.tree.map(
+        lambda a, h: jnp.where(airliner, a, h), AIRLINER_LEAD, LEAD_AUTOPILOT
+    )
+
+
+#: Samples of the lead's gust and wake the air keeps, newest first: 20 s, so a
+#: wake-surfing follower 3.7 km behind an airliner at 230 m/s (16 s) still finds
+#: the air its lead left.
+GUST_MEMORY = 20
 
 #: What the lead leaves in the air each step: x, y, z, its right wing's horizontal
 #: direction (2), its bank and its circulation (``wake_sample``).
@@ -192,27 +221,94 @@ class PatrolState(EnvState):
 
 @struct.dataclass
 class PatrolParams(PlaneParams3D):
-    """Physics params (inherited from :class:`PlaneParams3D`) + patrol config."""
+    """Physics params (inherited from :class:`PlaneParams3D`, with the F/A-18
+    Hornet's airframe, ``plane3d.hornet``) + patrol config."""
 
-    # Slot geometry sampled at reset (metres).  Defaults put the follower in a
-    # classic trailing echelon: ~200 m back, ~120 m to one side, co-altitude.
-    slot_back_range: Tuple[float, float] = (150.0, 300.0)
-    slot_right_range: Tuple[float, float] = (-150.0, 150.0)
-    slot_up_range: Tuple[float, float] = (-60.0, 60.0)
+    # ---- The airframe: an F/A-18 Hornet (owner, 2026-11-10; hornet.py) ----
+    initial_mass: float = hornet.MASS
+    initial_fuel_quantity: float = hornet.FUEL
+    wings_surface: float = hornet.WING_AREA
+    wingspan: float = hornet.SPAN
+    aspect_ratio: float = hornet.ASPECT_RATIO
+    cl_alpha: float = hornet.CL_ALPHA
+    cl0: float = hornet.CL0
+    CL_max: float = hornet.CL_MAX
+    aoa_stall: float = hornet.AOA_STALL
+    sweep_half_chord: float = hornet.SWEEP_HALF_CHORD
+    cd0: float = hornet.CD0
+    k: float = hornet.K_INDUCED
+    M_crit: float = hornet.M_CRIT
+    pitch_gyration_radius: float = hornet.PITCH_GYRATION
+    roll_gyration_radius: float = hornet.ROLL_GYRATION
+    moment_arm_wings: float = hornet.WING_ARM
+    moment_arm_stabilizer: float = hornet.TAIL_ARM
+    stabilizer_surface: float = hornet.TAIL_AREA
+    tail_cl_alpha: float = hornet.TAIL_CL_ALPHA
+    tail_aspect_ratio: float = hornet.TAIL_ASPECT_RATIO
+    tail_sweep_half_chord: float = hornet.TAIL_SWEEP_HALF_CHORD
+    tail_k: float = 1.0 / (3.14159265 * hornet.TAIL_ASPECT_RATIO * 0.8)
+    tail_efficiency: float = hornet.TAIL_EFFICIENCY
+    elevator_effectiveness: float = 1.0
+    downwash_ratio: float = hornet.DOWNWASH_RATIO
+    stabilizer_setting: float = hornet.STABILIZER_SETTING
+    C_lp: float = hornet.C_LP
+    aileron_surface: float = hornet.AILERON_AREA
+    aileron_effectiveness: float = hornet.AILERON_EFFECTIVENESS
+    moment_arm_aileron: float = hornet.AILERON_ARM
+    thrust_output_at_sea_level: float = hornet.THRUST_SEA_LEVEL
+    specific_fuel_consumption: float = hornet.SFC
+    power_response_rate: float = hornet.POWER_RESPONSE_RATE
+    load_factor_max: float = hornet.LOAD_FACTOR_MAX
+    load_factor_min: float = hornet.LOAD_FACTOR_MIN
+    ap_load_increment: float = hornet.AP_LOAD_INCREMENT
+    protected_bank: float = hornet.PROTECTED_BANK
+    mmo: float = hornet.MMO
+    vmo_eas: float = hornet.VMO_EAS
+    #: The Hornet's attitude loop, tuned once by the A320's procedure at the
+    #: AFF point, M 0.56 at 25 000 ft (``scripts/tune_inner_loop.py --airframe
+    #: hornet``), its scaler about that point's 116 m/s EAS. Its roll D is
+    #: capped at the Hornet's own roll damper, not the guide's 0.1 [HARV IV.A.2].
+    inner_loop: InnerLoop = InnerLoop(
+        Kp_theta=2.2918,
+        Ki_theta=0.0318,
+        Kd_theta=0.1273,
+        Kp_roll=0.6366,
+        Ki_roll=0.0318,
+        Kd_roll=0.3438,
+        scaling_speed=116.08,
+    )
+    #: The plant every scored aircraft task flies: limits protected, the
+    #: ground the one trip (plane3d/PHYSICS.md, Amendment 2).
+    amended: bool = True
+    #: The AFF test band, 20 000 to 32 000 ft [AFF].
+    target_altitude_range: Tuple[float, float] = hornet.ALTITUDE_BAND
+    initial_altitude_range: Tuple[float, float] = hornet.ALTITUDE_BAND
+    #: Light turbulence, as AFF flew ("no turbulence" to "light chop" [AFF]):
+    #: the OU innovation that holds a 0.6 m/s gust (ours, the 3D tasks' light).
+    turbulence_sigma: float = 0.36
+
+    # Slot geometry sampled at reset (metres): the cruise position, on a
+    # bearing line 3 to 6 plane widths out with a step down [CNATRA, cruise
+    # position], never closer than AFF's 56 ft nose to tail, one length, so
+    # 34 m centre to centre at least [AFF]. The lateral offset's size is drawn
+    # in ``slot_right_range`` and its side at random.
+    slot_back_range: Tuple[float, float] = (34.0, 70.0)
+    slot_right_range: Tuple[float, float] = (17.0, 45.0)
+    slot_up_range: Tuple[float, float] = (-10.0, 0.0)
 
     # Reward / termination shaping.
     #: The formation tolerance, in metres: what "in the slot" means when a
     #: test or a report judges whether the follower held station. Not a reward
     #: parameter -- the reward is log-scaled against ``max_slot_error`` with a
     #: floor at ``slot_precision_floor``.
-    slot_tolerance: float = 60.0
+    slot_tolerance: float = 10.0 * 0.3048  # 10 ft one sigma [AFF]
     # Heading-alignment tolerance (rad): the follower should fly roughly
     # parallel to the lead (like a real wingman), not merely occupy the slot
     # position.  30 deg sigma nudges toward parallel flight without dominating.
     heading_tolerance: float = 0.5236
-    #: Collision distance between centres, in metres, a trip. Over the A320's
-    #: 34.1 to 35.8 m span: at 25 m the wingtips of two aircraft abeam overlapped.
-    min_separation: float = 40.0
+    #: Collision distance between centres, in metres, a trip: one Hornet
+    #: length, 56 ft, the nose-to-tail limit AFF flew to [AFF].
+    min_separation: float = 56.0 * 0.3048
     max_slot_error: float = 1500.0  # follower lost the formation (m) -> terminal
     #: Slot error below which the reward stops paying, in metres. Relative
     #: position between two aircraft comes from differencing GPS fixes, so a
@@ -249,9 +345,11 @@ class PatrolParams(PlaneParams3D):
     rho_floor: float = (0.1021 / 3.0) ** 2 + (1.631e-3 / 0.0087) ** 2
 
     # Lead behaviour.  Turn rate is sampled in [-r, r] rad/step; 0 => straight
-    # and level.  At delta_t = 1 s, 0.03 rad/step is 1.7 deg/s, under the 3 deg/s
-    # of a standard-rate turn: 28 deg of bank at 171 m/s and 34 deg at 219 m/s.
-    lead_turn_rate_range: Tuple[float, float] = (-0.03, 0.03)
+    # and level.
+    #: 0.0303 rad/s is the parade turn's 30 deg of bank [CNATRA] at the lead's
+    #: 250 KCAS at 25 000 ft (186.9 m/s): 28 deg at the band's foot and 33 deg at
+    #: its top, inside the 45 deg the lead's and the wingmen's autopilots fly.
+    lead_turn_rate_range: Tuple[float, float] = (-0.0303, 0.0303)
     #: Seconds the lead holds each leg of its route before turning onto the
     #: next. 60 s at the 1 s step, so the follower meets a turn onset roughly
     #: every minute rather than once per episode.
@@ -268,7 +366,16 @@ class PatrolParams(PlaneParams3D):
 
     # Follower is spawned near the slot with this much isotropic position noise
     # (m) so the episode starts solvable but not perfectly trimmed.
-    follower_spawn_noise: float = 40.0
+    follower_spawn_noise: float = 10.0  # ours: inside the cruise position
+
+    #: Fly the scripted lead on the airliner's autopilot (``AIRLINER_LEAD``),
+    #: for an A320 lead (``wake_surf``).
+    airliner_lead: bool = False
+    #: Bank past which the follower is upset, a trip, rad; 0 leaves it out. A
+    #: bank of more than 60 deg en route is a Hazardous effect [EASA AMC
+    #: 25.1329, A4.2]; ``wake_surf`` sets it, where a vortex can roll the
+    #: follower past what its ailerons hold.
+    upset_bank: float = 0.0
 
     delta_t: float = 1.0
 
@@ -291,8 +398,98 @@ PARAM_UNITS = {
     "wake_core_ratio": "-",
     "wake_decay_rate": "-",
     "follower_spawn_noise": "m",
+    "airliner_lead": "-",
+    "upset_bank": "rad",
     "delta_t": "s",
 }
+
+
+_A320 = PlaneParams3D
+
+
+@struct.dataclass
+class WakeSurfParams(PatrolParams):
+    """``wake_surf``: an A320 follower surfing an A320 lead's wake (owner,
+    2026-11-10), wake-energy retrieval as Airbus's fello'fly flew it, two A350s
+    3 km apart, and the C-17 $AVE trials 3 000 to 6 000 ft in trail.
+
+    The airframe is the A320 of the transport tasks (``PlaneParams3D``), its
+    attitude loop and protections included. The station sits where the
+    model's own wake gives the most upwash for a level lead: 0.87 of a span
+    outboard, NASA's 13 % tip overlap, and below by the vortex's sink, 21 m at
+    3 km (plane3d/PHYSICS.md, wake surfing).
+    """
+
+    initial_mass: float = _A320.initial_mass
+    initial_fuel_quantity: float = _A320.initial_fuel_quantity
+    wings_surface: float = _A320.wings_surface
+    wingspan: float = _A320.wingspan
+    aspect_ratio: float = _A320.aspect_ratio
+    cl_alpha: float = _A320.cl_alpha
+    cl0: float = _A320.cl0
+    CL_max: float = _A320.CL_max
+    aoa_stall: float = _A320.aoa_stall
+    sweep_half_chord: float = _A320.sweep_half_chord
+    cd0: float = _A320.cd0
+    k: float = _A320.k
+    M_crit: float = _A320.M_crit
+    pitch_gyration_radius: float = _A320.pitch_gyration_radius
+    roll_gyration_radius: float = _A320.roll_gyration_radius
+    moment_arm_wings: float = _A320.moment_arm_wings
+    moment_arm_stabilizer: float = _A320.moment_arm_stabilizer
+    stabilizer_surface: float = _A320.stabilizer_surface
+    tail_cl_alpha: float = _A320.tail_cl_alpha
+    tail_aspect_ratio: float = _A320.tail_aspect_ratio
+    tail_sweep_half_chord: float = _A320.tail_sweep_half_chord
+    tail_k: float = _A320.tail_k
+    tail_efficiency: float = _A320.tail_efficiency
+    elevator_effectiveness: float = _A320.elevator_effectiveness
+    downwash_ratio: float = _A320.downwash_ratio
+    stabilizer_setting: float = _A320.stabilizer_setting
+    C_lp: float = _A320.C_lp
+    aileron_surface: float = _A320.aileron_surface
+    aileron_effectiveness: float = _A320.aileron_effectiveness
+    moment_arm_aileron: float = _A320.moment_arm_aileron
+    thrust_output_at_sea_level: float = _A320.thrust_output_at_sea_level
+    specific_fuel_consumption: float = _A320.specific_fuel_consumption
+    power_response_rate: float = _A320.power_response_rate
+    load_factor_max: float = _A320.load_factor_max
+    load_factor_min: float = _A320.load_factor_min
+    ap_load_increment: float = _A320.ap_load_increment
+    protected_bank: float = _A320.protected_bank
+    mmo: float = _A320.mmo
+    vmo_eas: float = _A320.vmo_eas
+    inner_loop: InnerLoop = InnerLoop()
+    airliner_lead: bool = True
+
+    #: Transatlantic cruise levels, FL330 to FL370 (ours, the A320's cruise).
+    target_altitude_range: Tuple[float, float] = (33_000.0 * 0.3048, 37_000.0 * 0.3048)
+    initial_altitude_range: Tuple[float, float] = (33_000.0 * 0.3048, 37_000.0 * 0.3048)
+    #: The station: 2.8 to 3.7 km in trail (fello'fly's 3 km; ours, about it),
+    #: 0.87 of the span outboard on a side drawn at random, and the vortex's
+    #: sink below, 19 to 26 m over 12 to 16 s.
+    slot_back_range: Tuple[float, float] = (2_800.0, 3_700.0)
+    slot_right_range: Tuple[float, float] = (31.0, 31.0)
+    slot_up_range: Tuple[float, float] = (-26.0, -19.0)
+    #: The box about the station, m (ours, a span: no public tolerance for a
+    #: fello'fly station was found). Inside it only the economy counts.
+    e_floor_slot: float = 30.0
+    e_tol_slot: float = 30.0
+    slot_tolerance: float = 30.0
+    min_separation: float = 40.0  # over the A320's span
+    follower_spawn_noise: float = 10.0
+    #: Straight and level, as fello'fly's oceanic track (ours): the station is
+    #: held in the lead's frame, and in a turn the wake stays on the lead's
+    #: past track, 3.7 deg of turn and 100 m off that frame at 0.3 deg/s
+    #: (plane3d/PHYSICS.md, known deviations).
+    lead_turn_rate_range: Tuple[float, float] = (0.0, 0.0)
+    lead_leg_seconds: float = 300.0
+    upset_bank: float = 60.0 * 3.14159265 / 180.0
+    economy_weight: float = 1.0
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
+    #: As ``plane``: the ground and an upset are the trips, priced by us.
+    failure_cost: float = ((12192.0 - 19.812) / 19.812) ** 2
 
 
 def make_cruise_state(
@@ -308,12 +505,15 @@ def make_cruise_state(
     """Build a trimmed, straight-and-level :class:`PlaneState3D` at cruise.
 
     Used to spawn both aircraft at reset: level flight, wings level, velocity
-    of magnitude ``speed`` along heading ``psi``.
+    of magnitude ``speed`` along heading ``psi``, in level trim (``trim_level``:
+    no net force, no pitching moment, the power that holds the speed), with the
+    attitude loop's integral at that trim. Spawning at ``initial_theta`` with the
+    elevator merely balanced there left a Hornet, which trims near 6 deg, 6 deg
+    short of the lift it needs.
     """
     x_dot = speed * jnp.cos(psi)
     y_dot = speed * jnp.sin(psi)
-    theta = jnp.deg2rad(params.initial_theta)
-    trim = trim_stick(speed, z, theta, params)
+    theta, trim, power = trim_level(speed, z, params.initial_mass, params)
     return PlaneState3D(
         x=x,
         x_dot=x_dot,
@@ -329,8 +529,8 @@ def make_cruise_state(
         alpha=theta,  # gamma = 0 at level flight
         gamma=0.0,
         m=params.initial_mass,  # fuel is a component of it, not an addition
-        power=params.initial_power,
-        stick=trim + jnp.deg2rad(params.initial_stick),
+        power=power,
+        stick=trim,
         aileron=jnp.deg2rad(params.initial_aileron),
         fuel=params.initial_fuel_quantity,
         time=0,
@@ -410,7 +610,8 @@ def check_is_terminal_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
     lead_crash, _ = check_is_terminal_3d(state.lead, params, xp)
     collision = separation(state) <= params.min_separation
     lost = slot_error(state) >= params.max_slot_error
-    terminated = follower_crash | lead_crash | collision | lost
+    upset = (params.upset_bank > 0.0) & (xp.abs(state.follower.phi) > params.upset_bank)
+    terminated = follower_crash | lead_crash | collision | lost | upset
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -452,6 +653,32 @@ def compute_reward_terms_patrol(
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
+def compute_reward_terms_wake_surf(
+    state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
+):
+    """``wake_surf``'s cost terms, each >= 0: the station box, and what the
+    follower's operator pays, fuel and time by the cost index per air distance
+    (``plane.env.economy_cost``). Inside the box the economy is all that counts,
+    so the cost falls where the follower finds the lead's upwash."""
+    p = params
+    box = R.tracking_cost(slot_error(state), p.e_floor_slot, p.e_tol_slot, 2.0, xp)
+    follower = state.follower
+    terms = {
+        "tracking": box,
+        "economy": economy_cost(
+            follower.power,
+            follower.z,
+            airspeed_3d(follower, p, xp),
+            lead_cruise_speed(follower.z, p),
+            p,
+            xp,
+        ),
+    }
+    if tripped is None:
+        tripped, _ = check_is_terminal_patrol(state, p, xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
+
+
 def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):
     """Slot-position tracking times heading alignment.
 
@@ -488,6 +715,22 @@ def compute_reward_patrol_v1(state: PatrolState, params: PatrolParams, xp=jnp):
 
 
 # ─── Observations ───────────────────────────────────────
+
+
+def compute_reward_v1(state: PatrolState, params: PatrolParams, xp=jnp):
+    """Version 1 of the package's tasks, by the name TargetFoundation looks up:
+    the patrol's log-scaled reward (``compute_reward_patrol_v1``), which
+    ``wake_surf``, the task added to the package, shares."""
+    return compute_reward_patrol_v1(state, params, xp)
+
+
+def compute_reward_wake_surf(state: PatrolState, params: PatrolParams, xp=jnp):
+    return R.select(
+        params.reward_version,
+        compute_reward_v1(state, params, xp),
+        R.total(compute_reward_terms_wake_surf(state, params, xp), xp),
+        xp,
+    )
 
 
 def compute_reward_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
@@ -574,9 +817,9 @@ def get_obs_full(state: PatrolState, xp=jnp):
 def get_obs_range_bearing(state: PatrolState, xp=jnp):
     """Partial (bearing + range) observation (21 values).
 
-    A TCAS-style sensor on the follower yields only the range and the
-    azimuth/elevation *bearing* to the lead — no lead velocity, heading or the
-    decomposed slot error.  Recovering the slot then requires the follower to
+    The wingman's sight of the lead (its range) and a TCAS-style sensor yield
+    only the range and the azimuth/elevation *bearing* to the lead — no lead
+    velocity, heading or the decomposed slot error.  Recovering the slot then requires the follower to
     infer the lead's motion.  The tracked scalar is measured range against the
     commanded slot range.
 
@@ -646,9 +889,10 @@ def decode_action(action: jnp.ndarray):
 # ─── The air ────────────────────────────────────────────
 
 
-def lead_cruise_speed(z):
+def lead_cruise_speed(z, params=None):
     """The true airspeed of the lead's schedule at height ``z``, m/s."""
-    return scheduled_airspeed(z, LEAD_AUTOPILOT.cruise_cas, LEAD_AUTOPILOT.cruise_mach)
+    lead = LEAD_AUTOPILOT if params is None else lead_autopilot(params)
+    return scheduled_airspeed(z, lead.cruise_cas, lead.cruise_mach)
 
 
 def air_speed(aircraft, gust, params):
@@ -791,7 +1035,7 @@ def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
     lead_action, memory = plane3d_heading_step(
-        LEAD_AUTOPILOT, state.lead_memory, get_obs_heading(lead_cmd)
+        lead_autopilot(params), state.lead_memory, get_obs_heading(lead_cmd)
     )
     power, pitch, bank = decode_action(lead_action)
     new_lead, metrics = compute_next_state_3d(

@@ -121,9 +121,13 @@ class FormationParams(PatrolParams):
     """
 
     #: Lateral offset of each rank of the V from the lead, in metres, drawn
-    #: once per episode. At least 60 m, so the two wingmen of a rank start
-    #: 120 m apart, well clear of ``min_separation``.
-    slot_lateral_range: Tuple[float, float] = (60.0, 150.0)
+    #: once per episode: the Hornet's cruise position [CNATRA, AFF], from 22 m
+    #: (ours: the two wingmen of a rank then start 44 m apart, so the spawn
+    #: noise below takes them inside ``min_separation``, 17 m, at 3.8 sigma).
+    slot_lateral_range: Tuple[float, float] = (22.0, 45.0)
+    #: Spawn offset, m, one sigma per axis (ours: half the patrol's; two
+    #: wingmen of a rank are both offset, so their gap varies by 7 m).
+    follower_spawn_noise: float = 5.0
 
     # ---- Reward (docs/reward-shaping.md; version 2) ----
     # The lead's altitude against the 1 m altimeter resolution and its heading

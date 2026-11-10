@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -34,8 +34,9 @@
         8839.2,
         11277.6
       ],
-      "turbulence_sigma": 0.598,
-      "speed_band_cost": true
+      "turbulence_sigma": 0.684,
+      "speed_band_cost": true,
+      "economy_weight": 1.0
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
@@ -61,7 +62,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 8,
+    "version": 9,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -116,7 +117,7 @@
   {
     "name": "plane_sine",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Altitude - sinusoid",
     "params_cls": [
       "target_gym.plane.env",
@@ -171,7 +172,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 7,
+    "version": 8,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -200,9 +201,10 @@
         0.0,
         0.0
       ],
-      "turbulence_sigma": 0.55,
+      "turbulence_sigma": 0.564,
       "amended": true,
       "e_tol_heading": 0.17453292519943295,
+      "economy_weight": 1.0,
       "heading_clearance_period": 150.0
     },
     "tuned_gains_key": "plane3d_heading",
@@ -230,7 +232,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -252,11 +254,21 @@
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 300,
+      "max_steps_in_episode": 600,
+      "target_radius_range": [
+        10500.0,
+        15000.0
+      ],
       "e_floor_altitude": 1.0,
       "failure_cost": 297289728.0,
       "rho_floor_tracking": 0.4656965077777777,
-      "rho_floor": 0.4656965077777777
+      "rho_floor": 0.4656965077777777,
+      "initial_altitude_offset_range": [
+        0.0,
+        0.0
+      ],
+      "turbulence_sigma": 0.564,
+      "amended": true
     },
     "tuned_gains_key": null,
     "gains_keys": [],
@@ -267,7 +279,11 @@
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -279,7 +295,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 8,
+    "version": 9,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -309,7 +325,7 @@
         0.0,
         0.0
       ],
-      "turbulence_sigma": 0.55,
+      "turbulence_sigma": 0.564,
       "amended": true,
       "e_tol_heading": 0.17453292519943295,
       "e_tol_path": 1389.0,
@@ -344,7 +360,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -368,12 +384,18 @@
     "scored_overrides": {
       "max_steps_in_episode": 1000,
       "target_radius_range": [
-        34000.0,
-        36000.0
+        36000.0,
+        38000.0
       ],
       "failure_cost": 1088888888.8888888,
       "rho_floor_tracking": 0.1840696011111111,
-      "rho_floor": 0.1840696011111111
+      "rho_floor": 0.1840696011111111,
+      "turbulence_sigma": 0.564,
+      "amended": true,
+      "zone_onset_range": [
+        0.0,
+        1000.0
+      ]
     },
     "tuned_gains_key": null,
     "gains_keys": [],
@@ -384,7 +406,11 @@
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -396,7 +422,7 @@
   {
     "name": "patrol",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Patrol - wingman",
     "params_cls": [
       "target_gym.patrol.env",
@@ -435,7 +461,7 @@
   {
     "name": "patrol_range_bearing",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Patrol - wingman, range and bearing",
     "params_cls": [
       "target_gym.patrol.env",

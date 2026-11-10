@@ -24,6 +24,7 @@ import numpy as np
 from scipy.optimize import fsolve
 
 from target_gym.plane.dynamics import (
+    AILERON_TRAVEL,
     STICK_TRAVEL,
     InnerLoop,
     compute_thrust_output,
@@ -42,7 +43,10 @@ ROLL_HOLD, PITCH_HOLD = 30.0, 20.0
 #: The proposal's steps, in ArduPilot units.
 P_START, P_STEP, P_MAX = 1.0, 0.1, 5.0
 D_START = {"roll": 0.08, "pitch": 0.04}
-D_STEP, D_MAX, I_STEP = 0.01, 0.1, 0.05
+D_STEP, I_STEP = 0.01, 0.05
+#: Step 3's cap on D, per axis: the guide's 0.1 (the amendment), the Hornet's
+#: roll at its own damper's gain (``main``).
+D_MAX = {"roll": 0.1, "pitch": 0.1}
 #: The speed hold's sample, the plant's action rate (the amendment).
 SPEED_HOLD_SAMPLE = 1.0
 #: Band of the readings: 5% of the step (section 2).
@@ -227,9 +231,15 @@ def tune(axis, run, gains):
         if test(p, 0.0, d)[1]:
             d /= 2.0
             break
-        if d + D_STEP > D_MAX + 1e-9:
+        if d + D_STEP > D_MAX[axis] + 1e-9:
             break
         d += D_STEP
+
+    # 3b. P again, up while the next step is clean: ArduPlane's current manual
+    # tuning guide (the rate loop's, P then D as G-MAN) lets P rise a little
+    # once D is set. Step 2 set P on the defaults' D; a larger D can carry more.
+    while p + P_STEP <= P_MAX + 1e-9 and not any(test(p + P_STEP, 0.0, d)):
+        p += P_STEP
 
     # 4. I up from 0 until a test overshoots or oscillates, then halve.
     i = 0.0
@@ -246,10 +256,12 @@ def tune(axis, run, gains):
 GAINS = ("Kp_theta", "Ki_theta", "Kd_theta", "Kp_roll", "Ki_roll", "Kd_roll")
 
 
-def tuned_gains(report=None):
+def tuned_gains(report=None, params=None, scaling_speed=None):
     """The recipe, roll first on the pitch loop's defaults: an ``InnerLoop``.
-    ``report``, a dict, collects each axis's tests."""
-    params = PlaneParams3D(turbulence_sigma=0.0)
+    ``report``, a dict, collects each axis's tests. ``params`` is the airframe
+    (the A320's by default) and ``scaling_speed`` the EAS the airspeed scaler
+    is about, the test point's (the A320's 173.5 m/s by default)."""
+    params = PlaneParams3D(turbulence_sigma=0.0) if params is None else params
     trimmed = trim(params)
     theta0 = trimmed[0]
     fly = make_flight(params, trimmed)
@@ -279,6 +291,8 @@ def tuned_gains(report=None):
         Ki_roll=0.0,
         Kd_roll=D_START["roll"] * UNIT,
     )
+    if scaling_speed is not None:
+        start = start.replace(scaling_speed=scaling_speed)
     gains, roll_log = tune("roll", run_roll, start)
     gains, pitch_log = tune("pitch", run_pitch, gains)
     if report is not None:
@@ -286,14 +300,41 @@ def tuned_gains(report=None):
     return gains
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--airframe", choices=("a320", "hornet"), default="a320")
+    args = parser.parse_args(argv)
+    params, scaling = None, None
+    if args.airframe == "hornet":
+        # The Hornet's test point is AFF's, M 0.56 at 25 000 ft (plane3d/hornet.py).
+        from target_gym.plane.dynamics import (
+            compute_air_density_from_altitude,
+            compute_speed_of_sound_from_altitude,
+        )
+        from target_gym.plane3d import hornet
+
+        global ALTITUDE, SPEED
+        ALTITUDE = hornet.DESIGN_ALTITUDE
+        sound = float(compute_speed_of_sound_from_altitude(ALTITUDE))
+        SPEED = hornet.DESIGN_MACH * sound
+        rho = float(compute_air_density_from_altitude(ALTITUDE))
+        scaling = SPEED * (rho / 1.225) ** 0.5
+        params = PlaneParams3D(**hornet.airframe(), turbulence_sigma=0.0)
+        # Roll D up to the Hornet's own damper: its gain in aileron radians per
+        # rad/s, over the aileron's travel, in ArduPilot units (UNIT).
+        D_MAX["roll"] = hornet.ROLL_RATE_GAIN / AILERON_TRAVEL / UNIT
+        print(f"roll D cap {D_MAX['roll']:.3f} (the Hornet's roll damper)")
+        print(f"hornet: {SPEED:.1f} m/s TAS at {ALTITUDE:.0f} m, EAS {scaling:.1f}")
     report = {}
-    gains = tuned_gains(report)
+    gains = tuned_gains(report, params, scaling)
     theta, stick, lever, _ = report["trim"]
     print(f"trim: pitch {np.rad2deg(theta):.3f} deg, stick {stick:.4f} rad, ", end="")
     print(f"lever {lever:.3f}")
     print(f"tests: {len(report['roll'])} roll, {len(report['pitch'])} pitch")
-    print(json.dumps({k: round(float(getattr(gains, k)), 4) for k in GAINS}, indent=1))
+    keys = GAINS + ("scaling_speed",)
+    print(json.dumps({k: round(float(getattr(gains, k)), 4) for k in keys}, indent=1))
     return 0
 
 

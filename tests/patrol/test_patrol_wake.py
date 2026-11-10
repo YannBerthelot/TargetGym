@@ -213,7 +213,8 @@ def test_the_wake_lies_where_the_lead_flew_not_where_it_is():
     for _ in range(GUST_MEMORY):
         places.append((x, y, psi))
         here = lead.replace(x=x, y=y, psi=psi)
-        history = shed_wake(history, wake_sample(here, 722_000.0, speed, params))
+        lift = float(lead.m) * params.gravity  # the straight path's, its weight
+        history = shed_wake(history, wake_sample(here, lift, speed, params))
         psi, x, y = psi + turn, x + speed * np.cos(psi), y + speed * np.sin(psi)
     x, y, psi = places[-3]
     right = np.array([np.sin(psi), -np.cos(psi)])
@@ -288,7 +289,8 @@ def test_upwash_saves_the_drag_the_rotated_lift_gives_back():
     of attack, the upwash the wake puts on a follower near the sweet spot gains it
     ``g w / V`` along its path, and nothing but the wind carries it: the plant's lift
     lies across the air-relative velocity, which the upwash tilts. That is the sweet
-    spot's drag saving, so it has no term of its own."""
+    spot's drag saving, so it has no term of its own. No thrust: its own component
+    across the path would turn with the lift (2% of a Hornet's at this attitude)."""
     params = PatrolParams()
     z, speed = 5000.0, 190.0
     _, history = _pair(params, z, speed)
@@ -299,7 +301,7 @@ def test_upwash_saves_the_drag_the_rotated_lift_gives_back():
         velocities = jnp.array([speed, 0.0, 0.0, 0.0, 0.0])
         positions = jnp.array([0.0, 0.0, z, theta, 0.0])
         accel, metrics = compute_acceleration_3d(
-            velocities, positions, (40e3, 0.0, 0.0), params.replace(wind_z=wind_z)
+            velocities, positions, (0.0, 0.0, 0.0), params.replace(wind_z=wind_z)
         )
         return float(accel[0]), float(metrics[1])
 
@@ -311,12 +313,12 @@ def test_upwash_saves_the_drag_the_rotated_lift_gives_back():
 
 def test_a_slot_astride_the_wake_rolls_a_follower_away_from_the_lead():
     """Right of the lead with its inner wing in the upwash: the left wing rises, so
-    the bank goes negative, right wing down."""
+    the bank goes negative, right wing down. Read after the first step: the bank
+    loop, holding wings level, answers the error the wake has made by then."""
     env, params, _, state = _slot("patrol", 0.87 * float(PatrolParams().wingspan))
     assert float(state.follower.phi) == 0.0
     step, action = jax.jit(env.step_env), jnp.array([0.0, 0.1, 0.0])
-    for t in range(2):
-        _, state, _, _, _ = step(jax.random.PRNGKey(t), state, action, params)
+    _, state, _, _, _ = step(jax.random.PRNGKey(0), state, action, params)
     assert float(state.follower.phi) < -1e-3
     off = params.replace(wake_strength=0.0)
     _, calm = env.reset_env(KEY, off)
@@ -356,15 +358,18 @@ def test_the_wake_comes_from_the_lift_of_each_step():
 
 
 def test_the_wake_stays_with_the_lead_down_the_route():
-    """Six seconds on, over a kilometre from where it began, the follower in its slot
-    still has the wake on it."""
+    """Eight seconds on, over a kilometre from where it began (250 KCAS is 163.5
+    m/s at 5000 m), the follower in its slot still has the wake on it: at least
+    half the upwash a level Hornet's pair gives 40 m out, Gamma / (2 pi) b0 / (y^2 -
+    b0^2 / 4) with Gamma = W / (rho V b0) = 137 m^2/s and b0 = 8.96 m, 0.12 m/s
+    (half, since the lead pitches up from a lift below its weight)."""
     env, params, _, state = _slot("patrol", 40.0)
     step = jax.jit(env.step_env)
-    for t in range(6):
+    for t in range(8):
         action = jnp.array([0.0, 0.1, 0.0])
         _, state, _, _, _ = step(jax.random.PRNGKey(t), state, action, params)
     assert float(state.lead.x**2 + state.lead.y**2) > 1000.0**2
-    assert abs(float(state.follower.gust_z)) > 0.2
+    assert abs(float(state.follower.gust_z)) > 0.06
 
 
 def test_each_wingman_meets_the_wake_on_its_own_side():
@@ -407,12 +412,13 @@ def test_the_step_is_differentiable_through_a_vortex_core():
 # ─── The expert in the wake ─────────────────────────────
 
 
-@pytest.mark.parametrize("altitude", [3000.0, 8000.0])
+@pytest.mark.parametrize("altitude", [6096.0, 9754.0])
 def test_the_aileron_can_hold_the_worst_of_the_wake(altitude):
     """Across the wake's cross-plane 200 m back, the largest rolling moment stays
-    under full aileron's, so a slot in it can be flown, as NASA's pilots flew it. The
-    plant's rolling gust stands for ``-C_lp p b / 2V`` and its aileron for ``6 m^2 x
-    0.08786 /deg x 0.4 x 25 deg x 14 m / (S b)``, which is 0.0168."""
+    under full aileron's, so a slot in it can be flown, as NASA's pilots flew it, at
+    both ends of AFF's band. The plant's rolling gust stands for ``-C_lp p b / 2V``
+    and its aileron for HARV's Cl_delta_a, 0.143 per rad, at the 25 deg travel:
+    0.0624 [HARV Table 7] (plane3d/hornet.py)."""
     params = PatrolParams()
     speed = float(lead_cruise_speed(altitude))
     _, history = _pair(params, altitude, speed)
@@ -427,7 +433,7 @@ def test_the_aileron_can_hold_the_worst_of_the_wake(altitude):
         params,
     )
     moment = float(jnp.abs(rolls).max()) * params.wingspan / (2 * speed) * -params.C_lp
-    assert 0.002 < moment < 0.0168
+    assert 0.002 < moment < 0.0624
 
 
 def _hold(right, strength, seed):
@@ -457,15 +463,25 @@ def _hold(right, strength, seed):
 
 
 @pytest.mark.large
-@pytest.mark.xfail(
-    strict=True, reason="PR 9: the hold has no allowance for a slot in the wake"
+@pytest.mark.parametrize(
+    "right",
+    [
+        pytest.param(
+            13.0,
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="PR 9: the hold has no allowance for a slot in the wake",
+            ),
+        ),
+        # Flown since the Hornet's direct hold (XPASS on 2026-11-10).
+        31.0,
+    ],
 )
-@pytest.mark.parametrize("right", [13.0, 31.0])
 def test_the_expert_flies_a_slot_in_the_wake(right):
     """NASA held position in the vortex ("Controllable flight in vortex is possible")
     and the aileron has the authority, so the wake should not cost the expert the
     slot: no more trips than the same slot without it, and within 1.5 times its hold.
-    Against itself, since the hold's 8.5 m is PR 9's on any slot."""
+    Against itself, since the hold's 10 ft is a finding on any slot."""
     seeds = (200, 201, 202)
     clear = [_hold(right, 0.0, seed) for seed in seeds]
     waked = [_hold(right, 1.0, seed) for seed in seeds]

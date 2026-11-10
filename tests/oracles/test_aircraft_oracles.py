@@ -94,10 +94,19 @@ def test_the_stick_crosses_its_travel_within_one_step():
     travel, so no demand lies past it. From one stop, a full demand reaches the
     other within the step, short by what the 60 ms lag leaves of the last 7.5 deg
     sub-step, under 0.2 deg. The load limits are opened, or the pull would trip
-    and restart the plant."""
+    and restart the plant, and the attitude loop's gain is raised so its output
+    stays at its stop through the step: the reach is the surface's, not the
+    loop's."""
     _, env, p = _setup()
     with enable_x64():
-        p = float64(p.replace(load_factor_max=100.0, load_factor_min=-100.0))
+        p = float64(
+            p.replace(
+                load_factor_max=100.0,
+                load_factor_min=-100.0,
+                ap_load_increment=100.0,
+                inner_loop=p.inner_loop.replace(Kp_theta=100.0),
+            )
+        )
         _, state = env.reset_env(jax.random.PRNGKey(100), p)
         state = float64(
             state.replace(stick=-STICK_TRAVEL, theta=-PITCH_DEMAND_MAX, pitch_integ=0.0)

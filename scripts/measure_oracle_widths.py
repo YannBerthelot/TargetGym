@@ -36,7 +36,7 @@ from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.rates import RateLimit
 from target_gym.oracles.widths import kink_width, limit_backoff, noise_backoff
-from target_gym.plane.dynamics import INNER_STEPS
+from target_gym.plane.dynamics import INNER_STEPS, PITCH_DEMAND_MAX
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
@@ -387,6 +387,10 @@ def aircraft_sites(name, points) -> tuple[dict, list]:
             2.0 * p.surface_rate_limit * p.delta_t / INNER_STEPS,
         ),
         "tropopause": ("plane/dynamics.py, the sound speed's switch", 288.15 - om.T11),
+        "protection": (
+            "plane/dynamics.py, protected_pitch_demand's clip",
+            2.0 * PITCH_DEMAND_MAX,
+        ),
     }
     resolutions = [p.precision_floor]
     if name not in AIRCRAFT_2D:

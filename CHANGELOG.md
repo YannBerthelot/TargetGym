@@ -14,6 +14,34 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
+  versions went up by one; `wake_surf` is new.** Upgrade notes:
+  - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and
+    Mach growth) and a real horizontal tail with the wing's downwash, with
+    inertias from JSBSim's A320. `PlaneParams.I`, `PlaneParams3D.I`, `I_x` and
+    `elevator_surface` are gone: use `pitch_gyration_radius`,
+    `roll_gyration_radius` and the `tail_*`, `stabilizer_*` and
+    `elevator_effectiveness` fields. The fixed attitude loop was retuned on it.
+  - The engine's lag lengthens with altitude in corrected time (6.3 s at FL350).
+  - Every controller's pitch demand is held to an autopilot's 0.2 g either side
+    of the flight path's load (`ap_load_increment`).
+  - `plane` and `plane3d_heading` charge an `economy` term, fuel and time by the
+    cost index; the band costs are unchanged.
+  - `plane3d_heading` scores and observes the heading flown, not the track: a
+    nineteenth observation, `heading` (22 with the wind sensor).
+  - `plane3d_racetrack`'s turns are sized for the maximum ground speed at 25 deg.
+  - `plane3d_circle` and `plane3d_figure8` fly the amended plant (protections,
+    light zones, an established start): the circle at 10.5 to 15 km for 600 s,
+    the figure-8 at a half-width of 36 to 38 km.
+  - `patrol`, `patrol_range_bearing` and `formation` fly an F/A-18 Hornet
+    (`plane3d/hornet.py`) on AFF's mission: slots, separation and tolerance
+    change, and the patrol's air keeps 20 s, not 5. Their lead turns at up to
+    0.0303 rad/s, the parade turn's 30 deg of bank. Their expert is NASA AFF's
+    direct hold (`FormationHoldParams.law` 1), over a Hornet attitude loop
+    whose roll D rises to the F/A-18's own roll damper. On
+    `patrol_range_bearing` the range is known from vision: it has no reading.
+  - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
+
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts

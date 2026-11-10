@@ -24,10 +24,10 @@ HELD_OUT = tuple(range(200, 210))
 # The contract, set before measuring (docs/proposals/scoring-and-experts.md,
 # limits agreed with the user 2026-10-27):
 # - every wingman's RMS 3D slot error after the scored burn-in is at most
-#   8.5 m: NASA's F/A-18 trials held 10 ft (3.05 m) one-sigma on a 12.3 m
-#   span, which scaled by span to the A320's 34.1 m is 8.46 m. PR 7b re-read it
-#   for the 40 m separation and the turning route: the number stays, and
-#   patrol/PHYSICS.md says what it no longer speaks for;
+#   10 ft (3.05 m), NASA's AFF requirement for two F/A-18s, one sigma
+#   (NASA/TM-2002-210729). The tasks fly Hornets since 2026-11-10 (owner), so
+#   AFF's number is the task's own; it used to be scaled by span to the A320's,
+#   8.5 m;
 # - the range-and-bearing follower is held to the same: what its estimator costs
 #   is what that task measures;
 # - the formation's lead holds the 3D heading task's spec
@@ -35,7 +35,7 @@ HELD_OUT = tuple(range(200, 210))
 #   heading within the AHRS resolution (``heading_precision_floor``,
 #   0.5 deg), both mean after the burn-in;
 # - no trip.
-SLOT_RMS_M = 8.5
+SLOT_RMS_M = 10.0 * 0.3048
 ALTITUDE_M = 2.0
 
 
@@ -46,8 +46,14 @@ def _finding(reason):
     return pytest.mark.xfail(strict=True, reason=f"finding: {reason}")
 
 
-_STALE = _finding("PR 9: the hold's gains predate the plant")
+_STALE = _finding("the wingmen hold a median 7.7 m, one seed 428 m (2026-11-10)")
 _STALE_TEAM = _finding("PR 9: the wingmen's trips restart the lead, and TECS is stale")
+#: Measured 2026-11-10 on the Hornet's direct hold: a median 3.6 m, 5.8 m at worst.
+_NEAR = _finding("the Hornet's hold misses 10 ft on these seeds, by up to 2.7 m")
+_SENSOR = _finding("the estimator's hold misses 10 ft: a median 6.2 m, 4.1 m at best")
+#: Held-out seeds the shipped experts hold (XPASS on 2026-11-10, marks removed).
+PATROL_HOLDS = (200, 201, 202, 209)
+LEAD_HOLDS = (200,)
 
 
 @functools.cache
@@ -95,11 +101,13 @@ def _episode(name, seed):
 @pytest.mark.large
 @pytest.mark.parametrize(
     "name, seed",
-    [
-        pytest.param(name, s, marks=_STALE)
-        for name in ("patrol", "patrol_range_bearing")
+    [pytest.param("patrol", s, marks=()) for s in PATROL_HOLDS]
+    + [
+        pytest.param("patrol", s, marks=_NEAR)
         for s in HELD_OUT
-    ],
+        if s not in PATROL_HOLDS
+    ]
+    + [pytest.param("patrol_range_bearing", s, marks=_SENSOR) for s in HELD_OUT],
 )
 def test_the_follower_holds_its_slot(name, seed):
     tripped, rms, _, _ = _episode(name, seed)
@@ -116,7 +124,10 @@ def test_every_formation_wingman_holds_its_slot(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("seed", [pytest.param(s, marks=_STALE_TEAM) for s in HELD_OUT])
+@pytest.mark.parametrize(
+    "seed",
+    [pytest.param(s, marks=() if s in LEAD_HOLDS else _STALE_TEAM) for s in HELD_OUT],
+)
 def test_the_formation_lead_holds_altitude_and_heading(seed):
     _, _, alt, hdg = _episode("formation", seed)
     floor = _setup("formation")[1].heading_precision_floor

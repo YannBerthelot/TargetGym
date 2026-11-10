@@ -128,6 +128,7 @@ EXPERT_FIGURES = {
     "formation": _SLOT_FLOWN,
     "patrol": _SLOT_FLOWN,
     "patrol_range_bearing": _SLOT_FLOWN,
+    "wake_surf": NO_FIGURE,  # no public station-keeping figure for fello'fly
     "plane3d_figure8": {
         "kind": "requirement",
         "value": 926.0,

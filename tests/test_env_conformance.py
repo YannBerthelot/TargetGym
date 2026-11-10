@@ -1073,9 +1073,15 @@ def test_plant_does_not_accelerate_without_input(spec):
     it counts -- so what is asserted is that growth does not *accelerate*: the
     mean increment over the last fifth of an unforced run against the first.
     An integrator holds near 1; an unstable mode runs away.
+
+    A disturbance supplies energy too, so the spec's ``noise_fields`` are
+    zeroed: a turbulence zone that opens late in the run (``plane3d_heading``'s
+    from 309 s) otherwise reads as the plant accelerating, 22x on its load
+    factor, against 0.001x in still air.
     """
     env = spec.make_env()
     params = spec.make_test_params()
+    params = params.replace(**{f: 0.0 for f in spec.noise_fields})
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
     fields = [

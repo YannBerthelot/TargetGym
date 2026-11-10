@@ -36,7 +36,7 @@ from target_gym.plane.dynamics import (
     airspeed_scaler,
     compute_air_density_from_altitude,
     compute_thrust_output,
-    protected_pitch_demand,
+    pitch_inertia,
     scheduled_airspeed,
     total_wind_2d,
 )
@@ -62,7 +62,7 @@ def accelerate(velocities, positions, thrust, stick, wind, mass, p, w, d):
     f_x = thrust * jnp.cos(theta) - a.drag * cos_g - a.lift * sin_g
     f_z = thrust * jnp.sin(theta) - a.drag * sin_g + a.lift * cos_g
     f_z = f_z - mass * p.gravity
-    accel = jnp.stack([f_x / mass, f_z / mass, a.moment / p.I])
+    accel = jnp.stack([f_x / mass, f_z / mass, a.moment / pitch_inertia(mass, p)])
     return accel, (a.lift, mach, a.cl_peak, accel[2], alpha)
 
 
@@ -90,9 +90,9 @@ def plane_step(p, x, u, t, gust, method, widths, deltas=om.NO_DELTA):
         eas = air_speed * jnp.sqrt(rho / p.air_density_at_sea_level)
         scaler = airspeed_scaler(eas, gains)
         # The plant's normal-law protection (``protected_pitch_demand``).
-        held = protected_pitch_demand(
+        held = om.protected(
             demand, jnp.arctan2(vz - wind[1], vx - wind[0]), air_speed, height,
-            mass, p,
+            mass, p, w, deltas,
         )  # fmt: skip
         surface, integ = om.attitude(
             gains.Kp_theta, gains.Ki_theta, gains.Kd_theta, held - attitude, rate,
@@ -102,7 +102,7 @@ def plane_step(p, x, u, t, gust, method, widths, deltas=om.NO_DELTA):
             surface * STICK_TRAVEL, stick, dt, p.stick_response_rate,
             p.surface_rate_limit, w.surface_rate, deltas.surface_rate,
         )  # fmt: skip
-        power = om.engine(lever, power, dt, p)
+        power = om.engine(lever, power, dt, p, height)
         thrust = compute_thrust_output(
             power=power,
             thrust_output_at_sea_level=p.thrust_output_at_sea_level,
