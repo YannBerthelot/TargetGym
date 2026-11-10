@@ -91,6 +91,10 @@ ACTIVE = 1e-6
 MAX_ITER, FTOL = 400, 1e-8
 #: Stationarity a converged float32 plan reaches (ours, float32 Jacobians).
 KKT_TOL = 1e-3
+#: The first-order repair of a last iterate that loses glass: at most this many rounds,
+#: each aiming a lost row this far (scaled) past its limit, past the linearisation's
+#: error (ours: one round sufficed on gas_lean 104, measured 2026-11-10).
+REPAIR_ROUNDS, REPAIR_INSIDE = 5, 1e-3
 #: Hours the last knot is held past the episode, under the limits, its fuel charged: the
 #: fining's dead time (11.8 h, scripts/ladder_rows/glass_furnace.py) plus a knot, with a
 #: margin (ours). Without a tail, the plans' end effect spans the last 24 h (measured
@@ -181,7 +185,7 @@ def solve(
     given. The objective is the fuel bill over the episode and the tail, per episode
     step; the plan's ``cost`` is the episode's alone.
     """
-    from scipy.optimize import minimize
+    from scipy.optimize import linprog, minimize
 
     n = int(keys.shape[0])
     k = -(-n // knot_steps)
@@ -257,22 +261,41 @@ def solve(
     )  # fmt: skip
     z, how = np.clip(res.x, lo, hi), "final"
     if not keeps(at(z, False)[1]):
-        # The last iterate loses glass. Repair it: the least raise of every knot that
-        # loses none, by bisection, against the best iterate that lost none.
+        # The last iterate loses glass. Two repairs, and the cheaper kept: the raise of the
+        # knots cheapest to first order that lifts every limit row a little past its
+        # limit, from the Jacobians, repeated from there; and the least raise of every
+        # knot alike, by bisection. The cheaper stands against the best iterate that
+        # lost none.
+        m, lifted = 2 * (n + n_tail), z
+        for _ in range(REPAIR_ROUNDS):
+            rows = at(lifted, False)[1][:m]
+            if np.all(rows >= 0.0):
+                break
+            g, J = at(lifted, True)
+            moved = np.abs(J[:m]).max(axis=1) > 0.0  # rows no knot reaches stay as are
+            need = np.where(rows < 0.0, REPAIR_INSIDE - rows, -rows)[moved]
+            lp = linprog(g, A_ub=-J[:m][moved], b_ub=-need, method="highs",
+                         bounds=[(0.0, hi - v) for v in lifted])  # fmt: skip
+            if lp.status != 0:
+                break
+            lifted = np.clip(lifted + lp.x, lo, hi)
+        repairs = [(lifted, "raised at least cost to first order")]
+
         def raised(d):
             return np.clip(z + d, lo, hi)
 
         a, b = 0.0, hi - lo
         if keeps(at(raised(b), False)[1]):
             for _ in range(30):
-                m = 0.5 * (a + b)
-                a, b = (a, m) if keeps(at(raised(m), False)[1]) else (m, b)
-            if at(raised(b), False)[0] < best.get("f", np.inf):
-                best.update(f=at(raised(b), False)[0], z=raised(b))
-                how = f"final iterate raised {b:.2e} kg/s"
-            else:
-                how = "best iterate that lost no glass"
-        elif "z" in best:
+                mid = 0.5 * (a + b)
+                a, b = (a, mid) if keeps(at(raised(mid), False)[1]) else (mid, b)
+            repairs.append((raised(b), f"raised alike by {b:.2e} kg/s"))
+        for fixed, step in repairs:
+            f, rows = at(fixed, False)
+            if keeps(rows) and f < best.get("f", np.inf):
+                best.update(f=f, z=fixed)
+                how = f"final iterate {step}"
+        if how == "final" and "z" in best:
             how = "best iterate that lost no glass"
         z = best.get("z", z)
     _, rows, cost, lost, run, run_t = (

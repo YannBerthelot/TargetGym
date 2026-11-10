@@ -151,6 +151,32 @@ def test_the_plan_is_cheapest_over_the_episode_and_its_tail():
     assert bills[False][0] < (1.0 - 1e-3) * bills[True][0]
 
 
+def test_a_last_iterate_that_loses_glass_is_raised_at_least_cost():
+    # Six hours on 2 h knots. Lowered by 0.02 kg/s, the plan's middle knot loses glass
+    # hours later, when its fuel reaches the fining. Left no iteration, the solve's plan
+    # is that start repaired. Raising where the glass is lost costs about the plan it
+    # came from; raising every knot alike also pays for the last knot's fuel through the
+    # 24 h tail. Margin: 1e-3 of the bill, above a first-order repair's overshoot and
+    # float32's 1e-5 (ours).
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=180)
+    reset, keys = O.episode_keys(5, 180)
+    _, state = env.reset_env(reset, p)
+    best = O.solve(env, p, state, keys, knot_steps=60)
+    start = best.knots - np.array([0.0, 0.02, 0.0])
+    lowered = O.Plan._make([np.repeat(start, 60), start] + [None] * 12)
+    fining, canal, _ = _held_past_the_episode(env, p, state, keys, lowered)
+    assert fining.min() < p.fining_pass or canal.min() < p.canal_target
+    plan = O.solve(env, p, state, keys, knot_steps=60, start=start, max_iter=0)
+    bills = []
+    for q in (best, plan):
+        assert q.lost_steps == 0
+        fining, canal, tail = _held_past_the_episode(env, p, state, keys, q)
+        assert fining.min() >= p.fining_pass and canal.min() >= p.canal_target
+        bills.append(180 * _replayed(env, p, 5, q.valve) + tail.sum())
+    assert bills[1] < (1.0 + 1e-3) * bills[0]
+
+
 def test_the_registered_oracle_plays_its_plan_for_the_seed():
     env = SPEC.make_env()
     p = SPEC.make_test_params(max_steps_in_episode=30)
