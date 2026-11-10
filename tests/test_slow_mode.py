@@ -54,13 +54,22 @@ def hold_zero(params):
     return lambda obs, state: np.zeros(1)
 
 
-def measure(plant, length, seeds=(0, 1, 2), ignore=(".total",), bias=False, offset=1.0):
+def measure(
+    plant,
+    length,
+    seeds=(0, 1, 2),
+    ignore=(".total",),
+    bias=False,
+    offset=1.0,
+    observe=None,
+):
     pairs = [
         coupled_pair(
             plant,
             None,
             hold_zero,
             bias=bias,
+            observe=observe,
             seed=k,
             pre=30,
             length=length,
@@ -126,3 +135,16 @@ def test_angles_are_compared_on_the_circle():
     np.testing.assert_allclose(
         wrapped_gap(np.array([3.0]), np.array([-3.0])), [2 * np.pi - 6.0]
     )
+
+
+def test_a_derived_quantity_stands_in_for_the_raw_state_it_replaces():
+    # A path task measures its path-relative error, not a world-frame coordinate:
+    # with the raw slow state ignored, a quantity observed from it still sets t_s.
+    result = measure(
+        TwoModePlant(0.8, 0.98),
+        length=400,
+        ignore=(".total", ".slow"),
+        observe=lambda state, params: {"slow_error": 2.0 * state.slow},
+    )
+    assert result.t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
+    assert result.slowest == "path.slow_error"

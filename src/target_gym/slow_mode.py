@@ -91,13 +91,26 @@ def coupled_pair(
     high: np.ndarray,
     bias: bool = False,
     angles: tuple[str, ...] = (),
+    observe: Callable | None = None,
 ) -> Pair:
     """Run A and B on ``PRNGKey(seed)``: ``pre`` steps with B in manual mode, then
     ``length`` steps with both under a fresh ``make_policy(params)``. A policy is
     called as ``policy(obs, state)`` and returns the action. With ``bias``, B's
     excursion is its own reference plus ``offset`` instead of a held action, so a
     plant that runs away open loop stays in its envelope. Elements named in
-    ``angles`` (as ``slow_mode``'s ``ignore``) are compared on the circle."""
+    ``angles`` (as ``slow_mode``'s ``ignore``) are compared on the circle.
+    ``observe(state, params)`` returns named scalars added as ``path.<name>``
+    elements: a path task's errors relative to its path, which forget where a
+    world-frame position along a closed path never does."""
+
+    def elements(state):
+        names, values = _leaves(state)
+        if observe is None:
+            return names, values
+        extra = observe(state, params)
+        names = names + [f"path.{k}" for k in extra]
+        return names, np.concatenate([values, [float(v) for v in extra.values()]])
+
     reset_key, step_key = jax.random.split(jax.random.PRNGKey(seed))
     step = jax.jit(env.step_env)
     obs, state = env.reset_env(reset_key, params)
@@ -124,8 +137,8 @@ def coupled_pair(
         trips[0] += int(np.any(info_a.get("tripped", False)))
         trips[1] += int(np.any(info_b.get("tripped", False)))
         if t >= pre:
-            names, v_a = _leaves(s_a)
-            v_b = _leaves(s_b)[1]
+            names, v_a = elements(s_a)
+            v_b = elements(s_b)[1]
             circle = _matches(names, angles) if circle is None else circle
             values.append(v_a)
             gaps.append(np.where(circle, wrapped_gap(v_a, v_b), np.abs(v_a - v_b)))

@@ -24,11 +24,17 @@ _FUEL = "fuel burnt is history: a monotone burn, not a mode that decays"
 _PLANE = {".x": _POSITION, ".m": _FUEL, ".fuel": _FUEL}
 _PLANE3D = {**_PLANE, ".y": _POSITION}
 _PATROL = {".x": _POSITION, ".y": _POSITION, ".m": _FUEL, ".fuel": _FUEL}
+_PHASE = (
+    "world-frame heading and velocity on a closed path: a point further along "
+    "it is the same task, so they never reconverge; path.* errors stand in"
+)
+_ON_PATH = {**_PLANE3D, ".psi": _PHASE, ".x_dot": _PHASE, ".y_dot": _PHASE}
 IGNORE: dict[str, dict[str, str]] = {
     "plane": _PLANE,
     "plane_energy": _PLANE,
     "plane_sine": _PLANE,
-    **{f"plane3d_{k}": _PLANE3D for k in ("heading", "circle", "racetrack", "figure8")},
+    "plane3d_heading": _PLANE3D,
+    **{f"plane3d_{k}": _ON_PATH for k in ("circle", "racetrack", "figure8")},
     "patrol": _PATROL,
     "patrol_range_bearing": _PATROL,
     "formation": {
@@ -50,6 +56,57 @@ IGNORE: dict[str, dict[str, str]] = {
 ANGLES = (".psi", ".target_heading")
 
 SEEDS = range(100, 110)
+
+
+def _wrap(a):
+    return (a + np.pi) % (2 * np.pi) - np.pi
+
+
+def _speed_and_height(s):
+    speed = float(np.sqrt(s.x_dot**2 + s.y_dot**2 + s.z_dot**2))
+    return {"speed": speed, "height_error": float(s.z - s.target_altitude)}
+
+
+def _circle(s, p):
+    dx, dy = float(s.x - s.target_x), float(s.y - s.target_y)
+    r = float(np.hypot(dx, dy))
+    radial_speed = (dx * float(s.x_dot) + dy * float(s.y_dot)) / max(r, 1e-9)
+    return {
+        "radius_error": r - float(s.target_radius),
+        "radial_speed": radial_speed,
+        **_speed_and_height(s),
+    }
+
+
+def _racetrack(s, p):
+    from target_gym.plane3d.env import racetrack_guidance
+
+    cross, tangent, _ = racetrack_guidance(s)
+    return {
+        "cross_track": float(cross),
+        "heading_error": float(_wrap(float(s.psi) - float(tangent))),
+        **_speed_and_height(s),
+    }
+
+
+def _figure8(s, p):
+    from target_gym.plane3d.env import nearest_point_on_twisted_lemniscate
+
+    _, _, dz, dist, tangent = nearest_point_on_twisted_lemniscate(s, p)
+    return {
+        "path_distance": float(dist),
+        "vertical_error": float(dz),
+        "heading_error": float(_wrap(float(s.psi) - float(tangent))),
+        "speed": _speed_and_height(s)["speed"],
+    }
+
+
+#: Path-relative errors, measured where the world frame never reconverges.
+OBSERVE = {
+    "plane3d_circle": _circle,
+    "plane3d_racetrack": _racetrack,
+    "plane3d_figure8": _figure8,
+}
 
 
 def measure(
@@ -77,6 +134,7 @@ def measure(
             high=high,
             bias=bias,
             angles=ANGLES,
+            observe=OBSERVE.get(name),
         )
         for k in SEEDS
     ]
