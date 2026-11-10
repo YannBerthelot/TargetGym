@@ -16,7 +16,7 @@ env, params = tg.make("cement_kiln")
 | Observation space | `Box((8,))` |
 | Tracked variable(s) | discharge free lime (%) |
 | Episode length | 700 steps of 30 s (5.83 h) |
-| Cite as | `cement_kiln-v3` |
+| Cite as | `cement_kiln-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 
 ## Action space
@@ -60,7 +60,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 14 fields.
 
 ## Episode end
 
@@ -87,6 +87,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 30 | s |
 | `max_steps_in_episode` | 700 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.0005 | - |
 | `e_tol` | 0 | - |

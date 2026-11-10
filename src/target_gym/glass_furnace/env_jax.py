@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace.env import (
     FUEL_DEAD_TIME_STEPS,
@@ -19,8 +25,11 @@ from target_gym.glass_furnace.env import (
     compute_reward_terms,
     get_obs,
     get_target_from_schedule,
+    regenerator_diagnostics,
+    settled_point,
 )
 from target_gym.glass_furnace.rendering import _render
+from target_gym.utils import convert_raw_action_to_range
 from target_gym.video import SavesVideo
 
 
@@ -40,13 +49,22 @@ class GlassFurnace(
     screen_width = 700
     screen_height = 900
 
-    # obs = [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown]
+    # obs = [T_crown, T_air_preheat, fuel_pct, reversal_phase, target_T_crown, pull]
     obs_value_index: int = 0  # T_crown
     tracked_names: tuple = ("crown temperature (K)",)
     obs_target_index: int = 4  # target_T_crown
 
+    # Two thermocouples and a vortex meter (PHYSICS.md, Readings). The crown's
+    # noise goes after the modelled lag, on the measured copy: the state keeps
+    # the lag clean.
+    readings: tuple = (
+        FieldReading("T_crown_meas", sigma=0.36),
+        FieldReading("T_air_preheat", sigma=0.32),
+        FieldReading("fuel_flow", sigma=3e-4),
+    )
+
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (5,)
+        self.obs_shape = (6,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -57,8 +75,8 @@ class GlassFurnace(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -70,12 +88,14 @@ class GlassFurnace(
         if params is None:
             params = self.default_params
 
-        fuel_raw = action
-        if not isinstance(action, float):
-            fuel_raw = action.reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, metrics = compute_next_state(
-            fuel_raw, state, params, key, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            key,
+            integration_method=self.integration_method,
         )
 
         # A trip is part of the kernel: the step is charged the trip cost and
@@ -84,8 +104,9 @@ class GlassFurnace(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: GlassFurnaceState, params: GlassFurnaceParams = None):
         if params is None:
             params = self.default_params
@@ -105,7 +126,7 @@ class GlassFurnace(
         if params is None:
             params = self.default_params
 
-        key, schedule_key, crown_key = jax.random.split(key, 3)
+        key, schedule_key, crown_key, gas_key = jax.random.split(key, 4)
 
         # A trim walk, not independent draws: the first slot is the level the
         # furnace is already being held at, and every later slot is the
@@ -140,38 +161,45 @@ class GlassFurnace(
             params.initial_T_crown_range[1],
         )
 
-        nominal_fuel = 0.5 * (params.fuel_min + params.fuel_max)
-        regen_profile = jnp.linspace(
-            params.initial_T_regen_hot,
-            params.initial_T_regen_cold,
-            N_REGEN_NODES,
-        )
+        # The gas of the day is stationary, and the furnace is found running on
+        # it: the fuel flow burns the heat the orbit needs.
+        lhv_deviation = params.lhv_noise_std * jax.random.normal(gas_key)
+        raw, positions = settled_point(initial_T_crown)
+        fuel = convert_raw_action_to_range(
+            raw, min_action=params.fuel_min, max_action=params.fuel_max
+        ) / (1.0 + lhv_deviation)
+        T_gas = initial_T_crown + params.initial_T_gas_offset
+        T_air, T_stack = regenerator_diagnostics(positions, T_gas, fuel, 0.0, params)
         state = GlassFurnaceState(
             time=0,
-            T_gas=initial_T_crown + params.initial_T_gas_offset,
+            T_gas=T_gas,
             T_crown=initial_T_crown,
-            T_melt=initial_T_crown + params.initial_T_melt_offset,
-            T_work=initial_T_crown + params.initial_T_work_offset,
-            # Checker stacks start with a linear hot-to-cold gradient, which
-            # is what a running regenerator holds.
-            T_rA=regen_profile,
-            T_rB=regen_profile,
-            m_batch=params.initial_m_batch,
+            T_melt=positions[1],
+            T_work=positions[2],
+            T_rA=positions[4 : 4 + N_REGEN_NODES],
+            T_rB=positions[4 + N_REGEN_NODES :],
+            m_batch=positions[3],
             target_T_crown=initial_target,
             target_schedule=target_schedule,
             m_pull_disturbance=jnp.zeros(()),
-            # The instrument starts settled on the plant, as it would be on a
-            # furnace that has been running, and the fuel pipeline starts full
-            # at the nominal flow rather than empty.
-            T_crown_meas=initial_T_crown,
-            fuel_pipeline=jnp.full((FUEL_DEAD_TIME_STEPS,), nominal_fuel),
-            fuel_flow=nominal_fuel,
-            T_air_preheat=params.initial_T_regen_hot,
-            T_stack=params.initial_T_regen_cold,
+            lhv_deviation=lhv_deviation,
+            # The instrument is settled on the plant, which has just come
+            # through a reversal, and the fuel pipeline starts full.
+            T_crown_meas=initial_T_crown + params.initial_T_meas_offset,
+            fuel_pipeline=jnp.full((FUEL_DEAD_TIME_STEPS,), fuel),
+            fuel_flow=fuel,
+            T_air_preheat=T_air,
+            T_stack=T_stack,
         )
 
         obs = self.get_obs(state)
         return obs, state
+
+    def initial_action(self, state: GlassFurnaceState, params: GlassFurnaceParams):
+        """The raw action that keeps the reset's fuel flow."""
+        span = params.fuel_max - params.fuel_min
+        fuel = state.fuel_pipeline[-1:]
+        return 2.0 * (fuel - params.fuel_min) / span - 1.0
 
     def action_space(self, params: GlassFurnaceParams | None = None) -> spaces.Box:
         return spaces.Box(

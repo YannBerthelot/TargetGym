@@ -134,6 +134,34 @@ def test_a_limit_priced_above_any_gain_holds_on_every_visited_state():
     np.testing.assert_allclose(float(plan.cost), 5.0, atol=1e-6)
 
 
+def _ramp(data, x, u, t):
+    """A position moving 0.1 u a step, charged for its distance from 1.5."""
+    x1 = x + 0.1 * u
+    return x1, jnp.sum((x1 - 1.5) ** 2), jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_a_moves_rows_do_not_bind_past_the_plan():
+    """x_{t+1} = x_t + 0.1 u from 0.6, |u| <= 1, x + 0.1 u <= 1 from each stage.
+    The cost falls with x up to 1.5, past the row, so by hand four stages at u = 1
+    reach 1.0 with the row active on the last: every planned move is 1. The stage
+    past the plan starts at 1.0, where the same row would ask for u <= 0, and its
+    move is held to the last planned one: a row left on it would drag that move
+    off 1, for a stage nothing is costed on."""
+    model = StageModel(
+        step=_ramp, block=1, lo=(-1.0,), hi=(1.0,),
+        move_rows=lambda x, u: 1.0 - x - 0.1 * u,
+    )  # fmt: skip
+    with enable_x64():
+        planner = Shooting(model, n_stages=4, nx=1)
+        plan = planner.solve(None, jnp.full(1, 0.6), jnp.zeros(1))
+        moves = np.asarray(planner.moves(plan))[:, 0]
+    assert not bool(plan.certificate.failed)
+    # Rows 1e-8 relaxed, and a barrier at a scaled error of 1e-8: 1e-5 is far
+    # over both and far under the 0.5 the row dragged the move by, unmasked.
+    np.testing.assert_allclose(moves, [1.0, 1.0, 1.0, 1.0], atol=1e-5)
+
+
 def _pendulum(v):
     """Five Euler steps of a forced pendulum from (v0, v1) under v2 held,
     and the steps' cost: smooth, through a scan as the integrators are."""
@@ -209,6 +237,29 @@ def test_a_cold_solve_plans_an_unstable_plant_whose_held_move_overflows():
     assert not bool(plan.certificate.failed)
     np.testing.assert_allclose(planner.moves(plan)[0], [-100.0], atol=1e-6)
     np.testing.assert_allclose(planner.states(plan), 0.0, atol=1e-6)
+
+
+def _hidden(data, x, u, t):
+    """x[0] multiplies by 100 a step, out of any move's reach and free of any
+    cost; x[1] moves by u and pays (x[1] - 3)^2."""
+    x1 = jnp.stack([100.0 * x[0], x[1] + u[0]])
+    return x1, (x1[1] - 3.0) ** 2, jnp.zeros(0)
+
+
+@pytest.mark.medium
+def test_multipliers_that_overflow_do_not_end_a_cold_solve():
+    """From x = 0 the first state stays at 0, unpriced, so the solve is plain.
+    The cold start's least-squares multipliers solve the same rows with K = I,
+    which does price it: their Riccati term grows 1e4 a stage, past float64 in
+    80 stages, so they come out NaN with every derivative finite. IPOPT zeroes
+    multipliers past its cap, and a NaN has to count as past it. By hand: the
+    first move takes x[1] to 3, and 0 holds it."""
+    model = StageModel(step=_hidden, block=1, lo=(-100.0,), hi=(100.0,))
+    with enable_x64():
+        planner = Shooting(model, n_stages=80, nx=2)
+        plan = planner.solve(0.0, jnp.zeros(2), jnp.zeros(1))
+    assert not bool(plan.certificate.failed)
+    np.testing.assert_allclose(planner.moves(plan)[0], [3.0], atol=1e-6)
 
 
 @pytest.mark.medium

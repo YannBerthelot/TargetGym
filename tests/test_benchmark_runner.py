@@ -12,6 +12,7 @@ import pytest
 
 from target_gym import benchmark as B
 from target_gym import eval as E
+from target_gym.base import true_obs
 from target_gym.cement_kiln.env import discharge_lime
 from target_gym.energy.wind_turbine.env import electrical_power as wind_power
 from target_gym.registry import REGISTRY
@@ -104,7 +105,8 @@ def _off_target(name, **offsets):
     env, params, task = _setup(name, 1)
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(**{k: fn(state, params) for k, fn in offsets.items()})
-    return env.get_obs(state, params)[None], params, task
+    # The band is a claim about the plant, so read it without the instruments.
+    return true_obs(env, state, params)[None], params, task
 
 
 # Two outputs, each moved ``a`` and ``b`` floors off its target.
@@ -440,10 +442,11 @@ def test_every_loop_runs_the_benchmarks_episodes(name):
 def test_the_batched_oracle_runs_the_same_episodes():
     """``rollout_mpc_batch`` vmaps the gradient planner over seeds; each seed is
     the episode ``rollout`` runs with the host planner, up to the float
-    rounding a vmapped solve may differ by."""
+    rounding a vmapped solve may differ by. ``distillation`` still has one: the
+    boiler left it for the shared solver."""
     from target_gym.runners import runners as R
 
-    spec = REGISTRY["boiler_drum"]
+    spec = REGISTRY["distillation"]
     params = spec.make_test_params(max_steps_in_episode=4)
     values, targets, rewards, trips = R.rollout_mpc_batch(spec, params, 2)
     for s in range(2):
@@ -451,8 +454,8 @@ def test_the_batched_oracle_runs_the_same_episodes():
         v, t, r, n_trips = R.rollout(spec, params, mpc, seed=s, return_trips=True)
         np.testing.assert_array_equal(t, targets[s])
         # float32: the vmapped and the single solve round differently, and the
-        # descent's iterations compound it (2e-5 over these 4 steps). A wrong
-        # noise path moves the rewards by 8 to 57 %, so 1e-4 still tells the
+        # descent's iterations compound it (2e-5 over these 4 steps). The other
+        # seed's episode moves the rewards by 43 to 90 %, so 1e-4 still tells the
         # episodes apart.
         np.testing.assert_allclose(r, rewards[s], rtol=1e-4)
         assert n_trips == trips[s]

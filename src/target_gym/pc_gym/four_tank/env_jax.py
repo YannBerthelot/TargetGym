@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.pc_gym.four_tank.env import (
     FourTankParams,
@@ -39,6 +45,11 @@ class FourTank(
     tracked_names: tuple = ("h1 (m)", "h2 (m)")
     obs_target_index: tuple = (4, 5)  # target_h1, target_h2
 
+    # Guided wave radar on each tank (PHYSICS.md section on readings).
+    readings: tuple = tuple(
+        FieldReading(level, sigma=5e-4, step=1e-3) for level in ("h1", "h2", "h3", "h4")
+    )
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (6,)
         self.integration_method = integration_method
@@ -50,8 +61,8 @@ class FourTank(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -63,7 +74,7 @@ class FourTank(
         if params is None:
             params = self.default_params
 
-        action = action.reshape((2,))
+        action, state = actuate(self, state, action.reshape((2,)), params)
 
         new_state, metrics = compute_next_state(
             action, state, params, integration_method=self.integration_method
@@ -75,8 +86,9 @@ class FourTank(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: FourTankState, params: FourTankParams = None):
         if params is None:
             params = self.default_params

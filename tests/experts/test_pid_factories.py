@@ -100,8 +100,9 @@ def test_pid_is_deterministic_across_resets(name):
 
 def test_the_tuned_gains_have_public_names():
     """Contract: ``load_gains()`` is the tuned-gains file as stored, and
-    ``gain(task, name, default)`` is that task's stored value as a float, or
-    the default when the file has none. Expected values come from the file
+    ``gain(task, name)`` is that task's stored value as a float. A key the file
+    does not hold raises (expert-protocols-process.md, D8), which the literal
+    a call site still passes cannot change. Expected values come from the file
     itself (``provenance.GAINS_PATH``), not from the loader."""
     import json
 
@@ -111,4 +112,5 @@ def test_the_tuned_gains_have_public_names():
     stored = json.loads(GAINS_PATH.read_text())
     assert load_gains() == stored
     assert gain("cstr", "Kp", 0.0) == float(stored["cstr"]["Kp"])
-    assert gain("cstr", "no_such_gain", 1.5) == 1.5
+    with pytest.raises(KeyError, match="no_such_gain"):
+        gain("cstr", "no_such_gain", 1.5)

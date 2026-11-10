@@ -33,6 +33,8 @@ from target_gym.identification import (
     insignificant,
     judge,
     nrmse_fit,
+    quiet_fits,
+    rga,
 )
 from target_gym.registry import REGISTRY
 
@@ -236,6 +238,36 @@ def test_a_trip_brings_a_p_only_setpoint_test_on_the_tripped_cv():
     assert pairs[0, 0, 0]["label"] == "valid"
 
 
+class TripsInItsSettle(FakePlant):
+    """A retest whose loop trips the plant before the step: base and step both
+    stop at index 0, so the test holds no samples."""
+
+    def test(self, s, j, step, window, loops):
+        if not loops:
+            return super().test(s, j, step, window, loops)
+        self.calls.append((step, window, loops))
+        empty = np.zeros((0, 1))
+        return Run(
+            step, window, loops, empty, empty, empty, np.zeros(1),
+            {"base": (0, 0), "step": (0, 0)},
+        )  # fmt: skip
+
+
+def test_a_retest_with_no_samples_leaves_the_last_test_that_has_some():
+    """Owner's ruling, 2026-11-07: a test with 0 samples is not the last test. The
+    row keeps its cut test, whose fit votes for its CV's class, where it would
+    otherwise end "short" with no class at all. A move of 0.2 in noise of sigma
+    0.0044 (a band of 0.026) is about 8 bands: V1 fails, and the trip brings the
+    loop. Cut at 60 steps, 6 tau, the response still settles, so it can vote."""
+    plant = TripsInItsSettle(k=2.0, tau=10.0, sigma=0.0044, trip_at=60)
+    pairs, classes = identify(plant, [0.1])
+    p = pairs[0, 0, 0]
+    assert p["tests"][-1][0].dy.shape[0] == 0, "the retest must have run and tripped"
+    assert p["kept"] == 0
+    assert classes[0]["class"] == "fopdt"
+    assert p["failed"] == ["V1"]
+
+
 def test_a_zero_response_is_insignificant_and_never_retested():
     plant = FakePlant(k=0.0)
     pairs, classes = identify(plant, [0.1])
@@ -259,3 +291,68 @@ def test_bump_test_on_first_order_returns_its_documented_lag():
         f = fit("fopdt", plant.dt, run.dy[:, 0], run.U[:, :1])
         np.testing.assert_allclose([f["k"], f["tau"]], [2.0, 0.5], rtol=1e-3)
         assert f["theta"] == pytest.approx(0.0, abs=1e-3) and math.isfinite(f["fit"])
+
+
+def _analysis(fit_percent=96.0, **failed):
+    """One response's analysis, its FOPDT fit failing the checks in ``failed``."""
+    checks = {"V1": True, "V2": True, "V3": True, "V4": True, **failed}
+    return {"zero": False, "fits": {"fopdt": {"fit": fit_percent, **checks}}}
+
+
+def _pairs(analysis, label="invalid"):
+    return {(0, 0, 0): {"tests": [(None, analysis)], "label": label}}
+
+
+FOPDT = {0: {"class": "fopdt"}}
+
+
+def test_a_fit_failing_v1_alone_at_95_percent_is_quiet():
+    """Amendment 4: V1 failed, the rest passed, a fit of at least 95 %."""
+    assert list(quiet_fits(_pairs(_analysis(95.0, V1=False)), FOPDT)) == [(0, 0, 0, 0)]
+
+
+@pytest.mark.parametrize(
+    "analysis",
+    [
+        _analysis(94.9, V1=False),  # under the bar
+        _analysis(99.0, V1=False, V2=False),  # V1 not alone
+        _analysis(99.0),  # valid, which needs no exception
+    ],
+)
+def test_a_fit_that_is_not_quiet_stays_out(analysis):
+    assert quiet_fits(_pairs(analysis), FOPDT) == {}
+
+
+def test_a_zero_model_has_no_quiet_fit():
+    """As H21: an insignificant pair is noise, whatever one test's fit read."""
+    pairs = _pairs(_analysis(99.0, V1=False), label="insignificant")
+    assert quiet_fits(pairs, FOPDT) == {}
+
+
+def test_a_quiet_fit_is_read_under_its_cvs_class():
+    """Only the structure the CV's class names counts (H17)."""
+    pairs = _pairs(_analysis(99.0, V1=False))
+    assert quiet_fits(pairs, {0: {"class": "integrating_lag"}}) == {}
+
+
+def test_every_test_of_a_pair_is_read_not_only_the_kept_one():
+    """A retest can keep a fast valid fit while an earlier test held the slow
+    quiet one: hvac's seed 103 kept its 979 s fit over its 139,000 s one."""
+    pairs = {
+        (0, 0, 0): {
+            "tests": [(None, _analysis(98.0, V1=False)), (None, _analysis(92.0))],
+            "label": "valid",
+        }
+    }
+    assert list(quiet_fits(pairs, FOPDT)) == [(0, 0, 0, 0)]
+
+
+def test_the_relative_gain_array_of_a_two_by_two():
+    # lambda_11 = 1 / (1 - G12 G21 / (G11 G22)) = 1 / (1 - 6 / 4) = -2, and each
+    # row and column sums to 1.
+    out = rga([[1.0, 2.0], [3.0, 4.0]])
+    np.testing.assert_allclose(out, [[-2.0, 3.0], [3.0, -2.0]])
+
+
+def test_a_diagonal_plant_has_nothing_to_pair_against():
+    np.testing.assert_allclose(rga([[2.0, 0.0], [0.0, 5.0]]), np.eye(2))

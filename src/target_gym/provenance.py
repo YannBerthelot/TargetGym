@@ -51,6 +51,10 @@ _ROOT = pathlib.Path(__file__).resolve().parent
 # Inside the package, not beside it, so they resolve from a source checkout and
 # from an installed wheel alike.
 GAINS_PATH = _ROOT / "data" / "pid_gains.json"
+#: The noise levels with gains of their own (expert-protocols-noise.md).
+#: ``GAINS_PATH`` is level 1, the shipped gains; each other level has a file.
+GAIN_LEVELS = (0.5, 1.0, 2.0)
+SHIPPED_LEVEL = 1.0
 #: The recorded returns, one file per task (``target_gym.records``).
 BASELINES_PATH = _ROOT / "data" / "baseline_returns"
 
@@ -61,6 +65,8 @@ _ORACLE_SOURCES = (_ROOT / "experts" / "mpc.py",)
 #: The shared solver (``target_gym.oracles``), in place of experts/mpc.py in
 #: the oracle part of every task whose oracle stands on it (``oracle_data``).
 _SOLVER_SOURCES = tuple(sorted((_ROOT / "oracles").glob("*.py")))
+#: The keys of a gains entry that describe it, which a level need not repeat.
+_NOT_GAINS = frozenset({"note", "tuning_rule"})
 #: The keys of a data file that only describe the run that wrote it.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
@@ -260,6 +266,40 @@ def gains_entries(spec, allgains: dict) -> dict:
     return _entries(spec, allgains, keys | set(spec.gains_keys))
 
 
+def gains_path(level=None) -> pathlib.Path:
+    """The file holding noise ``level``'s gains, so tuning at one level cannot
+    touch another's: no level and level 1 are ``GAINS_PATH``."""
+    if level is None or float(level) == SHIPPED_LEVEL:
+        return GAINS_PATH
+    return GAINS_PATH.with_name(f"pid_gains_{float(level):g}x.json")
+
+
+def level_gains(spec, level) -> dict | None:
+    """The store for ``spec``'s expert at noise ``level``, or None for the
+    shipped gains (no level, or level 1).
+
+    A level with no stored gains raises, because an expert never falls back to
+    another level's. Its file must name the task, and hold every entry and gain
+    the shipped expert reads: expert factories that read ``_p.get(key, default)``
+    would otherwise hide a missing gain behind their literal.
+    """
+    if gains_path(level) == GAINS_PATH:
+        return None
+    where = f"{spec.name} has no gains at noise level {float(level):g}"
+    if float(level) not in GAIN_LEVELS:
+        raise KeyError(f"{where}: the levels are {GAIN_LEVELS}")
+    path = gains_path(level)
+    stored = json.loads(path.read_text()) if path.exists() else {}
+    if spec.name not in stored:
+        raise KeyError(f"{where}: {path.name} has no {spec.name!r} entry")
+    shipped = gains_entries(spec, json.loads(GAINS_PATH.read_text()))
+    for key, entry in shipped.items():
+        missing = set(entry) - _NOT_GAINS - set(stored.get(key, ()))
+        if key not in stored or missing:
+            raise KeyError(f"{where}: {path.name} lacks {key!r} {sorted(missing)}")
+    return stored
+
+
 def _entries(spec, allgains: dict, keys) -> dict:
     for key in keys:
         if key not in allgains:
@@ -302,12 +342,22 @@ def _fingerprint(spec, part: str, sources, gains_of, extra=()) -> str:
     return h.hexdigest()[:16]
 
 
-def expert_fingerprint(spec) -> str:
+def expert_fingerprint(spec, level=None) -> str:
     """Everything that determines the expert's rows of ``spec``'s records:
     ``expert_sources``, its gains entries (``gains_entries``) and what both
     parts share (``_fingerprint``). Rendering is excluded, since it cannot
-    change a return."""
-    return _fingerprint(spec, "expert", expert_sources(spec), gains_entries)
+    change a return. ``level`` takes that noise level's gains in place of the
+    shipped ones, and the level itself, since the expert is scored on it."""
+    stored = level_gains(spec, level)
+    if stored is None:
+        return _fingerprint(spec, "expert", expert_sources(spec), gains_entries)
+    return _fingerprint(
+        spec,
+        "expert",
+        expert_sources(spec),
+        lambda s, _: gains_entries(s, stored),
+        [float(level)],
+    )
 
 
 def _data_digest(rel: str) -> str:

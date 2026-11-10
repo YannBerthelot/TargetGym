@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from scipy.optimize import brentq
 
-from target_gym.pc_gym.cstr.env import CSTRParams, compute_velocity
+from target_gym.pc_gym.cstr.env import CSTRParams, compute_velocity, with_load
 
 
 @pytest.fixture(scope="module")
@@ -186,15 +186,79 @@ def test_every_target_concentration_is_reachable(params):
     assert hi <= ca_cold, f"target {hi} above the reachable maximum {ca_cold:.3f}"
 
 
-def test_the_bottom_of_the_target_band_has_thin_margin(params):
-    """Documented deviation D1, asserted so it cannot quietly become worse.
+def _coolant_for(C_a, p, dTi=0.0, dCaf=0.0):
+    """The coolant that holds ``C_a`` under a load: the concentration balance
+    gives the rate, so the temperature, and the energy balance the coolant."""
+    k = p.q / p.V * (p.Caf + dCaf - C_a) / C_a
+    T = -p.EA_over_R / np.log(k / p.k0)
+    heat = -p.deltaHr * k * C_a / (p.rho * p.C)
+    return T - p.rho * p.C * p.V / p.UA * (p.q / p.V * (p.Ti + dTi - T) + heat)
 
-    Reaching the lowest target needs the coolant within a fraction of a kelvin
-    of its stop, leaving almost no authority for disturbance rejection.
-    """
-    ca_hot, _ = _operating_point(params.T_c_max, params)
-    margin = params.target_CA_range[0] - ca_hot
-    assert 0.0 < margin < 0.02
+
+def _fold(p, dTi=0.0, dCaf=0.0):
+    """Ignition fold: the highest coolant at which the low branch exists, the
+    peak of the coolant that makes each temperature steady."""
+    Ts = np.linspace(310.0, 345.0, 35001)
+    k = p.k0 * np.exp(-p.EA_over_R / Ts)
+    C_a = p.q / p.V * (p.Caf + dCaf) / (p.q / p.V + k)
+    heat = -p.deltaHr * k * C_a / (p.rho * p.C)
+    return np.max(
+        Ts - p.rho * p.C * p.V / p.UA * (p.q / p.V * (p.Ti + dTi - Ts) + heat)
+    )
+
+
+def _load_corners(p):
+    return [(a * p.Ti_load, b * p.Caf_load) for a in (-1, 1) for b in (-1, 1)]
+
+
+def test_a_load_moves_the_feed_terms_of_both_balances(params):
+    """q / V is 1 /min, so 1 K of feed adds 1 K/min to dT/dt and 0.02 mol/L adds
+    0.02 mol/L/min to dC_a/dt, with the rest of each balance unchanged."""
+    x = np.array([0.88, 325.0])
+    quiet = compute_velocity(x, 300.0, params)[0]
+    moved = compute_velocity(x, 300.0, with_load(params, (1.0, 0.02)))[0]
+    np.testing.assert_allclose(moved - quiet, [0.02, 1.0], rtol=1e-3)
+
+
+def test_the_coolant_stop_sits_below_the_ignition_fold(params):
+    """Why the plant cannot trip: the review's 303.23 K, and three steady
+    states just under it, one just over."""
+    assert _fold(params) == pytest.approx(303.23, abs=0.01)
+    assert len(_steady_states(303.2, params)) == 3
+    assert len(_steady_states(303.3, params)) == 1
+    assert params.T_c_max < 303.2
+
+
+def test_no_load_brings_the_fold_down_to_the_coolant_stop(params):
+    assert all(_fold(params, *load) > params.T_c_max for load in _load_corners(params))
+
+
+@pytest.mark.parametrize("C_a0", [0.8, 0.85])
+def test_full_heat_under_the_worst_load_stays_on_the_low_branch(params, C_a0):
+    """The hottest the plant can be driven, from either end of the reset box:
+    the coolant at its stop and both loads at their limits, for 100 min."""
+    hot = params.replace(
+        Ti=params.Ti + params.Ti_load, Caf=params.Caf + params.Caf_load
+    )
+    x = np.array([C_a0, params.initial_T])
+    top = 0.0
+    for _ in range(40_000):  # Euler at 0.0025 min, a hundredth of a step
+        v = np.asarray(compute_velocity(x, params.T_c_max, hot)[0], float)
+        x = x + 0.0025 * v
+        top = max(top, x[1])
+    assert top < 335.0  # the fold under this load, where ignition would start
+    assert np.abs(v).max() < 1e-3  # and it has come to rest
+
+
+def test_every_target_keeps_coolant_to_spare_under_every_load(params):
+    """D1 is gone: each corner of the band, under each corner of the load, is
+    held inside the coolant's range with 0.5 K (7 % of it) left at each stop."""
+    needs = [
+        _coolant_for(t, params, *load)
+        for t in params.target_CA_range
+        for load in _load_corners(params)
+    ]
+    assert params.T_c_min + 0.5 <= min(needs) and max(needs) <= params.T_c_max - 0.5
 
 
 def test_initial_concentrations_are_inside_the_envelope(params):

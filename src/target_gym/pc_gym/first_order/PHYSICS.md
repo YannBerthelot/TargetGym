@@ -132,23 +132,18 @@ with. `scripts/tune_process_experts.py --envs first_order` derives the gains
 and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 `make_first_order_pid_controller`.
 
-- **Step test.** From the steady state at each training seed's target (seeds
-  100 to 109), a step of 0.1 in the raw action. The fit is k = 2.0 per unit
-  raw action, tau1 = 0.50 s and no delay (measured), which is the plant's own
-  K (u_max - u_min) / 2 and tau. The 0.05 s sample adds half a step,
-  theta = 0.025 s (the half rule).
-- **Settings.** The tight choice tau_c = theta gives
-  Kc = tau1 / (k (tau_c + theta)) = 5.0 per unit error and
-  tau_I = min(tau1, 4 (tau_c + theta)) = 0.20 s, so Ki = 25 /s. tau_c = 2 theta
-  and 3 theta cost more on the training seeds (1.3e-4 per step against 0.0084
-  and 0.10, measured).
-- **Held-out check** (seeds 200 to 209). It holds 1.4e-12 per step against a
-  ceiling of 1 and never trips (`tests/pc_gym/test_expert_specs.py`). It
-  replaced a PID grid-searched on the scored reward, which was also far
-  inside the resolution.
+- **Step test.** One run per training seed (100 to 109): in manual at the
+  target, a baseline, then 0.1 in the raw action. The fit is k = 2.0 per unit raw
+  action, tau1 = 0.50 s and no delay (measured). The band is 0.0067 and the step
+  moves it 30 times. The 0.05 s sample adds half a step, theta = 0.025 s.
+- **Settings.** SIMC with tau_c = theta, then N5 to N7 of
+  `docs/proposals/expert-protocols-noise.md` on a dead band of 1 % of span. The
+  filter reaches its cap, 0.02 s, so Kp = 2.77, Ki = 7.70 /s at level 1, and 4.99
+  and 1.63 at levels 0.5 and 2.
+- **Held-out check** (seeds 200 to 209). It holds 0.013 per step against a ceiling
+  of 1 and never trips (`tests/pc_gym/test_expert_specs.py`).
 - **Episode.** 150 steps (100 in v2), twice the 63 steps the PI takes to come
-  within twice the level it holds. The plant has no noise, so that level is
-  float32 rounding.
+  within twice the level it holds.
 
 ---
 
@@ -162,7 +157,7 @@ and stores them in `src/target_gym/data/pid_gains.json`; the factory is
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 3 |
+| `first_order` | 150 | 0.05 | 8 s | 1 in [-1, 1] | 2 | 5 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -200,3 +195,34 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+This plant is an abstract lag, so **it has no real instrument**. Its one reading
+is a convention, not a measurement (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task. The setpoint stays exact.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `x` | 1.1e-3 | none | None: a smart transmitter's class, by analogy | Confirmed, as an analogy | [EJA530E](https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf) |
+
+The figure applies the transmitter's ±0.055 % of span, a 3-sigma conformance
+figure, to the 6-unit span: 6 × 0.00055 / 3 = 1.1e-3. The proposal marks it
+Confirmed because the transmitter's number holds, not because anything measures
+this plant.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays 0.034 per step in measured reward,
+`(1.1e-3 / 6e-3)^2`.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

@@ -1,13 +1,13 @@
-# Patrol - wingman, bearing-only
+# Patrol - wingman, range and bearing
 
-<p align="center"><img src="../../videos/patrol_bearing_only/pid_output.gif" width="480px"/></p>
+<p align="center"><img src="../../videos/patrol_range_bearing/pid_output.gif" width="480px"/></p>
 
-The `patrol` task flown from a passive sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. The lead's heading, which places the slot, is not measured and has to be inferred from how the bearing changes. The tracked value is the measured range, against the distance at which the slot sits from the lead.
+The `patrol` task flown from a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. The lead's heading, which places the slot, is not measured and has to be inferred from how the bearing changes. The tracked value is the measured range, against the distance at which the slot sits from the lead.
 
 ```python
 import target_gym as tg
 
-env, params = tg.make("patrol_bearing_only")
+env, params = tg.make("patrol_range_bearing")
 ```
 
 | | |
@@ -16,7 +16,7 @@ env, params = tg.make("patrol_bearing_only")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `patrol_bearing_only-v3` |
+| Cite as | `patrol_range_bearing-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -26,9 +26,9 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | power | -1 | 1 |
-| 1 | stick | -1 | 1 |
-| 2 | aileron | -1 | 1 |
+| 0 | throttle | -1 | 1 |
+| 1 | pitch demand | -1 | 1 |
+| 2 | bank demand | -1 | 1 |
 
 ## Observation space
 
@@ -63,7 +63,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 12 fields.
+`reset` samples the initial condition and the target; state has 15 fields.
 
 ## Episode end
 
@@ -82,16 +82,22 @@ Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseli
 
 The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
 
-The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
+The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
 ## Arguments
 
-The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("patrol_bearing_only", max_steps_in_episode=...)`.
+The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("patrol_range_bearing", max_steps_in_episode=...)`.
 
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
 | `max_steps_in_episode` | 200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 0 | fraction of span per delta_t unit |
+| `actuator_lag` | 0 | delta_t units |
 | `gravity` | 9.81 | m/s^2 |
 | `initial_mass` | 73500 | kg |
 | `thrust_output_at_sea_level` | 240000 | N |
@@ -102,9 +108,18 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_z0` | 0.9 | - |
 | `initial_fuel_quantity` | 19088 | kg |
 | `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
-| `power_response_rate` | 0.05 | 1/s |
-| `stick_response_rate` | 0.9 | 1/s |
-| `aileron_response_rate` | 0.9 | 1/s |
+| `power_response_rate` | 0.588235 | 1/s |
+| `idle_power` | 0.05 | - |
+| `stick_response_rate` | 16.6667 | 1/s |
+| `aileron_response_rate` | 16.6667 | 1/s |
+| `surface_rate_limit` | 0.523599 | rad/s |
+| `load_factor_max` | 2.5 | g |
+| `load_factor_min` | -1 | g |
+| `vmo_eas` | 180.056 | m/s |
+| `mmo` | 0.82 | - |
+| `buffet_mach` | 0.3 | - |
+| `buffet_slope` | 1.4 | - |
+| `bank_limit` | 1.0472 | rad |
 | `aspect_ratio` | 9.48 | - |
 | `aileron_effectiveness` | 0.4 | - |
 | `cl_alpha` | 0.08786 | 1/deg |
@@ -161,16 +176,21 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wind_z` | 0 | m/s |
 | `turbulence_sigma` | 1.2 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
+| `turbulence_scale_length` | 533.4 | m |
+| `gust_roll_rate` | 0 | rad/s |
 | `wind_shear_x` | 0 | 1/s |
 | `wind_shear_y` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |
 | `slot_tolerance` | 60 | m |
 | `heading_tolerance` | 0.5236 | rad |
-| `min_separation` | 25 | m |
+| `min_separation` | 40 | m |
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
 | `e_floor_slot` | 3 | m |
 | `e_tol_slot` | 0 | m |
 | `lead_leg_seconds` | 60 | s |
+| `wake_strength` | 1 | - |
+| `wake_core_ratio` | 0.0582 | - |
+| `wake_decay_rate` | 0.2 | - |
 | `follower_spawn_noise` | 40 | m |
 

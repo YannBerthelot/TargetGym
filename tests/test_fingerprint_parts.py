@@ -43,11 +43,11 @@ def _moved(spec, change) -> set[str]:
     "name,rel,parts",
     [
         ("cstr", "pc_gym/cstr/oracle.py", {"oracle"}),
-        # cstr's oracle is on the shared solver, the reactor's not yet.
+        # cstr's oracle is on the shared solver, the pH task's not yet.
         ("cstr", "experts/mpc.py", set()),
-        ("reactor", "experts/mpc.py", {"oracle"}),
+        ("ph_neutralization", "experts/mpc.py", {"oracle"}),
         ("cstr", "oracles/shooting.py", {"oracle"}),
-        ("reactor", "oracles/shooting.py", set()),
+        ("ph_neutralization", "oracles/shooting.py", set()),
         ("cstr", "pc_gym/cstr/experts.py", {"expert"}),
         ("cstr", "experts/pid.py", {"expert"}),
         ("cstr", "pc_gym/cstr/env.py", {"expert", "oracle", "stamp"}),
@@ -55,8 +55,9 @@ def _moved(spec, change) -> set[str]:
         ("compressor_surge", "compressor_surge/experts.py", {"expert"}),
         # An oracle on the shared solver reads no expert code.
         ("wind_turbine", "energy/wind_turbine/experts.py", {"expert"}),
+        ("plane", "experts/pid.py", {"expert"}),
         # Oracles that still read expert code: their part moves with it.
-        ("plane", "experts/pid.py", {"expert", "oracle"}),
+        ("patrol", "experts/pid.py", {"expert", "oracle", "stamp"}),
         ("formation", "patrol/oracle.py", {"oracle"}),
     ],
 )

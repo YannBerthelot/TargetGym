@@ -32,3 +32,24 @@ def test_a_summary_is_compact_and_its_evidence_is_outside_the_package(path):
     evidence = ROOT / row["evidence"]
     assert evidence.is_file() and records.DATA.parent not in evidence.parents
     assert "pairs" in json.loads(evidence.read_text())
+
+
+@pytest.mark.parametrize("task", ["plane_energy", "plane_sine"])
+def test_tasks_sharing_a_plant_take_its_test(task):
+    """H24: a plant's test runs once, on the shortest episode's window, so these
+    tasks read `plane`'s T_c and P, and only their planned stages differ."""
+    own, plane = (records.load_row("oracle_horizons", n) for n in (task, "plane"))
+    assert (own["T_c_steps"], own["P"]) == (plane["T_c_steps"], plane["P"])
+
+
+AIRCRAFT_TESTS = ("plane", "plane3d_heading", "patrol")
+
+
+@pytest.mark.parametrize("task", AIRCRAFT_TESTS)
+def test_the_record_names_the_cv_that_tripped(task):
+    """H9, with every trip limit a CV (H6): a trip names what tripped."""
+    evidence = ROOT / records.load_row("oracle_horizons", task)["evidence"]
+    pairs = json.loads(evidence.read_text())["pairs"]
+    trips = [t for p in pairs for test in p["tests"] for t in test["trips"].values()]
+    assert trips, "these tests trip, so this has something to read"
+    assert all(t["cv"] is not None for t in trips)

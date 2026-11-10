@@ -63,7 +63,8 @@ def make_plane3d_mpc(
     lr: float = 0.05,
     lr_end=_TASK_DEFAULT,
 ):
-    """Gradient MPC for the 3D plane tasks, optimising [power, stick, aileron] in [-1, 1].
+    """Gradient MPC for the 3D plane tasks, optimising the 1 Hz demands
+    [throttle, pitch, bank] in [-1, 1], through the plant's inner loop.
 
     Same rationale as the 2D Plane MPC: the 3D dynamics extend the 2D
     aerodynamic model with roll, so it remains differentiable JAX but not

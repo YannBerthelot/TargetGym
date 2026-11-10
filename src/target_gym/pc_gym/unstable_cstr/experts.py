@@ -9,10 +9,11 @@ module at load time, so editing a controller or the diagnostic never moves
 
 The cascade PID holds the saddle through its inner loop on T. No P or PI loop
 on C_a alone can stabilise the plant (PHYSICS.md, section 2), so the outer PI
-on C_a only sets the temperature the inner loop holds. Its factory refuses
-gains whose linearised closed loop does not decay fast enough at every target
-(``check_cascade_gains``), which is how the tuner's search is kept away from a
-controller that chatters between the coolant bounds.
+on C_a only sets the temperature the inner loop holds. ``check_cascade_gains``
+reports gains whose linearised closed loop, thermowell and valve included, does
+not decay fast enough at every target. Its thresholds are ours, so it cannot
+veto a protocol's values (expert-protocols-process.md, D2): the factory ships
+them and the recipe prints it.
 
 The point of no return is the lowest reactor temperature from which full
 cooling still reaches the trip. ``point_of_no_return`` computes it exactly on
@@ -31,6 +32,7 @@ import numpy as np
 from flax import struct
 from jax.tree_util import Partial as partial
 
+from target_gym.base import actuate
 from target_gym.experts import pid as _pid_mod
 from target_gym.pc_gym.unstable_cstr.env import (
     N_BLOCKS,
@@ -42,6 +44,7 @@ from target_gym.pc_gym.unstable_cstr.env import (
     steady_coolant,
     steady_temperature,
 )
+from target_gym.pc_gym.unstable_cstr.env_jax import UnstableCSTR
 
 try:
     # Newer JAX; 0.10 removed the experimental one. The declared range starts
@@ -62,9 +65,12 @@ except ImportError:
 #: to 0.1 K (scripts/unstable_cstr_numbers.py --section pnr). The PID's
 #: setpoint ceiling and the MPC's soft bound read it, so it is frozen with the
 #: physics, and changing it re-opens the tuning and every recorded baseline.
-PNR_LINE = (354.9, -40.7)
+PNR_LINE = (354.8, -42.2)
 #: The concentration at which ``PNR_LINE[0]`` is given (mol/L), the band's hot end.
 PNR_LINE_C_A = 0.45
+
+#: Whose action box and step ``actuate`` reads.
+_ENV = UnstableCSTR()
 
 # Lower end of the bisection (K, ours). ``point_of_no_return`` returns NaN
 # where full cooling trips even from here.
@@ -105,12 +111,13 @@ def coolant_from_raw(u_raw, params: UnstableCSTRParams):
 def trips_under_full_cooling(
     C_a, T, T_j, Ti_dev, params: UnstableCSTRParams, horizon_steps: int = 200
 ):
-    """True where holding the coolant at ``T_c_min`` from ``(C_a, T, T_j)``
+    """True where commanding the coolant to ``T_c_min`` from ``(C_a, T, T_j)``
     still trips within ``horizon_steps``.
 
-    The env's own step (``compute_next_state``, the jacket lag included) with
-    the drift frozen at ``Ti_dev``, and the env's trip check at every step
-    end. Scalar inputs; vmap for arrays.
+    The env's own step (``actuate`` from a valve at the jacket's temperature,
+    then ``compute_next_state``, the jacket lag included) with the drift frozen
+    at ``Ti_dev``, and the env's trip check at every step end. Scalar inputs;
+    vmap for arrays.
     """
     state = UnstableCSTRState(
         time=0,
@@ -120,12 +127,15 @@ def trips_under_full_cooling(
         Ti_dev=Ti_dev,
         target_levels=jnp.zeros(N_BLOCKS),
         block_clock=0,
+        actuator_held=jnp.reshape(raw_from_coolant(T_j, params), (1,)),
     )
     key = jax.random.PRNGKey(0)
+    full_cooling = -jnp.ones(1)
 
     def body(carry, _):
         s, tripped = carry
-        s = compute_next_state(-1.0, s, params, key)[0].replace(Ti_dev=Ti_dev)
+        applied, s = actuate(_ENV, s, full_cooling, params)
+        s = compute_next_state(applied[0], s, params, key)[0].replace(Ti_dev=Ti_dev)
         return (s, tripped | check_is_terminal(s, params)[0]), None
 
     carry, _ = jax.lax.scan(
@@ -188,7 +198,7 @@ def point_of_no_return_batch(C_a, T_j, Ti_dev, params: UnstableCSTRParams):
 #: never move.
 DEFAULT_GAINS: dict = {
     "Kp_T": 7.0,  # K of coolant per K of T error; inner proportional
-    "Kd_T": 0.4,  # K of coolant per K/min; inner derivative, first difference
+    "Kd_T": 0.4,  # K of coolant per K/min; inner derivative, filtered
     "Kc_Ca": 100.0,  # K of setpoint per mol/L; outer proportional
     "Ti_Ca": 0.5,  # min; outer integral time
     "sp_rate": 3.0,  # K/min; setpoint rate limit, 0.15 K per step
@@ -196,12 +206,13 @@ DEFAULT_GAINS: dict = {
     "sp_above": 2.0,  # K; setpoint ceiling T* + 2 K
     "sp_line_margin": 0.3,  # K; setpoint ceiling pnr_line(L) - 0.3 K
     "Tc_bias": 300.0,  # K; inner-loop coolant bias
+    "Tf_Ca": 0.0,  # min; filter on the C_a reading
 }
 #: The gains the tuner searches.
 TUNED_GAINS = ("Kp_T", "Kd_T", "Kc_Ca", "Ti_Ca")
 #: The gains it holds. Their right value is set by the distance to the point
 #: of no return, which the return sees only once a trip happens.
-HELD_GAINS = ("sp_rate", "sp_below", "sp_above", "sp_line_margin", "Tc_bias")
+HELD_GAINS = ("sp_rate", "sp_below", "sp_above", "sp_line_margin", "Tc_bias", "Tf_Ca")
 
 
 class CascadeState(NamedTuple):
@@ -209,10 +220,13 @@ class CascadeState(NamedTuple):
 
     #: Integral of the C_a error (mol/L min).
     integral: float
-    #: Reactor temperature at the previous step (K), for the derivative.
+    #: Filtered reactor temperature (K), the derivative's memory
+    #: (``pid.filtered_derivative``).
     T_prev: float
     #: Temperature setpoint at the previous step (K), for the rate limit.
     T_sp_prev: float
+    #: The filtered C_a reading (mol/L), NaN until the first.
+    C_a: float = float("nan")
 
 
 def setpoint_window(level, gains, params: UnstableCSTRParams, xp=np):
@@ -245,7 +259,7 @@ def cascade_init(obs, gains, params: UnstableCSTRParams, xp=np) -> CascadeState:
     1.5 K of T*, so there the two starts differ by at most 1.5 K.
     """
     T = obs[1]
-    return CascadeState(integral=xp.zeros_like(T), T_prev=T, T_sp_prev=T)
+    return CascadeState(integral=xp.zeros_like(T), T_prev=T, T_sp_prev=T, C_a=obs[0])
 
 
 def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np):
@@ -254,8 +268,16 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
     ``obs`` is the env's ``[C_a, T, T_j, target]``. With ``xp=jnp`` it traces,
     so it scans and vmaps inside the env's own rollouts.
     """
-    C_a, T, level = obs[0], obs[1], obs[3]
+    T, level = obs[1], obs[3]
     dt = params.delta_t
+    # The filter's step, 1 with no filter.
+    moves = xp.where(
+        gains["Tf_Ca"] > 0,
+        1.0 - xp.exp(-dt / xp.where(gains["Tf_Ca"] > 0, gains["Tf_Ca"], 1.0)),
+        1.0,
+    )
+    last = xp.where(xp.isnan(cs.C_a), obs[0], cs.C_a)
+    C_a = last + moves * (obs[0] - last)
     e = level - C_a
 
     # Outer PI on C_a around the steady-state feedforward. A C_a below its
@@ -266,12 +288,11 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
     ramp = gains["sp_rate"] * dt
     T_sp = xp.clip(xp.clip(T_sp_raw, lo, hi), cs.T_sp_prev - ramp, cs.T_sp_prev + ramp)
 
-    # Inner PD on T, the derivative on the measurement.
-    T_c_raw = (
-        gains["Tc_bias"]
-        + gains["Kp_T"] * (T_sp - T)
-        - gains["Kd_T"] * (T - cs.T_prev) / dt
+    # Inner PD on T, the derivative on the filtered measurement.
+    rate, T_filtered = _pid_mod.filtered_derivative(
+        T, cs.T_prev, gains["Kp_T"], gains["Kd_T"], dt
     )
+    T_c_raw = gains["Tc_bias"] + gains["Kp_T"] * (T_sp - T) - gains["Kd_T"] * rate
     T_c = xp.clip(T_c_raw, params.T_c_min, params.T_c_max)
 
     # Conditional integration: the integral moves only while neither the
@@ -279,8 +300,9 @@ def cascade_step(gains, cs: CascadeState, obs, params: UnstableCSTRParams, xp=np
     free = (T_c == T_c_raw) & (T_sp == T_sp_raw)
     new = CascadeState(
         integral=cs.integral + xp.where(free, e * dt, 0.0),
-        T_prev=T,
+        T_prev=T_filtered,
         T_sp_prev=T_sp,
+        C_a=C_a,
     )
     return raw_from_coolant(T_c, params), new
 
@@ -299,13 +321,16 @@ def cascade_track(
     C_a, T, level = obs[0], obs[1], obs[3]
     T_c = coolant_from_raw(xp.clip(u_raw, -1.0, 1.0), params)
     lo, hi = setpoint_window(level, gains, params, xp)
-    derivative = gains["Kd_T"] * (T - cs.T_prev) / params.delta_t
+    rate, T_filtered = _pid_mod.filtered_derivative(
+        T, cs.T_prev, gains["Kp_T"], gains["Kd_T"], params.delta_t
+    )
+    derivative = gains["Kd_T"] * rate
     T_sp = xp.clip(T + (T_c - gains["Tc_bias"] + derivative) / gains["Kp_T"], lo, hi)
     T_ff = steady_temperature(level, params, xp)
     integral = (
         (T_ff - gains["Kc_Ca"] * (level - C_a) - T_sp) * gains["Ti_Ca"] / gains["Kc_Ca"]
     )
-    return CascadeState(integral=integral, T_prev=T, T_sp_prev=T_sp)
+    return CascadeState(integral=integral, T_prev=T_filtered, T_sp_prev=T_sp, C_a=C_a)
 
 
 class UnstableCSTRCascadePID:
@@ -380,10 +405,8 @@ def load_gains() -> dict:
 
 
 def make_unstable_cstr_pid() -> UnstableCSTRCascadePID:
-    """Registry factory: the stored gains, refused unless the guard passes."""
-    gains = load_gains()
-    check_cascade_gains(gains)
-    return UnstableCSTRCascadePID(gains)
+    """Registry factory: the stored gains."""
+    return UnstableCSTRCascadePID(load_gains())
 
 
 @struct.dataclass
@@ -399,6 +422,7 @@ class UnstableCSTRPIDParams:
     sp_above: float
     sp_line_margin: float
     Tc_bias: float
+    Tf_Ca: float
     plant: UnstableCSTRParams
 
 
@@ -409,6 +433,7 @@ class UnstableCSTRPIDState:
     integral: float
     T_prev: float
     T_sp_prev: float
+    C_a: float
     started: bool
 
 
@@ -422,20 +447,27 @@ def unstable_cstr_pid_step(params, state, obs, xp=jnp):
         integral=xp.where(state.started, state.integral, fresh.integral),
         T_prev=xp.where(state.started, state.T_prev, fresh.T_prev),
         T_sp_prev=xp.where(state.started, state.T_sp_prev, fresh.T_sp_prev),
+        C_a=xp.where(state.started, state.C_a, fresh.C_a),
     )
     u_raw, cs = cascade_step(gains, cs, obs, params.plant, xp)
     return xp.reshape(u_raw, (1,)), UnstableCSTRPIDState(
-        integral=cs.integral, T_prev=cs.T_prev, T_sp_prev=cs.T_sp_prev, started=True
+        integral=cs.integral,
+        T_prev=cs.T_prev,
+        T_sp_prev=cs.T_sp_prev,
+        C_a=cs.C_a,
+        started=True,
     )
 
 
 def make_unstable_cstr_pid_controller() -> _pid_mod.Controller:
-    """``make_unstable_cstr_pid`` as a ``Controller``: the same stored gains,
-    the same guard and the same checks on the gain names."""
+    """``make_unstable_cstr_pid`` as a ``Controller``: the same stored gains
+    and the same checks on the gain names."""
     cascade = make_unstable_cstr_pid()
     return _pid_mod.Controller(
         UnstableCSTRPIDParams(**cascade.gains, plant=cascade.params),
-        UnstableCSTRPIDState(integral=0.0, T_prev=0.0, T_sp_prev=0.0, started=False),
+        UnstableCSTRPIDState(
+            integral=0.0, T_prev=0.0, T_sp_prev=0.0, C_a=0.0, started=False
+        ),
         unstable_cstr_pid_step,
     )
 
@@ -456,22 +488,29 @@ class UnstableCascadeGains(ValueError):
 
 
 def _closed_loop_equilibrium(level, Ti_dev, gains, params: UnstableCSTRParams):
-    """``[C_a, T, T_j, integral, T_prev, T_sp_prev]`` at which the closed loop
-    rests on target ``level``: the plant on (L, T*, Tc*) and the memory that
-    commands Tc* there. The rate limit and the clip are inactive. Gains may be
-    arrays; the last axis is the six entries."""
+    """``[C_a, T, T_j, integral, T_prev, T_sp_prev, T_well, valve, C_f]`` at which
+    the closed loop rests on target ``level``: the plant on (L, T*, Tc*), the
+    thermowell on T*, the valve on Tc* and the memory that commands Tc* there.
+    The rate limit and the clip are inactive. Gains may be arrays; the last axis
+    is the nine entries."""
     T_star = steady_temperature(level, params, np)
     T_c = steady_coolant(level, Ti_dev, params, np)
     T_sp = T_star + (T_c - gains["Tc_bias"]) / gains["Kp_T"]
     integral = -(T_sp - T_star) * gains["Ti_Ca"] / gains["Kc_Ca"]
+    valve = raw_from_coolant(T_c, params)
     return np.stack(
-        np.broadcast_arrays(level, T_star, T_c, integral, T_star, T_sp), axis=-1
+        np.broadcast_arrays(
+            level, T_star, T_c, integral, T_star, T_sp, T_star, valve, level
+        ),
+        axis=-1,
     )
 
 
 def _closed_loop_jacobian(z, level, Ti_dev, gains, params: UnstableCSTRParams):
-    """Jacobian of one closed-loop step (the cascade, then the env's
-    ``compute_next_state``) with respect to ``z``, at ``z``."""
+    """Jacobian of one closed-loop step (the cascade on the thermowell's T, the
+    valve, then the env's ``compute_next_state``) with respect to ``z``, at
+    ``z``."""
+    well = 1.0 - jnp.exp(-params.delta_t / _ENV.readings[1].lag)
 
     def one_step(x):
         state = UnstableCSTRState(
@@ -482,12 +521,25 @@ def _closed_loop_jacobian(z, level, Ti_dev, gains, params: UnstableCSTRParams):
             Ti_dev=Ti_dev,
             target_levels=jnp.full(N_BLOCKS, level),
             block_clock=0,
+            actuator_held=x[7:8],
         )
-        cs = CascadeState(integral=x[3], T_prev=x[4], T_sp_prev=x[5])
-        u_raw, cs = cascade_step(gains, cs, get_obs(state, params), params, xp=jnp)
-        new = compute_next_state(u_raw, state, params, jax.random.PRNGKey(0))[0]
+        cs = CascadeState(integral=x[3], T_prev=x[4], T_sp_prev=x[5], C_a=x[8])
+        obs = get_obs(state, params).at[1].set(x[6])
+        u_raw, cs = cascade_step(gains, cs, obs, params, xp=jnp)
+        applied, held = actuate(_ENV, state, jnp.reshape(u_raw, (1,)), params)
+        new = compute_next_state(applied[0], held, params, jax.random.PRNGKey(0))[0]
         return jnp.stack(
-            [new.C_a, new.T, new.T_j, cs.integral, cs.T_prev, cs.T_sp_prev]
+            [
+                new.C_a,
+                new.T,
+                new.T_j,
+                cs.integral,
+                cs.T_prev,
+                cs.T_sp_prev,
+                x[6] + well * (new.T - x[6]),
+                held.actuator_held[0],
+                cs.C_a,
+            ]
         )
 
     return jax.jacfwd(one_step)(z)
@@ -575,7 +627,8 @@ def _guard_problems(gain_items, params):
 def check_cascade_gains(gains, params: UnstableCSTRParams | None = None) -> None:
     """Raise ``UnstableCascadeGains`` unless the closed loop decays at
     ``GUARD_MIN_DECAY`` or faster at every target and each equilibrium
-    setpoint lies inside the setpoint window at a drift of -6, 0 and +6 K.
+    setpoint lies inside the setpoint window at a drift of -6, 0 and +6 K. The
+    recipe prints this; the factory does not call it (D2).
 
     Cached on the gain values, so the tuner pays the compile once per process.
     """

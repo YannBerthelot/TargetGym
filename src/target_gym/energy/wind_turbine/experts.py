@@ -3,8 +3,6 @@
 The oracle (the MPC slot) is in ``oracle.py``, so that the expert and
 the oracle each have a fingerprint of their own
 (``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
-The version-2 oracle flies this module's pitch PI, so this module is in the
-oracle fingerprint too.
 """
 
 import jax.numpy as jnp
@@ -23,14 +21,21 @@ class NRELBaselineParams:
     """The baseline controller's constants, as published, and the plant's.
 
     Speeds are generator-side, in rad/s; pitch in rad; torque in N m. The
-    pitch gains come from Jonkman's pole placement on our Cp surface
-    (``scripts/wind_turbine_gains.py``). The published ones (0.01882681 s,
-    0.008068634) assume the real blade's sensitivity, and its gain schedule
-    cannot be fitted on ours, so the gains are fixed.
+    pitch gains come from Jonkman's pole placement on the Cp table
+    (``scripts/wind_turbine_gains.py``), with his schedule ``GK = 1 / (1 + theta
+    / theta_K)``. The published ones (0.01882681 s, 0.008068634, 6.302336 deg)
+    linearise with the wake frozen. On the steady table the sensitivity runs
+    almost through the origin, so ``Kp`` and ``Ki`` here are the line's value at
+    0 deg, far larger, and ``theta_K`` far smaller: only their product with
+    ``GK`` means anything, and ``schedule_lo_deg`` and ``schedule_hi_deg`` hold
+    the schedule on the curve the line was fitted to.
     """
 
     Kp: float
     Ki: float
+    theta_K_deg: float
+    schedule_lo_deg: float
+    schedule_hi_deg: float
     N_gear: float
     eta_gen: float
     torque_max_plant: float
@@ -51,8 +56,8 @@ class NRELBaselineParams:
 
 @struct.dataclass
 class NRELBaselineState:
-    """The filtered speed, the pitch integral (of the speed error, rad), the
-    previous commands, and whether the first observation has been read."""
+    """The filtered speed, the pitch integral (rad of pitch, as ROSCO keeps it),
+    the previous commands, and whether the first observation has been read."""
 
     speed_f: float = 0.0
     integral: float = 0.0
@@ -105,13 +110,17 @@ def nrel_baseline_step(params, state, obs, xp=jnp):
     step_tq = p.torque_rate * p.dt
     tq = xp.clip(tq, torque_prev - step_tq, torque_prev + step_tq)
 
-    # Pitch: PI on the filtered speed error, the integral saturated at the
-    # pitch limits and started bumpless from the measured pitch.
+    # Pitch: PI on the filtered speed error, scheduled on the last command, the
+    # integral saturated at the pitch limits and started bumpless from the
+    # measured pitch. It adds the scheduled rate, in pitch units, so the poles
+    # sit where they were placed at every pitch.
     pitch_max = np.radians(p.pitch_max_deg)
     error = speed_f - p.rated_speed
-    integral = xp.where(first, pitch / p.Ki, state.integral) + error * p.dt
-    integral = xp.clip(integral, 0.0, pitch_max / p.Ki)
-    command = xp.clip(p.Kp * error + p.Ki * integral, 0.0, pitch_max)
+    read = xp.clip(xp.degrees(pitch_prev), p.schedule_lo_deg, p.schedule_hi_deg)
+    gk = 1.0 / (1.0 + read / p.theta_K_deg)
+    integral = xp.where(first, pitch, state.integral) + gk * p.Ki * error * p.dt
+    integral = xp.clip(integral, 0.0, pitch_max)
+    command = xp.clip(gk * p.Kp * error + integral, 0.0, pitch_max)
     step_pitch = np.radians(p.pitch_rate_deg) * p.dt
     command = xp.clip(command, pitch - step_pitch, pitch + step_pitch)
 
@@ -140,8 +149,11 @@ def make_wind_turbine_pid_controller() -> Controller:
 
     wp = WindTurbineParams()
     params = NRELBaselineParams(
-        Kp=gain("wind_turbine", "Kp", 0.01514),
-        Ki=gain("wind_turbine", "Ki", 0.00649),
+        Kp=gain("wind_turbine", "Kp"),
+        Ki=gain("wind_turbine", "Ki"),
+        theta_K_deg=gain("wind_turbine", "theta_K_deg"),
+        schedule_lo_deg=gain("wind_turbine", "schedule_lo_deg"),
+        schedule_hi_deg=gain("wind_turbine", "schedule_hi_deg"),
         N_gear=float(wp.N_gear),
         eta_gen=float(wp.eta_gen),
         torque_max_plant=float(wp.torque_max),

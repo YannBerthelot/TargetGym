@@ -554,6 +554,11 @@ all. Without it the replay gap was 7e-5, cold solves failed at their first
 iteration, and the first 11 steps of a seed applied held moves. With it the
 replay matches to rounding and solves converge in 10 to 30 iterations.
 
+Closed on 2026-11-06 (oracle-solver.md, Amendment 5): the env now steps
+calcination exactly, which removes that gain, so the fraction clip is a dropped
+guard (T4) again, as section 5.4 first had it. This paragraph records why it
+was kept in between.
+
 **The battery's fade.** Section 5.4 puts a slack on abs(current). One hinge per
 sign of the current is simpler and exact while the calendar rate stays under
 c_hold, which makes both hinges' sum max(calendar + cycling |I| - c_hold, 0).
@@ -563,3 +568,65 @@ That is a dropped guard (T4), and it is checked on every plan.
 takes the ladder's first rung, 28 K. K3's shift already keeps it conservative,
 by at most 28 ln 16 = 78 K against a burning zone 134 K above the limit, so it
 takes no K11 gap.
+
+## Amendment 3, 2026-11-06: planning by rate
+
+Written with PR 9 for the owner's review.
+
+The plant PRs put rate limits in `base.actuate`, between the action and the plant.
+Its clip has no slope past the limit, so a plan on commands stops seeing the
+actuator there: on `glass_furnace` the fuel stuck, 8.84 K off the crown (#158).
+
+**T1rr, a rate as the move.** On an actuator behind `actuate`, a plan's move is its
+rate, v in [-1, 1] of the limit, held over the T_c. Its position is a state of the
+plan, moved by exactly v of the limit each step, and each step the env is sent the
+command that does that, position plus v times the travel over the share of the gap
+the lag closes. Rows keep every command of the ramp in the action box (T1), which
+are affine in the stage's position and its move, as T1r's are. K8's replay sends the
+same commands. `oracles.rates` holds it, `TaskModel.action` applies it.
+
+No clip binds on these commands, so no corner is left for T5, and a site less is
+measured. A hold of one step loses nothing: every path `actuate` allows is such a
+plan, whatever the command (derived, and tested). Over a longer hold a plan reaches
+the same positions at each T_c, but by a ramp, where a held command would arrive and
+wait. T1r stays for a rate limit inside the plant's right-hand side, where no command
+gives a constant rate: the wind's pitch and torque, the compressor's drive and valve.
+This is ours: a rate is a move a velocity-form controller sends, and the sources read
+for T1r bound increments, not a held rate.
+
+A move's rows no longer bind past the plan. Its held move there is pinned to the last
+planned one, so a row left on it dragged that move off its bound, for a stage nothing
+is costed on: from 1 to 0.5 on a hand-derived ramp (`tests/oracles/test_shooting.py`).
+
+**ROSCO's table.** #157 replaced the analytic Cp with a bilinear lookup, which kinks
+at every node. A cell's interpolation is a clip of the coordinate to that cell, so the
+planner reads the table through one K2 clip per cell, one site per axis, K4's scale
+being a cell. At width 0 that is the lookup, held at its edges. A clip's gap at a node
+is w log 2 in cells, which moves Cp by that times the jump in the slope there, so K5's
+delta is on Cp in units of that jump. K5 gives 0.1 cell on pitch and 0.01 cell on
+tip-speed ratio.
+
+**The wind's torque** joins its pitch: its rate limit is inside the right-hand side,
+so it takes T1r and a T5 site, at 30 N m/s on a scale of 30 kN m/s.
+
+**The battery's half-cycles (`half_cycle`, #156).** Section 5.4 has no row for them,
+and no class fits. A half-cycle's peak is a running max, and its turn is a jump, in
+what it charges and in its anchor. The fixed turn below is ours, accepted by the owner
+on 2026-11-06:
+
+- the peak's growth is a second move, >= 0, and a row keeps the peak past the charge
+  on every visited state, so a plateau at the peak costs what the env charges (T2:
+  an epigraph). A softplus would add its gap every step, as on the glass blanket;
+- a turn cannot be crossed by Newton, so each is fixed for the solve where the planned
+  signal reverses, once a reference following it has swung past the hysteresis (X, by
+  the solve's start). This is the one part with no source or class behind it. A plan
+  that turns only there costs what the env charges, to rounding (tested through a
+  turn). A plan that turns elsewhere has a gap, which K8 reports;
+- what a new half-cycle jumps to at the hysteresis blends by K2's logistic, though its
+  two pieces do not join. K4's scale is the hysteresis, and K5 takes the first rung,
+  since no tracked output moves.
+
+On the same day the env was found to pay for a sawtooth that restarted a half-cycle,
+and the owner had `half_cycle` count by rainflow. So a closed swing is fixed the same
+way as a turn, where the reference runs back past it. The plan carries the two nearest
+open turns as states, and a third comes from the reference.

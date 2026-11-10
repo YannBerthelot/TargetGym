@@ -19,8 +19,8 @@ the consumers' valve against their static head and through the recycle valve
 back to suction. The drive follows a rate-limited speed setpoint through a
 first-order lag; the recycle valve is rate limited, faster opening than
 closing. The consumers' opening follows a hidden schedule plus an
-Ornstein-Uhlenbeck deviation. The plant trips when Phi falls below the surge
-line, the peak of the characteristic.
+Ornstein-Uhlenbeck deviation. The plant trips when Phi falls below the
+episode's surge line, a hidden offset right of the characteristic's peak.
 
 State (three ODEs, two actuator positions, the disturbance, the trip variable
 and the schedule)
@@ -35,6 +35,8 @@ and the schedule)
 ``setpoint_levels``  the episode's four header-pressure levels (Pa)
 ``demand_levels``    the episode's six consumer-opening levels, hidden
 ``block_clock``      steps since the schedule started, hidden
+``surge_offset``     the episode's surge line, right of the peak, hidden
+``valve_travel``     how far the recycle valve moved over the last step, hidden
 """
 
 from typing import Tuple
@@ -46,7 +48,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -103,8 +105,8 @@ class CompressorSurgeParams(EnvParams):
     drive_rate: float = 0.03  # of rated per s
     #: Speed lag behind the rate-limited drive setpoint (ours).
     tau_N: float = 1.0  # s
-    #: Full open in 2 s (read-consistent: Mirsky et al. p.23; Wilson and
-    #: Sheldon Table 1).
+    #: Full open in 2 s, dead time included (read-consistent: Mirsky et al.
+    #: p.23; Wilson and Sheldon Table 1).
     valve_open_rate: float = 0.5  # per s
     #: Full close in 10 s, the slowest closing Mirsky et al. p.23 allow.
     #: TUNED (PHYSICS.md sensitivity table).
@@ -112,9 +114,13 @@ class CompressorSurgeParams(EnvParams):
 
     # ---- Schedules (ours) ----
     #: Header-pressure levels, drawn per block. TUNED: the hardness depends on
-    #: the stepped setpoint (PHYSICS.md sensitivity table).
+    #: the moving setpoint (PHYSICS.md sensitivity table).
     p_ref_range: Tuple[float, float] = (20.0e3, 28.0e3)  # Pa
     setpoint_block_steps: int = 300  # 30 s
+    #: Linear ramp at the start of every block (ours): twice what the drive
+    #: needs for the largest move. Under half a block, so that the scorer still
+    #: reads each move (``benchmark.target_changes``).
+    setpoint_ramp_s: float = 10.0  # s
     demand_range: Tuple[float, float] = (0.35, 0.95)  # opening
     demand_block_steps: int = 200  # 20 s
     #: Linear ramp at the start of demand blocks 2 to 6. Must be shorter than
@@ -126,6 +132,9 @@ class CompressorSurgeParams(EnvParams):
     demand_theta: float = 0.2  # 1/s, reversion rate (5 s correlation)
     #: Clip on the initial deviation draw only, in standard deviations.
     demand_dev_reset_clip: float = 3.0
+    #: The episode's surge line sits up to this far right of the map's, as a
+    #: fraction of flow (ours, half the conventional 10 % margin, PHYSICS.md).
+    surge_offset_max: float = 0.05
 
     # ---- Reset (ours) ----
     N_reset: float = 1.0  # of rated
@@ -164,6 +173,13 @@ class CompressorSurgeParams(EnvParams):
     #: One floor-width of tracking error is worth once the hold-phase recycle
     #: power (ours, provisional).
     running_weight: float = 1.0
+    #: Valve travel per step the reward leaves free: a digital positioner's
+    #: dead band, 0.25 % of span, the least a real valve follows (read: Fisher
+    #: DVC6200, docs/proposals/measurement-noise.md).
+    travel_free: float = 0.0025
+    #: Twice that in one step is worth one floor-width of error (ours,
+    #: provisional).
+    travel_weight: float = 1.0
     #: The header-pressure transmitter's reference accuracy (derived): 0.055 %
     #: of calibrated span (read: Yokogawa EJA530E and Siemens SITRANS P320
     #: data sheets, PHYSICS.md reward table) on a 0 to 50 kPa span (ours).
@@ -204,11 +220,13 @@ PARAM_UNITS = {
     "valve_open_rate": "1/s",
     "valve_close_rate": "1/s",
     "setpoint_block_steps": "steps",
+    "setpoint_ramp_s": "s",
     "demand_block_steps": "steps",
     "demand_ramp_s": "s",
     "demand_sigma": "-",
     "demand_theta": "1/s",
     "demand_dev_reset_clip": "-",
+    "surge_offset_max": "-",
     "N_reset": "-",
     "x_reset": "-",
     "reset_newton_iters": "-",
@@ -223,6 +241,8 @@ PARAM_UNITS = {
     "restart_steps": "steps",
     "c_hold": "W",
     "running_weight": "-",
+    "travel_free": "1/step",
+    "travel_weight": "-",
     "precision_floor": "kPa",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
@@ -248,6 +268,16 @@ class CompressorSurgeState(EnvState):
     #: Steps since the schedule started. Hidden. ``reset_env`` sets it to 0, so
     #: a trip's fresh draw restarts the schedule while ``time`` runs on.
     block_clock: int
+    #: The episode's surge line, as a fraction of flow right of the map's.
+    #: Hidden: a controller reads the map, as a real one does.
+    surge_offset: float = 0.0
+    #: How far the valve moved over the last step: the wear the reward reads.
+    valve_travel: float = 0.0
+    #: The reset's own pressure above level 0 (Pa), so that the first move ramps
+    #: like the others. 0 on a state built at its target.
+    setpoint_lead: float = 0.0
+
+    actuator_held: jax.Array = actuator_field(2)
 
 
 # ---------------------------------------------------------------------------
@@ -356,32 +386,45 @@ def recycle_power(state: CompressorSurgeState, params: CompressorSurgeParams, xp
 # ---------------------------------------------------------------------------
 
 
+def ramped_levels(levels, tau, block_s, ramp_s, xp=jnp):
+    """A schedule at ``tau`` seconds from its start.
+
+    Block k holds level k after a linear ramp of ``ramp_s`` from level k - 1 at
+    its start; block 0 holds level 0 and the last level holds past the last
+    block. Written as a sum of ramps, which is the same function while a ramp
+    is shorter than a block, is continuous in ``tau`` and needs no index, so
+    the RK4 stages read it at their own times.
+    """
+    out = levels[..., 0]
+    for k in range(1, levels.shape[-1]):
+        w = xp.clip((tau - k * block_s) / ramp_s, 0.0, 1.0)
+        out = out + (levels[..., k] - levels[..., k - 1]) * w
+    return out
+
+
+def scheduled_setpoint(levels, lead, tau, params: CompressorSurgeParams, xp=jnp):
+    """The header-pressure target (Pa) at ``tau`` seconds from the start: the
+    blocks, opening ``lead`` above level 0 and ramping onto it."""
+    block_s = params.setpoint_block_steps * params.delta_t
+    ramp_s = params.setpoint_ramp_s
+    opening = lead * (1.0 - xp.clip(tau / ramp_s, 0.0, 1.0))
+    return ramped_levels(levels, tau, block_s, ramp_s, xp) + opening
+
+
 def live_target(state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp):
-    """The header-pressure level (Pa) the state is scored against and
-    observes. The clamp holds the last level past block four; ``block_clock``
-    is traced under ``jit``, so it uses ``xp.minimum``."""
-    block = xp.minimum(
-        state.block_clock // params.setpoint_block_steps, N_SETPOINT_BLOCKS - 1
+    """The header-pressure target (Pa) the state is scored against and
+    observes."""
+    tau = state.block_clock * params.delta_t
+    return scheduled_setpoint(
+        state.setpoint_levels, state.setpoint_lead, tau, params, xp
     )
-    return state.setpoint_levels[block]
 
 
 def scheduled_demand(demand_levels, tau, params: CompressorSurgeParams, xp=jnp):
     """The scheduled consumer opening at ``tau`` seconds from the schedule's
-    start.
-
-    Block k (20 s each) holds level k after a linear ramp of ``demand_ramp_s``
-    from level k - 1 at its start; block 0 holds level 0 and the last level
-    holds past the sixth block. Written as a sum of ramps, which is the same
-    function while a ramp is shorter than a block, is continuous in ``tau``
-    and needs no index, so the RK4 stages read it at their own times.
-    """
+    start (``ramped_levels``)."""
     block_s = params.demand_block_steps * params.delta_t
-    out = demand_levels[..., 0]
-    for k in range(1, N_DEMAND_BLOCKS):
-        w = xp.clip((tau - k * block_s) / params.demand_ramp_s, 0.0, 1.0)
-        out = out + (demand_levels[..., k] - demand_levels[..., k - 1]) * w
-    return out
+    return ramped_levels(demand_levels, tau, block_s, params.demand_ramp_s, xp)
 
 
 def demand_opening(demand_levels, tau, dev, params: CompressorSurgeParams, xp=jnp):
@@ -566,6 +609,7 @@ def compute_next_state(
             demand_dev=demand_dev,
             phi_min=phi_min,
             block_clock=state.block_clock + 1,
+            valve_travel=jnp.abs(x - state.x),
             time=state.time + 1,
         ),
         None,
@@ -585,8 +629,9 @@ def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
     ``m_d`` is the consumers' flow at the state's clock with the deviation the
     coming step integrates with, so the total opening can be inferred; its
     split into block level and deviation, both schedules' future values, the
-    clock and ``phi_min`` are hidden. The surge margin is not a channel: it
-    is ``obs[1] / (surge_flow_per_speed * obs[3] / 100) - 1``.
+    clock, ``phi_min`` and ``surge_offset`` are hidden. The surge margin is not
+    a channel: the map's is ``obs[1] / (surge_flow_per_speed * obs[3] / 100) -
+    1``, and the true one up to ``surge_offset_max`` less.
     """
     opening = demand_opening(
         state.demand_levels,
@@ -610,21 +655,27 @@ def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
 def check_is_terminal(
     state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp
 ):
-    # One trip: the soft minimum of Phi over the step below the surge line,
-    # the peak of the characteristic at every speed. A NaN fails the
-    # comparison, so a non-finite proposal trips. There is no second trip: a
-    # header pressure under the consumers' static head closes the check valve
-    # and is charged as tracking error.
-    terminated = xp.logical_not(state.phi_min >= 2.0 * params.W)
+    # One trip: the soft minimum of Phi over the step below the episode's surge
+    # line, ``surge_offset`` right of the peak of the characteristic at every
+    # speed. A NaN fails the comparison, so a non-finite proposal trips. There
+    # is no second trip: a header pressure under the consumers' static head
+    # closes the check valve and is charged as tracking error.
+    line = 2.0 * params.W * (1.0 + state.surge_offset)
+    terminated = xp.logical_not(state.phi_min >= line)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
 
 def compute_reward_terms(
-    state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp
+    state: CompressorSurgeState, params: CompressorSurgeParams, xp=jnp, tripped=None
 ):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             (live_target(state, params, xp) - state.dp) / KPA,
@@ -639,8 +690,11 @@ def compute_reward_terms(
             params.running_weight,
             xp,
         ),
+        "wear": R.excess_cost(
+            state.valve_travel, params.travel_free, params.travel_weight, xp
+        ),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(

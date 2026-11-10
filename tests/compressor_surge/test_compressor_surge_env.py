@@ -232,7 +232,8 @@ def test_observation_units_schedules_and_integrator(env, params):
     pressures in kPa and the speeds and valve in percent; the tracked channel
     is the pressure against its setpoint. Both schedules fill the episode
     exactly, and the plant integrates with RK4 alone."""
-    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
+    quiet = params.replace(sensor_noise_scale=0.0)
+    obs, state = env.reset_env(jax.random.PRNGKey(0), quiet)
     opening = float(state.demand_levels[0] + state.demand_dev)
     expected = [
         float(state.dp) / KPA,
@@ -289,6 +290,7 @@ def test_observed_margin_matches_the_state(env, params):
     observation, ``surge_margin_from_obs``, equals m_c / (surge flow at
     rated x N) - 1 from the state, and ``pair_init``'s integrators equal the
     state's drive setpoint and valve, to float32 rounding (1e-6 relative)."""
+    params = params.replace(sensor_noise_scale=0.0)
     key = jax.random.PRNGKey(3)
     init, policy = _policy("pair")
 
@@ -415,8 +417,9 @@ def _rollout_next(params, state, action, key, n):
 
 
 def test_schedule_draw(env, params):
-    """Over 256 seeds every level lies in its range. The live setpoint changes
-    only at 30, 60 and 90 s. The scheduled demand is level 0 until 20 s and
+    """Over 256 seeds every level lies in its range. The live setpoint moves
+    only in the 10 s ramps from 0, 30, 60 and 90 s. The scheduled demand is level 0
+    until 20 s and
     then moves only during the 5 s ramps that start at 20, 40, 60, 80 and
     100 s, linearly, reaching each block's level at the ramp's end."""
     keys = jax.random.split(jax.random.PRNGKey(0), 256)
@@ -437,7 +440,7 @@ def test_schedule_draw(env, params):
     changes = (
         np.flatnonzero(np.any(np.diff(np.asarray(targets), axis=1) != 0, axis=0)) + 1
     )
-    assert list(changes) == [300, 600, 900]
+    assert list(changes) == [c + k for c in (0, 300, 600, 900) for k in range(1, 101)]
 
     tau = np.linspace(0.0, 125.0, 12501)  # 10 ms grid
     d = np.asarray(
@@ -468,35 +471,46 @@ def test_schedule_draw(env, params):
 
 
 def test_live_target_follows_the_block_clock(params, step):
-    """The live setpoint is ``level[min(clock // 300, 3)]`` and holds past the
-    fourth block. The step that enters a block is scored against that
-    block's level, which its observation already shows. Both read
-    ``setpoint_block_steps`` from the params the step is given."""
+    """Block k ends its ramp on ``level[k]``, and the last level holds past the
+    fourth block. The first step of a ramp is scored against the target it
+    moved to, which its observation already shows: 1 % of the 2 kPa move here.
+    Both read ``setpoint_block_steps`` from the params the step is given."""
     levels = np.array([20.0e3, 22.0e3, 26.0e3, 28.0e3], np.float32)
     quiet = params.replace(demand_sigma=0.0)
-    short = quiet.replace(setpoint_block_steps=50, max_steps_in_episode=200)
+    short = quiet.replace(
+        setpoint_block_steps=50, setpoint_ramp_s=2.0, max_steps_in_episode=200
+    )
     state = _equilibrium_state(quiet, 0.9, 0.0, 0.8, setpoints=levels)
     for p in (params, short):
         b = p.setpoint_block_steps
-        for clock in (0, b - 1, b, 2 * b, 3 * b - 1, 3 * b, 4 * b - 1, 4 * b, 5000):
+        r = round(p.setpoint_ramp_s / p.delta_t)
+        for clock, k in (
+            (0, 0),
+            (b, 0),
+            (b + r, 1),
+            (2 * b + r, 2),
+            (3 * b + r, 3),
+            (5000, 3),
+        ):
             s = state.replace(block_clock=jnp.asarray(clock, jnp.int32))
-            assert float(live_target(s, p)) == levels[min(clock // b, 3)], (b, clock)
+            assert float(live_target(s, p)) == pytest.approx(levels[k]), (b, clock)
 
     for p in (quiet, short):
         before = state.replace(
-            block_clock=jnp.asarray(p.setpoint_block_steps - 1, jnp.int32)
+            block_clock=jnp.asarray(p.setpoint_block_steps, jnp.int32)
         )
+        moved = levels[0] + (levels[1] - levels[0]) * p.delta_t / p.setpoint_ramp_s
         obs, after, reward, _, info = step(
             jax.random.PRNGKey(0), before, _action(p, 0.9, 0.0), p
         )
         assert not bool(info["tripped"])
-        assert int(after.block_clock) == p.setpoint_block_steps
-        assert float(obs[6]) == pytest.approx(levels[1] / KPA)
-        # The recycle is shut, so the running term is 0 and the reward is the
-        # tracking cost against the new level.
+        assert int(after.block_clock) == p.setpoint_block_steps + 1
+        assert float(obs[6]) == pytest.approx(moved / KPA)
+        # The recycle is shut and still, so the running and wear terms are 0
+        # and the reward is the tracking cost against the moved target.
         assert float(recycle_power(after, p)) == 0.0
         assert float(reward) == pytest.approx(
-            -(((levels[1] - float(after.dp)) / KPA / p.e_floor) ** 2), rel=1e-5
+            -(((moved - float(after.dp)) / KPA / p.e_floor) ** 2), rel=1e-4
         )
 
 
@@ -671,7 +685,10 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     assert not bool(terminated)
     # Equal to float32 rounding: the step's copy of the reset is compiled
     # inside the step, where XLA may fuse its arithmetic differently.
-    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(time=new.time)
+    # The instruments stay through a restart, so the sensor key does too.
+    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(
+        time=new.time, sensor_key=new.sensor_key
+    )
     for name in CompressorSurgeState.__dataclass_fields__:
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),
@@ -773,22 +790,22 @@ def _exact_state(params, dp, x=0.0, phi_min=0.6, target=24.0e3):
 
 def test_v2_reward_units(params):
     """Version 2 is minus the floor-normalised squared error plus the
-    recycle power above ``c_hold``: tracking is 0 at the setpoint and 1 one
-    ``e_floor`` (0.0275 kPa) away; running is 0 at or below ``c_hold`` and 1 at
-    twice it. A tripped state pays the trip cost alone."""
+    recycle power as a share of ``c_hold``: tracking is 0 at the setpoint and 1
+    one ``e_floor`` (0.0275 kPa) away; running is 1 at ``c_hold`` and 2 at twice
+    it. A tripped state pays the trip cost alone."""
     dp = 24.0e3
     per_x = float(recycle_power(_exact_state(params, dp, x=1.0), params, np))
     x_hold = params.c_hold / per_x
 
     terms = compute_reward_terms(_exact_state(params, dp), params, np)
-    assert set(terms) == {"tracking", "running", "failure"}
+    assert set(terms) == {"tracking", "running", "wear", "failure"}
     assert float(compute_reward(_exact_state(params, dp), params, np)) == 0.0
     for sign in (-1.0, 1.0):
         s = _exact_state(params, dp + sign * params.e_floor * KPA)
         assert float(compute_reward_terms(s, params, np)["tracking"]) == pytest.approx(
             1.0, rel=1e-9
         )
-    for scale, running in ((0.5, 0.0), (1.0, 0.0), (2.0, 1.0), (3.0, 2.0)):
+    for scale, running in ((0.5, 0.5), (1.0, 1.0), (2.0, 2.0), (3.0, 3.0)):
         s = _exact_state(params, dp, x=scale * x_hold)
         assert float(recycle_power(s, params, np)) == pytest.approx(
             scale * params.c_hold, rel=1e-12
@@ -945,13 +962,13 @@ def test_full_travel_high_never_trips(env, params):
 def test_setpoint_chasing_without_the_margin_trips(env, params):
     """The hardness claim on the env, 64 seeds: a pressure PI on speed with
     the recycle shut trips in every episode, and the margin-blind chaser at
-    bias 0.3, which uses the recycle for pressure and ignores the margin,
+    bias 0.25, which uses the recycle for pressure and ignores the margin,
     trips in at least one. On 256 other seeds (1000 to 1255) the two trip in
-    100 % and 11.3 % of episodes (measured, scripts/compressor_surge_numbers.py
-    --hardness)."""
+    100 % and 19.9 % of episodes (measured, PHYSICS.md section 6). Ramps took
+    the chaser this test first used, at bias 0.3, from 12.5 % to 0.8 %."""
     keys = jax.vmap(jax.random.PRNGKey)(jnp.arange(64))
     _, shut = _episodes(env, params, keys, "fixed", 0.0)
-    _, chaser = _episodes(env, params, keys, "chaser", 0.3)
+    _, chaser = _episodes(env, params, keys, "chaser", 0.25)
     assert shut.any(axis=1).all()
     assert chaser.any()
 

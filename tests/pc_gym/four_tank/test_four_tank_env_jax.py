@@ -33,7 +33,7 @@ def test_reset_target_levels_in_range(env, key):
 
 def test_obs_contains_all_levels_and_targets(env, key):
     _, state = env.reset_env(key)
-    obs = env.get_obs(state)
+    obs = env.get_obs(state, env.default_params.replace(sensor_noise_scale=0.0))
     assert jnp.allclose(obs[0], state.h1)
     assert jnp.allclose(obs[1], state.h2)
     assert jnp.allclose(obs[2], state.h3)

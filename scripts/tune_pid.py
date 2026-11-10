@@ -55,195 +55,6 @@ sys.path.insert(0, str(ROOT / "src"))
 # ---------------------------------------------------------------------------
 
 
-def _tune_glass_furnace(n_points: int, tuning_rule: str, **kw) -> dict:
-    import jax.numpy as jnp
-
-    from target_gym import GlassFurnace, GlassFurnaceParams
-    from target_gym.experts.relay_autotune import relay_sweep
-    from target_gym.glass_furnace.env import N_SETPOINTS
-
-    env = GlassFurnace()
-    params = GlassFurnaceParams(m_pull_noise_std=0.0)
-
-    def reset_fn(key, p, t):
-        _, st = env.reset_env(key, p)
-        return st.replace(
-            target_T_crown=t,
-            target_schedule=jnp.full((N_SETPOINTS,), t),
-            T_crown=t,
-        )
-
-    result = relay_sweep(
-        env,
-        params,
-        reset_fn,
-        state_index=0,
-        setpoint_index=2,
-        target_range=tuple(params.target_T_crown_range),
-        n_points=n_points,
-        sign=1,
-        tuning_rule=tuning_rule,
-        relay_amplitude=0.3,
-        max_steps=10000,
-    )
-    mid = len(result["operating_points"]) // 2
-    return {
-        "Kp": round(result["Kp"][mid], 6),
-        "Ki": round(result["Ki"][mid], 6),
-        "Kd": round(result["Kd"][mid], 6),
-        "gain_schedule": {
-            "operating_points": result["operating_points"],
-            "Kp": [round(k, 6) for k in result["Kp"]],
-            "Ki": [round(k, 6) for k in result["Ki"]],
-            "Kd": [round(k, 6) for k in result["Kd"]],
-        },
-        "tuning_rule": tuning_rule,
-        "note": "Relay autotuning on T_crown loop (fuel -> crown temperature).",
-    }
-
-
-def _tune_glass_furnace_search(n_points: int, tuning_rule: str, **kw) -> dict:
-    """Grid search over (Kp, Ki, Kd) maximising cumulative env reward.
-
-    Replaces relay autotuning for the glass furnace. Under a bang-bang relay
-    the crown temperature does not produce sustained zero-crossings -- the
-    thermal mass integrates the firing rate, so it drifts rather than
-    oscillating -- and ``relay_sweep`` aborts with "every operating point
-    failed". Same failure mode, and same remedy, as FourTank.
-
-    The objective is mean cumulative reward over several seeds on a full
-    episode, which is the quantity the benchmark actually scores, so it
-    balances crown tracking against the fuel penalty without needing a
-    separate weighting.
-
-    ``tuning_rule`` is ignored (kept for signature compatibility).
-    """
-    import itertools
-
-    import jax
-    import jax.numpy as jnp
-    import numpy as np
-
-    from target_gym import GlassFurnace, GlassFurnaceParams
-    from target_gym.experts.pid import siso_pid
-
-    env = GlassFurnace()
-    params = GlassFurnaceParams(max_steps_in_episode=kw.get("max_steps", 1920))
-    seeds = range(kw.get("n_seeds", 3))
-
-    def score(Kp, Ki, Kd):
-        totals = []
-        for seed in seeds:
-            pid = siso_pid(
-                Kp=Kp, Ki=Ki, Kd=Kd, dt=params.delta_t, state_index=0, setpoint_index=4
-            ).host()
-            key = jax.random.PRNGKey(seed)
-            obs, state = env.reset_env(key, params)
-            total = 0.0
-            while int(state.time) < int(params.max_steps_in_episode):
-                key, sub = jax.random.split(key)
-                obs, state, reward, terminated, _ = env.step_env(
-                    sub, state, jnp.asarray(pid(obs)), params
-                )
-                total += float(reward)
-                if bool(terminated):
-                    break
-            totals.append(total)
-        return float(np.mean(totals))
-
-    # Bracketing matters more than resolution here. The original grid stopped at
-    # Kp=0.040 and the score rose monotonically across the whole Kp column right
-    # up to that last point -- a boundary solution, not an optimum. Probing
-    # outward found the real turn at Kp~5, some 125x further out, worth +3.2%
-    # (1357.6 against 1315.9); Ki then turned out to be pinned at its own edge
-    # too, and settles at 0.05. Every grid below now brackets its optimum on
-    # both sides, so a future re-run cannot silently revert to an edge. The
-    # chosen Ki=0.15 was itself verified interior by direct probe at the chosen
-    # Kp=2.5 (0.05 -> 1357.2, 0.15 -> 1358.2, 0.3 -> 1355.0); 0.3 is carried in
-    # the grid purely so the winner is never the last point in the tuple.
-    #
-    # Kd is kept only for coverage: the score is bit-identical from 0.0 to 2.0
-    # and only moves at absurd values (1349.4 at Kd=100), so the term is wired
-    # but genuinely flat, and 0.0 is as good as anything.
-    kp_grid = (0.04, 0.5, 2.5, 5.0, 10.0)
-    ki_grid = (0.0, 5.0e-3, 2.0e-2, 5.0e-2, 0.15, 0.3)
-    kd_grid = (0.0, 0.05, 0.5)
-
-    best = (-np.inf, None)
-    for Kp, Ki, Kd in itertools.product(kp_grid, ki_grid, kd_grid):
-        value = score(Kp, Ki, Kd)
-        if value > best[0]:
-            best = (value, (Kp, Ki, Kd))
-            print(f"    Kp={Kp:.4f} Ki={Ki:.5f} Kd={Kd:.3f} -> reward {value:8.1f}  *")
-    reward, (Kp, Ki, Kd) = best
-    print(f"  best: Kp={Kp} Ki={Ki} Kd={Kd} (mean reward {reward:.1f})")
-
-    return {
-        "Kp": Kp,
-        "Ki": Ki,
-        "Kd": Kd,
-        "tuning_rule": "grid_search_max_reward",
-        "note": (
-            "Grid search over (Kp, Ki, Kd) maximising mean cumulative env "
-            "reward. Relay autotuning fails on this plant: the crown "
-            "temperature integrates the firing rate, so under a bang-bang "
-            "relay it drifts without sustained zero-crossings and "
-            "Astrom-Hagglund has no Ku/Tu to extract."
-        ),
-    }
-
-
-def _tune_reactor(n_points: int, tuning_rule: str, **kw) -> dict:
-    import jax.numpy as jnp
-
-    from target_gym import Reactor, ReactorParams
-    from target_gym.experts.relay_autotune import relay_sweep
-    from target_gym.reactor.env import N_SETPOINTS, steady_state_xenon
-
-    env = Reactor(integration_method="rk4_50")
-    # Freeze OU demand for relay experiments (need constant setpoint).
-    params = ReactorParams(demand_sigma=0.0, demand_theta=0.0)
-
-    def reset_fn(key, p, t):
-        _, st = env.reset_env(key, p)
-        I_eq, Xe_eq = steady_state_xenon(t, p)
-        return st.replace(
-            target_n=t,
-            target_schedule=jnp.full((N_SETPOINTS,), t),
-            n=t,
-            I_hat=I_eq,
-            Xe_hat=Xe_eq,
-        )
-
-    result = relay_sweep(
-        env,
-        params,
-        reset_fn,
-        state_index=0,
-        setpoint_index=3,
-        target_range=tuple(params.target_n_range),
-        n_points=n_points,
-        sign=1,
-        tuning_rule=tuning_rule,
-        relay_amplitude=0.3,
-        max_steps=10000,
-    )
-    mid = len(result["operating_points"]) // 2
-    return {
-        "Kp": round(result["Kp"][mid], 6),
-        "Ki": round(result["Ki"][mid], 6),
-        "Kd": round(result["Kd"][mid], 6),
-        "gain_schedule": {
-            "operating_points": result["operating_points"],
-            "Kp": [round(k, 6) for k in result["Kp"]],
-            "Ki": [round(k, 6) for k in result["Ki"]],
-            "Kd": [round(k, 6) for k in result["Kd"]],
-        },
-        "tuning_rule": tuning_rule,
-        "note": "Relay autotuning, positive-gain (rod withdrawal raises power).",
-    }
-
-
 def _tune_plane(n_points: int, tuning_rule: str, **kw) -> dict:
     """Plane 2D: relay on stick (altitude loop), power fixed at cruise."""
     from target_gym.experts.relay_autotune import relay_sweep
@@ -836,16 +647,6 @@ def _controller_defaults(gains_key):
     reported success and changed nothing. Seeding from the constructor's own
     defaults is what the controller has in fact been running on.
     """
-    import dataclasses
-
-    if gains_key == "plane_cascaded":
-        from target_gym.plane.oracle import PlaneCascadedPIDParams
-
-        return {
-            f.name: float(f.default)
-            for f in dataclasses.fields(PlaneCascadedPIDParams)
-            if f.name != "dt" and isinstance(f.default, (int, float))
-        }
     return None
 
 
@@ -1004,8 +805,6 @@ def _write_copies(gains: dict, save_key: str) -> None:
 
 
 TUNERS = {
-    "glass_furnace": (_tune_glass_furnace_search, "GlassFurnace"),
-    "reactor": (_tune_reactor, "Reactor"),
     "plane": (
         lambda n_points=0, tuning_rule="", _k="plane_cascaded", _e="plane", **kw: _tune_aircraft_search(
             _e, _k, **kw
@@ -1020,31 +819,6 @@ TUNERS = {
     ),
     # Tasks added after the 21. A plain run leaves them out (``_plain_run_envs``).
     #
-    # Coordinate descent on the pair's four gains (experts.TUNED_GAINS: the
-    # speed PI and the anti-surge PI) over whole episodes (four setpoint
-    # blocks, six demand blocks, 24 seeds), starting from the package's
-    # DEFAULT_GAINS. The control line, the override line, the override hold
-    # and the reset band (experts.HELD_GAINS) are held: their right value is
-    # set by the distance to the surge line, which the return sees only once
-    # a trip happens. Candidates that fail any of the guard's checks are
-    # refused by the task's own PID factory (experts.check_pair_gains), and
-    # ``score`` maps that refusal to -inf. The checks, in the plant's
-    # PHYSICS.md section 7, are the linearised closed loop's decay at the
-    # control-line points (GUARD_MIN_DECAY), no trip and a margin of at least
-    # GUARD_MIN_MARGIN in the stress battery, and at most GUARD_MAX_TRAVEL of
-    # valve travel over each battery run's last 100 steps.
-    "compressor_surge": (
-        lambda n_points=0, tuning_rule="", **kw: _tune_aircraft_search(
-            "compressor_surge",
-            "compressor_surge",
-            steps=1200,
-            # The training seeds: 0-9 are scored and never tuned on.
-            seeds=range(100, 110),
-            hold=_task_experts("compressor_surge").HELD_GAINS,
-            **kw,
-        ),
-        "CompressorSurge",
-    ),
     # formation has no row: its gains are in its experts.py, tuned by
     # scripts/tune_formation_hold.py, as the 3D aircraft's are by
     # scripts/tune_aircraft_guidance.py.

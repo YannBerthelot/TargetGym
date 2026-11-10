@@ -21,14 +21,13 @@ from target_gym import (
     FourTank,
     FourTankParams,
 )
-from target_gym.experts.mpc import GradientMPC
 from target_gym.oracles.controller import Oracle
 from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
+from target_gym.pc_gym.distillation.oracle import make_distillation_mpc
 from target_gym.pc_gym.first_order.oracle import make_first_order_mpc
 from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
-from target_gym.plane.oracle import PlaneHandoverMPC, make_plane_mpc
 from target_gym.registry import REGISTRY
 from target_gym.runners import runners as R
 
@@ -126,28 +125,27 @@ def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, acti
         assert np.all(np.isfinite(arr)), "MPC action contains non-finite values"
 
 
-# Compiling an aircraft planner peaks at 2.5 to 4 GB and takes 25 to 95 s on a
-# cold cache (measured 2026-10-28), more than a small test's share of a machine.
+# Compiling a gradient planner on the column takes tens of seconds on a cold cache.
 @pytest.mark.medium
-def test_plane_mpc_step_returns_finite():
-    """PlaneMPC.step() returns a finite [power, stick] array."""
-    env = Airplane2D(integration_method="rk4_1")
-    params = PlaneParams(max_steps_in_episode=N)
-    mpc = make_plane_mpc(env, params, horizon=3, n_iter=3)
+def test_gradient_mpc_step_returns_finite():
+    """GradientMPC.step() returns a finite [L, V] array."""
+    spec = REGISTRY["distillation"]
+    env, params = spec.make_env(), spec.make_test_params(max_steps_in_episode=N)
+    mpc = make_distillation_mpc(env, params, horizon=3, n_iter=3)
 
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
     action = mpc.step(obs, state)
-    assert np.array(action).shape == (2,), "PlaneMPC action should have shape (2,)"
-    assert np.all(np.isfinite(action)), "PlaneMPC action contains non-finite values"
+    assert np.array(action).shape == (2,), "GradientMPC action should have shape (2,)"
+    assert np.all(np.isfinite(action)), "GradientMPC action contains non-finite values"
 
 
-@pytest.mark.medium  # an aircraft planner, as above
+@pytest.mark.medium  # a gradient planner, as above
 def test_mpc_reset_zeroes_actions():
     """GradientMPC.reset() zeros out the internal action sequence."""
-    env = Airplane2D(integration_method="rk4_1")
-    params = PlaneParams(max_steps_in_episode=N)
-    mpc = make_plane_mpc(env, params, horizon=5, n_iter=3)
+    spec = REGISTRY["distillation"]
+    env, params = spec.make_env(), spec.make_test_params(max_steps_in_episode=N)
+    mpc = make_distillation_mpc(env, params, horizon=5, n_iter=3)
 
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
@@ -208,10 +206,4 @@ def test_env_make_mpc_returns_controller(
 def test_plane_env_make_mpc_returns_controller():
     env = Airplane2D()
     params = PlaneParams(max_steps_in_episode=N)
-    mpc = env.make_mpc(params=params, horizon=3, n_iter=2)
-    # The default pattern (plane's hold) flies two gradient planners in turn:
-    # one for the capture of the altitude, one for the hold.
-    assert isinstance(mpc, PlaneHandoverMPC)
-    assert isinstance(mpc.capture, GradientMPC)
-    assert isinstance(mpc.hold, GradientMPC)
-    assert mpc.action_dim == 2
+    assert isinstance(env.make_mpc(params=params), Oracle)

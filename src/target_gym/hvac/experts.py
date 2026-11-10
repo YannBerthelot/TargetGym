@@ -9,27 +9,33 @@ import jax.numpy as jnp
 import numpy as np
 from flax import struct
 
-from target_gym.experts.pid import Controller, pid_update
+from target_gym.experts.pid import Controller, gain
 
 # ---------------------------------------------------------------------------
-# The expert: ASHRAE Guideline 36 zone heating with optimal start
+# The expert: outdoor reset with indoor feedback, and optimal start
 # ---------------------------------------------------------------------------
 
 
 @struct.dataclass
-class G36Params:
-    """The published constants, and the schedule a BMS is programmed with.
+class ResetParams:
+    """The heating curve, the room's PI and the programmed schedule.
 
-    The loop is G36's zone heating PI as LBL's Modelica Buildings library
-    implements it (``G36/ThermalZones/ControlLoops.mo``: ``kHeaCon = 0.1``
-    per K, ``TiHeaCon = 900`` s, output 0-1). Optimal start is LBL's
-    ``OBC/Utilities/OptimalStart`` with its defaults: ``tOptMax`` 3 h, three
-    days of slopes, ``uLow`` 0 K and ``uHigh`` 0.5 K, ``thrOptOn`` 60 s, and
-    its floors of 1 K/h on the mean slope and 120 s on a learning interval.
+    The curve is an outdoor reset as the tekmar House Control 352 runs one zone
+    (data brochure D 352, 06/00): heat supplied equals heat lost, from a starting
+    point at the setpoint in force, shut down when the outdoor temperature reaches
+    that point, with indoor feedback shifting the starting point. On this plant's
+    linear emitter its setting comes to ``H``, the building's heat-loss
+    coefficient. ``kp`` and ``Ti`` are the indoor feedback's PI on a 0-1 signal,
+    from the recipe in ``scripts/tune_industrial_experts.py``. Optimal start is
+    LBL's ``OBC/Utilities/OptimalStart`` with its defaults: ``tOptMax`` 3 h, three
+    days of slopes, ``uLow`` 0 K and ``uHigh`` 0.5 K, ``thrOptOn`` 60 s, and its
+    floors of 1 K/h on the mean slope and 120 s on a learning interval.
     """
 
-    kp: float = 0.1
-    Ti: float = 900.0
+    kp: float
+    Ti: float
+    H: float
+    Q_max: float
     dt: float = 900.0
     occupied_start_h: float = 7.0
     occupied_end_h: float = 22.0
@@ -44,7 +50,7 @@ class G36Params:
 
 
 @struct.dataclass
-class G36State:
+class ResetState:
     """The PI's integral and optimal start's memory."""
 
     integral: float = 0.0
@@ -68,14 +74,14 @@ class G36State:
     prev_opt_on: float = 0.0
 
 
-def g36_step(params, state, obs, xp=jnp):
-    """One step of the G36 zone heating loop with optimal start.
+def reset_step(params, state, obs, xp=jnp):
+    """One step of the heating curve and the room's PI, with optimal start.
 
     obs: ``[T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T]``.
     The clock is read from ``sin_h, cos_h``, as a BMS knows the time.
     """
     p = params
-    T_air, target = obs[..., 0], obs[..., 6]
+    T_air, T_out, target = obs[..., 0], obs[..., 1], obs[..., 6]
     hour = xp.mod(xp.arctan2(obs[..., 4], obs[..., 5]) * 24.0 / (2.0 * np.pi), 24.0)
     occupied = (hour >= p.occupied_start_h) & (hour < p.occupied_end_h)
     to_occ = xp.mod(p.occupied_start_h - hour, 24.0) * 3600.0
@@ -119,13 +125,16 @@ def g36_step(params, state, obs, xp=jnp):
     has_pending = xp.where(done, 1.0, has_pending)
     learning = xp.where(done, 0.0, learning)
 
-    # The heating PI on the setpoint in force.
+    # The curve starts at the setpoint in force, and the PI shifts it. The signal
+    # at 0 is warm weather shutdown: the outdoor temperature has reached the
+    # starting point. The integral stops while the signal is saturated.
     setpoint = xp.where(opt_on, sp_occ, target)
     e = setpoint - T_air
-    heat, integral, _ = pid_update(
-        e, state.integral, 0.0, p.kp, p.kp / p.Ti, 0.0, p.dt, 0.0, 1.0, xp
-    )
-    new_state = G36State(
+    grown = state.integral + e * p.dt
+    u = p.H * (setpoint - T_out) / p.Q_max + p.kp * (e + grown / p.Ti)
+    heat = xp.clip(u, 0.0, 1.0)
+    integral = xp.where(u == heat, grown, state.integral)
+    new_state = ResetState(
         integral=integral,
         setpoint_occupied=sp_occ,
         slopes=slopes,
@@ -144,20 +153,25 @@ def g36_step(params, state, obs, xp=jnp):
 
 
 def make_hvac_pid_controller() -> Controller:
-    """The expert: G36 zone heating with optimal start, as a
-    :class:`~target_gym.experts.pid.Controller`. Every constant is the
-    published one (:class:`G36Params`); nothing is tuned on seeds."""
-    from target_gym.hvac.env import HVACParams
+    """The expert: outdoor reset, indoor feedback and optimal start, as a
+    :class:`~target_gym.experts.pid.Controller`. The feedback's gains are stored
+    by ``scripts/tune_industrial_experts.py``; the rest is the building's
+    datasheet and published constants (:class:`ResetParams`)."""
+    from target_gym.hvac.env import HVACParams, total_heat_loss_coefficient
 
     pr = HVACParams()
-    params = G36Params(
+    params = ResetParams(
+        kp=gain("hvac", "kp"),
+        Ti=gain("hvac", "Ti"),
+        H=float(total_heat_loss_coefficient(pr)),
+        Q_max=float(pr.Q_heat_max),
         dt=float(pr.delta_t),
         occupied_start_h=float(pr.occupied_start_h),
         occupied_end_h=float(pr.occupied_end_h),
         setpoint_design=float(pr.setpoint_occupied),
     )
-    state = G36State(
+    state = ResetState(
         setpoint_occupied=params.setpoint_design,
         slopes=np.zeros(params.n_day, np.float32),
     )
-    return Controller(params, state, g36_step)
+    return Controller(params, state, reset_step)

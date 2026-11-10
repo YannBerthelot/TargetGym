@@ -5,7 +5,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
@@ -43,6 +49,14 @@ class BoilerDrum(
     tracked_names: tuple = ("drum level (m)", "drum pressure (bar)")
     obs_target_index: tuple = (5, 6)  # target_level, target_pressure
 
+    # Guided-wave radar, a pressure transmitter and a vortex meter (PHYSICS.md,
+    # Readings).
+    readings: tuple = (
+        FieldReading("level", sigma=5e-4),
+        FieldReading("pressure", sigma=0.022),
+        FieldReading("q_steam", sigma=0.047),
+    )
+
     def __init__(self, integration_method: str = "rk4_1"):
         self.obs_shape = (7,)
         self.integration_method = integration_method
@@ -54,8 +68,8 @@ class BoilerDrum(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -67,6 +81,8 @@ class BoilerDrum(
         if params is None:
             params = self.default_params
 
+        action, state = actuate(self, state, action.reshape((2,)), params)
+
         new_state, _ = compute_next_state(
             action, state, params, key, integration_method=self.integration_method
         )
@@ -76,8 +92,9 @@ class BoilerDrum(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state: BoilerDrumState, params: BoilerDrumParams = None):
         if params is None:
             params = self.default_params
@@ -117,9 +134,8 @@ class BoilerDrum(
         )
         # Offset the inventory so the gauge reads ``level0`` at t = 0.
         V_wt = V_wt + level0 * params.A_d
-        q_steam = params.q_steam_nominal + params.q_steam_noise_std * jax.random.normal(
-            load_key
-        )
+        q_demand = params.q_steam_nominal
+        q_demand += params.q_steam_noise_std * jax.random.normal(load_key)
 
         state = BoilerDrumState(
             time=0,
@@ -128,7 +144,8 @@ class BoilerDrum(
             m_sr=m_sr,
             m_sd=m_sd,
             level=jnp.asarray(level0),
-            q_steam=q_steam,
+            q_steam=q_demand,  # at p_nominal the valve passes its demand
+            q_demand=q_demand,
             Q_fuel=jnp.asarray(Q),
             # Feedwater matched to the steam actually leaving, not to nominal.
             # Setting it to nominal while sampling steam at +/-8 kg/s opened
@@ -138,11 +155,20 @@ class BoilerDrum(
             # genuinely balanced, which is what the comment above already
             # claimed, and the OU steam demand supplies the control problem
             # from there.
-            q_feed=q_steam,
+            q_feed=q_demand,
             target_pressure=target_pressure,
             level_ref=jnp.asarray(level_ref),
         )
         return self.get_obs(state), state
+
+    def initial_action(self, state: BoilerDrumState, params: BoilerDrumParams):
+        """The raw action that keeps the reset's firing and feedwater."""
+        return jnp.array(
+            [
+                2.0 * state.Q_fuel / params.Q_max - 1.0,
+                2.0 * state.q_feed / params.q_feed_max - 1.0,
+            ]
+        )
 
     def action_space(self, params: BoilerDrumParams | None = None) -> spaces.Box:
         return spaces.Box(

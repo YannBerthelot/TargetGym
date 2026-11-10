@@ -16,7 +16,7 @@ env, params = tg.make("unstable_cstr")
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 1200 steps of 3 s (60 min) |
-| Cite as | `unstable_cstr-v3` |
+| Cite as | `unstable_cstr-v4` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space
@@ -37,7 +37,7 @@ actuator range inside the environment.
 | 0 | `C_a`, concentration of A (mol/L) |
 | 1 | `T`, reactor temperature (K) |
 | 2 | `T_j`, jacket temperature (K) |
-| 3 | target `C_a`, the current block's level (mol/L) |
+| 3 | target `C_a`, on its ramp to the current block's level (mol/L) |
 
 ## Rewards
 
@@ -55,7 +55,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 7 fields.
+`reset` samples the initial condition and the target; state has 10 fields.
 
 ## Episode end
 
@@ -82,6 +82,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 |---|---|---|
 | `delta_t` | 0.05 | min |
 | `max_steps_in_episode` | 1200 | steps |
+| `sensor_noise_scale` | 1 | - |
+| `actuator_dead_band` | 0 | fraction of span |
+| `actuator_stiction` | 0 | fraction of span |
+| `action_noise` | 0 | fraction of span |
+| `actuator_rate` | 4.8 | fraction of span per delta_t unit |
+| `actuator_lag` | 0.0333333 | delta_t units |
 | `q` | 100 | L/min |
 | `V` | 100 | L |
 | `rho` | 1000 | g/L |
@@ -92,7 +98,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `UA` | 50000 | J/(min*K) |
 | `Ti` | 350 | K |
 | `Caf` | 1 | mol/L |
-| `precision_floor` | 0.0001 | mol/L |
+| `precision_floor` | 0.0005 | mol/L |
 | `time_unit_seconds` | 60 | s |
 | `T_c_min` | 290 | K |
 | `T_c_max` | 310 | K |
@@ -103,15 +109,16 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `Ti_tau` | 10 | min |
 | `Ti_dev_reset_clip` | 3 | - |
 | `block_steps` | 200 | steps |
+| `target_ramp` | 0.0333333 | mol/L per min |
 | `initial_CA_offset` | 0.01 | mol/L |
 | `initial_T_offset` | 1.5 | K |
 | `reward_version` | 2 | - |
-| `e_floor` | 0.0001 | mol/L |
+| `e_floor` | 0.0005 | mol/L |
 | `e_tol` | 0 | mol/L |
 | `tracking_exponent` | 2 | - |
 | `CA_error_max` | 0.55 | mol/L |
-| `failure_cost` | 6.05e+07 | reward |
+| `failure_cost` | 2.42e+06 | reward |
 | `restart_steps` | 1200 | steps |
-| `rho_floor_tracking` | 0.00049729 | reward |
-| `rho_floor` | 0.00049729 | reward |
+| `rho_floor_tracking` | 1.98916e-05 | reward |
+| `rho_floor` | 1.98916e-05 | reward |
 

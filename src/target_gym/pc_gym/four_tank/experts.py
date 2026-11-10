@@ -23,8 +23,8 @@ class DecoupledPIParams:
     ``D = G(0)^-1 diag(G12, G21)``, so at steady state ``w1`` moves h1 alone
     as pump 2 alone would and ``w2`` moves h2 as pump 1 would. ``v*`` is the
     pair of voltages that holds the targets, from the steady-state balances
-    and the rig's datasheet constants (orifice areas, pump constants, valve
-    splits).
+    and the task's constants (orifice areas, pump constants, valve splits),
+    PC-gym's and not the Johansson rig's (PHYSICS.md).
     """
 
     Kp_1: float
@@ -133,13 +133,13 @@ def make_four_tank_pid_controller():
     from target_gym.experts.pid import gain
 
     D = [
-        [gain("four_tank", "D11", -0.294), gain("four_tank", "D12", 1.065)],
-        [gain("four_tank", "D21", 1.065), gain("four_tank", "D22", -0.235)],
+        [gain("four_tank", "D11"), gain("four_tank", "D12")],
+        [gain("four_tank", "D21"), gain("four_tank", "D22")],
     ]
     return four_tank_decoupled_pi(
-        Kp_1=gain("four_tank", "Kp_1", 45.1),
-        Ti_1=gain("four_tank", "Ti_1", 146.4),
-        Kp_2=gain("four_tank", "Kp_2", 32.4),
-        Ti_2=gain("four_tank", "Ti_2", 118.1),
+        Kp_1=gain("four_tank", "Kp_1"),
+        Ti_1=gain("four_tank", "Ti_1"),
+        Kp_2=gain("four_tank", "Kp_2"),
+        Ti_2=gain("four_tank", "Ti_2"),
         D=D,
     )

@@ -4,9 +4,54 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
+from flax import struct
 from gymnax.environments import EnvParams
 
+from target_gym.base import FieldReading
 from target_gym.utils import compute_norm_from_coordinates
+
+_FT = 0.3048  # m
+_KT = 1852.0 / 3600.0  # m/s
+_DEG = float(jnp.pi) / 180.0  # rad
+
+#: The instrument behind each state field of an aircraft, by the sections on
+#: readings in PHYSICS.md. ``gamma`` and ``psi`` have none: an IRS works them
+#: out from its velocities (``read_angles``).
+INSTRUMENTS = {
+    "x": dict(sigma=0.27),
+    "y": dict(sigma=0.27),
+    "z": dict(sigma=0.2, step=_FT),
+    "x_dot": dict(sigma=0.03, step=0.125 * _KT),
+    "y_dot": dict(sigma=0.03, step=0.125 * _KT),
+    "z_dot": dict(sigma=0.03, step=_FT / 60.0),
+    "theta": dict(sigma=0.0, step=0.010986 * _DEG),
+    "phi": dict(sigma=0.0, step=0.010986 * _DEG),
+    "theta_dot": dict(sigma=4.3e-6, step=0.015625 * _DEG),
+    "phi_dot": dict(sigma=4.3e-6, step=0.015625 * _DEG),
+    "power": dict(sigma=0.0, step=0.003),
+    "stick": dict(sigma=0.0, step=1.6e-3),
+    "aileron": dict(sigma=0.0, step=2.6e-3),
+}
+#: What a 2D aircraft reads, what a 3D one adds, and its GNSS fix.
+LONGITUDINAL = ("z", "x_dot", "z_dot", "theta", "theta_dot", "power", "stick")
+LATERAL = ("y_dot", "phi", "phi_dot", "aileron")
+POSITION = ("x", "y")
+
+
+def instruments(fields, prefix=""):
+    """One reading per name in ``fields``, on the state field ``prefix + name``
+    (``"lead."`` for an aircraft nested in the state)."""
+    return tuple(FieldReading(prefix + f, **INSTRUMENTS[f]) for f in fields)
+
+
+def read_angles(state, params, **angles):
+    """``state`` with ``angles`` as worked out from its measured velocities, so
+    they inherit that noise instead of taking their own. At
+    ``sensor_noise_scale = 0`` nothing is measured, so the stored values stay."""
+    quiet = params.sensor_noise_scale == 0
+    return state.replace(
+        **{k: jnp.where(quiet, getattr(state, k), v) for k, v in angles.items()}
+    )
 
 
 def advance_gust(
@@ -139,29 +184,90 @@ def check_power(power):
 EPS = 1e-8
 
 
-# First-order actuator lags. The defaults reproduce the behaviour these had as
-# literals; they are parameters so that a slower engine or a stiffer control
-# system is expressible, and so that they appear in the parameter table rather
-# than sitting unsourced in the code.
-POWER_RESPONSE_RATE = 0.05
-STICK_RESPONSE_RATE = 0.9
+# First-order actuator lags. They are parameters so that a slower engine or a
+# stiffer control system is expressible, and so that they appear in the parameter
+# table rather than sitting unsourced in the code.
+POWER_RESPONSE_RATE = 1.0 / 1.7
+IDLE_POWER = 0.05
+STICK_RESPONSE_RATE = 1.0 / 0.06
 
 
 def compute_next_power(
-    requested_power, current_power, delta_t, rate: float = POWER_RESPONSE_RATE
+    lever,
+    current_power,
+    delta_t,
+    rate: float = POWER_RESPONSE_RATE,
+    idle: float = IDLE_POWER,
 ):
-    """First-order spool-up toward the requested throttle setting."""
-    requested_power = jnp.clip(requested_power, 0.0 + EPS, 1.0)
-    power_diff = requested_power - current_power
-    return current_power + rate * delta_t * power_diff
+    """The engine after ``delta_t``: a first-order lag, solved exactly, toward
+    the power the lever in [0, 1] asks for, its range mapped onto idle to full."""
+    requested_power = idle + (1.0 - idle) * jnp.clip(lever, 0.0, 1.0)
+    return requested_power + (current_power - requested_power) * jnp.exp(
+        -rate * delta_t
+    )
 
 
-def compute_next_stick(
-    requested_stick, current_stick, delta_t, rate: float = STICK_RESPONSE_RATE
-):
-    """First-order lag toward the requested stick deflection."""
-    stick_diff = requested_stick - current_stick
-    return current_stick + rate * delta_t * stick_diff
+def compute_next_surface(requested, current, delta_t, rate, rate_limit):
+    """A control surface after ``delta_t``: a first-order lag, solved exactly,
+    toward ``requested``, moving no faster than ``rate_limit``."""
+    move = (requested - current) * (1.0 - jnp.exp(-rate * delta_t))
+    most = rate_limit * delta_t
+    return current + jnp.clip(move, -most, most)
+
+
+# ---------------------------------------------------------------------------
+# The fixed inner loop (PHYSICS.md section on the inner loop)
+# ---------------------------------------------------------------------------
+
+#: Control sub-steps per step: the inner loop closes at 4 Hz, around a short
+#: period of about 2.5 s that a 1 s step could not resolve.
+INNER_STEPS = 4
+#: What a full action demands: the pitch TECS is limited to and the bank
+#: ArduPilot's FBWA gives at full stick, which is the model's validity too.
+PITCH_DEMAND_MAX = 15.0 * _DEG
+BANK_DEMAND_MAX = 45.0 * _DEG
+#: The surfaces' travel, which the loop's output in [-1, 1] spans.
+STICK_TRAVEL = 15.0 * _DEG
+AILERON_TRAVEL = 25.0 * _DEG
+
+
+@struct.dataclass
+class InnerLoop:
+    """The attitude loop's gains, per radian of error and rad/s of rate, one
+    tune for every task (``scripts/tune_inner_loop.py``, by the manual procedure
+    of ``docs/proposals/expert-protocols-aircraft.md``), and ArduPilot's airspeed
+    scaler about the tuning test's EAS, 230 m/s at 5500 m."""
+
+    Kp_theta: float = 6.3662
+    Ki_theta: float = 0.2546
+    Kd_theta: float = 0.1273
+    Kp_roll: float = 0.8913
+    Ki_roll: float = 0.0318
+    Kd_roll: float = 0.1273
+    scaling_speed: float = 173.5  # m/s, SCALING_SPEED
+    scale_min: float = 0.3  # min(0.5, 0.5 ARSPD_FBW_MIN / SCALING_SPEED)
+    scale_max: float = 2.0  # max(2, 1.5 VMO / SCALING_SPEED)
+
+
+def airspeed_scaler(eas, gains: InnerLoop):
+    """ArduPilot's surface scaler: a surface's moment goes with EAS^2."""
+    return jnp.clip(
+        gains.scaling_speed / jnp.maximum(eas, 1.0), gains.scale_min, gains.scale_max
+    )
+
+
+def attitude_axis(kp, ki, kd, error, rate, integral, scaler, dt):
+    """One axis of the attitude loop: ``(surface in [-1, 1], new integral)``.
+
+    ``AP_RollController``'s law reduced to P on the angle and D on the rate
+    (the proposal's section 1), with the scaler on the angle path and squared
+    on the rate path. The integral is in surface units, so a scaler change does
+    not move its trim, and it freezes while the surface is saturated.
+    """
+    output = kp * scaler * error + integral - kd * scaler**2 * rate
+    surface = jnp.clip(output, -1.0, 1.0)
+    grown = integral + ki * scaler**2 * error * dt
+    return surface, jnp.where(output == surface, grown, integral)
 
 
 def compute_thrust_output(
@@ -349,6 +455,39 @@ def aero_coefficients(aoa_deg, mach, params):
     return CL, CD
 
 
+def buffet_line(mach, params):
+    """The most lift the wing holds at ``mach`` before buffet (PHYSICS.md):
+    ``CL_max`` at low speed, falling linearly. Prandtl-Glauert raises the lift
+    slope with Mach but not this. The wing's only, since buffet is a wing's."""
+    return params.CL_max - params.buffet_slope * jnp.maximum(
+        mach - params.buffet_mach, 0.0
+    )
+
+
+def scheduled_airspeed(z, cas, mach, xp=jnp):
+    """The true airspeed of a schedule of ``cas`` (m/s) below the crossover and
+    ``mach`` above it, by the standard atmosphere and the compressible pitot
+    relation between CAS, impact pressure and Mach."""
+    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    pressure = 101325.0 * (temperature / 288.15) ** 5.2559
+    sound = xp.sqrt(1.4 * 287.0 * temperature)
+    impact = 101325.0 * ((1.0 + 0.2 * (cas / 340.29) ** 2) ** 3.5 - 1.0)
+    mach_of_cas = xp.sqrt(5.0 * ((impact / pressure + 1.0) ** (2.0 / 7.0) - 1.0))
+    return xp.minimum(mach_of_cas, mach) * sound
+
+
+def outside_envelope(load_factor, air_speed, z, params):
+    """Whether a flight condition is past the limit load factors, VMO or MMO."""
+    rho = compute_air_density_from_altitude(z)
+    eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+    return (
+        (load_factor > params.load_factor_max)
+        | (load_factor < params.load_factor_min)
+        | (eas > params.vmo_eas)
+        | (air_speed / compute_speed_of_sound_from_altitude(z) > params.mmo)
+    )
+
+
 def compute_gamma(x_dot: float, z_dot: float) -> float:
     """Flight path angle from velocity vector."""
     return jnp.arctan2(z_dot, x_dot)  # handles negative x_dot safely
@@ -433,6 +572,7 @@ def compute_acceleration(
     # WINGS
     # ====================================================
     C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
+    C_z_w = xp.minimum(C_z_w, buffet_line(M, params))
     lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
     drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
     # Only the component normal to the body axis makes a pitching moment, and
@@ -525,6 +665,22 @@ def compute_acceleration(
             jnp.array(max_clip_boundaries),
         )
     return accelerations, metrics
+
+
+def trim_stick(speed, z, theta, params):
+    """The elevator that balances the pitching moment at this speed, height and
+    level attitude, clipped to its travel, so a reset aircraft engages in trim.
+    The moment is close to linear in the deflection, so one secant does."""
+
+    def moment(stick):
+        velocities = jnp.array([speed, 0.0, 0.0])
+        positions = jnp.array([0.0, z, theta])
+        return compute_acceleration(velocities, positions, (0.0, stick), params)[0][2]
+
+    probe = -0.1
+    at_zero, at_probe = moment(0.0), moment(probe)
+    stick = probe * at_zero / (at_zero - at_probe)
+    return jnp.clip(stick, -STICK_TRAVEL, STICK_TRAVEL)
 
 
 def clamp_altitude(z, z_dot):

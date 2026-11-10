@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -46,7 +46,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -99,7 +99,7 @@
   {
     "name": "plane_sine",
     "group": "aircraft",
-    "version": 2,
+    "version": 3,
     "display_name": "Altitude - sinusoid",
     "params_cls": [
       "target_gym.plane.env",
@@ -150,7 +150,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -199,7 +199,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -248,7 +248,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -297,7 +297,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 4,
+    "version": 5,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -319,8 +319,12 @@
       "make_plane3d_mpc"
     ],
     "scored_overrides": {
-      "max_steps_in_episode": 400,
-      "failure_cost": 88888888.8888889,
+      "max_steps_in_episode": 1000,
+      "target_radius_range": [
+        34000.0,
+        36000.0
+      ],
+      "failure_cost": 1088888888.8888888,
       "rho_floor_tracking": 0.1840696011111111,
       "rho_floor": 0.1840696011111111
     },
@@ -345,7 +349,7 @@
   {
     "name": "patrol",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "Patrol - wingman",
     "params_cls": [
       "target_gym.patrol.env",
@@ -382,35 +386,35 @@
     ]
   },
   {
-    "name": "patrol_bearing_only",
+    "name": "patrol_range_bearing",
     "group": "aircraft",
-    "version": 3,
-    "display_name": "Patrol - wingman, bearing-only",
+    "version": 4,
+    "display_name": "Patrol - wingman, range and bearing",
     "params_cls": [
       "target_gym.patrol.env",
       "PatrolParams"
     ],
-    "env_factory": "_patrol_bearing_only",
+    "env_factory": "_patrol_range_bearing",
     "env_class": [
       "target_gym.patrol.env_jax",
-      "PlanePatrolBearingOnly"
+      "PlanePatrolRangeBearing"
     ],
     "make_pid": [
       "_pid.<locals>.make",
       "target_gym.patrol.experts",
-      "make_patrol_bearing_only_pid_controller"
+      "make_patrol_range_bearing_pid_controller"
     ],
     "make_mpc": [
       "_mpc.<locals>.make",
       "target_gym.patrol.oracle",
-      "make_patrol_bearing_only_mpc"
+      "make_patrol_range_bearing_mpc"
     ],
     "scored_overrides": {
       "max_steps_in_episode": 200
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity from the follower's own and the change in the relative position, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a bearing-only controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
+    "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
     "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
@@ -423,7 +427,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -453,12 +457,14 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "first_order",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "First order",
     "params_cls": [
       "target_gym.pc_gym.first_order.env",
@@ -493,7 +499,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",
@@ -523,12 +529,14 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": []
+    "noise_fields": [
+      "load_scale"
+    ]
   },
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 2,
+    "version": 3,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",
@@ -567,7 +575,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 3,
+    "version": 4,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",
@@ -606,7 +614,7 @@
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Glass Furnace",
     "params_cls": [
       "target_gym.glass_furnace.env",
@@ -632,20 +640,22 @@
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
-      "m_pull_disturbance"
+      "m_pull_disturbance",
+      "lhv_deviation"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "m_pull_noise_std"
+      "m_pull_noise_std",
+      "lhv_noise_std"
     ]
   },
   {
     "name": "reactor",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Reactor",
     "params_cls": [
       "target_gym.reactor.env",
@@ -666,9 +676,7 @@
       "target_gym.reactor.oracle",
       "make_reactor_mpc"
     ],
-    "scored_overrides": {
-      "max_steps_in_episode": 864
-    },
+    "scored_overrides": {},
     "tuned_gains_key": "reactor",
     "gains_keys": [],
     "baselines_note": null,
@@ -684,7 +692,7 @@
   {
     "name": "hvac",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Building HVAC",
     "params_cls": [
       "target_gym.hvac.env",
@@ -723,7 +731,7 @@
   {
     "name": "cement_kiln",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Cement Kiln",
     "params_cls": [
       "target_gym.cement_kiln.env",
@@ -762,7 +770,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 2,
+    "version": 3,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",
@@ -801,7 +809,7 @@
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 2,
+    "version": 3,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",
@@ -840,7 +848,7 @@
   {
     "name": "battery",
     "group": "energy",
-    "version": 2,
+    "version": 3,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",

@@ -16,11 +16,12 @@ section 5.4, and decision S10), run by
   ``data/oracle_widths/compressor_surge.json``); the consumers' deviation
   on its noise-free mean path, a^t times its measured value;
 - objective: the header pressure's tracking term as (e / e_floor)^2, exact
-  since e_tol = 0 and p = 2, and the running cost max(q - c_hold, 0) through
-  epigraph rows on every visited state (T2);
+  since e_tol = 0 and p = 2, the running cost, linear in the recycle power, and
+  max(|dx| - travel_free, 0) through epigraph rows on every visited state (T2);
 - limit: the env's trip variable, the soft minimum of Phi over the step, at
-  least 2W on every visited state, elastic at the trip cost per unit (T3),
-  backed off by the planner's error on it (K11, in the widths file);
+  least the episode's surge line on every visited state, which the oracle reads
+  as it reads the rest of the true state, elastic at the trip cost per unit
+  (T3), backed off by the planner's error on it (K11, in the widths file);
 - dropped guard: the characteristic's switch to its tangent past
   ``phi_join`` (T4, K9); every plan's substep Phi is checked against it.
 
@@ -33,10 +34,10 @@ from jax.tree_util import Partial as partial
 
 from target_gym.compressor_surge.env import (
     KPA,
-    N_SETPOINT_BLOCKS,
     _substeps,
     compute_velocity,
     recycle_flow,
+    scheduled_setpoint,
     suction_density,
 )
 from target_gym.integration import integrate_dynamics
@@ -77,7 +78,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     ``u``: ``(x_next, phi_min, the substep Phis, the rate limits' arguments)``.
     ``widths`` are the drive's and the valve's (0.0 is the exact clip), and
     ``deltas[i, j]`` is added to site i's output at substep j (K5's probe)."""
-    setpoints, demand, clock, drift = task
+    _, demand, clock, drift, *_ = task
     n = _substeps(env.integration_method)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
@@ -116,24 +117,31 @@ def compressor_model(env, p) -> TaskModel:
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _ = d["task"]
-        block = jnp.minimum(
-            (clock + t + 1) // p.setpoint_block_steps, N_SETPOINT_BLOCKS - 1
-        )
+        setpoints, _, clock, _, offset, lead = d["task"]
+        target = scheduled_setpoint(setpoints, lead, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
-        cost = ((setpoints[block] - dp) / KPA / p.e_floor) ** 2
+        cost = ((target - dp) / KPA / p.e_floor) ** 2
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
-        y = jnp.stack([p.running_weight * (power - p.c_hold) / p.c_hold, phi_min])
+        cost = cost + p.running_weight * power / p.c_hold
+        y = jnp.stack([
+            (x1[4] - x[4]) / p.travel_free,
+            phi_min - 2.0 * p.W * offset,
+        ])  # fmt: skip
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
     return TaskModel(
         nx=5, nu=2, step=step,
         state_x=lambda s: jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]),
-        data=lambda s: (s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev),
+        data=lambda s: (
+            s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
+            s.surge_offset, s.setpoint_lead,
+        ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=1.0),),
+        hinges=(
+            Hinge(weight=float(p.travel_weight), absolute=True, tol=1.0),
+        ),
         limits=(Limit(lo=2.0 * p.W, price=float(trip_cost(p))),),
         move_rows=lambda x, u, steps: reach(p, x, u, steps),
         move_scale=lambda steps: reach_scale(p, steps),

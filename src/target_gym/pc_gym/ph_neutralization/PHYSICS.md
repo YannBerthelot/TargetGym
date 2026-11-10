@@ -46,7 +46,7 @@ Deliberately **not** modelled:
 |---|---|
 | Temperature dependence of pK1/pK2 | Isothermal operation, as in the benchmark. |
 | Mixing dynamics / imperfect stirring | Perfect mixing is the standard assumption; a real tank adds a transport lag. |
-| Electrode dynamics and drift | The pH probe is treated as instantaneous and exact. Real probes lag seconds and drift. |
+| Electrode drift and fouling | The probe lags and reports late, with noise (section Readings). Real probes also drift and foul. |
 | Acid/base concentration variation | Feed concentrations are fixed; only flows vary. |
 
 **Regime of validity.** Near-neutral operation (pH 4–10) with the carbonate
@@ -125,7 +125,8 @@ pH reading can call for very different moves.
    genuinely partially observed rather than merely noisy.
 
 **Observation.** A plant has a pH electrode and knows its own valve position. It does not have an on-line assay of carbonate
-speciation, so `Wa`, `Wb` and the buffer flow are hidden.
+speciation, so `Wa`, `Wb` and the buffer flow are hidden. The electrode reads through
+a 10 s lag and reports what it saw 10 s ago (section Readings).
 
 **Reward** — the floor-normalised cost described in *Reward (version 2)*
 below.
@@ -172,9 +173,10 @@ table above predates the version-2 reward and this change.)
 
 ## 6. Known deviations
 
-**⚠️ D1 — ideal pH measurement.** The probe is instantaneous and noise-free.
-Real electrodes have a seconds-scale lag, drift, and fouling — all of which
-matter for pH control specifically, since the measurement is the whole game.
+**⚠️ D1. Electrode drift and fouling.** The probe has a lag and a dead time, with
+the noise of section Readings, and stays that fast. Real electrodes also drift and
+foul, and a 1 mm coating can take the response from seconds to minutes
+([McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability)).
 
 **⚠️ D2 — single buffer species.** Carbonate only. Real effluents carry several
 weak acid/base pairs, giving a titration curve with multiple inflections
@@ -204,18 +206,18 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 - **Bias.** The PI's output is added to the target's demand, the valve
   position the curve says the target needs. This is ours: q1 is constant and
   q2 unmeasured, so there is no inflow to feed forward from.
-- **Tuning.** A step of 0.1 mL/s from the reset state of each training seed
-  (100 to 109), taken against an unstepped run on the same buffer noise and
-  read in demand units. The median fit is k = 1.34, tau1 = 117 s and
-  theta = 2.5 s, half the 5 s sample (measured). SIMC with tau_c = theta
-  cycles on the low-buffer seeds, whose demand gain is about twice the median:
-  the training cost per step is 140 at tau_c = theta, 4.2 at 2 theta and 0.99
-  at 3 theta, so tau_c = 3 theta, Kp = 8.79 and Ti = 40 s.
-- **Held-out check** (seeds 200 to 209). It holds 0.94 per step (worst seed
-  2.87) against a ceiling of 1, settles in 12 steps and never trips
-  (`tests/pc_gym/test_expert_specs.py`). The plain PI it replaced held 43.6.
-  What is left is the buffer's drift, which moves the curve the
-  linearisation assumes; the oracle reads the buffer flow and holds about 0.09.
+- **Tuning.** With the buffer stream off, q2 = 0, the plant's lower limit and the
+  steepest curve there is, as the plan asks. In manual at the rest the true curve
+  gives there, +0.1 mL/s, 120 steps, read in the expert's demand units on the
+  nominal curve. The median fit is k = 19.7, tau1 = 95.3 s and theta = 17.5 s, with
+  the probe's dead time and half the 5 s sample. At the nominal buffer the same test
+  reads k = 1.0, so the steep end has 20 times the gain. SIMC with tau_c = theta
+  gives Kp = 0.138 and Ti = 95.3 s. The band is 0.104 mL/s, which the valve's dead
+  band absorbs, so no filter. Kp is 0.199 and 0.100 at levels 0.5 and 2.
+- **Held-out check** (seeds 200 to 209). It holds 230 per step (worst seed 619)
+  against a ceiling of 1, from 4,690 on the gains tuned without the probe, and no
+  longer cycles. pH cannot trip. The best null is the table, ratio 0.48, 0 of 10
+  wins. The miss is a finding: `tests/pc_gym/test_expert_specs.py`.
 
 ---
 
@@ -229,7 +231,7 @@ and the gains come from `scripts/tune_process_experts.py --envs ph_neutralizatio
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 6 |
+| `ph_neutralization` | 300 | 5 | 25 min | 1 in [-1, 1] | 3 | 10 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -244,7 +246,7 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, and measurement noise is not modelled, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
+| `e_floor` | 0.01 pH (the MPC holds 0.0013) | the lowest per-seed long-run mean \|error\| the shipped MPC held under the shipped buffer-flow disturbance (`scripts/measure_hold.py`, 900 hold steps after a 108-step burn-in; seeds 0.0021 / 0.0031 / 0.0013, PID 0.016-0.054). The MPC reads the buffer flow from the state since the oracle audit (2026-10-01); planning on the nominal flow, it held 0.0080. A per-seed minimum so no run of the reference sits below it; an upper bound on the achievable floor Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
 | `e_tol` | 0 | **provisional.** The discharge permit band (typically pH 6-9 on an outfall) is a regulatory number the plant would supply. |
 | `tracking_exponent` | 2 | quadratic |
 | `c_hold` | 16.24 mL/s | reagent flow while holding, PID and MPC alike (`scripts/measure_hold.py`) |
@@ -269,3 +271,56 @@ restarts at once as `reset_env` would, on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports pH through its electrode, and the operator's own base
+flow and the setpoint exactly (`docs/proposals/measurement-noise.md`).
+`sensor_noise_scale = 0` gives the noise-free task, rounding included.
+
+| reading | sigma | step | lag | dead time | instrument | status | source |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `pH` | 0.01 pH | 0.01 pH | 10 s | 10 s | Glass electrode with industrial pH transmitter | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
+
+**This figure is weak, and it is the tracked quantity.** No noise source was
+found. McMillan gives 0.02 pH only as an accuracy target that needs best
+practice, with no coverage factor, so 0.01 as 2 sigma is ours. A transmitter's
+±0.01 pH on simulated input, with no electrode, would be a lower bound. The
+0.01 step is this project's `precision_floor`, which cites nothing.
+
+**The lag is 10 s, for the owner to accept.** [McMillan's Tip 86](https://www.automation.com/article/tip-86-test-the-ph-response-time-to-determine-the-health-of-a-glass-electrode)
+gives time constants for a clean electrode in a buffered solution: 0.75 and 1.5 s at
+4 ft/s, 3 and 12 s at 0.5 ft/s, for a rising and a falling pH. 10 s sits inside the
+0.5 ft/s pair, which is the speed here: this tank's 33 mL/s runs at 0.5 ft/s through
+a 17 mm line (derived). The line is ours, and the tank is a fast place for it: a
+probe in the mixed volume would see a different speed. It is not fouling, which is
+D1. The same tip warns that electrodes approach their final value more slowly than a
+first-order lag above 90 %, which this lag leaves out.
+
+**The dead time is 10 s, for the owner to accept.** The tip calls the electrode's own
+dead time usually negligible, so this is not the electrode's. It stands for mixing
+and transport to the probe, which the tank here does not model. Faanes and Skogestad
+([Comput. Chem. Eng. 28, 2004](https://skoge.folk.ntnu.no/publications/2004/faanes_cce_ph/ph.pdf))
+take 10 s as "typical" and write that the mixing and measurement delay is "about 10
+s or larger", with an example of 5 s of transport and 5 s of measurement. Their tanks
+are industrial, and their figure lumps in measurement and valve dynamics, so the lag
+and this delay together sit above it. At 33 mL/s, 10 s is also 330 mL of line, about
+1 m of 20 mm pipe (derived). The step is 5 s, so this is exactly 2 steps. pH keeps
+its Provisional status, which covers the noise.
+
+The expert reads these readings, and so does every tuner. The oracle plans and
+acts on the true state, so it stays a full-state bound. `reward`, trips and the
+score read the true state. `info["measured_reward"]` is the same cost on the
+readings, with any trip taken from the true state, and a learner can train on
+it.
+
+A plant resting exactly on target pays about 1.08 per step in measured reward.
+The proposal's floor of 1 is the scatter alone, `(0.01 / 0.01)^2`. Rounding to
+0.01 pH adds `step^2 / 12` to the variance, 1/12 of the floor.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

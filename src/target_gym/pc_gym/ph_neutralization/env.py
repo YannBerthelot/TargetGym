@@ -49,7 +49,7 @@ from flax import struct
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
-from target_gym.base import EnvParams, EnvState
+from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
@@ -144,9 +144,9 @@ class PHParams(EnvParams):
     # floor (no reduced-model optimum exists for this plant).
     # e_tol = 0 provisionally: the discharge permit band a plant would use
     # here is a regulatory number to be supplied (typically pH 6-9 on the
-    # outfall). Reagent above the hold-phase flow (16.24 mL/s, the same for
-    # PID and MPC) is charged at weight 1: one floor-width of pH error is
-    # worth the whole hold-phase reagent flow again. The failure cost was set
+    # outfall). Reagent is charged as a share of the hold-phase flow (16.24
+    # mL/s, the same for PID and MPC), at weight 1: one floor-width of pH error
+    # is worth the whole hold-phase reagent flow again. The failure cost was set
     # at twice the span's cost in units of the earlier 0.0080 pH hold,
     # (10 / 0.0080)^2 = 1.6e6 per step. It is never charged (see PHYSICS.md),
     # so it was left as it is when the hold improved.
@@ -215,6 +215,8 @@ class PHState(EnvState):
     pH: float  # the single measurement
     q3: float  # commanded base flow
     target_pH: float
+
+    actuator_held: jax.Array = actuator_field(1)
 
 
 def titration_residual(pH, Wa, Wb, params: PHParams):
@@ -318,6 +320,7 @@ def compute_next_state(
 # which traces this inline.
 def get_obs(state: PHState, params: PHParams):
     """``[pH, q3_pct, target_pH]`` -- a pH probe and the operator's own valve.
+    The env reads pH through the probe's lag, dead time and noise.
 
     The reaction invariants and the buffer flow are hidden. That is not an
     artificial restriction: a plant has a pH electrode, not an on-line assay
@@ -338,9 +341,14 @@ def check_is_terminal(state: PHState, params: PHParams, xp=jnp):
     return terminated, truncated
 
 
-def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
-    terminated, _ = check_is_terminal(state, params, xp)
+def compute_reward_terms(state: PHState, params: PHParams, xp=jnp, tripped=None):
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+
+    ``tripped`` overrides the trip check on ``state``, for a measured copy,
+    whose noise must not fire or hide a trip (``base.measured_reward``).
+    """
+    if tripped is None:
+        tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
             state.target_pH - state.pH,
@@ -351,7 +359,7 @@ def compute_reward_terms(state: PHState, params: PHParams, xp=jnp):
         ),
         "running": R.running_cost(state.q3, params.c_hold, params.running_weight, xp),
     }
-    return R.with_trip(terms, terminated, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state: PHState, params: PHParams, xp=jnp):

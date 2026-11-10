@@ -11,7 +11,10 @@ change start one):
   Ornstein-Uhlenbeck demand) or smooth (a sine), makes no change;
 - float rounding in a held target makes no change;
 - a change in any output counts, and the first step is compared with the
-  target at reset.
+  target at reset;
+- a restart after a trip is a fresh draw of the plant, not a target change, so a
+  policy that trips is held over the same steps as one that does not (the
+  industrial-fixes plan, "One hold window for all").
 """
 
 from __future__ import annotations
@@ -25,9 +28,15 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import baseline_policy
 
 
-def _changes(targets, first):
+def _changes(targets, first, restarts=None):
     targets = np.asarray(targets, float).reshape(len(targets), -1)
-    return np.flatnonzero(B.target_changes(targets, np.atleast_1d(first)))
+    return np.flatnonzero(B.target_changes(targets, np.atleast_1d(first), restarts))
+
+
+def _steps(n, *at):
+    flags = np.zeros(n, bool)
+    flags[list(at)] = True
+    return flags
 
 
 def test_a_small_step_on_a_large_target_is_a_change():
@@ -72,10 +81,68 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
 #   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
-#   compressor_surge: N_SETPOINT_BLOCKS = 4 blocks of setpoint_block_steps 300.
+#   wind_turbine: N_TARGET_BLOCKS = 4 blocks of target_block_steps 100.
 #   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
-SCHEDULES = [("plane_energy", 200, 8), ("compressor_surge", 300, 3)]
-SCHEDULES += [("glass_furnace", 320, 4)]
+_TRIPS_ON_A_MOVE = pytest.mark.xfail(
+    strict=True,
+    reason="PR 9: the expert trips on step 1199 of seed 101, and a move on the step "
+    "of a restart cannot be told from it",
+)
+SCHEDULES = [pytest.param("plane_energy", 200, 8, marks=_TRIPS_ON_A_MOVE)]
+SCHEDULES += [("wind_turbine", 100, 3), ("glass_furnace", 320, 4)]
+
+
+def test_a_restart_is_not_a_target_change():
+    """The plant restarts at step 2 on a fresh target, and the schedule moves at
+    step 4. Only the schedule's move starts a cycle."""
+    targets = [1.0, 1.0, 5.0, 5.0, 7.0, 7.0]
+    np.testing.assert_array_equal(_changes(targets, 1.0, _steps(6, 2)), [4])
+
+
+def test_a_restart_catching_up_with_the_schedule_is_not_a_second_jump():
+    """The trip at step 2 shows the reset's own target, 5, and the next step the
+    schedule's level at the clock, 6. Neither is a move (``plane_energy``, seed
+    100: changes at 637 and 638 for the one trip at 637)."""
+    targets = [1.0, 1.0, 5.0, 6.0, 6.0, 6.0]
+    assert len(_changes(targets, 1.0, _steps(6, 2))) == 0
+
+
+def test_a_move_just_after_a_restart_is_still_a_move():
+    """The restart takes steps 2 and 3. The schedule's move at step 4 follows
+    them directly, and a rule counting runs of jumps would swallow it."""
+    targets = [1.0, 1.0, 5.0, 6.0, 8.0, 8.0]
+    np.testing.assert_array_equal(_changes(targets, 1.0, _steps(6, 2)), [4])
+
+
+def test_a_ramp_cut_by_a_restart_is_still_one_move():
+    """A ramp from step 2 to step 7 with a restart at step 4 is one move, at its
+    start, not a second one after the restart."""
+    targets = [0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.0, 6.0, 6.0, 6.0]
+    np.testing.assert_array_equal(_changes(targets, 0.0, _steps(12, 4)), [2])
+
+
+def test_restarts_on_most_steps_do_not_set_the_drift():
+    """The drift a move is measured against comes from the steps that did not
+    restart. With 6 restarts of 3 in 12 steps the median step is 2, so the move
+    of 1 at step 8 would pass for drift."""
+    targets = [3.0, 6.0, 9.0, 9.0, 12.0, 15.0, 18.0, 18.0, 19.0, 19.0, 19.0, 19.0]
+    restarts = _steps(12, 0, 1, 2, 4, 5, 6)
+    np.testing.assert_array_equal(_changes(targets, 0.0, restarts), [8])
+
+
+def test_a_run_that_restarts_on_every_step_has_no_move():
+    assert len(_changes([1.0, 2.0, 3.0], 0.0, np.ones(3, bool))) == 0
+
+
+def test_a_tripping_run_is_held_over_the_schedule():
+    """Through ``run_policy``: a policy that trips over and over on the energy
+    ladder keeps the 8 treads of the schedule and no others, and its steps after
+    a restart stay in its hold."""
+    spec = REGISTRY["plane_energy"]
+    params = spec.make_test_params()
+    ep = E.run_episode(spec, params, baseline_policy(spec, "pid", params), seed=100)
+    assert ep.failed.sum() > 8  # this expert trips until PR 9, which is the case
+    assert set(np.flatnonzero(ep.target_change)) <= set(200 * np.arange(1, 9) - 1)
 
 
 @pytest.mark.large
@@ -92,10 +159,43 @@ def test_the_scorer_starts_a_cycle_at_every_scheduled_setpoint(name, block, n_ch
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("name", ["reactor", "plane_sine"])
+def test_a_compressor_ramp_starts_one_cycle():
+    """N_SETPOINT_BLOCKS = 4 blocks of 300 steps, each opening on a 100-step
+    ramp. The target at ``time`` t + 1 first moves at t = 0, 300, 600 and 900."""
+    spec = REGISTRY["compressor_surge"]
+    p = spec.make_test_params()
+    for seed in (100, 101):
+        ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=seed)
+        np.testing.assert_array_equal(
+            np.flatnonzero(ep.target_change),
+            [0, 300, 600, 900],
+            err_msg=f"seed {seed}",
+        )
+
+
+@pytest.mark.large
+@pytest.mark.parametrize("name", ["plane_sine"])
 def test_a_drifting_or_smooth_target_starts_no_cycle_in_the_scorer(name):
-    # reactor: an Ornstein-Uhlenbeck power demand; plane_sine: a sine altitude.
+    # plane_sine: a sine altitude.
     spec = REGISTRY[name]
     p = spec.make_test_params()
     ep = E.run_episode(spec, p, baseline_policy(spec, "pid", p), seed=100)
     assert not ep.target_change.any()
+
+
+def test_a_ramp_that_moves_on_under_half_the_steps_is_one_move():
+    """Its median step is 0, so each ramp step would look like a new target,
+    and a task would get hundreds of cycles from a few moves. A ramp is one move,
+    counted where it starts. Here 20 steps from step 40, in 100."""
+    targets = np.concatenate([np.zeros(40), np.linspace(0.05, 1.0, 20), np.ones(40)])[
+        :, None
+    ]
+    assert list(_changes(targets, 0.0)) == [40]
+
+
+def test_two_ramps_are_two_moves():
+    up = np.linspace(0.1, 1.0, 10)
+    targets = np.concatenate(
+        [np.zeros(30), up, np.ones(30), up[::-1] - 0.1, np.zeros(20)]
+    )[:, None]
+    assert list(_changes(targets, 0.0)) == [30, 70]

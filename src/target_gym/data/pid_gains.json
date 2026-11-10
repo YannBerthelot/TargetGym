@@ -126,106 +126,142 @@
     "note": "MIMO relay: pid1=power loop, pid2=stick loop, both on altitude error."
   },
   "reactor": {
-    "Kp": 2.265556,
-    "Ki": 1.33268,
-    "Kd": 1.2234,
-    "gain_schedule": {
-      "operating_points": [
-        0.3,
-        0.39999999999999997,
-        0.5,
-        0.6,
-        0.7,
-        0.7999999999999999,
-        0.8999999999999999,
-        1.0
-      ],
-      "Kp": [
-        2.45797,
-        2.45797,
-        2.45797,
-        2.351468,
-        2.265556,
-        2.259871,
-        2.243326,
-        2.240856
-      ],
-      "Ki": [
-        1.445865,
-        1.445865,
-        1.445865,
-        1.383216,
-        1.33268,
-        1.329336,
-        1.319603,
-        1.318151
-      ],
-      "Kd": [
-        1.327304,
-        1.327304,
-        1.327304,
-        1.269792,
-        1.2234,
-        1.22033,
-        1.211396,
-        1.210062
-      ]
-    },
-    "tuning_rule": "amigo",
-    "note": "Relay autotuning, positive-gain (rod withdrawal raises power)."
+    "tuning_rule": "published",
+    "note": "The rod program is published (HRTD 8.1 and 5.0), and every constant is in RodControlParams. Nothing is tuned, and this entry holds no gain. It exists because a noise level's file must name every task it serves."
   },
   "four_tank": {
-    "Kp_1": 45.069595,
-    "Ti_1": 146.374594,
-    "Kp_2": 32.394183,
-    "Ti_2": 118.144275,
-    "D11": -0.293842,
-    "D12": 1.064773,
-    "D21": 1.064773,
-    "D22": -0.234713,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Kp_1": 31.350462,
+    "Ti_1": 119.98385,
+    "Kp_2": 23.996064,
+    "Ti_2": 102.069122,
+    "D11": -0.300043,
+    "D12": 1.067265,
+    "D21": 1.067265,
+    "D22": -0.239264,
+    "model": {
+      "h1": {
+        "k": 0.0368,
+        "tau1": 119.98385,
+        "theta": 52.0,
+        "band": 0.00347,
+        "step": 0.093596,
+        "bands": 4.963443,
+        "spread": 1.282999,
+        "tests": 10.0,
+        "tau_c": 52.0
+      },
+      "h2": {
+        "k": 0.044308,
+        "tau1": 102.069122,
+        "theta": 48.0,
+        "band": 0.003435,
+        "step": 0.077274,
+        "bands": 4.984356,
+        "spread": 1.388398,
+        "tests": 10.0,
+        "tau_c": 48.0
+      },
+      "rga": -0.0673
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "glass_furnace": {
-    "Kp": 12.08439222573085,
-    "Ki": 0.10070326854775706,
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp": 0.2973263678258992,
+    "Ki": 0.00010900560104732946,
     "Kd": 0.0,
+    "Tf": 82.23748934141194,
     "model": {
-      "k": 0.0027583789660813795,
-      "theta": 15.000000000000004,
-      "tau_c": 15.000000000000004
-    },
-    "tuning_rule": "simc_integrating",
-    "note": "Crown-temperature PI by SIMC on the integrating approximation of a firing step's first hour, from step tests on seeds 100-109 (scripts/tune_industrial_experts.py). Practice runs an MPC over this loop; this is the base layer under it."
+      "k": 0.004932214484413031,
+      "tau1": 55.593722,
+      "theta": 185.03435101817686,
+      "band": 3.366995,
+      "step": 1.001096,
+      "bands": 1.759773,
+      "spread": 2.457697,
+      "tests": 10.0,
+      "tau_c": 496.8718193280657,
+      "tau2": 55.59372215353034
+    }
   },
   "distillation": {
-    "Kp_T": 0.160129,
-    "Ti_T": 21.051052,
-    "Kp_D": 36.191234,
-    "Ti_D": 1.980297,
-    "Kp_B": -222.74302,
-    "Ti_B": 2.182375,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Kp_T": 0.359929,
+    "Ti_T": 9.687682,
+    "Tf_T": 0.4,
+    "Kp_D": 16.116055,
+    "Ti_D": 4.876369,
+    "Kp_B": -36.010398,
+    "Ti_B": 3.370861,
+    "band_D": 0.002371,
+    "band_B": 0.002497,
+    "every": 5.0,
+    "wait": 2.0,
+    "sp_rate": 0.695695,
+    "model": {
+      "T": {
+        "k": 1.147159,
+        "tau1": 0.0,
+        "theta": 0.5,
+        "band": 0.25005,
+        "step": 0.095745,
+        "bands": 5.270999,
+        "spread": 1.262144,
+        "tests": 10.0,
+        "tau_c": 1.521921
+      },
+      "yD": {
+        "k": 0.014408,
+        "tau1": 1.376369,
+        "theta": 10.5,
+        "band": 0.002371,
+        "step": 0.24755,
+        "bands": 1.504629,
+        "spread": 1.389802,
+        "tests": 10.0,
+        "tau_c": 10.5
+      },
+      "xB": {
+        "k": -0.006241,
+        "tau1": 0.870861,
+        "theta": 7.500001,
+        "band": 0.002497,
+        "step": -1.052993,
+        "bands": 2.632142,
+        "spread": 1.087406,
+        "tests": 10.0,
+        "tau_c": 7.500001
+      },
+      "rga": {
+        "yD, xB on L, V": 35.94454039116139,
+        "yD, T on L, V": 43.341802692091996,
+        "yD, xB on L, T_sp": 0.8293273043236771
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "wind_turbine": {
-    "Kp": 0.015144123621885518,
-    "Ki": 0.006490338695093793,
+    "Kp": 7.0512614276929275,
+    "Ki": 3.021969183296969,
+    "theta_K_deg": 0.015260586305121303,
+    "schedule_lo_deg": 3.5987370366807205,
+    "schedule_hi_deg": 22.839432509805743,
     "model": {
-      "dP_dtheta": -31724882.679951087,
-      "theta_K_deg": 512.2277916696783,
+      "dP_dtheta": -68136.11296669637,
+      "theta_K_deg": 0.015260586305121303,
       "zeta": 0.7,
       "wn": 0.6
     },
     "tuning_rule": "jonkman_pole_placement",
-    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of this plant's Cp surface along the region-3 curve; that line is flat, so no gain schedule (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
+    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of the Cp table along the region-3 curve, with his schedule read at the last pitch command and held on that curve (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
   },
   "cement_kiln": {
-    "Kp_inner": 0.03720405423566248,
-    "Ki_inner": 4.368147686292763e-05,
+    "Kp_inner": 0.04060008779803512,
+    "Ki_inner": 4.986839922659246e-05,
     "model_inner": {
-      "k": 406.8997080955525,
-      "tau": 3223.373352016678,
-      "theta": 106.46404639776924,
-      "tau_c": 106.46404639776924
+      "k": 410.27004975634486,
+      "tau": 3390.301646961275,
+      "theta": 101.7680746417087,
+      "tau_c": 101.7680746417087
     },
     "lime_halfwidth": 0.004,
     "step": 0.1,
@@ -234,30 +270,71 @@
     "note": "Swain and Subudhi (1996) rule base on free lime and the kiln-speed trend, moving the burning-zone setpoint, over a fuel PI on the burning zone (SIMC from a fuel step, tight); kiln speed follows feed. The two scaling factors are the lowest training cost of a 3 x 4 grid and its extension on seeds 100-109 (scripts/tune_industrial_experts.py)."
   },
   "boiler_drum": {
-    "Kp_pressure": 0.671596574994995,
-    "Ki_pressure": 0.14403322022041107,
-    "model_pressure": {
-      "k": 0.35925121669704274,
-      "theta": 1.5542631391268964,
-      "lam": 1.5542631391268964
-    },
-    "Kp_level": 748.9829963723436,
-    "Ki_level": 18.48191294464852,
-    "model_level": {
-      "k": 7.412855282715136e-05,
-      "theta": 13.508395994423893,
-      "lam": 13.508395994423893
-    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp_pressure": 0.027686628500784665,
+    "Ki_pressure": 0.00018944124550042434,
     "Kd_pressure": 0.0,
-    "tuning_rule": "lambda_integrating",
-    "note": "Three-element: feedwater follows measured steam flow, a level PI trims it; firing is an enthalpy feedforward plus a pressure PI. Both loops lambda-tuned for an integrating process from step tests on seeds 100-109 (scripts/tune_industrial_experts.py)."
+    "Tf_pressure": 0.0,
+    "Kp_level": 450.54793275891996,
+    "Ki_level": 7.179157770357165,
+    "Tf_level": 0.0,
+    "model_pressure": {
+      "k": 59.98501716782104,
+      "tau1": 146.14889396260145,
+      "theta": 22.000000000000018,
+      "band": 0.131974,
+      "step": 0.02,
+      "bands": 9.09042,
+      "spread": 1.162325,
+      "tests": 10.0,
+      "tau_c": 22.0,
+      "lam": 22.000000000000018
+    },
+    "model_level": {
+      "k": 7.957451731501645e-05,
+      "tau1": 1.2931215868472192,
+      "theta": 20.919256695134823,
+      "band": 0.002954,
+      "step": 0.02,
+      "bands": 12.930666,
+      "spread": 1.268767,
+      "tests": 10.0,
+      "tau_c": 20.919257,
+      "lam": 20.919256695134823
+    }
   },
   "cstr": {
-    "Kp": -132.409195,
-    "Ti": 0.861168,
-    "Kp_T": 0.268146,
-    "Ti_T": 0.634633,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Kp": -24.43382,
+    "Ti": 1.530129,
+    "Kp_T": 0.317351,
+    "Ti_T": 0.648004,
+    "Tf_C": 0.148077,
+    "Tf_T": 0.0648,
+    "model": {
+      "T": {
+        "k": 5.379108,
+        "tau1": 0.648004,
+        "theta": 0.125,
+        "band": 0.246998,
+        "step": 0.224039,
+        "bands": 4.879105,
+        "spread": 1.248476,
+        "tests": 10.0,
+        "tau_c": 0.1898
+      },
+      "C_a": {
+        "k": -0.008105,
+        "tau1": 1.10577,
+        "theta": 1.125,
+        "band": 0.00311,
+        "step": 1.878459,
+        "bands": 4.896019,
+        "spread": 1.181722,
+        "tests": 10.0,
+        "tau_c": 6.453591
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "plane_cascaded": {
     "Kp_alt": 0.12,
@@ -308,37 +385,152 @@
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
-    "Kp_T": 8.491863,
-    "Kd_T": 0.945667,
-    "Kc_Ca": 91.976888,
-    "Ti_Ca": 0.470636,
-    "sp_rate": 3.0,
-    "sp_below": 8.0,
-    "sp_above": 2.0,
-    "sp_line_margin": 0.3,
-    "Tc_bias": 300.0,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Kp_T": 2.206154,
+    "Kd_T": 0.478,
+    "Kc_Ca": 26.576068,
+    "Ti_Ca": 0.34482,
+    "Tf_Ca": 0.03337,
+    "sp_rate": 9.686836,
+    "sp_below": 4.72585,
+    "sp_above": 4.72585,
+    "sp_line_margin": 2.068244,
+    "Tc_bias": 300.882172,
+    "model": {
+      "C_a": {
+        "k": -0.01946,
+        "tau1": 0.233696,
+        "theta": 0.3,
+        "band": 0.011864,
+        "step": -2.098814,
+        "bands": 3.442598,
+        "spread": 1.466375,
+        "tests": 10.0,
+        "tau_c": 0.33337
+      },
+      "pole": {
+        "rate": 2.4224279711911776,
+        "on C_a": 2.5672246091719226,
+        "on T": 4.166543090292996
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "compressor_surge": {
-    "kp_speed": 0.11199999999999999,
-    "ki_speed": 0.04,
-    "kp_surge": 2.0,
-    "ki_surge": 0.75,
-    "surge_line": 0.15,
-    "override_line": 0.075,
+    "kp_speed": 0.028934,
+    "ki_speed": 0.016376,
+    "kp_surge": 1.0,
+    "ki_surge": 4.676422,
+    "Tf_surge": 0.021384,
+    "surge_line": 0.1,
+    "override_line": 0.05,
     "override_hold": 2.0,
-    "reset_band": 0.05,
-    "note": "coordinate descent on episode return, seeds 100-109, from DEFAULT_GAINS (scripts/tune_industrial_experts.py)"
+    "reset_band": 0.01397,
+    "model": {
+      "speed": {
+        "k": 46.972554,
+        "tau1": 1.766848,
+        "theta": 0.65,
+        "band": 0.382029,
+        "step": 0.267495,
+        "bands": 5.755731,
+        "spread": 1.409397,
+        "tests": 8.0,
+        "tau_c": 0.65
+      },
+      "valve": {
+        "k": 1.16437,
+        "tau1": 0.213839,
+        "theta": 0.05,
+        "band": 0.03637,
+        "step": 0.264564,
+        "bands": 4.234913,
+        "spread": 1.312376,
+        "tests": 6.0,
+        "tau_c": 0.108266
+      },
+      "rga": 0.9122689943866417,
+      "schedule": {
+        "least margin": 0.06097376346588135,
+        "trips": 0
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "first_order": {
-    "Kp": 4.999993,
-    "Ki": 24.999915,
+    "Kp": 2.770961,
+    "Ki": 7.697113,
     "Kd": 0.0,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Tf": 0.02,
+    "noise_band": 0.006676,
+    "model": {
+      "x": {
+        "k": 2.000241,
+        "tau1": 0.498833,
+        "theta": 0.025,
+        "band": 0.006676,
+        "step": 0.1,
+        "bands": 29.963676,
+        "spread": 1.001922,
+        "tests": 10.0,
+        "tau_c": 0.045
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "ph_neutralization": {
-    "Kp": 8.785357,
-    "Ti": 40.000001,
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012) from step tests on seeds 100-109"
+    "Kp": 0.138292,
+    "Ti": 95.280105,
+    "Tf": 0.0,
+    "model": {
+      "demand": {
+        "k": 19.685139,
+        "tau1": 95.280105,
+        "theta": 17.500001,
+        "band": 0.104163,
+        "step": 0.016667,
+        "bands": 18.898425,
+        "spread": 1.069436,
+        "tests": 10.0,
+        "tau_c": 17.500001
+      }
+    },
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+  },
+  "battery": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "Kp": 0.31474527009927755,
+    "Ki": 0.19993103972742732,
+    "guard_margin": 0.14775413711583923,
+    "model": {
+      "power": {
+        "k": 1.000345,
+        "tau1": 0.740936,
+        "theta": 2.5,
+        "band": 0.001911,
+        "step": 0.1,
+        "bands": 52.339215,
+        "spread": 1.002252,
+        "tests": 10.0,
+        "tau_c": 2.5
+      }
+    }
+  },
+  "hvac": {
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
+    "kp": 0.23639991504753094,
+    "Ti": 1308.6862984169786,
+    "model": {
+      "T_air": {
+        "k": 3.0755,
+        "tau1": 1308.686298,
+        "theta": 450.0,
+        "band": 0.16148,
+        "step": 0.271687,
+        "bands": 5.174462,
+        "spread": 1.123592,
+        "tests": 10.0,
+        "tau_c": 450.0
+      }
+    }
   }
 }

@@ -66,7 +66,8 @@ well-insulated dwelling.
 | Heater sizing vs design load | 1.3–2.0× | 1.5× (7.2 kW vs 4.8 kW) | ✅ |
 | Overnight free-float drop (8 h, T_out 0 °C) | a few K for heavyweight | 20 → 16.6 °C | ✅ |
 | Steady 20 °C at T_out = 0 °C | — | 3.19 kW | ✅ |
-| Seasonal heating energy (PID) | — | ~106 Wh/(m²·day) | ⚠️ |
+| Free gains against losses, per day | gains below losses | 39.1 against 57.4 kWh | ✅ |
+| Heating energy (expert) | — | 21.3 kWh/day, 142 Wh/(m²·day) | ⚠️ |
 
 The time constant and design load are the load-bearing checks: together they
 pin both the envelope quality and the thermal mass, and they are what make the
@@ -103,13 +104,43 @@ control problem what it is — a building that responds over *hours*.
 | Symbol | Value | Unit | Source | |
 |---|---|---|---|---|
 | `Q_heat_max` | 7200 | W | 1.5× the 4.78 kW design load | ✅ |
-| `emitter_tau` | 900 | s | TUNED — radiator/water thermal lag | ⚠️ |
+| `emitter_tau` | 900 | s | **Ours, for the owner to accept**: radiator and water lag. No measured figure for a room's panel radiator was found | ⚠️ |
 | `gain_occupied` | 8.0 | W/m² | People + lighting + equipment | ✅ |
-| `solar_peak` | 350 | W/m² | Winter clear-sky on vertical glazing | ⚠️ |
+| `solar_peak` | 175 | W/m² | A heating season's mean over four facades, *Solar gain* below | ✅ |
 | `T_out_mean/amplitude` | 5 / 5 | °C | Heating-season daily cycle | ⚠️ |
 | `T_out_noise_std` | 3.0 | °C | OU weather deviation, ~12 h correlation | ⚠️ |
 
 ---
+
+### Solar gain
+
+`solar_peak` is the noon value of a half sine over 12 h, so a day delivers
+`175 * 12 * 2 / pi` = 1337 Wh/m² on the glazing. It is a seasonal mean with the
+cloud in it, not a clear-sky peak.
+
+It was 350 W/m², winter clear sky, every day. Then free gains matched losses, 57.45
+against 57.38 kWh/day, heating was never needed, and leaving the heater off beat
+the expert. 175 comes from what the glass receives over a heating season, not from
+any score. The zone's 25 m² of glazing has no stated orientation, so this takes the
+mean of four vertical facades, from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/)
+5.2 (SARAH2, 2005 to 2020, `PVcalc` at slope 90 degrees), with the daily mean air
+temperature from its monthly tool (2010 to 2019):
+
+| site, season | mean air, °C | S / E / W / N, kWh/m²/day | four facades | as `solar_peak` |
+|---|---|---|---|---|
+| Frankfurt, Oct to Apr | 5.9 | 2.29 / 1.26 / 1.24 / 0.47 | 1.32 | **172** |
+| Paris, Nov to Mar | 5.9 | 2.31 / 1.05 / 1.05 / 0.40 | 1.20 | 157 |
+| London, Nov to Mar | 5.7 | 2.06 / 0.90 / 0.89 / 0.35 | 1.05 | 137 |
+| London, Oct to Apr | 7.1 | 2.29 / 1.19 / 1.17 / 0.47 | 1.28 | 167 |
+| Paris, Oct to Apr | 7.6 | 2.57 / 1.37 / 1.34 / 0.50 | 1.45 | 189 |
+
+The model's season is 5 °C. Frankfurt's seven months sit closest, with the whole of
+a heating season in them, and the plan's 175 is that figure, rounded. A building
+with all its glass facing south would see 260 to 340 and need far less heat.
+
+With it, 18.4 kWh of solar and 20.7 kWh of occupancy leave 18.3 kWh a day to the
+heater, a third of the 57.4 kWh lost at 20 °C. Over 212 days that is 26 kWh/m² a
+year, an ordinary figure for this envelope. Left off, the zone settles near 15 °C.
 
 ## 4. Task design
 
@@ -155,8 +186,9 @@ and a trip cost, described in *Reward (version 2)* below.
 **⚠️ D1 — synthetic weather.** Outdoor temperature is a daily sinusoid plus an
 OU deviation, not a real weather file. It has the right magnitude and
 correlation time but none of a real year's structure (fronts, multi-day cold
-spells, cloud). Consequence: an agent cannot learn genuine climate patterns,
-only the daily cycle plus noise.
+spells). Cloud is in `solar_peak` only as a mean, so every day has the same sun.
+Consequence: an agent cannot learn genuine climate patterns, only the daily
+cycle plus noise.
 
 **⚠️ D2 — no cooling.** Heating only, so summer operation and the
 cooling/heating changeover are out of scope. Over-heating is penalised but
@@ -164,12 +196,12 @@ cannot be corrected except by backing off the heat.
 
 **The 35 °C trip is still reachable only through the actuator**, which was
 worth checking, because a terminal state the controller has no authority over
-would be unlike every other trip in this suite. Peak free gain is 5.6 kW --
-4.8 kW of solar through the glazing plus 0.8 kW of occupancy -- against a heat
+would be unlike every other trip in this suite. Peak free gain is 3.6 kW --
+2.4 kW of solar through the glazing plus 1.2 kW of occupancy -- against a heat
 loss coefficient of 159.4 W/K, so the *steady* rise above outdoor would be
-35 K, which on a 10 °C afternoon points at 45 °C. It never gets there: solar is
+23 K, which on a 10 °C afternoon points at 33 °C. It never gets there: solar is
 zero for twelve hours a day and the 43 h thermal mass integrates, so with the
-heater held fully off the zone peaks at 21.6 to 24.2 °C across seeds. Reaching
+heater held fully off the zone peaks at 18.3 to 20.6 °C across seeds. Reaching
 the trip requires the heater, so it is the controller's to avoid.
 
 **⚠️ D3 — solar gain ignores orientation and shading.** A single glazing area
@@ -199,50 +231,58 @@ reward and the expert below.)
 
 The oracle is now the shared solver (`oracle.py`): the episode reward on the
 5R1C model, the comfort hinge as epigraph rows, and a plan that runs to the
-episode's end, since Cooper's recipe gives P = 932 steps on this building's
-mass. Its comfort and gas bill sit within 1 % of the 24-step `NewtonMPC` it
-replaced, on either side, at about half the expert's cost.
+episode's end, since Cooper's recipe gives P = 930 steps on this building's mass.
+That fit falls just short of the noise test, at 9.97 of its 10 bands with a fit of
+98 %, and counts under the owner's rule of 2026-11-06 (`docs/proposals/
+oracle-horizon-protocol.md`, Amendment 4). On the ten test seeds it beats the expert
+on every seed, -12.90 against -16.54, with no trip. Without the mass in the horizon
+it plans 2 hours, cannot see the morning, and wins only 3 of 10.
 
-### The expert: Guideline 36 zone heating with optimal start
+### The expert: outdoor reset with indoor feedback and optimal start
 
-The expert is what a building automation system running ASHRAE Guideline 36
-does, on the observation only (`experts.py`, `g36_step`). Every constant is
-published, and nothing is tuned on seeds.
+Guideline 36 targets commercial VAV, so the expert is what a hot-water system in a
+dwelling runs: an outdoor reset with a room sensor, as the tekmar House Control 352
+runs one zone (data brochure D 352, 06/00), on the observation only (`experts.py`,
+`reset_step`). Its recipe is section 10 of
+`docs/proposals/expert-protocols-process.md`.
 
-- **Heating loop.** A PI on the zone air temperature, gain 0.1 per K and
-  integral time 900 s, output 0 to 1 (G36 as LBL's Modelica Buildings library
-  implements it, `G36/ThermalZones/ControlLoops.mo`: `kHeaCon`, `TiHeaCon`).
-  The action maps that signal onto [-1, 1], so 0 is no heat. The integral
-  stops while the output is saturated.
-- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults.
-  Three hours before occupancy it samples the zone; if the zone is more than
-  0.5 K under the occupied setpoint, the warm-up lasts the deficit over the
-  learned heating rate, capped at 3 h. The rate is the mean of the last three
-  learned rates, floored at 1 K/h (so it is 1 K/h on the first morning). Each
-  warm-up learns one: the temperature gained over the time taken to reach the
-  setpoint, pushed at midnight. During the warm-up the heating setpoint is the
-  occupied one (G36 5.3.2.3).
-- **What it knows.** The clock (from the time-of-day channels), the
-  occupancy schedule (07:00 to 22:00) and the occupied setpoint last seen, the
-  design 21 C before the first. All are what a BMS is programmed with.
-- **Left out.** G36's loop-enable hysteresis and its zero-output hold.
+- **The heating curve.** Heat supplied must equal heat lost, so the curve starts at
+  the setpoint in force and falls with the outdoor temperature. On this linear emitter
+  it is `Q = H (T_s - T_out)`, with `H` the building's 159.4 W/K. The heat stops when
+  the outdoor temperature reaches the starting point, which is warm weather shutdown.
+- **Indoor feedback.** The 352 shifts the starting point up when the zone is cold and
+  down when it is warm, and gives no number. Here that is a PI on the zone reading,
+  on a 0-1 heating signal: kp 0.236 per K and Ti 1309 s, from a bump on a quiet
+  building over five emitter lags. Its integral finds the free gains, and stops while
+  the signal is saturated.
+- **Optimal start.** LBL's `OBC/Utilities/OptimalStart` with its defaults. Nothing in
+  it is VAV-specific, and weather-compensated controllers carry their own: the
+  Siemens RVL470 calculates its changeover time up to a maximum heating-up period.
+  Three hours before occupancy it
+  samples the zone; if the zone is more than 0.5 K under the occupied setpoint, the
+  warm-up lasts the deficit over the learned heating rate, capped at 3 h. The rate is
+  the mean of the last three learned rates, floored at 1 K/h. Each warm-up learns one:
+  the temperature gained over the time taken to reach the setpoint, pushed at
+  midnight. During the warm-up the setpoint in force is the occupied one.
+- **What it knows.** The clock (from the time-of-day channels), the occupancy schedule
+  (07:00 to 22:00), the occupied setpoint last seen, the design 21 C before the first,
+  and the building's heat-loss figure. All are what a controller is commissioned with.
 
-On the held-out seeds 200 to 209 the expert's hold is 0.0179 euro per step
-against a ceiling of 7.5e-5, 2.38 decades of room. The PI it replaces
-(in-code gains 0.4 per K and 1e-4 per K s) held 0.0172.
+The bump reads k 3.08 K per unit action and a lag of 1309 s, with half a sample as
+delay. SIMC at those values lands near the G36 PI it replaces, 0.1 per K and 900 s.
 
-On the training seeds 100 to 109, optimal start makes the expert costlier:
-0.0241 euro per step against 0.0205 for the same PI without it. The plant only
-heats, and its cost is afternoon overheating from solar and internal gains,
-1 to 2.7 K above target. Warming the building before occupancy stores more
-heat, so the afternoons run warmer. Optimal start stays because it is what
-G36 buildings run; the task's room for anticipation is what it costs.
+On the held-out seeds 200 to 209 it costs EUR 15.65 an episode (worst 19.91), with no
+trip, and uses 22.9 kWh a day. Its zone is within the comfort tolerance on 83 % of
+occupied steps, 0.2 K above target on average, where the G36 loop ran 1.0 K above.
+No null policy passes for it: the table reaches 0.81 and wins no seed.
 
-Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`. The zone is within
-the comfort tolerance at the start of occupancy on 59 of 70 held-out
-mornings, against the 90 % stated. Every miss, 0.55 to 1.0 K cold, is a
-morning where the zone was less than 0.5 K short at the 04:00 sample.
-OptimalStart then runs no warm-up, and the zone keeps cooling until 07:00.
+Spec, a strict xfail in `tests/hvac/test_hvac_expert.py`: the zone within the comfort
+tolerance at the start of occupancy on 90 % of held-out mornings. It holds 46 of 70,
+where the G36 loop held 67. This is what the stronger loop does to optimal start. The
+zone now reaches its setpoint fast, on the air's quick rise, so the module learns
+about 5 K/h, starts 0.7 h before occupancy, and the mass pulls the air back: the
+median morning is 0.16 K short, and the worst 2.9 K. G36's warm-ups ran to the 3 h
+cap. It ships as a finding, and the morning's cost is small next to the day's.
 
 **Cheap to step**: one differential state with closed-form algebraic nodes,
 which is what the 5R1C reduction buys. See
@@ -262,7 +302,7 @@ rather than claimed in fifteen.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 9 |
+| `hvac` | 720 | 900 | 180.0 h | 1 in [-1, 1] | 7 | 11 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -278,7 +318,7 @@ which is what the recorded baselines use.
 | parameter | value | source |
 | --- | --- | --- |
 | `comfort_tolerance` | 0.5 K | occupied comfort band about the setpoint (dead-zone) |
-| `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool: under its clear-sky gains the zone sits +4.3 K above the setback target every night and above the occupied band two thirds of the day whatever the controller does (`scripts/measure_hold.py`, signed errors for the shipped MPC over 720 hold steps after a 516-step burn-in), so a symmetric night target would score the weather. |
+| `setback_lower_bound_only` | True | **provisional design choice.** During the setback only the shortfall below 17 C is charged. This plant cannot cool, so a symmetric night target would score the weather: at the old clear-sky `solar_peak` the zone sat +4.3 K above the setback target every night (`scripts/measure_hold.py`, shipped MPC). Not remeasured at 175. |
 | `comfort_price` | 0.03 EUR per K^2 per hour | **provisional**: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016), so comfort is worth fixing but not at any price; the earlier 0.2 was 12x the gas and the gas term never bound. Sweep 0.015 / 0.03 / 0.06 |
 | `gas_price` | 0.10 EUR/kWh | charged on the emitter's heat in full: the bill the plant trades against comfort |
 | `tracking_exponent` | 2 | quadratic outside the band |
@@ -309,3 +349,50 @@ trip cost, with tracking and running cost zeroed, until the controller brings
 it back. `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).
+
+## Readings
+
+The observation reports air, outdoor air, the emitter's heat and solar irradiance
+through their instruments (`docs/proposals/measurement-noise.md`), and `heat_pct`
+inherits the heat meter's noise. The clock channels and the setpoint stay exact.
+`sensor_noise_scale = 0` gives the noise-free task, rounding included.
+
+| reading | sigma | step | instrument | status | source |
+| --- | --- | --- | --- | --- | --- |
+| `T_air` | 0.023 K | 0.1 K at BMS | Digital room sensor, SHT45 class | Confirmed | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
+| `T_out` | 0.023 K | 0.1 K at BMS | Shielded outdoor sensor | Not checked | [SHT45](https://cdn.sparkfun.com/assets/9/7/7/a/d/SHT45-AD1B-R2_datasheet.pdf) |
+| `Q_emitter` | 27 W | | Hydronic heat meter: Pt100 pair plus flow sensor | Not checked | [TMT82](https://bdih-download.endress.com/file/2c4c2c5496b6c81881df53d319b2e2f5/TI01010TDE_2725-00.pdf) |
+| `solar_gain(time)` | 1 W/m2 | | Kipp & Zonen SMP6 pyranometer | Not checked, no source | [SMP6](https://spaces.awi.de/download/attachments/183009319/KippZonen_Manual_Smart_Pyranometers_DE_HMe.pdf?api=v2) |
+
+The 0.1 K step is this library's own floor for a building management system. The
+sensor's converter resolves 0.01 K, and no source gives the BMS figure. At 0.1 K
+the step dominates: rounding alone gives 0.029 K rms, and a reading mid-bin sits
+still between steps.
+
+**Weak figures.**
+
+- `solar_gain` is a guess. The manual gives offsets under 10 W/m2 and no scatter
+  figure. It is 0.57 % of `solar_norm` at peak.
+- `Q_emitter` has no meter sheet behind it. It is the scatter of a Pt100 pair on
+  an assumed 15 K loop difference, 0.38 % of reading, taken at `Q_heat_max`.
+- `T_out` assumes the zone sensor's class, and the refutation pass did not reach it.
+
+Solar gain is computed from the clock, which must stay exact, so it is a channel
+reading: channel 3 in `solar_norm` units, 1/175 of the 175 W/m2 peak. It reads
+small values of either sign at night, as a real pyranometer's offset does.
+
+**Timing, all ours for the owner to accept.** The 15 min step is the standard
+building-simulation step and a plausible BMS trend interval, no source opened.
+The readings have no dead time.
+
+The expert reads these values, and so does every tuner. The oracle plans and acts
+on the true state, so it stays a full-state bound. `reward`, trips and the score
+read the true state. `info["measured_reward"]` is the same cost on the readings,
+with any trip taken from the true state.
+
+## Written exception to check 2
+
+The credibility check on a sourced real figure has nothing to read here. The owner
+accepted a class exception on 2026-11-06: no published figure could be found or opened
+after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
+says what was tried.

@@ -158,9 +158,8 @@ def test_reflux_and_boilup_push_compositions_oppositely(params):
 def test_default_integrator_is_stable_and_fewer_substeps_are_not(params):
     """16 substeps is a stability requirement, not accuracy tuning.
 
-    Tray time constant ~0.17 min gives |lambda| ~ 11.8 /min, and RK4 needs
-    h*|lambda| < 2.78. At dt = 1 min that means at least ~5 substeps; in
-    practice the profile only survives at 16.
+    The stiffest mode is |lambda| = 32.5 /min at the nominal point and 37.6 /min
+    across the flow box, and RK4 needs h*|lambda| < 2.78 (PHYSICS.md section 4).
     """
     p = params.replace(zF_noise_std=0.0)
     raw = _raw(NOMINAL_L, NOMINAL_V, p)
@@ -226,7 +225,8 @@ def test_the_thermocouple_reads_stage_15_on_the_boiling_point_curve(
     env = DistillationColumn()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     state = state.replace(x=state.x.at[14].set(x15))
-    assert float(env.get_obs(state, params)[6]) == pytest.approx(kelvin, abs=1e-4)
+    quiet = params.replace(sensor_noise_scale=0.0)
+    assert float(env.get_obs(state, quiet)[6]) == pytest.approx(kelvin, abs=1e-4)
 
 
 def test_reward_requires_both_specifications(params):

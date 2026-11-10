@@ -3,9 +3,18 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
 from target_gym.expert_access import RegistryExperts
-from target_gym.plane.dynamics import total_wind_2d
+from target_gym.plane.dynamics import (
+    LONGITUDINAL,
+    PITCH_DEMAND_MAX,
+    STICK_TRAVEL,
+    compute_gamma,
+    instruments,
+    read_angles,
+    total_wind_2d,
+    trim_stick,
+)
 from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
@@ -32,7 +41,9 @@ class Airplane2D(
     """
     JAX-compatible 2D airplane environment.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], held for the step. A
+    fixed inner loop in the plant flies the elevator to the demand (+-15 deg at
+    full action); a policy does not touch the surfaces.
     """
 
     registry_name: str = "plane"
@@ -46,7 +57,10 @@ class Airplane2D(
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 6  # target_altitude
 
-    def __init__(self, integration_method: str = "rk4_2", observe_wind: bool = False):
+    # PHYSICS.md section on readings; gamma follows from the velocities.
+    readings: tuple = instruments(LONGITUDINAL)
+
+    def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         # observe_wind=False -> the wind is a hidden disturbance (POMDP);
         # observe_wind=True  -> wind (wind_x, wind_z) is appended to the obs
         #                       (a fully-observable baseline / feedforward case).
@@ -66,8 +80,8 @@ class Airplane2D(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -84,13 +98,13 @@ class Airplane2D(
 
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
-        power, stick = jnp.clip(jnp.asarray(action), -1.0, 1.0)
+        action, state = actuate(self, state, jnp.asarray(action).reshape((2,)), params)
+        power, pitch = jnp.clip(action, -1.0, 1.0)
         power = (power + 1) / 2  # map from [-1, 1] to [0, 1]
-        stick = jnp.deg2rad(stick * 15)  # radians
 
         new_state, metrics = compute_next_state(
             power,
-            stick,
+            pitch * PITCH_DEMAND_MAX,
             state,
             params,
             integration_method=self.integration_method,
@@ -153,7 +167,9 @@ class Airplane2D(
         # ignored ``state.m`` and used ``params.initial_mass`` directly.
         initial_m = params.initial_mass
         initial_power = params.initial_power
-        initial_stick = jnp.deg2rad(params.initial_stick)
+        # The autopilot engages in trim; ``initial_stick`` is an offset from it.
+        trim = trim_stick(initial_x_dot, initial_z, initial_theta, params)
+        initial_stick = trim + jnp.deg2rad(params.initial_stick)
         initial_fuel = params.initial_fuel_quantity
 
         state = PlaneState(
@@ -174,20 +190,22 @@ class Airplane2D(
             # What the moving patterns oscillate about; identical to
             # target_altitude while the pattern is 'hold'.
             base_target_altitude=target_altitude,
+            pitch_integ=trim / STICK_TRAVEL,
         )
 
         obs = self.get_obs(state, params)
         return obs, state
 
+    @measured_obs
     def get_obs(self, state: PlaneState, params: PlaneParams = None):
         """
         Observation vector. When ``observe_wind`` is set, the wind components
         (wind_x, wind_z) are appended so the disturbance is fully observable.
         """
+        gamma = compute_gamma(state.x_dot, state.z_dot)
+        state = read_angles(state, params, gamma=gamma)
         obs = get_obs(state, params, xp=jnp)
         if self.observe_wind:
-            if params is None:
-                params = self.default_params
             # Realized wind = steady mean + altitude shear + current gust.
             wx, wz = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
             obs = jnp.concatenate([obs, jnp.array([wx, wz])])
@@ -230,7 +248,7 @@ class PlaneEnergy(Airplane2D):
     airspeed for altitude for free. Scoring both forces the trade,
     repeatedly. The pure staircase is ``PlaneParams(speed_weight=0.0)``.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], as ``Airplane2D``.
     """
 
     registry_name: str = "plane_energy"
@@ -264,7 +282,7 @@ class PlaneSine(Airplane2D):
     """``plane_sine``: the 2D aircraft tracking a sinusoidal altitude, a probe
     of the closed loop's bandwidth.
 
-    Action (2,): [power, stick], raw in [-1, 1]
+    Action (2,): [throttle, pitch demand], raw in [-1, 1], as ``Airplane2D``.
     """
 
     registry_name: str = "plane_sine"

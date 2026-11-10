@@ -1,0 +1,39 @@
+{
+  "cpu": "Apple M4 Pro",
+  "exception": null,
+  "expert_figure": {
+    "kind": "requirement",
+    "source": "FAA AC 90-105A, Appendix C, C.3.1, page C-3",
+    "status": "read, primary",
+    "unit": "m",
+    "url": "https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_90-105A.pdf",
+    "value": 926.0,
+    "what": "flight technical error budget for RNP 1 with autopilot or flight director, 0.5 NM; a budget, not a hold"
+  },
+  "expert_fingerprint": "12aacf2267c9dfda",
+  "generated": "2026-11-06T12:57:38+00:00",
+  "null_wins": [
+    "constant 0.0",
+    "constant 0.5",
+    "constant 1.0",
+    "table"
+  ],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 2.0438606606709646,
+      "win_rate": 0.8
+    },
+    "constant 0.5": {
+      "ratio": 213.20557718242662,
+      "win_rate": 1.0
+    },
+    "constant 1.0": {
+      "ratio": 28.748946549640337,
+      "win_rate": 1.0
+    },
+    "table": {
+      "ratio": 11710.938213022013,
+      "win_rate": 1.0
+    }
+  }
+}

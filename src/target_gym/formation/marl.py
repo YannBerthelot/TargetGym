@@ -34,12 +34,12 @@ def wingman_name(i: int) -> str:
 class FormationMARL:
     """A lead and ``num_wingmen`` wingmen (1 to 4), one agent per aircraft.
 
-    Each agent acts with ``[power, stick, aileron]`` in [-1, 1]. The lead
+    Each agent acts with ``[throttle, pitch demand, bank demand]`` in [-1, 1]. The lead
     observes ``16 + 3 * num_wingmen`` values, each wingman the patrol's 26
     (see :class:`Formation`). The joint environment is ``self.env``.
     """
 
-    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_2"):
+    def __init__(self, num_wingmen: int = 2, integration_method: str = "rk4_1"):
         self.env = Formation(num_wingmen, integration_method)
         self.num_wingmen = num_wingmen
         self.agents = [LEAD] + [wingman_name(i) for i in range(num_wingmen)]
@@ -49,8 +49,10 @@ class FormationMARL:
     def default_params(self) -> FormationParams:
         return self.env.default_params
 
-    def get_obs(self, state: FormationState) -> Dict[str, jnp.ndarray]:
-        return self._split(self.env.get_obs(state))
+    def get_obs(
+        self, state: FormationState, params: FormationParams = None
+    ) -> Dict[str, jnp.ndarray]:
+        return self._split(self.env.get_obs(state, params))
 
     def _split(self, joint: jnp.ndarray) -> Dict[str, jnp.ndarray]:
         lead = self.env.lead_obs_dim

@@ -5,7 +5,14 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import canonical_reset, finish_step
+from target_gym.base import (
+    ChannelReading,
+    FieldReading,
+    actuate,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.energy.battery.env import (
     N_DISPATCH_BLOCKS,
     BatteryParams,
@@ -24,10 +31,12 @@ from target_gym.video import SavesVideo
 class GridBattery(
     RegistryExperts, SavesVideo, environment.Environment[BatteryState, BatteryParams]
 ):
-    """Grid battery storage tracking a dispatch signal.
+    """Grid battery storage following a regulation signal.
 
-    Observation (5,): [soc, V_cell, T_cell, P_MW, target_P_MW]
-    Action      (1,): power, raw in [-1, 1] -> [-P_max, +P_max] (positive = discharge)
+    Observation (7,): [soc, V_cell, T_cell, P_MW, target_P_MW, next_block_MW,
+    minutes_to_next_block]
+    Action      (1,): inverter power, raw in [-1, 1] -> [-P_max, +P_max] (positive
+    = discharge)
     """
 
     registry_name: str = "battery"
@@ -36,12 +45,23 @@ class GridBattery(
     screen_width = 700
     screen_height = 800
 
-    obs_value_index: int = 3  # delivered power (MW)
+    obs_value_index: int = 3  # power at the meter (MW)
     tracked_names: tuple = ("delivered power (MW)",)
-    obs_target_index: int = 4  # dispatch (MW)
+    obs_target_index: int = 4  # regulation signal (MW)
+
+    # A BMS estimate, a cell monitor, an NTC and a revenue meter (PHYSICS.md,
+    # Readings). Cell voltage is computed from current, charge and a hidden
+    # state, so its reading goes on channel 1. The NTC's step is 152.59 uV at
+    # the GPIO over the assumed 50 mV/K divider.
+    readings: tuple = (
+        FieldReading("soc", sigma=4.7e-5),
+        ChannelReading(1, sigma=5.5e-5),
+        FieldReading("T_cell", sigma=0.03, step=152.59e-6 / 0.05),
+        FieldReading("power", sigma=330.0),
+    )
 
     def __init__(self, integration_method: str = "rk4_2"):
-        self.obs_shape = (5,)
+        self.obs_shape = (7,)
         self.integration_method = integration_method
 
     @property
@@ -51,8 +71,8 @@ class GridBattery(
     def compute_reward(self, state, params):
         return compute_reward(state, params)
 
-    def reward_terms(self, state, params):
-        return compute_reward_terms(state, params)
+    def reward_terms(self, state, params, tripped=None):
+        return compute_reward_terms(state, params, tripped=tripped)
 
     def step_env(
         self,
@@ -63,12 +83,14 @@ class GridBattery(
     ):
         if params is None:
             params = self.default_params
-        action_raw = action
-        if not isinstance(action, float):
-            action_raw = jnp.asarray(action).reshape(())
+        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
 
         new_state, _ = compute_next_state(
-            action_raw, state, params, key, integration_method=self.integration_method
+            action.reshape(()),
+            state,
+            params,
+            key,
+            integration_method=self.integration_method,
         )
         # A trip is part of the kernel: the step is charged the trip cost and
         # the plant restarts at once, or is lost (``terminated``) with
@@ -76,8 +98,9 @@ class GridBattery(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params
         )
-        return self.get_obs(new_state), new_state, reward, terminated, info
+        return self.get_obs(new_state, params), new_state, reward, terminated, info
 
+    @measured_obs
     def get_obs(self, state, params: BatteryParams = None):
         if params is None:
             params = self.default_params
@@ -95,24 +118,29 @@ class GridBattery(
         if params is None:
             params = self.default_params
 
-        key, soc_key, dispatch_key = jax.random.split(key, 3)
+        key, soc_key, dispatch_key, signal_key = jax.random.split(key, 4)
 
         soc = jax.random.uniform(
             soc_key,
             minval=params.initial_soc_range[0],
             maxval=params.initial_soc_range[1],
         )
-        # A schedule of held setpoints, drawn once. The pack is told what it
-        # will be asked for, and delivering it is the task; within a scored
-        # episode, exact delivery stays inside the charge window and what it
-        # costs is wear.
+        # A schedule of hourly levels, drawn once, and the regulation signal at
+        # its stationary spread, in whole watts, so that the sum below rounds the
+        # same under jit, which may fuse a product into it, and outside it.
         schedule = jax.random.uniform(
             dispatch_key,
             shape=(N_DISPATCH_BLOCKS,),
             minval=-params.dispatch_range,
             maxval=params.dispatch_range,
         )
-        target = jnp.clip(schedule[0], -params.power_max, params.power_max)
+        decorrelated = -jnp.expm1(-2.0 * params.delta_t / params.regulation_tau)
+        regulation = jnp.round(
+            params.dispatch_noise_std
+            / jnp.sqrt(decorrelated)
+            * jax.random.normal(signal_key)
+        )
+        target = jnp.clip(schedule[0] + regulation, -params.power_max, params.power_max)
 
         # Rested pack: no diffusion voltage, at ambient, undegraded. A battery
         # entering a dispatch window has typically been idle, and starting with
@@ -126,7 +154,10 @@ class GridBattery(
             current=jnp.zeros(()),
             power=jnp.zeros(()),
             target_power=target,
+            regulation=regulation,
             dispatch_schedule=schedule,
+            soc_anchor=soc,
+            soc_peak=soc,
         )
         return self.get_obs(state), state
 
