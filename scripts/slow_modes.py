@@ -24,7 +24,7 @@ IGNORE: dict[str, dict[str, str]] = {}
 SEEDS = range(100, 110)
 
 
-def measure(name: str, windows: float, offset_share: float) -> dict:
+def measure(name: str, windows: float, offset_share: float, pre: float) -> dict:
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
     from target_gym.slow_mode import coupled_pair, slow_mode
@@ -40,7 +40,7 @@ def measure(name: str, windows: float, offset_share: float) -> dict:
             params,
             lambda p: baseline_policy(spec, "pid", p),
             seed=k,
-            pre=n // 2,
+            pre=int(pre * n),
             length=int(windows * n),
             offset=offset_share * (high - low),
             low=low,
@@ -56,6 +56,9 @@ def measure(name: str, windows: float, offset_share: float) -> dict:
         "slowest": result.slowest,
         "never_forgot": list(result.never_forgot),
         "start_excess": result.start_excess,
+        "tripped_pairs": result.tripped_pairs,
+        "pre": pre,
+        "offset": offset_share,
         "ignored": IGNORE.get(name, {}),
         "windows": windows,
         "seeds": list(SEEDS),
@@ -69,10 +72,11 @@ def main() -> None:
     ap.add_argument("--tasks", nargs="*", default=list(REGISTRY))
     ap.add_argument("--windows", type=float, default=3.0)
     ap.add_argument("--offset", type=float, default=0.1, help="share of the span")
+    ap.add_argument("--pre", type=float, default=0.5, help="share of a window")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", default="slow_modes.json")
     args = ap.parse_args()
-    jobs = [(t, args.windows, args.offset) for t in args.tasks]
+    jobs = [(t, args.windows, args.offset, args.pre) for t in args.tasks]
     with mp.get_context("spawn").Pool(args.workers) as pool:
         rows = []
         for row in pool.starmap(measure, jobs):

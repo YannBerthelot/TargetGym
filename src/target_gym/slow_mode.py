@@ -31,12 +31,15 @@ FIT_FROM, FIT_TO = np.exp(-1.0), np.exp(-5.0)
 
 class Pair(NamedTuple):
     """One coupled pair after the hand-over: per state element, run A's values and
-    the absolute gap ``(T, n)``; the element names; B's excess cost per step."""
+    the absolute gap ``(T, n)``; the element names; B's excess cost per step; and
+    the trips of each run (a trip restarts the plant, so the pair is suspect)."""
 
     values: np.ndarray
     gap: np.ndarray
     names: tuple[str, ...]
     excess_cost: np.ndarray
+    trips_a: int = 0
+    trips_b: int = 0
 
 
 class SlowMode(NamedTuple):
@@ -45,6 +48,7 @@ class SlowMode(NamedTuple):
     slowest: str  # the element that is largest at the end of the fit
     never_forgot: tuple[str, ...]  # elements whose gap stayed above e^-1 of its start
     start_excess: float  # median of B's summed excess cost after the hand-over
+    tripped_pairs: int = 0  # pairs where either run tripped
 
 
 def _leaves(state) -> tuple[list[str], np.ndarray]:
@@ -79,7 +83,7 @@ def coupled_pair(
     obs, state = env.reset_env(reset_key, params)
     obs_a, s_a, obs_b, s_b = obs, state, obs, state
     policy_a, policy_b, held = make_policy(params), None, None
-    values, gaps, excess, names = [], [], [], None
+    values, gaps, excess, names, trips = [], [], [], None, [0, 0]
     for t in range(pre + length):
         u_a = np.asarray(policy_a(np.asarray(obs_a), s_a), dtype=float)
         if held is None:
@@ -90,15 +94,19 @@ def coupled_pair(
             policy_b = make_policy(params) if policy_b is None else policy_b
             u_b = np.asarray(policy_b(np.asarray(obs_b), s_b), dtype=float)
         k = jax.random.fold_in(step_key, t)
-        obs_a, s_a, r_a, _, _ = step(k, s_a, u_a, params)
-        obs_b, s_b, r_b, _, _ = step(k, s_b, u_b, params)
+        obs_a, s_a, r_a, _, info_a = step(k, s_a, u_a, params)
+        obs_b, s_b, r_b, _, info_b = step(k, s_b, u_b, params)
+        trips[0] += int(np.any(info_a.get("tripped", False)))
+        trips[1] += int(np.any(info_b.get("tripped", False)))
         if t >= pre:
             names, v_a = _leaves(s_a)
             v_b = _leaves(s_b)[1]
             values.append(v_a)
             gaps.append(np.abs(v_a - v_b))
             excess.append(float(r_a) - float(r_b))  # reward is minus the cost
-    return Pair(np.array(values), np.array(gaps), tuple(names), np.array(excess))
+    return Pair(
+        np.array(values), np.array(gaps), tuple(names), np.array(excess), *trips
+    )
 
 
 def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
@@ -136,4 +144,5 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
             t_s, end = -1.0 / slope, int(t[fit][-1])
     slowest = names[int(np.bincount([a[end] for a in argmax]).argmax())]
     never_forgot = tuple(n for n, a in zip(names, stuck) if a)
-    return SlowMode(float(t_s), gap, slowest, never_forgot, start)
+    tripped = sum(p.trips_a + p.trips_b > 0 for p in pairs)
+    return SlowMode(float(t_s), gap, slowest, never_forgot, start, tripped)
