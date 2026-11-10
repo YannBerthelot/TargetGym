@@ -272,7 +272,11 @@ class Formation(
         )
         return fresh.replace(
             lead=fresh.lead.replace(time=state.lead.time),
-            wingmen=fresh.wingmen.replace(time=state.wingmen.time),
+            wingmen=fresh.wingmen.replace(
+                time=state.wingmen.time,
+                target_heading=state.wingmen.target_heading,
+                target_altitude=state.wingmen.target_altitude,
+            ),
         )
 
     # -- rendering / video -------------------------------------------------

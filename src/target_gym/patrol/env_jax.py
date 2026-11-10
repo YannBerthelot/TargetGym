@@ -272,8 +272,8 @@ class _PlanePatrolBase(
             psi=lead.psi,
             speed=lead_cruise_speed(lead.target_altitude),
             params=params,
-            target_altitude=lead.target_altitude,
-            target_heading=lead.target_heading,
+            target_altitude=state.follower.target_altitude,
+            target_heading=state.follower.target_heading,
         ).replace(time=state.follower.time)
         return fresh.replace(follower=follower)
 

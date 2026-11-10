@@ -31,7 +31,11 @@ IGNORE: dict[str, dict[str, str]] = {
     **{f"plane3d_{k}": _PLANE3D for k in ("heading", "circle", "racetrack", "figure8")},
     "patrol": _PATROL,
     "patrol_range_bearing": _PATROL,
-    "formation": _PATROL,
+    "formation": {
+        **_PATROL,
+        ".wake_history": "the lead's past absolute positions; the wake acts only "
+        "relative to the wingmen, so a re-formed lead elsewhere is the same wake",
+    },
     "compressor_surge": {
         ".surge_times": "a log of past surge times, counted only inside "
         "surge_window (env.py:688), so its effect expires on its own"
