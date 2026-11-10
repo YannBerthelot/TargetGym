@@ -1,6 +1,6 @@
 # Charter amendment 5 (draft): one member, both sides, every stop
 
-Status: draft for the owner, 2026-11-10. Nothing here is adopted. It proposes edits to
+Status: adopted by the owner as drafted, 2026-11-10, into the untracked charter in the main checkout. It proposes edits to
 [task-charter.md](task-charter.md) (version 2), which lives on main; this file only
 gives the text. Each change names the rule it edits, the wording to add or replace, and
 the reactor episode that showed the gap.
