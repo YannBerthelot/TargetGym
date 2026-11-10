@@ -39,7 +39,9 @@ class Scenario:
 
     In a stream (``target_gym.stream``) a scenario lasts a memoryless time of mean
     ``dwell_h`` hours, and its events start at ``events_per_h`` per hour, both from
-    the plant record (long-strata draft 4, S1)."""
+    the plant record (long-strata draft 4, S1). ``stream_overrides`` are parameters
+    only a continuing plant reads, applied after ``overrides``: how long an event
+    holds before it returns, or turning off the window's own event."""
 
     name: str
     overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
@@ -48,6 +50,7 @@ class Scenario:
     weight: float = 1.0
     dwell_h: float | None = None
     events_per_h: float = 0.0
+    stream_overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
 
 NORMAL = Scenario("normal", {}, description="the scored configuration as it is")

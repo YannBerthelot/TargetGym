@@ -35,7 +35,7 @@ import numpy as np
 from flax import struct
 from gymnax.environments import environment
 
-__all__ = ["StreamEnv", "StreamState", "event_counts"]
+__all__ = ["StreamEnv", "StreamState", "event_counts", "make_stream"]
 
 #: Salt for a start's draws, apart from the per-step keys ``fold_in(key, t)``.
 _START = 0x53545254
@@ -54,6 +54,21 @@ class StreamState:
 def _per_step(rate_per_h: float, dt_h: float) -> float:
     """The chance that a memoryless clock of ``rate_per_h`` rings within one step."""
     return float(1.0 - np.exp(-rate_per_h * dt_h))
+
+
+def make_stream(name: str, **kwargs) -> "StreamEnv":
+    """Registry task ``name`` as a stream over its scenario suite, at its scored
+    params. A task opts in with ``STREAM_READY = True`` on its env, once its events
+    end, its cycles wrap and its rates are set (long-strata draft 4, S1)."""
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY[name]
+    env = spec.make_env()
+    if not getattr(env, "STREAM_READY", False):
+        raise ValueError(f"{name} is not wired for the stream yet")
+    suite = scenarios.suite(spec)
+    return StreamEnv(env, spec.make_test_params(), suite, **kwargs)
 
 
 def event_counts(expected: float, n: int) -> np.ndarray:
@@ -89,7 +104,10 @@ class StreamEnv(environment.Environment):
         switching = pin is None and len(scenarios) > 1
         if switching and any(s.dwell_h is None for s in scenarios):
             raise ValueError("switching scenarios need a dwell_h each")
-        dt_h = float(params.delta_t) / 3600.0
+        from target_gym.registry import control_step_seconds
+
+        # Plant hours per step: ``delta_t`` is in minutes on some tasks.
+        dt_h = control_step_seconds(env, params) / 3600.0
         leave = np.array(
             [
                 0.0 if s.dwell_h is None else _per_step(1 / s.dwell_h, dt_h)
@@ -115,13 +133,16 @@ class StreamEnv(environment.Environment):
         self._entry = jnp.log(jnp.asarray(entry / entry.sum()))
         self._event_p = jnp.asarray(rates)
         self._expected = float(rates[pin] * scored) if pin is not None else 0.0
-        fields = sorted({f for s in scenarios for f in s.overrides})
+        self.scenarios = scenarios
+        sets = [
+            {**s.overrides, **getattr(s, "stream_overrides", {})} for s in scenarios
+        ]
         self._stacked = {
             f: jax.tree_util.tree_map(
                 lambda *v: jnp.stack([jnp.asarray(x) for x in v]),
-                *[s.overrides.get(f, getattr(params, f)) for s in scenarios],
+                *[o.get(f, getattr(params, f)) for o in sets],
             )
-            for f in fields
+            for f in sorted({f for o in sets for f in o})
         }
 
     @property
@@ -138,13 +159,16 @@ class StreamEnv(environment.Environment):
     def observation_space(self, params=None):
         return self.env.observation_space(params)
 
-    def _params(self, params, scenario):
-        """``params`` with ``scenario``'s overrides."""
+    def scenario_params(self, params, scenario):
+        """``params`` as the stream runs scenario ``scenario`` (an index): its
+        ``overrides``, then its ``stream_overrides``."""
         picked = {
             f: jax.tree_util.tree_map(lambda a: a[scenario], v)
             for f, v in self._stacked.items()
         }
         return params.replace(**picked) if picked else params
+
+    _params = scenario_params
 
     def start(self, key, count=0, params=None):
         """A stream from seed ``key``; a scoring run with ``count`` events in S."""
