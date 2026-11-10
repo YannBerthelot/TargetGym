@@ -483,7 +483,11 @@ def failure_kernel(env, key, state, new_state, params):
     in_place = jnp.asarray(getattr(params, "restart_in_place", False), bool)
     continuing = jnp.asarray(getattr(params, "continuing", False), bool)
     lost = jnp.logical_and(tripped, jnp.logical_not(in_place))
-    fresh = env.reset_env(restart_key(key, new_state.time), params)[1]
+    # A task whose plant must be put back into a world that flew on (a follower
+    # re-forming on a lead that kept its route) draws it with ``restart_plant``.
+    plant = getattr(env, "restart_plant", None)
+    rkey = restart_key(key, new_state.time)
+    fresh = plant(rkey, new_state, params) if plant else env.reset_env(rkey, params)[1]
     outside = {f: getattr(new_state, f) for f in getattr(env, "OUTSIDE_WORLD", ())}
     fresh = fresh.replace(
         time=new_state.time, sensor_key=new_state.sensor_key, **outside

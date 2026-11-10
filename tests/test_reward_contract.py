@@ -428,13 +428,16 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
         is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
         reset_env = staticmethod(env.reset_env)
         OUTSIDE_WORLD = env.OUTSIDE_WORLD
+        restart_plant = getattr(env, "restart_plant", None)
 
     assert bool(p.continuing)
     out, tripped, scored, terminated = failure_kernel(Trips(), key, state, proposal, p)
     assert bool(tripped) and not bool(terminated)
     assert int(out.time) == int(proposal.time)
     assert scored is proposal
-    fresh = env.reset_env(restart_key(key, proposal.time), p)[1]
+    rkey = restart_key(key, proposal.time)
+    plant = getattr(env, "restart_plant", None)
+    fresh = plant(rkey, proposal, p) if plant else env.reset_env(rkey, p)[1]
     for name in vars(fresh):
         if name in ("time", "sensor_key"):
             continue
@@ -493,7 +496,67 @@ def test_a_restart_does_not_itself_trip(spec, seed):
         is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
         reset_env = staticmethod(env.reset_env)
         OUTSIDE_WORLD = env.OUTSIDE_WORLD
+        restart_plant = getattr(env, "restart_plant", None)
 
     proposal = state.replace(time=state.time + 1)
     out, *_ = failure_kernel(Trips(), jax.random.PRNGKey(seed), state, proposal, p)
     assert not bool(env.is_terminated(out, p)), spec.name
+
+
+def _clocks(state):
+    """Every ``time`` leaf in the state, nested aircraft included, by path."""
+    flat, _ = jax.tree_util.tree_flatten_with_path(state)
+    return {
+        jax.tree_util.keystr(p): np.asarray(v)
+        for p, v in flat
+        if jax.tree_util.keystr(p).endswith(".time")
+    }
+
+
+def test_a_restart_keeps_every_clock(spec):
+    """S2: an aircraft keys its turbulence on its own clock, so a restart that
+    set a nested clock back would replay the outside world. Every clock in the
+    restarted state reads what it would have read without the trip."""
+    from target_gym.base import failure_kernel
+
+    env, p, state = _a_state(spec, steps=20)
+    if getattr(p, "restart_in_place", False):
+        pytest.skip(f"{spec.name}: restarts in place")
+
+    class Trips:
+        is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
+        reset_env = staticmethod(env.reset_env)
+        OUTSIDE_WORLD = env.OUTSIDE_WORLD
+        restart_plant = getattr(env, "restart_plant", None)
+
+    proposal = jax.jit(env.step_env)(
+        jax.random.PRNGKey(1), state, jnp.zeros(env.action_space(p).shape), p
+    )[1]
+    out, *_ = failure_kernel(Trips(), jax.random.PRNGKey(2), state, proposal, p)
+    before, after = _clocks(proposal), _clocks(out)
+    assert before.keys() == after.keys()
+    for path in before:
+        np.testing.assert_array_equal(after[path], before[path], err_msg=path)
+
+
+def test_a_restarted_formation_flies_on_along_its_route():
+    """The formation's learner flies the lead, so a trip restarts every
+    aircraft; the route the lead was cleared on is the outside world and
+    carries over, so the restarted lead is commanded where the route says."""
+    from target_gym.base import failure_kernel
+    from target_gym.registry import REGISTRY
+
+    env, p, state = _a_state(REGISTRY["formation"], steps=30)
+
+    class Trips:
+        is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
+        reset_env = staticmethod(env.reset_env)
+        OUTSIDE_WORLD = env.OUTSIDE_WORLD
+        restart_plant = env.restart_plant
+
+    proposal = state.replace(time=state.time + 1)
+    out, *_ = failure_kernel(Trips(), jax.random.PRNGKey(5), state, proposal, p)
+    for field in ("target_heading", "target_altitude"):
+        np.testing.assert_allclose(
+            float(getattr(out.lead, field)), float(getattr(proposal.lead, field))
+        )

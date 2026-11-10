@@ -80,12 +80,16 @@ class _PlanePatrolBase(
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
     #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
     OUTSIDE_WORLD = (
+        "lead",
+        "lead_memory",
         "slot_back",
         "slot_right",
         "slot_up",
+        "lead_turn_rate",
         "lead_turn_schedule",
         "gust_history",
         "gust_own",
+        "wake_history",
     )
 
     render_plane = classmethod(_render)
@@ -249,6 +253,29 @@ class _PlanePatrolBase(
 
         state = provisional.replace(follower=follower)
         return self.get_obs(state, params), state
+
+    def restart_plant(self, key: chex.PRNGKey, state: PatrolState, params):
+        """After a trip the scripted lead flies on (``OUTSIDE_WORLD``), so the
+        follower re-forms on it: at its slot plus the spawn noise, at the
+        lead's heading and cruise speed, with its clock running on so the
+        turbulence it meets is the one it would have met (long-strata S2)."""
+        fresh = self.reset_env(key, params)[1]
+        noise = params.follower_spawn_noise * jax.random.normal(
+            jax.random.fold_in(key, 1), (3,)
+        )
+        slot_x, slot_y, slot_z = desired_slot_position(state)
+        lead = state.lead
+        follower = make_cruise_state(
+            x=slot_x + noise[0],
+            y=slot_y + noise[1],
+            z=slot_z + noise[2],
+            psi=lead.psi,
+            speed=lead_cruise_speed(lead.target_altitude),
+            params=params,
+            target_altitude=lead.target_altitude,
+            target_heading=lead.target_heading,
+        ).replace(time=state.follower.time)
+        return fresh.replace(follower=follower)
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: PatrolState, params: PatrolParams, frames, clock):

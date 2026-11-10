@@ -198,6 +198,20 @@ class Formation(
             k,
         )
 
+        state = self._spawn(noise_key, lead_alt, lead_heading, back, right, up, params)
+        state = state.replace(
+            lead_turn_rate=schedule[0],
+            lead_turn_schedule=schedule,
+            gust_own=jnp.zeros((k, 3)),
+        )
+        return self.get_obs(state, params), state
+
+    def _spawn(self, noise_key, lead_alt, lead_heading, back, right, up, params):
+        """The formation in cruise: the lead at the origin on ``lead_heading``,
+        each wingman in its slot plus isotropic noise, at the lead's velocity
+        and heading: solvable, not trimmed. The route and gusts are left at
+        their reset values for the caller to set."""
+        k = self.num_wingmen
         speed = lead_cruise_speed(lead_alt)
         lead = make_cruise_state(
             x=0.0,
@@ -209,8 +223,6 @@ class Formation(
             target_altitude=lead_alt,
             target_heading=lead_heading,
         )
-        # Each wingman in its slot plus isotropic noise, at the lead's
-        # velocity and heading: solvable, not trimmed.
         forward = jnp.array([jnp.cos(lead_heading), jnp.sin(lead_heading)])
         starboard = jnp.array([jnp.sin(lead_heading), -jnp.cos(lead_heading)])
         noise = params.follower_spawn_noise * jax.random.normal(noise_key, (k, 3))
@@ -228,21 +240,40 @@ class Formation(
                 target_heading=lead_heading,
             )
 
-        wingmen = jax.vmap(spawn)(back, right, up, noise)
-        state = FormationState(
+        return FormationState(
             lead=lead,
-            wingmen=wingmen,
+            wingmen=jax.vmap(spawn)(back, right, up, noise),
             slot_back=back,
             slot_right=right,
             slot_up=up,
-            lead_turn_rate=schedule[0],
-            lead_turn_schedule=schedule,
+            lead_turn_rate=jnp.zeros(()),
+            lead_turn_schedule=jnp.zeros((N_LEAD_LEGS,)),
             time=0,
             wake_history=initial_wake(lead, params),
             gust_own=jnp.zeros((k, 3)),
             actuator_held=jnp.zeros(3 * (k + 1)),
         )
-        return self.get_obs(state, params), state
+
+    def restart_plant(self, key: chex.PRNGKey, state: FormationState, params):
+        """The learner flies every aircraft, so a trip restarts them all; the
+        route the lead was cleared on is the outside world, so the formation
+        re-forms on it (the lead's commanded heading and altitude), and every
+        aircraft's clock runs on so the turbulence it meets is the one it
+        would have met (long-strata S2). The kernel restores the rest of the
+        outside world from ``OUTSIDE_WORLD``."""
+        fresh = self._spawn(
+            key,
+            state.lead.target_altitude,
+            state.lead.target_heading,
+            state.slot_back,
+            state.slot_right,
+            state.slot_up,
+            params,
+        )
+        return fresh.replace(
+            lead=fresh.lead.replace(time=state.lead.time),
+            wingmen=fresh.wingmen.replace(time=state.wingmen.time),
+        )
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: FormationState, params, frames, clock):
