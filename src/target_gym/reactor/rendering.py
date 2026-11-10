@@ -1,4 +1,4 @@
-"""Control-room rendering for the pressurised water reactor.
+"""Control-room rendering for the nuclear reactor, a pressurised water reactor.
 
 The task (PHYSICS.md): follow the turbine's load while holding Tavg on its
 program, Tref, and the axial offset inside its band, with rods that move at one
@@ -437,11 +437,11 @@ def render_reactor(state, params, step, history):
     ]
     status, status_text = _status(state, p)
     fig = rk.frame(
-        title="PRESSURISED  WATER  REACTOR",
+        title="NUCLEAR  REACTOR  —  PRESSURISED  WATER",
         step=step,
         elapsed_s=step * p.delta_t,
         schematic=lambda ax: _draw_vessel(ax, state, p),
-        schematic_title="REACTOR  VESSEL",
+        schematic_title="NUCLEAR  CORE",
         gauges=gauges,
         strips=strips,
         status=status,
