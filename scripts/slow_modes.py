@@ -57,6 +57,10 @@ ANGLES = (".psi", ".target_heading")
 
 SEEDS = range(100, 110)
 
+#: Ignored on every task: readings of plant states measured directly, rounded
+#: to the instrument's resolution, so two near-identical runs flicker a step apart.
+COMMON = {".sensor_history": "rounded readings of states measured directly"}
+
 
 def _wrap(a):
     return (a + np.pi) % (2 * np.pi) - np.pi
@@ -138,7 +142,8 @@ def measure(
         )
         for k in SEEDS
     ]
-    result = slow_mode(pairs, ignore=tuple(IGNORE.get(name, {})))
+    ignored = {**COMMON, **IGNORE.get(name, {})}
+    result = slow_mode(pairs, ignore=tuple(ignored))
     return {
         "task": name,
         "N": n,
@@ -151,7 +156,7 @@ def measure(
         "pre": pre,
         "bias": bias,
         "offset": offset_share,
-        "ignored": IGNORE.get(name, {}),
+        "ignored": ignored,
         "windows": windows,
         "seeds": list(SEEDS),
     }

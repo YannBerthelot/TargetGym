@@ -28,7 +28,10 @@ import numpy as np
 #: An element has forgotten once its gap falls to ``e^-1`` of its start; the plant
 #: has forgotten once the largest gap stays under ``e^-3`` (``FORGOT``), which an
 #: exponential reaches at ``3 t_s``.
-FIT_FROM, FORGOT, PASSES = np.exp(-1.0), np.exp(-3.0), 3.0
+FIT_FROM, FORGOT = np.exp(-1.0), np.exp(-3.0)
+#: A gap within this many float32 steps of the value is no gap: two runs that
+#: agree to the arithmetic's resolution have forgotten.
+ULPS = 16 * float(np.finfo(np.float32).eps)
 #: The largest scaled gap at hand-over must reach this share of an element's spread
 #: over the run; below it the excursion did not move the plant and nothing is fitted.
 MIN_START = 0.05
@@ -151,10 +154,9 @@ def coupled_pair(
     )
 
 
-def _crossing(g: np.ndarray) -> float:
-    """When ``g`` last falls under ``e^-3`` of its start, interpolated on the log
-    scale (exact for an exponential); ``inf`` if it is still above at the end."""
-    level = g[0] * FORGOT
+def _crossing(g: np.ndarray, level: float) -> float:
+    """When ``g`` last falls under ``level``, interpolated on the log scale
+    (exact for an exponential); ``inf`` if it is still above at the end."""
     above = np.nonzero(g > level)[0]
     if not above.size:
         return 0.0
@@ -165,12 +167,19 @@ def _crossing(g: np.ndarray) -> float:
     return last + (hi - np.log(level)) / max(hi - lo, 1e-12)
 
 
+def _decay_time(g: np.ndarray) -> float:
+    """The time from staying under ``e^-1`` of the start to staying under
+    ``e^-3``, over 2: an exponential's time constant, however it started."""
+    first, third = _crossing(g, g[0] * FIT_FROM), _crossing(g, g[0] * FORGOT)
+    return np.inf if third == np.inf else max(third - first, 0.0) / 2.0
+
+
 def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
-    """``t_s`` from coupled pairs. Each state element forgets when its scaled gap
-    stays under ``e^-3`` of its own start, which an exponential does at ``3 t``;
-    ``t_s`` is the slowest element's median over pairs of that time, over 3.
-    It is immune to a floor under ``e^-3``, and ``inf`` for an element that never
-    stays under it (a neutral mode, a limit cycle's phase).
+    """``t_s`` from coupled pairs. Each state element's decay time is half the time
+    between its scaled gap staying under ``e^-1`` and under ``e^-3`` of its own
+    start, exact for an exponential however it started and immune to a floor
+    under ``e^-3``; ``inf`` for one that never stays under it (a neutral mode, a
+    limit cycle's phase). ``t_s`` is the slowest element's median over pairs.
     ``ignore`` names bookkeeping fields: an element is skipped when its name, less
     any ``[i]`` index, ends with an entry (``".x"`` skips ``.lead.x``, not ``.x_dot``).
     """
@@ -180,14 +189,18 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     for p in pairs:
         spread = p.values.std(axis=0)
         floor = 1e-9 * (1.0 + np.abs(p.values).mean(axis=0))
-        scaled = p.gap / np.maximum(spread, floor)
+        resolved = np.where(p.gap > ULPS * np.abs(p.values), p.gap, 0.0)
+        scaled = resolved / np.maximum(spread, floor)
         scaled[:, skip] = 0.0
         starts.append(scaled[0])
         largest.append(scaled.max(axis=1))
         # An element counts once its start gap is visible next to the largest one.
         visible = scaled[0] >= 1e-2 * scaled[0].max()
         times.append(
-            [_crossing(scaled[:, e]) if visible[e] else 0.0 for e in range(len(names))]
+            [
+                _decay_time(scaled[:, e]) if visible[e] else 0.0
+                for e in range(len(names))
+            ]
         )
     gap = np.median(np.array(largest), axis=0)
     per_element = np.median(np.array(times), axis=0)
@@ -195,7 +208,7 @@ def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
     tripped = sum(p.trips_a + p.trips_b > 0 for p in pairs)
     g0 = gap[0]
     slowest_i = int(np.argmax(per_element))
-    t_s = per_element[slowest_i] / PASSES
+    t_s = per_element[slowest_i]
     if g0 < MIN_START:
         t_s = np.nan
     never_forgot = tuple(n for n, t in zip(names, per_element) if t == np.inf)
