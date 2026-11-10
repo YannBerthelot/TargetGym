@@ -51,6 +51,7 @@ from target_gym.reactor.env import (
     scheduled_load,
     steady_state_precursors,
     steady_state_temperatures,
+    tavg_dnb_limit,
     tavg_program,
 )
 from target_gym.reactor.experts import (
@@ -77,6 +78,8 @@ BORON_BUMP = (
 #: The boron line's delay the operator plans with: the middle of its drawn range,
 #: 10 to 30 steps, ours, since an operator knows the line, not today's draw.
 LEAD_STEPS = 20
+#: A bump test's length: an hour of 30 s steps.
+BUMP_STEPS = 120
 #: The procedure's action band on the offset: half the 0.05 target band, ours,
 #: fixed by the owner on 2026-11-08 before any rerun (PHYSICS.md section 6).
 ACTION_BAND = 0.025
@@ -380,6 +383,40 @@ def design(fits, rule):
 LINEAR_OFFSET = 0.2
 
 
+def tavg_bump(q, s):
+    """The dilution step for the Tavg bump, sized from the curve book (owner,
+    2026-11-10): an operator knows the boron worth and the MTC, and steps so that
+    the predicted rise over the hour after the line's delay ends at the DNB limit,
+    never more than ``BORON_BUMP``. A ppm moves Tavg ``-boron_worth / (alpha_coolant
+    + alpha_fuel)`` K; a unit of dilution takes ``dilution_flow * boron /
+    primary_mass`` ppm a second."""
+    per_ppm = -q.boron_worth / (q.alpha_coolant + q.alpha_fuel)
+    per_unit = per_ppm * q.dilution_flow * float(s.boron) / q.primary_mass  # K/s
+    room = float(tavg_dnb_limit(q)) - float(tavg(s))
+    hour = (BUMP_STEPS - LEAD_STEPS) * DT
+    return -min(abs(BORON_BUMP), room / (abs(per_unit) * hour))
+
+
+def boron_on_tavg(env, q, s):
+    """Boron on Tavg with the rods held where they sit, read as an integrator past
+    the line's delay: K/s per unit of boron action, and the delay. The step is
+    ``tavg_bump``; a paired run without it takes out the day's own drift."""
+    rods = 1.0 - 2.0 * s.rod_in
+    still = closed(
+        env,
+        q,
+        s,
+        lambda m, o: (jnp.array([rods, 0.0]), m),
+        jnp.asarray(0.0),
+        BUMP_STEPS,
+    )
+    step = tavg_bump(q, s)
+    a = jnp.array([rods, step])
+    tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
+    slope, delay = integrator(tavg(tr) - tavg(still))
+    return slope / step, max(delay, float(s.boron_delay) * DT)
+
+
 def boron_bump(env, base, read, limit=np.inf):
     """A step of dilution with rung 1's rods closed, at every point and seed."""
 
@@ -453,15 +490,8 @@ def bumps(env, params):
     ) / p.primary_mass  # fmt: skip
     ff = ppm_per_load / (rate * DT)
 
-    # The override's loop: boron on Tavg with the rods held where they sit, read as an
-    # integrator past the line's delay.
-    def boron_on_tavg(q, s):
-        a = jnp.array([1.0 - 2.0 * s.rod_in, BORON_BUMP])
-        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
-        slope, delay = integrator(tavg(tr))
-        return slope / BORON_BUMP, max(delay, float(s.boron_delay) * DT)
-
-    fits = [[boron_on_tavg(q, s) for q, s in pts] for pts in every]
+    # The override's loop: boron on Tavg with the rods held where they sit.
+    fits = [[boron_on_tavg(env, q, s) for q, s in pts] for pts in every]
     (t_Kc, t_Ti), report["boron_on_Tavg"] = design(fits, simc_integrating)
 
     # The procedure's rods: ROD_BUMP steps in, boron held, an hour, on the offset.

@@ -6,6 +6,7 @@
     "restart_steps": {"lo": 2880, "hi": 8400, "unit": "30 s steps", "why": "a scram's restart, 24 to 70 h (Doel-3; APR1400)"},
     "floor_allowed": {"lo": 900.0, "hi": 1800.0, "unit": "s", "why": "time to restore Tavg above its floor, 15 to 30 min"}
   },
-  "coupled": "alpha_coolant and boron_worth both belong to the start of the cycle; within it they are drawn independently",
+  "coupled": [["alpha_coolant", "boron_worth"]],
+  "coupled_why": "both follow the core's boron (ours, from the physics): more boron makes the MTC less negative and each ppm worth less, so the MTC's most negative end (-20) goes with the largest worth (-10.9), as BEAVRS measures 10.8 at lower boron",
   "no_range": ["alpha_tilt", "rho_ext_min", "rod_step_price", "effluent_price", "imbalance_multiple", "carried_days_range"]
 }

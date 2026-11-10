@@ -28,17 +28,23 @@ SEED = 20261110
 
 
 def draws(table):
+    """``DRAWS`` Latin-hypercube draws. Each group in ``table["coupled"]`` shares one
+    coordinate, so its numbers move together, ``lo`` with ``lo`` (amendment 5)."""
     names = sorted(table["ranges"])
-    lo = np.array([table["ranges"][n]["lo"] for n in names], float)
-    hi = np.array([table["ranges"][n]["hi"] for n in names], float)
-    unit = qmc.LatinHypercube(d=len(names), seed=SEED).random(DRAWS)
-    values = qmc.scale(unit, np.minimum(lo, hi), np.maximum(lo, hi))
+    groups = [list(g) for g in table.get("coupled", [])]
+    grouped = {n for g in groups for n in g}
+    groups += [[n] for n in names if n not in grouped]
+    unit = qmc.LatinHypercube(d=len(groups), seed=SEED).random(DRAWS)
     out = []
-    for row in values:
-        d = dict(zip(names, row.tolist()))
+    for row in unit:
+        d = {}
+        for u, group in zip(row, groups):
+            for n in group:
+                r = table["ranges"][n]
+                d[n] = float(r["lo"] + u * (r["hi"] - r["lo"]))
         if "restart_steps" in d:
             d["restart_steps"] = int(round(d["restart_steps"]))
-        out.append(d)
+        out.append({n: d[n] for n in names})
     return out
 
 
