@@ -212,6 +212,13 @@ class ReactorParams(EnvParams):
     #: Recent power level the xenon inventory is in equilibrium with at reset:
     #: narrow, because a unit that load-follows daily is never quite at rest.
     initial_xenon_power_range: Tuple[float, float] = (0.9, 1.0)
+    #: Fuel burnup, ppm of boron a day: BEAVRS (MIT, measured Westinghouse 4-loop),
+    #: Table 24, 2.27 ppm a day in cycle 1 and 3.34 in cycle 2. Lost through the
+    #: whole day as if at full power (D9).
+    burnup_range: Tuple[float, float] = (2.3, 3.3)
+    #: Days of burnup not yet diluted at reset: ours, the operator dilutes at least
+    #: once a day. The day starts lined out that much below its Tavg program.
+    carried_days_range: Tuple[float, float] = (0.0, 1.0)
 
     # ---- Time discretization ----
     # One control step applies the action for Reactor.control_period physics
@@ -355,6 +362,8 @@ PARAM_UNITS = {
     "load_min": "-",
     "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
+    "burnup_range": "ppm/day",
+    "carried_days_range": "day",
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
@@ -419,6 +428,7 @@ class ReactorState(EnvState):
     ril_outside: float = 0.0  # s the rods have sat past their insertion limit
     above_dnb: float = 0.0  # s Tavg has sat above its DNB limit without a break
     xenon_power: float = 1.0  # the recent power the starting xenon is balanced with
+    burn_rate: float = 0.0  # ppm/s of boron the fuel's burnup is worth today
     #: Core boron as the boronmeter has read it, newest first; the reading is the
     #: oldest, ``BORON_METER_STEPS`` control steps late.
     boron_meter: jax.Array = struct.field(
@@ -480,6 +490,11 @@ def rod_balance(T_fuel, T_avg, Xe_hat, params: ReactorParams):
         + params.alpha_coolant * (T_avg - params.T_coolant_ref)
         - params.rho_Xe_full * (Xe_hat - 1.0)
     )
+
+
+def burnt(state, params: ReactorParams):
+    """The ppm of boron the fuel has burnt since reset, at full power's rate."""
+    return state.burn_rate * state.physics_time * params.delta_t
 
 
 def rod_worth(rod_in, params: ReactorParams):
@@ -746,6 +761,8 @@ def compute_next_state(
     boron = state.boron + (feed - state.boron) * closes
 
     rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
+    # Burnup since reset, as the boron it is worth (D9).
+    rho_ext = rho_ext + p.boron_worth * burnt(state, p)
     rod_eps = rod_tilt(rod_in, p)
 
     # ── Integrate coupled ODEs ──

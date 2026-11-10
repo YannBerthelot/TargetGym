@@ -28,7 +28,9 @@ from target_gym.reactor.env import (
 
 
 def reset(seed=0):
-    env, p = Reactor(), ReactorParams()
+    # On program at reset: no dilution carried over (reactor-v7's carried debt
+    # would start the plant up to 0.8 K cold).
+    env, p = Reactor(), ReactorParams(carried_days_range=(0.0, 0.0))
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     return env, p, obs, s
 

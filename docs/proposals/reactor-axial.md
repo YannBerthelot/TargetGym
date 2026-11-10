@@ -1,11 +1,50 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: Amendment 3 (reactor-v6) is the current design (next section); the EDF rebuild
+Status: reactor-v7 (next section) is the current design, on top of Amendment 3; the EDF rebuild
 of 2026-11-08 and the first attempt of 2026-11-07 below it are history, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
+
+## Burnup and the xenon tool's play, 2026-11-10 (reactor-v7)
+
+This section updates the Amendment 3 results below it. Two owner decisions, each
+written into PHYSICS.md before its run:
+
+- **The xenon tool's play** (PHYSICS.md section 6). A diagnostic showed the
+  reference's whole baseload cost, $90, was effluent from the xenon tool cancelling a
+  drift that left alone costs $0.80; its Tavg loop never acted. The tool now keeps
+  the boron it did not move as a debt and acts only on the part that would carry
+  Tavg out of its free zone (1.6 K cold to the DNB limit hot). On v6 this alone did
+  not save baseload ($93 against the null's $0.80): the Tavg loop then acted
+  instead, and the slow Krsko days got dearer ($1,307 to $1,534, $627 to $994).
+- **Fuel burnup** (PHYSICS.md D9). The fuel loses 2.3 to 3.3 ppm of boron's worth a
+  day (BEAVRS, Table 24, measured letdown of two cycles of a Westinghouse 4-loop
+  PWR), and the day starts with 0 to 1 day of it not yet diluted (ours: an operator
+  dilutes at least daily). The Tavg it moves is 8/33 K per ppm: at a fixed power the
+  fuel cools with the coolant, so both feedbacks count. A first hand value that
+  counted the coolant alone (8/30) was wrong, and the six-hour test caught it
+  (0.199 K measured, 0.200 K from the corrected rule).
+
+### Reference and nulls on reactor-v7, seeds 100 to 109
+
+| Scenario | Reference | Null | Null cheaper on |
+|---|---:|---|---:|
+| edf_daily | $2,551 | $8.04M, trips on all 10 | 0 |
+| edf_short_hold | $2,420 | $8.04M, trips on all 10 | 0 |
+| krsko_slow | $1,549 | $6.36M, trips on all 10 | 0 |
+| krsko_shallow | $1,020 | $5.04M, trips on all 10 | 0 |
+| fast_return | $4,318 | $8.52M, trips on all 10 | 0 |
+| baseload | $81 | $142, no trips | 4 of 10 |
+
+The reference trips nowhere and never sits past the insertion limit. On baseload the
+null now loses on the mean and wins 4 seeds, short of the 6 the acceptance rule needs,
+so no null passes for the reference. Baseload now has a real chore: dilution for
+burnup and for the debt carried in.
+
+Not re-run on v7: the ceilings, the room and its sensitivity. The tables below are
+v6's.
 
 ## Amendment 3, 2026-11-08 to 2026-11-10 (reactor-v6)
 

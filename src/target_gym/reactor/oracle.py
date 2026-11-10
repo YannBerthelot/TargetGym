@@ -84,7 +84,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     n, T_fuel, T_hot, Tavg, delta I) per sub-step. ``width`` is the rate corner's
     (0.0 is the exact clip) and ``deltas`` are added to its output, one per sub-step
     (K5's probe)."""
-    start, ramp_down_at, ramp_up_at, wobble, delay = task
+    start, ramp_down_at, ramp_up_at, wobble, delay, burn_rate = task
     most = rod_travel(p)
     period = env.control_period
     substeps = int(env.integration_method.split("_")[-1])
@@ -105,6 +105,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         boron = boron_step(arriving, boron, p, boron_width)
         rho = rod_worth(rod_in, p) - rod_worth(p.rod_park, p)
         rho = rho + p.boron_worth * (boron - p.boron_ref)
+        rho = rho + p.boron_worth * burn_rate * (start + t * period + i) * p.delta_t
         eps = rod_tilt(rod_in, p)
         plant, _ = _reactor_stiff_step(plant, rho, p, substeps, load_at(i), eps)
         T_hot, T_cold = plant[8], plant[9]
@@ -173,6 +174,7 @@ def reactor_model(env, p) -> TaskModel:
         ]),
         data=lambda s: (
             s.physics_time, s.ramp_down_at, s.ramp_up_at, s.load_wobble, s.boron_delay,
+            s.burn_rate,
         ),
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],

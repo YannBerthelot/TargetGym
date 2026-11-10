@@ -164,6 +164,8 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `load_min`, `hold_range` | 0.5, 3 to 8 h | | The URD's cycle, Chari and Rohr (1997) | earlier |
 | `ramp_down_range` | 0.5 to 2 h | s | | ours |
 | `demand_theta`, `demand_sigma` | 300 s, 0.5 % | | A small frequency-control wobble | ours |
+| `burnup_range` | 2.3 to 3.3 | ppm/day | BEAVRS (MIT), Table 24: letdown 623 to 0 ppm over 52 to 326 EFPD in cycle 1 (2.27 a day), 918 to 104 ppm over 13 to 257 EFPD in cycle 2 (3.34 a day) | read |
+| `carried_days_range` | 0 to 1 | day | Burnup not yet diluted at reset: the operator dilutes at least once a day | ours |
 | `max_steps_in_episode` | 2880 | steps | A day, so the xenon's swing shows after the return | design |
 
 **`nu_Sigma_f`.** Table I-1 prints Sigma_a 1.53 and nu Sigma_f 1.56, and with those
@@ -255,6 +257,15 @@ none of the patent's 7 % noise.
 
 **D5: no decay heat.** A scram removes all heat at once.
 
+**D9: burnup by the clock.** The fuel's burnup is worth boron at the day's drawn rate
+for every second since reset, as if at full power. Real burnup follows the energy
+made, so on a day with a 50 % hold it is overstated by at most half the hold's share
+of the day: under 0.1 ppm at 3.3 ppm a day, 0.02 K of Tavg. It keeps the oracle's
+model exact without a new state. The day starts lined out below its program by the
+burnup earlier days left undiluted, 0 to 1 day of it, 0 to 0.8 K. Burnup's bite is
+small within a day (0.56 to 0.8 K of Tavg at the BEAVRS rates), so it matters mostly
+together with that carried debt.
+
 **Retired tests (owner, 2026-11-08, TESTING.md section 10).**
 `test_peak_xenon_worth_is_in_the_published_band` (the task has no scram; the load cut's
 swing is tested against Krsko instead), `test_the_reactors_winning_null_has_a_written_exception`
@@ -292,6 +303,24 @@ the excess. It is a band on the offset, like the target band, so in delta I it
 narrows with power as the target band does; read as 2.5 % of delta I at every power
 it would equal the whole band at the half-power hold. **ours,** family range 0 to
 0.05, chosen at half, and not to be adjusted after results (J1).
+
+**The xenon tool's play (owner, 2026-11-10), fixed before any rerun.** The rule: a
+controller acts on what the cost charges and on what predicts a charge, never on a
+deviation that is free. The xenon tool broke it on baseload: it moved 13.6 ppm of
+boron, $90 of effluent a day, to cancel a xenon drift that left alone costs $0.80
+(diagnostic, `docs/proposals/reactor-axial.md`). So the tool now has play. It keeps
+the boron it did not move as a debt in ppm, and reads the debt as the Tavg shift it
+would leave at steady power, `debt * boron_worth / (alpha_coolant + alpha_fuel)`
+(at a fixed power the fuel sits a fixed step above the coolant, so it cools with it
+and both feedbacks absorb the reactivity; 0.24 K per ppm). While that
+shift stays inside Tavg's free zone, the tool does nothing; past it, it moves only
+the excess. The free zone is what the cost leaves free: down to the 1.6 K dead band
+on the cold side, up to the DNB limit on the hot side. Each edge is pulled in by the
+shift xenon causes over the boron line's lead (600 s, the same lead as the plan's
+feedforward), so the tool acts before the edge, not after it. No new number: the
+dead band, the DNB limit, the lead and the plant's two worths are all set elsewhere.
+The rods and the Tavg PI are unchanged. Every rung of the ladder uses the same tool,
+so the comparison between rungs stays fair.
 
 ---
 

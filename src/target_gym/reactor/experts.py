@@ -97,9 +97,10 @@ class ReferenceParams:
     A (PHYSICS.md, D8). Bank D holds the axial offset, never deeper than its insertion
     limit; boron trims Tavg past the rods' 1.6 C dead band (IAEA NP-T-3.23, annex
     II-5.1), fed forward from the day's plan, led by the boron line's expected delay,
-    and from xenon's balance (:func:`xenon_feedforward`). Both loops are SIMC PIs on
-    bump tests at full power and at the half-power hold, the design asking the least
-    gain kept. Nothing here was set from a cost (docs/proposals/reactor-axial.md)."""
+    and from xenon's balance (:func:`xenon_rate`, with :func:`xenon_play`). Both
+    loops are SIMC PIs on bump tests at full power and at the half-power hold, the
+    design asking the least gain kept. Nothing here was set from a cost (docs/proposals/reactor-axial.md).
+    """
 
     dt: float = 30.0
     dead_band: float = 1.6
@@ -132,20 +133,25 @@ class ReferenceState:
     up: float = 0.0
     I_hat: float = 0.0
     Xe_hat: float = 0.0
+    debt: float = 0.0  # ppm the xenon tool has not moved (its play)
 
 
 def xenon_feedforward(I_hat, Xe_hat, n, boron, first, plant, dt, xp=jnp, history=None):
-    """The boron flow that cancels xenon's reactivity rate, and the next ``I_hat,
-    Xe_hat``.
+    """The boron flow that cancels xenon's reactivity rate in full, and the next
+    ``I_hat, Xe_hat``: :func:`xenon_rate` with no play."""
+    rate, I_hat, Xe_hat = xenon_rate(I_hat, Xe_hat, n, first, plant, dt, xp, history)
+    return ppm_flow(rate, boron, plant, xp), I_hat, Xe_hat
+
+
+def xenon_rate(I_hat, Xe_hat, n, first, plant, dt, xp=jnp, history=None):
+    """The boron rate, ppm/s, that cancels xenon's reactivity rate, and the next
+    ``I_hat, Xe_hat``.
 
     The operator's xenon tool (OAPS, section 1): the textbook iodine and xenon
     equations (the same point form as the plant's means, PHYSICS.md) run on the
     observed power, started in balance with the recent power the observation
     reports (``history``; the first reading when it is not given). Xenon's worth
-    ``rho_Xe_full (Xe_hat - 1)`` is met by boron at its worth, and the ppm rate
-    turned into a flow by the line's feed and bleed: dilution removes
-    ``dilution_flow / primary_mass * boron`` ppm/s at full flow, boration adds
-    ``boration_flow / primary_mass * (acid - boron)``. No gain is tuned."""
+    ``rho_Xe_full (Xe_hat - 1)`` is met by boron at its worth. No gain is tuned."""
     from target_gym.reactor.env import LAMBDA_IODINE, LAMBDA_XENON
 
     p = plant
@@ -158,10 +164,39 @@ def xenon_feedforward(I_hat, Xe_hat, n, boron, first, plant, dt, xp=jnp, history
     dI = LAMBDA_IODINE * (n - I_hat)
     dXe = a * (r * n + I_hat) - (LAMBDA_XENON + s * n) * Xe_hat
     ppm_rate = p.rho_Xe_full * dXe / p.boron_worth  # ppm/s, negative: dilute
+    return ppm_rate, I_hat + dt * dI, Xe_hat + dt * dXe
+
+
+def ppm_flow(ppm_rate, boron, plant, xp=jnp):
+    """The boron flow that changes the core's boron by ``ppm_rate`` ppm/s: dilution
+    removes ``dilution_flow / primary_mass * boron`` ppm/s at full flow, boration
+    adds ``boration_flow / primary_mass * (acid - boron)``."""
+    p = plant
     dilute = p.dilution_flow / p.primary_mass * xp.maximum(boron, 1.0)
     borate = p.boration_flow / p.primary_mass * (p.boric_acid_ppm - boron)
-    flow = xp.where(ppm_rate < 0.0, ppm_rate / dilute, ppm_rate / borate)
-    return flow, I_hat + dt * dI, Xe_hat + dt * dXe
+    return xp.where(ppm_rate < 0.0, ppm_rate / dilute, ppm_rate / borate)
+
+
+def xenon_play(debt, ppm_rate, T_ref, plant, dt, lead, dead_band, xp=jnp):
+    """The xenon tool with play (owner, 2026-11-10; PHYSICS.md section 6): the ppm
+    to move this step and the debt left.
+
+    ``debt`` is the boron the tool did not move, in ppm; at steady power it leaves
+    Tavg shifted by ``debt * boron_worth / (alpha_coolant + alpha_fuel)``. Tavg's free zone runs
+    from ``dead_band`` below its program ``T_ref`` to the DNB limit, each edge
+    pulled in by the shift xenon makes over ``lead``. Inside it nothing moves;
+    past it, only the excess."""
+    from target_gym.reactor.env import tavg_dnb_limit
+
+    p = plant
+    # K of Tavg per ppm of debt: at a fixed power the fuel cools with the coolant.
+    k = p.boron_worth / (p.alpha_coolant + p.alpha_fuel)
+    debt = debt + ppm_rate * dt
+    pull = xp.abs(ppm_rate) * lead
+    lo = xp.minimum(-dead_band / k + pull, 0.0)
+    hi = xp.maximum((tavg_dnb_limit(p) - T_ref) / k - pull, 0.0)
+    left = xp.clip(debt, lo, hi)
+    return debt - left, left
 
 
 def reference_step(params, state, obs, xp=jnp):
@@ -196,13 +231,17 @@ def reference_step(params, state, obs, xp=jnp):
     t = state.clock + p.lead
     planned = scheduled_load(t + p.dt, down, up, plant, xp=xp)
     planned = planned - scheduled_load(t, down, up, plant, xp=xp)
-    xenon, I_hat, Xe_hat = xenon_feedforward(
-        state.I_hat, state.Xe_hat, n, obs[..., 7], first, plant, p.dt, xp, obs[..., 10]
+    rate, I_hat, Xe_hat = xenon_rate(
+        state.I_hat, state.Xe_hat, n, first, plant, p.dt, xp, obs[..., 10]
     )
+    moved, debt = xenon_play(
+        state.debt, rate, T_ref, plant, p.dt, p.lead, p.dead_band, xp
+    )
+    xenon = ppm_flow(moved / p.dt, obs[..., 7], plant, xp)
     out = xp.clip(boron + p.ff * planned + xenon, -1.0, 1.0)
     new = ReferenceState(
         rods=rods, boron=boron, last_ao=ao, last_e=e, clock=state.clock + p.dt,
-        down=down, up=up, I_hat=I_hat, Xe_hat=Xe_hat,
+        down=down, up=up, I_hat=I_hat, Xe_hat=Xe_hat, debt=debt,
     )  # fmt: skip
     return xp.stack([rods, out], axis=-1), new
 

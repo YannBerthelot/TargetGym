@@ -56,8 +56,10 @@ from target_gym.reactor.env import (
 from target_gym.reactor.experts import (
     RodControlParams,
     RodControlState,
+    ppm_flow,
     rod_control_step,
-    xenon_feedforward,
+    xenon_play,
+    xenon_rate,
 )
 
 SEEDS = tuple(range(100, 110))
@@ -179,6 +181,14 @@ class Tune:
     wd_Ti: float = 1.0
 
 
+def xenon_tool(I_x, Xe_x, debt, n, obs, clock, p):
+    """The operator's xenon tool with its play (PHYSICS.md section 6), the same on
+    every rung: the boron flow, the next iodine and xenon, and the debt."""
+    rate, I_x, Xe_x = xenon_rate(I_x, Xe_x, n, clock == 0.0, p, DT, history=obs[10])
+    moved, debt = xenon_play(debt, rate, obs[5], p, DT, LEAD_STEPS * DT, DEAD_BAND)
+    return ppm_flow(moved / DT, obs[7], p), I_x, Xe_x, debt
+
+
 def dead(e):
     return jnp.sign(e) * jnp.maximum(jnp.abs(e) - DEAD_BAND, 0.0)
 
@@ -192,7 +202,7 @@ def make_policy(tune, rung, p):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, target, last_e, last_ao, last_r, clock, down, up, bt, I_x, Xe_x = m
+        u, b, target, last_e, last_ao, last_r, clock, down, up, bt, I_x, Xe_x, debt = m
         n, rod, T_avg, T_ref = obs[0], obs[2], obs[4], obs[5]
         di, to_down, to_up = obs[6], obs[8], obs[9]
         # The plan, read once at the start: absolute times on the policy's clock.
@@ -231,16 +241,14 @@ def make_policy(tune, rung, p):
                 stuck, bt + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), 0.0
             )
             out = b + bt + (out - b_before_override)
-        # Every rung: the operator's xenon tool (experts.xenon_feedforward).
-        xenon, I_x, Xe_x = xenon_feedforward(
-            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
-        )
+        # Every rung: the operator's xenon tool, with its play.
+        xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = out + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x)
+        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x, debt)
 
     zero = jnp.asarray(0.0)
-    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 9
+    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 10
     return act, memory
 
 
@@ -259,7 +267,7 @@ def procedure(p, tune):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x = m
+        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x, debt = m
         n, rod, T_avg, T_ref, di = obs[0], obs[2], obs[4], obs[5], obs[6]
         down = jnp.where(clock == 0.0, obs[8] * 3600.0, down)
         up = jnp.where(clock == 0.0, obs[9] * 3600.0, up)
@@ -272,15 +280,13 @@ def procedure(p, tune):
         u = jnp.clip(u, deepest, PARK)
         e = dead(T_ref - T_avg)
         b = jnp.clip(b + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), -1.0, 1.0)
-        xenon, I_x, Xe_x = xenon_feedforward(
-            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
-        )
+        xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = b + tune.ff * planned_step(clock, down, up) + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x)
+        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x, debt)
 
     zero = jnp.asarray(0.0)
-    return act, (jnp.asarray(PARK),) + (zero,) * 8
+    return act, (jnp.asarray(PARK),) + (zero,) * 9
 
 
 def reference(saved, p):

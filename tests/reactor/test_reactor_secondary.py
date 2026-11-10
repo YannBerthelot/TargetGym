@@ -176,7 +176,8 @@ def test_the_load_ramps_at_two_percent_a_minute():
 
 
 def test_reset_starts_on_program_at_full_load():
-    params = P.replace(sensor_noise_scale=0.0)
+    """With no dilution carried over (reactor-v7 carries 0 to 1 day of it)."""
+    params = P.replace(sensor_noise_scale=0.0, carried_days_range=(0.0, 0.0))
     obs, state = ENV.reset_env(jax.random.PRNGKey(0), params)
     assert float(state.n) == pytest.approx(1.0)
     assert float(obs[4]) == pytest.approx(float(obs[5]), abs=1e-3)

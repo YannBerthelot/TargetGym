@@ -264,7 +264,26 @@ class Reactor(
             maxval=params.initial_xenon_power_range[1],
         )
         I_hat, Xe_hat = steady_state_xenon(n_recent, params)
-        T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
+        # Burnup: today's rate, and the dilution earlier days left undone, which
+        # lines the day out that far below its program (D9). Folded keys keep the
+        # other draws as they were.
+        rate = jax.random.uniform(
+            jax.random.fold_in(key, 7),
+            minval=params.burnup_range[0],
+            maxval=params.burnup_range[1],
+        )
+        carried = rate * jax.random.uniform(
+            jax.random.fold_in(key, 8),
+            minval=params.carried_days_range[0],
+            maxval=params.carried_days_range[1],
+        )
+        # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
+        shift = (
+            carried * params.boron_worth / (params.alpha_coolant + params.alpha_fuel)
+        )
+        T_fuel, T_hot, T_cold, T_sg = (
+            T - shift for T in steady_state_temperatures(load, params)
+        )
         # Critical on boron: the rods stay parked, whatever xenon asks for.
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
         boron = params.boron_ref + needed / params.boron_worth
@@ -307,6 +326,7 @@ class Reactor(
             rod_moved=as_state(0.0),
             effluent=as_state(0.0),
             xenon_power=as_state(n_recent),
+            burn_rate=as_state(rate / 86400.0),
             boron_meter=jnp.full(BORON_METER_STEPS + 1, boron, dtype),
         )
 
