@@ -311,3 +311,24 @@ Each scenario's real operating time, in 4 h blocks a year of 2190
 spike 60, long deviation 20, long deviation with a wrong estimate 1. All are
 ours, with family ranges in `scenarios.py`; REALITY.md gives the events but
 not how many blocks a year hold them.
+
+---
+
+<!-- BEGIN GENERATED FACTS -->
+
+<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
+     `make ci-docs` fails if this block does not match the code. Prose
+     about *why* these numbers are what they are belongs outside it. -->
+
+### Facts, generated from the code
+
+| environment | steps | step (s) | episode | action | obs | float state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `battery` | 14400 | 1 | 4.0 h | 1 in [-1, 1] | 17 | 120 |
+
+`float state` counts the scalar and array float fields the state carries,
+`time` excluded; the gap between it and `obs` is what the controller cannot
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
+
+<!-- END GENERATED FACTS -->

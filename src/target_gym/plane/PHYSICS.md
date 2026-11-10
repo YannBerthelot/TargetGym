@@ -655,9 +655,9 @@ sites (2D, 3D and patrol) now say so.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 21 |
-| `plane_energy` | 1600 | 1 | 27 min | 2 in [-1, 1] | 10 | 21 |
-| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 10 | 21 |
+| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
+| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
+| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 24 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
