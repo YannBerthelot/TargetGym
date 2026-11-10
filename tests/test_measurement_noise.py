@@ -744,7 +744,11 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
     # 36 km. Two such steps at the farthest coordinate, never under 2 mm.
     state = env.reset_env(keys[1], params)[1]
     far = max(
-        [abs(float(getattr(state, f))) for f in ("x", "y", "z") if hasattr(state, f)]
+        [
+            float(np.max(np.abs(np.asarray(getattr(state, f)))))
+            for f in ("x", "y", "z")
+            if hasattr(state, f)
+        ]
         + [0.0]
     )
     atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
