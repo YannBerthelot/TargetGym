@@ -99,6 +99,23 @@ def test_the_kiln_solves_seed_zeros_reset():
 
 
 @pytest.mark.medium
+def test_the_four_tank_rig_solves_its_reset_though_it_has_no_trip():
+    """The rig has no trip, so its trip costs nothing (failure_cost 0), yet an
+    empty or overflowing tank still bounds every level. At rest at the P+
+    operating point the first solve is a plain one: converged, inside the
+    cap, with no retry."""
+    env, params, oracle = _oracle("four_tank")
+    assert float(params.failure_cost) == 0.0
+    key = episode_keys(jax.random.PRNGKey(0), 1, 3300)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
 @pytest.mark.parametrize(
     "name, in_force",
     [(n, False) for n in ON_SOLVER] + [(n, True) for n in IN_FORCE],
