@@ -248,7 +248,7 @@ def _draw_furnace(ax, state, params):
     # toward the glass, with a brighter core, its length by the bay's firing.
     for k in range(g.n_bays):
         xc, f = (k + 0.5) * bay_w, fire * shares[k] / shares.max()
-        length = (0.45 + 0.5 * f) * 2.0 * half[0]
+        length = (0.25 + 0.3 * f) * 2.0 * half[0]  # a quarter to over half across
         # The gas's glow, warmed: an orange flame with a yellow-white core.
         hot = rk.mcolors.to_hex(_glow(gas[k]))
         outer = rk.lerp_hex(hot, rk.ORANGE, 0.55)
