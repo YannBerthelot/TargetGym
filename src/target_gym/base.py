@@ -455,7 +455,10 @@ def failure_kernel(env, key, state, new_state, params):
     When the physics' proposal for the next state leaves the operating
     envelope the plant trips: the step is charged ``reward.trip_cost``
     (``restart_steps * failure_cost``) and the plant restarts at once, as
-    ``reset_env`` would, on the same window clock. ``terminated`` stays false,
+    ``reset_env`` would, on the same window clock. The outside world does not
+    restart: the fields the task names in ``env.OUTSIDE_WORLD`` (disturbances,
+    targets, schedules, records) carry on from the proposal, so a policy that
+    trips meets the world one that does not would (long-strata S2). ``terminated`` stays false,
     so the restart is an ordinary transition with a cost and every window has
     the same length. Each restart is a fresh draw (``restart_key``).
 
@@ -481,7 +484,10 @@ def failure_kernel(env, key, state, new_state, params):
     continuing = jnp.asarray(getattr(params, "continuing", False), bool)
     lost = jnp.logical_and(tripped, jnp.logical_not(in_place))
     fresh = env.reset_env(restart_key(key, new_state.time), params)[1]
-    fresh = fresh.replace(time=new_state.time, sensor_key=new_state.sensor_key)
+    outside = {f: getattr(new_state, f) for f in getattr(env, "OUTSIDE_WORLD", ())}
+    fresh = fresh.replace(
+        time=new_state.time, sensor_key=new_state.sensor_key, **outside
+    )
     out = _select(jnp.logical_and(lost, continuing), fresh, new_state)
     return out, tripped, new_state, jnp.logical_and(lost, jnp.logical_not(continuing))
 

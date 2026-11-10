@@ -56,6 +56,19 @@ class Reactor(
     Action      (2,): [rod demand, boron flow] in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_n",
+        "load_wobble",
+        "ramp_down_at",
+        "ramp_up_at",
+        "demand_key",
+        "effluent",
+        "ao_outside",
+        "ril_outside",
+    )
+
     registry_name: str = "reactor"
 
     render_reactor = classmethod(_render)

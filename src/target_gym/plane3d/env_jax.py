@@ -77,6 +77,26 @@ class _Airplane3DBase(
       - _reset_targets(key, params) -> dict of target fields
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_altitude",
+        "target_heading",
+        "target_x",
+        "target_y",
+        "target_radius",
+        "target_half_leg",
+        "heading_change",
+        "clearance_time",
+        "gust_x",
+        "gust_y",
+        "gust_z",
+        "zone_start",
+        "zone_end",
+        "m",
+        "fuel",
+    )
+
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400

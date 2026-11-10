@@ -39,6 +39,14 @@ class UnstableCSTR(
     Action      (1,): initiator in the feed, raw in [-1, 1] -> [I_f_min, I_f_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_T",
+        "event_at",
+        "feed_phase",
+    )
+
     registry_name: str = "unstable_cstr"
 
     render_car = classmethod(_render)

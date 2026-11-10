@@ -41,6 +41,28 @@ class GridBattery(
     closure
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "prices",
+        "baselines",
+        "bias_pu",
+        "bias_start",
+        "bias_end",
+        "signal_x",
+        "signal_energy",
+        "regulation",
+        "target_power",
+        "period_response",
+        "deficit_export",
+        "deficit_import",
+        "short_seconds",
+        "unavailable",
+        "availability_cost",
+        "losses_cost",
+        "trade_cost",
+    )
+
     registry_name: str = "battery"
 
     render_battery = classmethod(_render)

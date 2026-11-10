@@ -50,6 +50,19 @@ class Airplane2D(
     full action); a policy does not touch the surfaces.
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_altitude",
+        "base_target_altitude",
+        "gust_x",
+        "gust_z",
+        "zone_start",
+        "zone_end",
+        "m",
+        "fuel",
+    )
+
     registry_name: str = "plane"
 
     render_plane = classmethod(_render)

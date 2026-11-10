@@ -46,6 +46,17 @@ class WindTurbine(
     Action      (2,): [pitch_raw, torque_raw] in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "v_wind",
+        "v_mean",
+        "v_turb",
+        "gust_t0",
+        "derate_t0",
+        "target_power",
+    )
+
     registry_name: str = "wind_turbine"
 
     render_turbine = classmethod(_render)

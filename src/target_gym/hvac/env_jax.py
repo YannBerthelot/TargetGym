@@ -48,6 +48,14 @@ class BuildingHVAC(
                       [T_supply_min, T_supply_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "T_out",
+        "T_out_hist",
+        "weather_dev",
+    )
+
     registry_name: str = "hvac"
 
     render_hvac = classmethod(_render)

@@ -43,6 +43,17 @@ class CompressorSurge(
     Action (2,): [speed command, recycle command], raw in [-1, 1] -> [N_min, N_max] of rated and [0, 1] opening.
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "demand_dev",
+        "setpoint_levels",
+        "demand_levels",
+        "block_clock",
+        "surge_times",
+        "surges",
+    )
+
     registry_name: str = "compressor_surge"
 
     render_car = classmethod(_render)

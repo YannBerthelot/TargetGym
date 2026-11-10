@@ -40,6 +40,13 @@ class CementKiln(
     Action      (2): [fuel, kiln_speed], raw in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_lime",
+        "raw_meal",
+    )
+
     registry_name: str = "cement_kiln"
 
     render_kiln = classmethod(_render)

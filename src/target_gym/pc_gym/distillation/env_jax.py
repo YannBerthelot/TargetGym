@@ -42,6 +42,19 @@ class DistillationColumn(
     Action      (2,): [L_raw, V_raw] in [-1, 1] -> reflux and boilup
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_yD",
+        "target_xB",
+        "zF",
+        "F",
+        "feed_step_at",
+        "feed_sign",
+        "zF_step_at",
+        "zF_sign",
+    )
+
     registry_name: str = "distillation"
 
     render_column = classmethod(_render)

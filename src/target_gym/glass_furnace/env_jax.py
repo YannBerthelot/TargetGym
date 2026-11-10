@@ -289,6 +289,15 @@ class GlassFurnace(
     Action (1,): fuel valve, raw in [-1, 1] -> [fuel_min, fuel_max] kg/s.
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "walk",
+        "pull",
+        "cullet",
+        "events",
+    )
+
     registry_name: str = "glass_furnace"
     obs_value_index: int = 4  # the fining share read at the cold end
     obs_target_index: int = 5  # its pass mark

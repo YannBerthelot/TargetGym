@@ -35,6 +35,19 @@ class FourTank(
     Action (2,): [pump 1 voltage, pump 2 voltage], raw in [-1, 1] -> [v_min, v_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_h1",
+        "target_h2",
+        "sp_tank",
+        "sp_sign",
+        "leak_start",
+        "leak_tank",
+        "cup_time",
+        "cup_tank",
+    )
+
     registry_name: str = "four_tank"
 
     render_car = classmethod(_render)

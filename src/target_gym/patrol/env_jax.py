@@ -77,6 +77,17 @@ class _PlanePatrolBase(
     implement :meth:`get_obs`.
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "slot_back",
+        "slot_right",
+        "slot_up",
+        "lead_turn_schedule",
+        "gust_history",
+        "gust_own",
+    )
+
     render_plane = classmethod(_render)
     screen_width = 600
     screen_height = 400

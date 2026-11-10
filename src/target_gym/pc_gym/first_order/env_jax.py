@@ -36,6 +36,10 @@ class FirstOrderSystem(
     Action (1,): [input], raw in [-1, 1] -> [u_min, u_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = ("target_x",)
+
     registry_name: str = "first_order"
 
     render_car = classmethod(_render)

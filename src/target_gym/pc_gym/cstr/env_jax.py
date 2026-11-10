@@ -35,6 +35,15 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     Action      (1,): cooling water, raw in [-1, 1] -> [Fw_min, Fw_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_T",
+        "T_feed",
+        "feed_phase",
+        "event_at",
+    )
+
     registry_name: str = "cstr"
 
     render_car = classmethod(_render)

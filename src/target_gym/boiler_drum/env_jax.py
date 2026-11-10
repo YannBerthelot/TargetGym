@@ -40,6 +40,21 @@ class BoilerDrum(
     Action      (2): [fuel, feedwater], raw in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "q_demand",
+        "target_pressure",
+        "level_ref",
+        "load_from",
+        "load_to",
+        "ramp_start",
+        "ramp_rate",
+        "event_time",
+        "event_rate",
+        "standby_delay",
+    )
+
     registry_name: str = "boiler_drum"
 
     render_boiler = classmethod(_render)

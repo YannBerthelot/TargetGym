@@ -409,10 +409,13 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     """``base.failure_kernel``: when the physics' proposal leaves the envelope
     the step is scored on that proposal -- every term zero, the failure term
     the trip cost ``restart_steps * failure_cost``. In the continuing mode, the
-    default, the state the window continues from is a fresh draw on the same
-    clock and the episode does not end; with ``continuing=False`` the state is
-    the proposal and the episode ends. A proposal inside the envelope
-    passes through unchanged in both."""
+    default, the plant restarts from a fresh draw on the same clock and the
+    episode does not end, while the outside world (``env.OUTSIDE_WORLD``: the
+    disturbances, targets, schedules and records) carries on from the proposal
+    untouched, so a policy that trips meets the same world as one that does not
+    (docs/proposals/long-strata.md, S2). With ``continuing=False`` the state is
+    the proposal and the episode ends. A proposal inside the envelope passes
+    through unchanged in both."""
     from target_gym.base import failure_kernel
 
     env, p, state = _a_state(spec)
@@ -424,6 +427,7 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     class Trips:
         is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
         reset_env = staticmethod(env.reset_env)
+        OUTSIDE_WORLD = env.OUTSIDE_WORLD
 
     assert bool(p.continuing)
     out, tripped, scored, terminated = failure_kernel(Trips(), key, state, proposal, p)
@@ -434,7 +438,9 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     for name in vars(fresh):
         if name in ("time", "sensor_key"):
             continue
-        _assert_tree_equal(getattr(out, name), getattr(fresh, name))
+        kept = name in env.OUTSIDE_WORLD
+        source = proposal if kept else fresh
+        _assert_tree_equal(getattr(out, name), getattr(source, name))
     # The instruments stay through a restart.
     _assert_tree_equal(out.sensor_key, proposal.sensor_key)
     lost = p.replace(continuing=False)
@@ -459,3 +465,35 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     out_of_envelope = R.with_trip(terms, jnp.ones((), bool), R.trip_cost(p))
     assert float(out_of_envelope["failure"]) == pytest.approx(float(R.trip_cost(p)))
     assert all(float(v) == 0.0 for k, v in out_of_envelope.items() if k != "failure")
+
+
+def test_every_task_names_its_outside_world(spec):
+    """S2: each task declares, on its class, the state fields a restart
+    carries over; each is a field of its state, and the clock and the
+    instruments are handled by the kernel itself."""
+    env, p, state = _a_state(spec)
+    declared = getattr(type(env), "OUTSIDE_WORLD", None)
+    assert declared is not None, f"{spec.name}: no OUTSIDE_WORLD on its class"
+    fields = set(vars(state))
+    assert set(declared) <= fields, sorted(set(declared) - fields)
+    assert not {"time", "sensor_key"} & set(declared)
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_a_restart_does_not_itself_trip(spec, seed):
+    """The plant a restart draws must sit inside the envelope of the outside
+    world it is put back into, or one trip would chain into the next."""
+    from target_gym.base import failure_kernel
+
+    env, p, state = _a_state(spec, seed=seed, steps=20)
+    if getattr(p, "restart_in_place", False):
+        pytest.skip(f"{spec.name}: restarts in place")
+
+    class Trips:
+        is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
+        reset_env = staticmethod(env.reset_env)
+        OUTSIDE_WORLD = env.OUTSIDE_WORLD
+
+    proposal = state.replace(time=state.time + 1)
+    out, *_ = failure_kernel(Trips(), jax.random.PRNGKey(seed), state, proposal, p)
+    assert not bool(env.is_terminated(out, p)), spec.name

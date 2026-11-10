@@ -39,6 +39,19 @@ class PHNeutralization(
     Action      (2,): stage-1 base flow and stage-2 trim, raw in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_pH",
+        "upset_times",
+        "upset_levels",
+        "flow_times",
+        "flow_levels",
+        "q1",
+        "q2",
+        "excursion",
+    )
+
     registry_name: str = "ph_neutralization"
 
     render_ph = classmethod(_render)
