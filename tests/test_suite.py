@@ -93,6 +93,20 @@ def test_a_task_whose_best_known_move_is_under_a_quarter_cheaper_has_no_reach_po
     assert p["reach"]["y"] == pytest.approx(0.75)
 
 
+def test_a_best_known_move_that_costs_nothing_still_puts_the_best_on_the_edge():
+    """An oracle whose moves cost nothing has an infinite transient ratio over
+    the expert. The best known still sits on the edge (radius 1) and the
+    expert on the half ring, as for any finite best known; a policy with a
+    finite ratio is no closer to an infinite edge than the expert."""
+    inf, nan = float("inf"), float("nan")
+    best = {"score": nan, "transient_ratio": inf, "oracle_transient_ratio": inf}
+    expert = {"score": nan, "transient_ratio": 1.0, "oracle_transient_ratio": inf}
+    finite = {"score": nan, "transient_ratio": 50.0, "oracle_transient_ratio": inf}
+    tags = {"best": ("x",), "expert": ("y",), "finite": ("z",)}
+    p = suite.profile({"best": best, "expert": expert, "finite": finite}, tags=tags)
+    assert p["reach"] == pytest.approx({"x": 1.0, "y": 0.5, "z": 0.5})
+
+
 def test_the_expert_is_the_half_ring_and_the_oracle_comes_from_the_records():
     """Task a: the expert holds at 100 and the oracle at 10 against a ceiling
     of 1, half the two decades (radius 0.75); the oracle's moves cost a
