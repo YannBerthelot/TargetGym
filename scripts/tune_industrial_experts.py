@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import pathlib
 import sys
 import warnings
@@ -230,11 +229,13 @@ def _boiler_pairing(plant, inst_p, inst_l) -> np.ndarray:
 def tune_boiler_drum() -> dict:
     """Pressure, then level, under R12's P loop on level. Lambda (D7) on each."""
     name = "boiler_drum"
-    spec, p = REGISTRY[name], _params(name, q_steam_noise_std=0.0)
+    # Quiet steam demand (R2): the load plan held at nominal, so no ramp.
+    spec, p = REGISTRY[name], _params(name, load_range=(1.0, 1.0))
     env = spec.make_env()
     q_max, Q_max = float(p.q_feed_max), float(p.Q_max)
     per_kg = 2.0 / q_max  # raw per kg/s
-    level_gain = q_max / (2.0 * float(p.level_trip))  # R12, 400 kg/s per m
+    # R12: the full feed span over the full level span, trip to trip.
+    level_gain = q_max / float(p.level_trip_high - p.level_trip_low)
     h_steam = 2.75e6  # J/kg, the expert's feedforward
 
     def rest(o, xp):
@@ -269,8 +270,10 @@ def tune_boiler_drum() -> dict:
         "k": level["k"] * per_kg,
         "theta": level["theta"] + level["tau1"],
     }
-    # N7's floor: the steam demand's 3 sd, as feed and as firing.
-    swing = 3 * float(REGISTRY[name].make_test_params().q_steam_noise_std)
+    # N7's floor was the steam demand's 3 sd. The rebuilt plant's demand has no
+    # random part: its plan is measured and fed forward, so no load is left for
+    # either PI to take, and N7 runs to its end.
+    swing = 0.0
     firing = 2 * swing * (h_steam - float(p.h_feedwater)) / Q_max
     p_out = tuned(pressure, inst_p.h, RAW_BAND, firing, _lambda_rule(pressure))
     l_out = tuned(level, inst_l.h, DEAD_BAND * q_max, swing, _lambda_rule(level))
@@ -297,41 +300,20 @@ def tune_boiler_drum() -> dict:
 
 
 def tune_hvac() -> dict:
-    """The room's PI on a quiet building, on the emitter's five lags (R16). The
-    curve itself reads the building's datasheet, in ``experts.py``."""
-    from target_gym.hvac.env import total_heat_loss_coefficient
+    """No recipe since hvac v5: the expert is a heating curve with no room
+    feedback (``hvac/experts.py``), drawn from the building's design
+    calculation, so nothing is tuned. The record keeps the curve's points."""
+    from target_gym.hvac.experts import make_hvac_curve
 
-    name = "hvac"
-    spec = REGISTRY[name]
-    quiet = spec.make_test_params()
-    design = float(quiet.setpoint_occupied)
-    p = _params(
-        name,
-        T_out_amplitude=0.0,
-        T_out_noise_std=0.0,
-        solar_peak=0.0,
-        gain_occupied=float(quiet.gain_unoccupied),
-        setpoint_setback=design,
-        setpoint_occupied_range=(design, design),
-    )
-    env = spec.make_env()
-    H = float(total_heat_loss_coefficient(p))
-    # From the balance at the design setpoint, with the one gain left.
-    load = H * (design - float(p.T_out_mean)) - float(p.gain_unoccupied * p.A_floor)
-    raw = 2.0 * load / float(p.Q_heat_max) - 1.0
-    rest = manual(lambda o, xp: xp.full((1,), raw))
-    plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest)
-    inst = Instrument.of(env, p, "T_air")
-    window = math.ceil((5 * float(p.emitter_tau) + inst.h / 2) / inst.h)
-    loop = read_loop(
-        plant, "T_air on heat", 0, 0, 0.1, window, inst, room=plant.room(0)
-    )
-    out = tuned(loop, inst.h)
-    # The loop's output is 0 to 1 of the heat, and a raw action spans 2.
+    c = make_hvac_curve()
     return {
-        "kp": 0.5 * out["Kc"],
-        "Ti": out["Ti"],
-        "model": {"T_air": record(loop, out)},
+        "model": {
+            "curve": {
+                "T_set": c.T_set,
+                "T_out_design": c.T_out_design,
+                "T_supply_design": c.T_supply_design,
+            }
+        }
     }
 
 
