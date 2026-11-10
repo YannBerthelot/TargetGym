@@ -78,9 +78,19 @@ def _draw_furnace(ax, state, params):
         zorder=1,
     )
     iso.text(ax, xs[nm] + 7.2, -_WALL - 1.7, H + 4.6, "STACK", color=rk.DIM, size=6)
+    # A narrower zone's back wall stands in front of the back of the wider bath
+    # before it, so it is drawn over the melt; the melter's own is behind it.
     for j0, j1, h, _ in zones:
         yb = yc - half[j0]
-        iso.box(ax, (xs[j0], xs[j1]), (yb - _WALL, yb), (-D, h), color=_BRICK, zorder=1)
+        narrower = half[j0] < half[0]
+        iso.box(
+            ax,
+            (xs[j0], xs[j1]),
+            (yb - _WALL, yb),
+            (-D, h),
+            color=_BRICK,
+            zorder=3.5 if narrower else 1,
+        )
     # The charger's hopper behind the back end wall, standing over it.
     iso.box(
         ax,

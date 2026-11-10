@@ -237,7 +237,8 @@ def _draw_kiln(ax, state, params):
     rk.glow(ax, float(u), float(v), 0.06, color=rk.AMBER, strength=fuel_f, zorder=7)
     iso.line(
         ax,
-        [(L + 3.5, 0.0, zL), (L + 14.0, 0.0, zL + 1.5)],
+        # Coaxial with the kiln, out through the hood.
+        [(L + 3.5, 0.0, zL), (L + 14.0, 0.0, _axis_z(L + 14.0))],
         color="#8a96a2",
         lw=3.0,
         zorder=7,
