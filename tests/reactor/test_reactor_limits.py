@@ -17,8 +17,11 @@ Contracts, from the family's sources, written before the code:
   INIS 1ypr9-dk595; APR1400 restart windows of 22 to 70 h, KNS 20A-065); hot
   standby after a timed limit's overrun, 15 h (ours: Doel-3's 6 h down and 18 h
   reduced, about 15 h of full output lost).
-- Tavg above its program is not lost output (rule 15): it costs nothing; below,
-  past the dead band, the charge stands.
+- Tavg is charged past its 1.6 K dead band on either side of its program, at the
+  same price per kelvin (the physics review's finding 1, owner 2026-11-10,
+  reversing Amendment 3 decision 7): both cited procedures keep a two-sided band
+  (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), and at part power the hot side is
+  bounded by the steam side, not by DNB.
 - The operator reads the recent power history the starting xenon is balanced with,
   and the core boron only through a boronmeter 20 min late (Areva, US 8,489,338).
 
@@ -141,10 +144,20 @@ def test_a_timed_limits_overrun_costs_hot_standby(field, value):
 # --- Tavg above program ---
 
 
-def test_tavg_above_its_program_costs_nothing():
+# test_tavg_above_its_program_costs_nothing was retired with decision 7, which the
+# owner reversed on 2026-11-10 (the physics review's finding 1).
+
+
+@pytest.mark.parametrize("hot, expected", [(1.59, 0.0), (3.0, 0.44722)])
+def test_tavg_above_its_program_is_charged_past_the_band(hot, expected):
+    """Lined out at half load, Tavg ``hot`` K over its program. Past the 1.6 K band,
+    the cold side's price: 1.25 x 0.23 %/K x $80/MWh x 1 GW = $0.0639 per K s, so
+    (3 - 1.6) K x 5 s = $0.44722 per sub-step ($2.68 per 30 s step)."""
     env, p, obs, s = reset()
-    hot = s.replace(T_coolant=s.T_coolant + 5.0, T_cold=s.T_cold + 5.0)
-    assert float(compute_reward_terms(hot, p)["tracking"]) == 0.0
+    tavg = 0.5 * (s.T_coolant + s.T_cold)
+    s = at(s, n=0.5).replace(T_ref=tavg - hot)
+    terms = compute_reward_terms(s, p)
+    assert float(terms["tracking"]) == pytest.approx(expected, rel=1e-3, abs=1e-6)
 
 
 # --- what the operator reads ---

@@ -179,7 +179,7 @@ def reactor_model(env, p) -> TaskModel:
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=per_K * float(p.e_floor),
+        hinges=(Hinge(weight=per_K * float(p.e_floor), absolute=True,
                       tol=float(p.e_tol / p.e_floor)),) * period
         + (Hinge(weight=per_delta_I),) * (2 * period)
         + (

@@ -52,7 +52,8 @@ class Reactor(
     """
     Nuclear reactor: a two-point core with rods and boron.
 
-    Observation (8,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]
+    Observation (11,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
+    (20 min late), hours to the ramp down, hours to the ramp up, xenon's power]
     Action      (2,): [rod demand, boron flow] in [-1, 1]
     """
 
@@ -89,7 +90,7 @@ class Reactor(
     @property
     def default_params(self) -> ReactorParams:
         # The scored configuration: env steps of 30 s (``control_period``
-        # physics sub-steps each) over the 12 h of a load cycle.
+        # physics sub-steps each) over the 24 h of a load-follow day.
         return ReactorParams()
 
     def compute_reward(self, state, params):

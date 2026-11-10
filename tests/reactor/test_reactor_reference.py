@@ -13,10 +13,10 @@ tool; Shinskey's bumpless transfer for the override):
 - The xenon tool has play (owner, 2026-11-10; PHYSICS.md section 6): the boron it
   did not move is a debt, read as the Tavg shift it leaves at steady power,
   ``debt * boron_worth / (alpha_coolant + alpha_fuel)``: at a fixed power the fuel
-  is a fixed step above the coolant, so it cools with it (here 8/33, 0.24242 K per
-  ppm). Inside Tavg's
-  free zone, 1.6 K cold to the DNB limit hot, each edge pulled in by the shift over
-  the 600 s lead, it moves nothing; past it, only the excess.
+  is a fixed step above the coolant, so it cools with it (here 8/15, 0.5333 K per
+  ppm). Inside Tavg's free zone, the 1.6 K dead band on either side of the program
+  (the physics review's finding 1, 2026-11-10), each edge pulled in by the shift
+  over the 600 s lead, it moves nothing; past it, only the excess.
 """
 
 import jax
@@ -25,8 +25,9 @@ import numpy as np
 import pytest
 
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.env import rod_insertion_limit, tavg_dnb_limit, tavg_program
+from target_gym.reactor.env import rod_insertion_limit
 from target_gym.reactor.experts import (
+    boron_can_follow,
     make_reactor_pid_controller,
     xenon_feedforward,
     xenon_play,
@@ -36,9 +37,14 @@ from target_gym.reactor.experts import (
 def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     env = Reactor()
     # Rods held with no boron through the cut run Tavg hot for hours; the DNB
-    # limit's clock is lifted so no restart resets the xenon being followed.
+    # limit's clock and the hot-leg envelope are lifted so no restart resets the
+    # xenon being followed (at the start-of-cycle MTC the hold runs the hot leg
+    # past 610 K).
     p = ReactorParams(
-        demand_sigma=0.0, initial_xenon_power_range=(1.0, 1.0), dnb_allowed=1e9
+        demand_sigma=0.0,
+        initial_xenon_power_range=(1.0, 1.0),
+        dnb_allowed=1e9,
+        T_coolant_max=1e9,
     )
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     s = s.replace(ramp_down_at=jnp.float32(0.0), ramp_up_at=jnp.float32(1e8))
@@ -128,21 +134,20 @@ def test_the_reference_keeps_the_band_on_every_load_follow_day(scenario):
 
 
 # --- the xenon tool's play ---
-# Hand values: boron_worth -8e-5 per ppm, alpha_coolant -30e-5 and alpha_fuel -3e-5
-# per K, so a ppm of debt is 8/33 K. The cold edge, 1.6 K, is a debt of -6.6 ppm;
-# the hot edge at full power, the DNB limit 2.8333 K over program, is +11.6875 ppm.
+# Hand values: boron_worth -8e-5 per ppm, alpha_coolant -12e-5 and alpha_fuel -3e-5
+# per K, so a ppm of debt is 8/15 = 0.5333 K. Each edge, 1.6 K, is a debt of 3 ppm,
+# on the cold side and the hot side alike, at every power.
 
-K_PER_PPM = 8.0 / 33.0
+K_PER_PPM = 8.0 / 15.0
+EDGE = 1.6 / K_PER_PPM  # 3 ppm
 
 
-def _play(debt, rate, load=1.0):
+def _play(debt, rate):
     p = ReactorParams()
-    return xenon_play(
-        debt, rate, float(tavg_program(load, p)), p, dt=30.0, lead=600.0, dead_band=1.6
-    )
+    return xenon_play(debt, rate, p, dt=30.0, lead=600.0, dead_band=1.6)
 
 
-@pytest.mark.parametrize("debt", [-5.0, 0.0, 10.0])
+@pytest.mark.parametrize("debt", [-2.0, 0.0, 2.0])
 def test_inside_the_free_zone_the_xenon_tool_moves_no_boron(debt):
     moved, left = _play(debt, 0.0)
     assert float(moved) == 0.0
@@ -152,8 +157,8 @@ def test_inside_the_free_zone_the_xenon_tool_moves_no_boron(debt):
 @pytest.mark.parametrize(
     "debt, moved_ppm",
     [
-        (-7.6, -1.0),  # 1.84 K cold, past 1.6 K by 1 ppm: dilute 1 ppm
-        (12.0, 0.3125),  # 2.91 K hot, past the DNB limit's 11.6875 ppm
+        (-4.0, -1.0),  # 2.13 K cold, past 3 ppm by 1: dilute 1 ppm
+        (4.0, 1.0),  # 2.13 K hot: the same band, borate 1 ppm
     ],
 )
 def test_past_the_free_zone_the_tool_moves_only_the_excess(debt, moved_ppm):
@@ -164,23 +169,22 @@ def test_past_the_free_zone_the_tool_moves_only_the_excess(debt, moved_ppm):
 
 def test_the_edges_are_pulled_in_by_the_lead():
     """Xenon building at 0.001 ppm/s: 0.03 ppm more debt in the step, and the edge
-    600 s ahead is 0.6 ppm closer, at -6.0. From -5.0 nothing moves; from -6.1 the
-    debt reaches -6.13 and the 0.13 past -6.0 is diluted."""
-    moved, left = _play(-5.0, -0.001)
+    600 s ahead is 0.6 ppm closer, at -2.4. From -1.0 nothing moves; from -2.5 the
+    debt reaches -2.53 and the 0.13 past -2.4 is diluted."""
+    moved, left = _play(-1.0, -0.001)
     assert float(moved) == 0.0
-    assert float(left) == pytest.approx(-5.03, abs=1e-5)
-    moved, left = _play(-6.1, -0.001)
+    assert float(left) == pytest.approx(-1.03, abs=1e-5)
+    moved, left = _play(-2.5, -0.001)
     assert float(moved) == pytest.approx(-0.13, abs=1e-4)
-    assert float(left) == pytest.approx(-6.0, abs=1e-4)
+    assert float(left) == pytest.approx(-2.4, abs=1e-4)
 
 
-def test_the_hot_edge_is_the_dnb_limit_at_every_power():
-    """At half power the program is lower, so the fixed DNB limit is further away."""
-    p = ReactorParams()
-    room = float(tavg_dnb_limit(p) - tavg_program(0.5, p))
-    moved, _ = _play(room / K_PER_PPM - 0.1, 0.0, load=0.5)
+def test_the_hot_edge_is_the_dead_band_not_the_dnb_limit():
+    """At full power the DNB limit is 2.83 K over the program, past the 1.6 K band:
+    the tool acts at the band."""
+    moved, _ = _play(EDGE - 0.1, 0.0)
     assert float(moved) == 0.0
-    moved, _ = _play(room / K_PER_PPM + 0.1, 0.0, load=0.5)
+    moved, _ = _play(EDGE + 0.1, 0.0)
     assert float(moved) == pytest.approx(0.1, abs=1e-3)
 
 
@@ -196,3 +200,25 @@ def test_with_xenon_in_balance_a_baseload_day_moves_no_boron(seed):
         carried_days_range=(0.0, 0.0),
     )
     assert float(np.max(np.abs(flow))) == 0.0
+
+
+# --- rods on Tavg through a fast ramp (owner, 2026-11-10; PHYSICS.md section 6) ---
+# Hand values: on the program the fuel sits 243.6 K hotter at full load than at half
+# (the physics review, finding 1) and Tavg 7.7 K hotter, so the power defect is
+# 3e-5 x 243.6 + 12e-5 x 7.7 = 823.2 pcm per 50 % of load, 205.8 ppm per unit of load
+# at 8 pcm/ppm. At 1690 ppm full dilution moves 10 / 2.5e5 x 1690 = 0.0676 ppm/s and
+# full boration 3 / 2.5e5 x (7800 - 1690) = 0.0733 ppm/s.
+
+
+@pytest.mark.parametrize(
+    "rate, follows",
+    [
+        (0.0, True),
+        (-0.08 / 3600.0, True),  # Krsko's 8 %/h down: 0.0046 ppm/s of boration
+        (0.08 / 3600.0, True),  # and back up: 0.0046 ppm/s of dilution
+        (-0.05 / 60.0, False),  # 5 %/min down: 0.1715 ppm/s, past 0.0733
+        (0.05 / 60.0, False),  # 5 %/min up: past 0.0676
+    ],
+)
+def test_boron_follows_a_ramp_only_within_the_lines_rate(rate, follows):
+    assert bool(boron_can_follow(rate, 1690.0, ReactorParams())) is follows

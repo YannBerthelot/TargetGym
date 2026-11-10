@@ -99,10 +99,11 @@ def test_power_settles_at_the_load_whatever_the_rods_do(offset):
 
 
 def test_rods_set_tavg_by_the_feedback_sum():
-    """200 pcm between two rod positions over 33 pcm/K: 6.06 K."""
+    """200 pcm between two rod positions over the feedback sum, alpha_coolant plus
+    alpha_fuel, 12 + 3 = 15 pcm/K at the start-of-cycle MTC: 13.33 K."""
     low = _hold(*_lined_out(0.8, -100e-5), 2400.0)
     high = _hold(*_lined_out(0.8, 100e-5), 2400.0)
-    assert _tavg(high) - _tavg(low) == pytest.approx(200.0 / 33.0, rel=0.03)
+    assert _tavg(high) - _tavg(low) == pytest.approx(200.0 / 15.0, rel=0.03)
 
 
 def test_a_turbine_cut_heats_the_cold_leg():

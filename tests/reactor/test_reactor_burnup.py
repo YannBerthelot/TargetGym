@@ -10,11 +10,11 @@ Contracts, from the source before the code:
 - The day starts with up to one day of burnup not yet diluted (ours: the operator
   dilutes at least once a day): the plant is lined out at a Tavg below its program
   by that debt, ``debt * boron_worth / (alpha_coolant + alpha_fuel)``: at a fixed
-  power the fuel sits a fixed step above the coolant and cools with it, 8/33 K per
-  ppm here.
+  power the fuel sits a fixed step above the coolant and cools with it, 8/15 =
+  0.5333 K per ppm here, at a start-of-cycle MTC.
 
-Hand values: 3.3 ppm a day of debt is 0.8 K; 3.3 ppm a day for 6 h is 0.825 ppm,
-0.2 K.
+Hand values: 3.3 ppm a day of debt is 1.76 K; 3.3 ppm a day for 6 h is 0.825 ppm,
+0.44 K.
 """
 
 import jax
@@ -23,7 +23,7 @@ import pytest
 
 from target_gym.reactor import Reactor, ReactorParams
 
-K_PER_PPM = 8.0 / 33.0
+K_PER_PPM = 8.0 / 15.0
 
 
 def reset(seed=0, **changes):

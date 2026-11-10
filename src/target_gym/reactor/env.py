@@ -38,7 +38,8 @@ now, and the core sees it ``boron_delay`` steps later.
 
 Observation (partially observable)
 ----------------------------------
-``[n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]``.
+``[n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron (20 min late),
+hours to the ramp down, hours to the ramp up, the power xenon is balanced with]``.
 
 Action
 ------
@@ -106,7 +107,14 @@ class ReactorParams(EnvParams):
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
-    alpha_coolant: float = -30.0e-5  # Moderator temperature coefficient, on Tavg
+    # The moderator coefficient at the start of the cycle, where the core sits
+    # (1690 ppm): near zero there, ours, PHYSICS.md section 1 (physics review,
+    # finding 2, 2026-11-10).
+    alpha_coolant: float = -12.0e-5  # on Tavg
+    # The part-power axial shift's lumped coefficient (moderator and Doppler
+    # redistribution), kept at its value before the MTC moved so Krsko's +5 % delta
+    # I at half power holds: ours.
+    alpha_tilt: float = -30.0e-5
     # Zero feedback at full power on program.
     T_fuel_ref: float = 1051.4  # K
     T_coolant_ref: float = 580.2  # K, Tavg at full load
@@ -122,7 +130,10 @@ class ReactorParams(EnvParams):
 
     # ---- Soluble boron ----
     boron_ref: float = 1690.0  # ppm, Krsko fig. 3, at full power
-    boron_worth: float = -8.0e-5  # per ppm, ours
+    # Ours, inside the family's -6.7 to -10.9 pcm/ppm: BEAVRS measures 10.8 to 10.9
+    # at hot zero power and 975 to 1405 ppm (Tables 22, 23); boron is worth less at
+    # full power and at 1690 ppm. PHYSICS.md section 1.
+    boron_worth: float = -8.0e-5  # per ppm
     dilution_flow: float = 10.0  # kg/s, OAPS section 2.1
     boration_flow: float = 3.0  # kg/s, OAPS section 2.1
     boric_acid_ppm: float = 7800.0  # ppm, ours: a recycling unit's concentrate
@@ -174,7 +185,8 @@ class ReactorParams(EnvParams):
     n_max: float = 1.09  # the high-flux trip, 109 % of rated
     T_fuel_max: float = 1473.0  # K, well below UO2 melting (~3120 K)
     T_fuel_min: float = 500.0
-    T_coolant_max: float = 620.0  # K, the hot leg's saturation margin
+    # K, ours: below saturation at the nominal 2250 psia, 618.0 K (IAPWS-IF97).
+    T_coolant_max: float = 610.0
     # The minimum temperature for criticality, 541 F at Salem. It is a limit with
     # a time to act, not a trip: restore it or go to hot standby. No EDF figure is
     # public, so the Westinghouse-family value is kept (the EDF units are of that
@@ -303,6 +315,7 @@ PARAM_UNITS = {
     "Lambda_gen": "s",
     "alpha_fuel": "1/K",
     "alpha_coolant": "1/K",
+    "alpha_tilt": "1/K",
     "T_fuel_ref": "K",
     "T_coolant_ref": "K",
     "rho_ext_min": "-",
@@ -376,6 +389,8 @@ PARAM_UNITS = {
     "rod_step_price": "$/step",
     "failure_cost": "reward",
     "restart_steps": "steps",
+
+    "standby_steps": "steps",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
 }
@@ -552,7 +567,7 @@ def moderator_tilt(T_hot, T_cold, params: ReactorParams):
     rise warms the top less, which moves power up the core (Krsko, section 2)."""
     p = params
     full_rise = p.P_thermal_ref / p.m_dot_cp
-    return p.alpha_coolant * p.nu_Sigma_f * (full_rise - (T_hot - T_cold)) / 4.0
+    return p.alpha_tilt * p.nu_Sigma_f * (full_rise - (T_hot - T_cold)) / 4.0
 
 
 def tilt_rates(n, I_hat, Xe_hat, I_tilt, Xe_tilt, eps, p: ReactorParams):
@@ -958,9 +973,10 @@ def compute_reward_terms(
     per_K_s = (
         p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
     )  # $ per second per K off program
-    # Only Tavg below its program loses output (rule 15); above it the limits are
-    # protective and hotter steam gains a little.
-    error = xp.maximum(state.T_ref - 0.5 * (state.T_coolant + state.T_cold), 0.0)
+    # Tavg past its dead band on either side of its program: the band both cited
+    # procedures keep (physics review, finding 1, 2026-11-10), priced as the cold
+    # side's lost output.
+    error = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
     tracking = (
         per_K_s
         * p.delta_t

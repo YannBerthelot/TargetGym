@@ -56,6 +56,7 @@ from target_gym.reactor.env import (
 from target_gym.reactor.experts import (
     RodControlParams,
     RodControlState,
+    boron_can_follow,
     ppm_flow,
     rod_control_step,
     xenon_play,
@@ -185,7 +186,7 @@ def xenon_tool(I_x, Xe_x, debt, n, obs, clock, p):
     """The operator's xenon tool with its play (PHYSICS.md section 6), the same on
     every rung: the boron flow, the next iodine and xenon, and the debt."""
     rate, I_x, Xe_x = xenon_rate(I_x, Xe_x, n, clock == 0.0, p, DT, history=obs[10])
-    moved, debt = xenon_play(debt, rate, obs[5], p, DT, LEAD_STEPS * DT, DEAD_BAND)
+    moved, debt = xenon_play(debt, rate, p, DT, LEAD_STEPS * DT, DEAD_BAND)
     return ppm_flow(moved / DT, obs[7], p), I_x, Xe_x, debt
 
 
@@ -267,7 +268,7 @@ def procedure(p, tune):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x, debt = m
+        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x, debt, rc = m
         n, rod, T_avg, T_ref, di = obs[0], obs[2], obs[4], obs[5], obs[6]
         down = jnp.where(clock == 0.0, obs[8] * 3600.0, down)
         up = jnp.where(clock == 0.0, obs[9] * 3600.0, up)
@@ -275,18 +276,30 @@ def procedure(p, tune):
         # The action band: no error within ACTION_BAND of the reference.
         ao = jnp.sign(off) * jnp.maximum(jnp.abs(off) - ACTION_BAND, 0.0)
         u = u + tune.wd_Kc * ((ao - last_ao) + DT / tune.wd_Ti * ao)
+        # Through a ramp boron can't follow, the rod program takes Tavg; the offset
+        # loop picks up from where it leaves the rods (PHYSICS.md section 6).
+        now = (
+            scheduled_load(clock + DT, down, up, p) - scheduled_load(clock, down, up, p)
+        ) / DT
+        fast = ~boron_can_follow(now, obs[7], p)
+        rc_a, rc = rod_control_step(RodControlParams(), rc, obs[:6])
+        u = jnp.where(fast, rc_a[0], u)
         u = jnp.clip(u, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
-        deepest = 1.0 - 2.0 * rod_insertion_limit(n, p)
+        # Above the insertion limit where the plan puts the power by the step's
+        # end: on a ramp up the limit tightens as the power rises.
+        after = jnp.maximum(n, scheduled_load(clock + DT, down, up, p))
+        deepest = 1.0 - 2.0 * rod_insertion_limit(after, p)
         u = jnp.clip(u, deepest, PARK)
         e = dead(T_ref - T_avg)
         b = jnp.clip(b + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), -1.0, 1.0)
         xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = b + tune.ff * planned_step(clock, down, up) + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x, debt)
+        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x, debt, rc)
 
     zero = jnp.asarray(0.0)
-    return act, (jnp.asarray(PARK),) + (zero,) * 9
+    rc0 = RodControlState(zero, zero, zero)
+    return act, (jnp.asarray(PARK),) + (zero,) * 9 + (rc0,)
 
 
 def reference(saved, p):

@@ -104,11 +104,12 @@ class ReferenceParams:
 
     dt: float = 30.0
     dead_band: float = 1.6
-    wd_Kc: float = 0.1275857822917686  # rod action per unit of offset
+    # The recipe's bump tests on reactor-v8 (scripts/reactor_ladder.py).
+    wd_Kc: float = 0.12757098960052432  # rod action per unit of offset
     wd_Ti: float = 30.0
-    t_Kc: float = -0.04801103506999523  # boron per K of Tavg past the dead band
-    t_Ti: float = 4680.0
-    ff: float = -113.64819067771116
+    t_Kc: float = -0.02094281018869827  # boron per K of Tavg past the dead band
+    t_Ti: float = 4920.0
+    ff: float = -97.2559113703026
     ao_ref: float = 0.0
     # The rods' action band: no error while the offset is within 0.025 of its
     # reference, half the 0.05 target band (owner, 2026-11-08; PHYSICS.md section 6).
@@ -134,6 +135,10 @@ class ReferenceState:
     I_hat: float = 0.0
     Xe_hat: float = 0.0
     debt: float = 0.0  # ppm the xenon tool has not moved (its play)
+    # The rod program's state, used through a ramp boron can't follow.
+    rc_lag: float = 0.0
+    rc_moving: float = 0.0
+    rc_started: float = 0.0
 
 
 def xenon_feedforward(I_hat, Xe_hat, n, boron, first, plant, dt, xp=jnp, history=None):
@@ -167,6 +172,26 @@ def xenon_rate(I_hat, Xe_hat, n, first, plant, dt, xp=jnp, history=None):
     return ppm_rate, I_hat + dt * dI, Xe_hat + dt * dXe
 
 
+def boron_can_follow(load_rate, boron, plant, xp=jnp):
+    """Whether the boron line can carry a planned ramp of ``load_rate`` per second
+    (PHYSICS.md section 6): the ppm a second the ramp needs, the power defect per
+    unit of load on the program times the rate, against full dilution or full
+    boration at ``boron``."""
+    from target_gym.reactor.env import rod_balance, steady_state_temperatures
+
+    p = plant
+
+    def needed(load):
+        T_fuel, T_hot, T_cold, _ = steady_state_temperatures(load, p)
+        return rod_balance(T_fuel, 0.5 * (T_hot + T_cold), 1.0, p)
+
+    ppm_per_load = (needed(1.0) - needed(0.5)) / 0.5 / p.boron_worth
+    need = ppm_per_load * load_rate  # ppm/s, negative: dilute
+    dilute = p.dilution_flow / p.primary_mass * xp.maximum(boron, 1.0)
+    borate = p.boration_flow / p.primary_mass * (p.boric_acid_ppm - boron)
+    return xp.where(need < 0.0, -need <= dilute, need <= borate)
+
+
 def ppm_flow(ppm_rate, boron, plant, xp=jnp):
     """The boron flow that changes the core's boron by ``ppm_rate`` ppm/s: dilution
     removes ``dilution_flow / primary_mass * boron`` ppm/s at full flow, boration
@@ -177,25 +202,22 @@ def ppm_flow(ppm_rate, boron, plant, xp=jnp):
     return xp.where(ppm_rate < 0.0, ppm_rate / dilute, ppm_rate / borate)
 
 
-def xenon_play(debt, ppm_rate, T_ref, plant, dt, lead, dead_band, xp=jnp):
+def xenon_play(debt, ppm_rate, plant, dt, lead, dead_band, xp=jnp):
     """The xenon tool with play (owner, 2026-11-10; PHYSICS.md section 6): the ppm
     to move this step and the debt left.
 
     ``debt`` is the boron the tool did not move, in ppm; at steady power it leaves
-    Tavg shifted by ``debt * boron_worth / (alpha_coolant + alpha_fuel)``. Tavg's free zone runs
-    from ``dead_band`` below its program ``T_ref`` to the DNB limit, each edge
-    pulled in by the shift xenon makes over ``lead``. Inside it nothing moves;
-    past it, only the excess."""
-    from target_gym.reactor.env import tavg_dnb_limit
-
+    Tavg shifted by ``debt * boron_worth / (alpha_coolant + alpha_fuel)``. Tavg's
+    free zone is its dead band on either side of the program, each edge pulled in
+    by the shift xenon makes over ``lead``. Inside it nothing moves; past it, only
+    the excess."""
     p = plant
     # K of Tavg per ppm of debt: at a fixed power the fuel cools with the coolant.
     k = p.boron_worth / (p.alpha_coolant + p.alpha_fuel)
     debt = debt + ppm_rate * dt
     pull = xp.abs(ppm_rate) * lead
-    lo = xp.minimum(-dead_band / k + pull, 0.0)
-    hi = xp.maximum((tavg_dnb_limit(p) - T_ref) / k - pull, 0.0)
-    left = xp.clip(debt, lo, hi)
+    edge = xp.maximum(dead_band / k - pull, 0.0)
+    left = xp.clip(debt, -edge, edge)
     return debt - left, left
 
 
@@ -220,8 +242,23 @@ def reference_step(params, state, obs, xp=jnp):
     ao = xp.sign(off) * xp.maximum(xp.abs(off) - p.action_band, 0.0)
     held = xp.where(first, rod, state.rods)
     rods = held + p.wd_Kc * ((ao - state.last_ao) + p.dt / p.wd_Ti * ao)
+    # Through a ramp boron can't follow, the rod program takes Tavg; the offset
+    # loop picks up from where it leaves the rods (PHYSICS.md section 6).
+    now = scheduled_load(state.clock + p.dt, down, up, plant, xp=xp)
+    now = (now - scheduled_load(state.clock, down, up, plant, xp=xp)) / p.dt
+    fast = ~boron_can_follow(now, obs[..., 7], plant, xp)
+    rc_state = RodControlState(state.rc_lag, state.rc_moving, state.rc_started)
+    rc_action, rc_state = rod_control_step(
+        RodControlParams(), rc_state, obs[..., :6], xp
+    )
+    rods = xp.where(fast, rc_action[..., 0], rods)
     rods = xp.clip(rods, rod - p.reach, rod + p.reach)
-    rods = xp.clip(rods, 1.0 - 2.0 * rod_insertion_limit(n, plant), p.park)
+    # Above the insertion limit where the plan puts the power by the step's end:
+    # on a ramp up the limit tightens as the power rises.
+    after = xp.maximum(
+        n, now * p.dt + scheduled_load(state.clock, down, up, plant, xp=xp)
+    )
+    rods = xp.clip(rods, 1.0 - 2.0 * rod_insertion_limit(after, plant), p.park)
 
     error = T_ref - T_avg
     e = xp.sign(error) * xp.maximum(xp.abs(error) - p.dead_band, 0.0)
@@ -234,14 +271,14 @@ def reference_step(params, state, obs, xp=jnp):
     rate, I_hat, Xe_hat = xenon_rate(
         state.I_hat, state.Xe_hat, n, first, plant, p.dt, xp, obs[..., 10]
     )
-    moved, debt = xenon_play(
-        state.debt, rate, T_ref, plant, p.dt, p.lead, p.dead_band, xp
-    )
+    moved, debt = xenon_play(state.debt, rate, plant, p.dt, p.lead, p.dead_band, xp)
     xenon = ppm_flow(moved / p.dt, obs[..., 7], plant, xp)
     out = xp.clip(boron + p.ff * planned + xenon, -1.0, 1.0)
     new = ReferenceState(
         rods=rods, boron=boron, last_ao=ao, last_e=e, clock=state.clock + p.dt,
         down=down, up=up, I_hat=I_hat, Xe_hat=Xe_hat, debt=debt,
+        rc_lag=rc_state.mismatch_lag, rc_moving=rc_state.moving,
+        rc_started=rc_state.started,
     )  # fmt: skip
     return xp.stack([rods, out], axis=-1), new
 

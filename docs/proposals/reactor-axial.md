@@ -1,11 +1,64 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: reactor-v7 (next section) is the current design, on top of Amendment 3; the EDF rebuild
+Status: reactor-v8 (next section) is the current design, on top of v7 and Amendment 3; the EDF rebuild
 of 2026-11-08 and the first attempt of 2026-11-07 below it are history, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
+
+## Physics review fixes, 2026-11-10 (reactor-v8)
+
+From `reactor-physics-review.md`, the owner took the review's recommendations, each
+written into PHYSICS.md before its run:
+
+- **Finding 1:** Tavg is charged past 1.6 K on either side of its program, at the cold
+  side's price; the xenon tool's free zone and the oracle's hinge are two-sided too.
+  Amendment 3 decision 7 is reversed. Steam relief is not modelled (D10).
+- **Finding 2:** the core stays at the start of its cycle with an MTC of -12 pcm/K
+  (`ours`, range 0 to -20: no hot-full-power start-of-cycle figure was found). The
+  part-power axial shift keeps -30 under its own coefficient. Boron worth stays -8
+  pcm/ppm, now labelled with its range, -6.7 to -10.9 (BEAVRS measures 10.8 at hot
+  zero power and lower boron). A ppm moves Tavg 8/15 K.
+- **Finding 4:** the hot-leg envelope is 610 K, under the 618.0 K saturation at 2250 psia.
+- **Finding 5:** docstrings fixed; the environment page regenerated as reactor-v8. Its
+  baseline rows are the old records, which were not re-recorded.
+- **Finding 3** (a starting axial tilt) waits.
+
+The start-of-cycle MTC broke fast_return: a load cut releases about 820 pcm, boron
+moves at most about 35 pcm/min, and with the rods on the offset Tavg ran 20 to 29 K hot
+and the hot leg tripped on 7 seeds of 10. In the family fast ramps are carried by rods
+on Tavg, so the owner chose a mode switch, written before the rerun: while the plan
+ramps faster than boron can follow, the rods run Westinghouse's rod program on Tavg;
+otherwise bank D holds the offset. The rods also keep above the insertion limit at the
+power the plan reaches by the step's end. The reference's gains come from the v8 bump
+tests by the same recipe.
+
+### Reference and nulls on reactor-v8, seeds 100 to 109
+
+| Scenario | Reference | Trips | Null |
+|---|---:|---:|---|
+| edf_daily | $4,603 | 0 | $63.7M, cheaper on no seed |
+| edf_short_hold | $4,326 | 0 | $63.7M, cheaper on no seed |
+| krsko_slow | $1,735 | 0 | $7.6M, cheaper on no seed |
+| krsko_shallow | $1,152 | 0 | $6.9M, cheaper on no seed |
+| fast_return | $9,200 to $11,000 on 8 seeds | 2 | $66.8M, cheaper on no seed |
+| baseload | $240 | 0 | $122,845, cheaper on no seed |
+
+No reference run sits past the insertion limit. Findings, left as they are:
+
+- **fast_return seeds 107 and 109** trip on the DNB clock after the return to full
+  power: Tavg sits about 3.7 K hot for 2 h while xenon burns out, and the boron loop,
+  at its bump-test gain (half v7's), is too slow. Changing the gain would be tuning on
+  results.
+- **The Krsko-day validation fails:** delta I reaches 8.5 % against Krsko's 5 % plus
+  1 %, with or without burnup. The test's fixed procedure (bank D inside Krsko's 35
+  steps, a proportional boron trim on Tavg) now lets Tavg swing -17 to +24 K and pins
+  the bank at the end of its travel.
+- Four plant tests had setups that overran the new limits; their setups changed, their
+  contracts did not (comments in each).
+
+Not re-run on v8: ceilings, room and sensitivity.
 
 ## Burnup and the xenon tool's play, 2026-11-10 (reactor-v7)
 
@@ -61,7 +114,7 @@ labelled `ours` with its family range in
 | Offset band as a penalty clock: 1 h in 24 h free, then a derate to 50 % priced at $80/MWh | D.C. Cook and RAOC technical specifications; EDF scope | owner, decision 3 |
 | Rod insertion limit, 22 % in at full power to 78 % at half, 2 h, then hot standby | KAIST's Bank D line; STS 3.1.6 | owner, decision 5 |
 | Tavg's DNB limit, full-power program plus 5.1 F (2.833 K), 2 h, then hot standby | STS LCO 3.4.1; Braidwood COLR (search summary, nrc.gov blocks readers) | owner, "source the hot side" |
-| Tavg above its program costs nothing below the DNB limit | charter: not lost output | owner, decision 7 |
+| Tavg above its program costs nothing below the DNB limit (reversed 2026-11-10: the physics review's finding 1, both procedures keep the band two-sided) | charter: not lost output | owner, decision 7 |
 | Trips as lost production: scram 48 h ($3.84M), timed overrun 15 h ($1.2M) | `ours`, family 22 to 70 h | owner, decision 6 |
 | Boronmeter 20 min late; obs[10] is the power the starting xenon is balanced with | Areva US 8,489,338 | owner, decision 8 |
 | Six scenarios, weighted from EDF's 250 h a year of load following | IEA 2019 (Mercel, slide 7) | owner, decisions 9 and "weights from the record" |
