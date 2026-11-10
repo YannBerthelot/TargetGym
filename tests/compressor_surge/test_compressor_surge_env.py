@@ -525,8 +525,9 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     ``restart_steps x failure_cost`` in version 2 and exactly
     ``-restart_steps`` in version 1, and the window continues from the plant
     ``reset_env`` draws from the step's key, with ``time`` running on. The
-    outside world (``OUTSIDE_WORLD``: the schedule, its clock, the demand and
-    the surge record) runs on as if no trip had happened (long-strata S2)."""
+    outside world (``OUTSIDE_WORLD``: the schedule, its clock, the demand) and
+    the surge record (``RECORDS``) run on as if no trip had happened
+    (long-strata S2)."""
     key = jax.random.PRNGKey(3)
     v1 = params.replace(reward_version=1)
     _, state = env.reset_env(key, params)
@@ -550,7 +551,8 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     # The proposal the step made before the trip, whose outside world carries on.
     _, proposal, _, _, _ = step(key, state, low, params.replace(continuing=False))
     for name in CompressorSurgeState.__dataclass_fields__:
-        source = proposal if name in env.OUTSIDE_WORLD else fresh
+        kept = name in env.OUTSIDE_WORLD or name in env.RECORDS
+        source = proposal if kept else fresh
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),
             np.asarray(getattr(source, name)),

@@ -1062,10 +1062,9 @@ or how long (`REALITY.md`), so these numbers are ours, set once without tuning
 and open for the owner. In a window nothing changes: the schedule never runs out
 inside it, its clock is the window's, and a scored window is bit-identical.
 
-The task is not opted in (`STREAM_READY`) yet: the shared conformance suite runs
-2 events an hour over 2 N steps, 0.13 events on this 0.1 s plant, and reads the
-surge record (`surge_times`, `surges`, in `OUTSIDE_WORLD` so a trip's restart
-carries it) as outside world, which a policy moves.
+The surge record (`surge_times`, `surges`) is the plant's history, which the
+policy writes: a trip's restart keeps it as a record (`RECORDS`), apart from the
+outside world (`OUTSIDE_WORLD`), which depends on the seed and the time only.
 
 <!-- BEGIN GENERATED FACTS -->
 
