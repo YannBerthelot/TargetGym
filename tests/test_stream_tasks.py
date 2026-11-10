@@ -7,8 +7,8 @@ refuses the others. For each wired task:
   task names in ``OUTSIDE_WORLD``, the scenario sequence and the event onsets;
 - the observation is the task's own: its shape, and finite.
 
-The rates here are the test's, raised so a short run switches and has events; the
-contract holds for any rates. A task with one scenario has nothing to switch, and a
+The rates here are the test's, sized to the run so it switches and has events
+whatever the task's step length; the contract holds for any rates. A task with one scenario has nothing to switch, and a
 task with no ``start_event`` hook has no events: each is checked on what it has.
 """
 
@@ -49,15 +49,26 @@ def _has_events(env) -> bool:
     return callable(getattr(env, "start_event", None))
 
 
+#: Switch draws and events a busy run expects. Sized to the run, not per hour: a
+#: plant on 0.1 s steps runs minutes in 2 N steps. At 30, a seed missing every event
+#: is a chance of e^-30, and one never leaving a scenario of weight 0.7 is 0.7^30.
+_EXPECTED = 30.0
+
+
 def _busy(name):
-    """The task's stream with its scenarios switching every ~0.1 h and, where the
-    task has events, two an hour in each, so a short run sees both."""
+    """The task's stream for a run of 2 N steps, with about 30 switch draws and,
+    where the task has events, about 30 events over the run, whatever its step."""
+    from target_gym.registry import control_step_seconds
+
     stream = make_stream(name)
-    rate = 2.0 if _has_events(stream.env) else 0.0
+    steps = 2 * int(stream.default_params.max_steps_in_episode)
+    hours = steps * control_step_seconds(stream.env, stream.default_params) / 3600.0
+    rate = _EXPECTED / hours if _has_events(stream.env) else 0.0
     fast = [
-        dataclasses.replace(s, dwell_h=0.1, events_per_h=rate) for s in stream.scenarios
+        dataclasses.replace(s, dwell_h=hours / _EXPECTED, events_per_h=rate)
+        for s in stream.scenarios
     ]
-    return StreamEnv(stream.env, stream.default_params, fast)
+    return StreamEnv(stream.env, stream.default_params, fast), steps
 
 
 @partial(jax.jit, static_argnums=(0, 1))
@@ -78,10 +89,9 @@ def _roll(stream, side, steps_key):
 
 @pytest.mark.parametrize("name", WIRED)
 def test_a_wired_task_never_ends_and_both_policies_meet_one_world(name):
-    stream = _busy(name)
-    n = int(stream.default_params.max_steps_in_episode)
-    low = _roll(stream, -1, jax.random.split(jax.random.PRNGKey(0), 2 * n))
-    high = _roll(stream, +1, jax.random.split(jax.random.PRNGKey(1), 2 * n))
+    stream, steps = _busy(name)
+    low = _roll(stream, -1, jax.random.split(jax.random.PRNGKey(0), steps))
+    high = _roll(stream, +1, jax.random.split(jax.random.PRNGKey(1), steps))
     for run in (low, high):
         assert not bool(run[0].any()) and not bool(run[1].any())
     np.testing.assert_array_equal(low[2], high[2])
