@@ -147,6 +147,11 @@ class BoilerDrum(
         nominal = params.q_steam_nominal
         lo, hi = params.load_range
         load_from = nominal * jax.random.uniform(k_from, minval=lo, maxval=hi)
+        # A stream starts on a flat plan: its load changes are events, so its
+        # load_to is load_from's own draw and its ramp has started. The key is
+        # selected, not the draw: a select on the draw changes how XLA fuses it
+        # on x86, by an ulp, in a window too.
+        k_to = jnp.where(params.window_ramp, k_to, k_from)
         load_to = nominal * jax.random.uniform(k_to, minval=lo, maxval=hi)
         rate_pct = jax.random.uniform(
             k_rate,
@@ -158,8 +163,6 @@ class BoilerDrum(
             minval=params.ramp_start_range[0],
             maxval=params.ramp_start_range[1],
         )
-        # A stream starts on a flat plan: its load changes are events.
-        load_to = jnp.where(params.window_ramp, load_to, load_from)
         ramp_start = jnp.where(params.window_ramp, ramp_start, 0.0)
         event_time = jnp.where(
             params.event_kind > 0,
