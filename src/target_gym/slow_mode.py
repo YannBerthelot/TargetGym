@@ -25,8 +25,10 @@ from typing import Callable, NamedTuple
 import jax
 import numpy as np
 
-#: The fit reads the median gap from ``e^-1`` to ``e^-5`` of its value at hand-over.
-FIT_FROM, FIT_TO = np.exp(-1.0), np.exp(-5.0)
+#: An element has forgotten once its gap falls to ``e^-1`` of its start; the plant
+#: has forgotten once the largest gap stays under ``e^-3`` (``FORGOT``), which an
+#: exponential reaches at ``3 t_s``.
+FIT_FROM, FORGOT, PASSES = np.exp(-1.0), np.exp(-3.0), 3.0
 #: The largest scaled gap at hand-over must reach this share of an element's spread
 #: over the run; below it the excursion did not move the plant and nothing is fitted.
 MIN_START = 0.05
@@ -60,10 +62,11 @@ class SlowMode(NamedTuple):
     t_s: float  # steps; ``inf`` when the gap never fell to ``e^-1``; ``nan`` when
     # the excursion did not move the plant (start gap under ``MIN_START``)
     gap: np.ndarray  # median over pairs of the largest scaled gap, per step
-    slowest: str  # the element that is largest at the end of the fit
+    slowest: str  # the element that forgets last
     never_forgot: tuple[str, ...]  # elements whose gap stayed above e^-1 of its start
     start_excess: float  # median of B's summed excess cost after the hand-over
     tripped_pairs: int = 0  # pairs where either run tripped
+    floor: float = 0.0  # the slowest element's gap over the last third, over its start
 
 
 def _leaves(state) -> tuple[list[str], np.ndarray]:
@@ -148,44 +151,63 @@ def coupled_pair(
     )
 
 
+def _crossing(g: np.ndarray) -> float:
+    """When ``g`` last falls under ``e^-3`` of its start, interpolated on the log
+    scale (exact for an exponential); ``inf`` if it is still above at the end."""
+    level = g[0] * FORGOT
+    above = np.nonzero(g > level)[0]
+    if not above.size:
+        return 0.0
+    last = int(above[-1])
+    if last >= len(g) - 1:
+        return np.inf
+    hi, lo = np.log(g[last]), np.log(max(g[last + 1], 1e-300))
+    return last + (hi - np.log(level)) / max(hi - lo, 1e-12)
+
+
 def slow_mode(pairs: list[Pair], ignore: tuple[str, ...] = ()) -> SlowMode:
-    """``t_s`` from coupled pairs: ``-1 / slope`` of ``log`` of the median largest
-    scaled gap, fitted where it lies between ``e^-1`` and ``e^-5`` of its start.
+    """``t_s`` from coupled pairs. Each state element forgets when its scaled gap
+    stays under ``e^-3`` of its own start, which an exponential does at ``3 t``;
+    ``t_s`` is the slowest element's median over pairs of that time, over 3.
+    It is immune to a floor under ``e^-3``, and ``inf`` for an element that never
+    stays under it (a neutral mode, a limit cycle's phase).
     ``ignore`` names bookkeeping fields: an element is skipped when its name, less
     any ``[i]`` index, ends with an entry (``".x"`` skips ``.lead.x``, not ``.x_dot``).
     """
     names = pairs[0].names
-    acc = _matches(names, ignore)
-    stuck = np.zeros(len(names), bool)
-    largest, argmax = [], []
+    skip = _matches(names, ignore)
+    times, starts, largest = [], [], []
     for p in pairs:
         spread = p.values.std(axis=0)
         floor = 1e-9 * (1.0 + np.abs(p.values).mean(axis=0))
         scaled = p.gap / np.maximum(spread, floor)
-        scaled[:, acc] = 0.0
-        # An element counts once its start gap is visible next to the largest one.
-        visible = scaled[0] >= 1e-3 * scaled[0].max()
-        stuck |= visible & ~np.any(scaled <= scaled[0] * FIT_FROM, axis=0)
+        scaled[:, skip] = 0.0
+        starts.append(scaled[0])
         largest.append(scaled.max(axis=1))
-        argmax.append(scaled.argmax(axis=1))
+        # An element counts once its start gap is visible next to the largest one.
+        visible = scaled[0] >= 1e-2 * scaled[0].max()
+        times.append(
+            [_crossing(scaled[:, e]) if visible[e] else 0.0 for e in range(len(names))]
+        )
     gap = np.median(np.array(largest), axis=0)
+    per_element = np.median(np.array(times), axis=0)
     start = float(np.median([p.excess_cost.sum() for p in pairs]))
-    g0 = gap[0]
-    t = np.arange(len(gap))
-    fit = (gap <= g0 * FIT_FROM) & (gap >= g0 * FIT_TO)
-    if g0 < MIN_START:
-        t_s, end = np.nan, 0
-    elif stuck.any() or not np.any(gap <= g0 * FIT_FROM):
-        t_s, end = np.inf, len(gap) - 1
-    else:
-        last = np.argmax(gap < g0 * FIT_TO) if np.any(gap < g0 * FIT_TO) else len(gap)
-        fit &= t < last
-        if fit.sum() < 2:  # fell through the window in one step
-            t_s, end = float(np.argmax(gap <= g0 * FIT_FROM)), 0
-        else:
-            slope = np.polyfit(t[fit], np.log(gap[fit]), 1)[0]
-            t_s, end = -1.0 / slope, int(t[fit][-1])
-    slowest = names[int(np.bincount([a[end] for a in argmax]).argmax())]
-    never_forgot = tuple(n for n, a in zip(names, stuck) if a)
     tripped = sum(p.trips_a + p.trips_b > 0 for p in pairs)
-    return SlowMode(float(t_s), gap, slowest, never_forgot, start, tripped)
+    g0 = gap[0]
+    slowest_i = int(np.argmax(per_element))
+    t_s = per_element[slowest_i] / PASSES
+    if g0 < MIN_START:
+        t_s = np.nan
+    never_forgot = tuple(n for n, t in zip(names, per_element) if t == np.inf)
+    s0 = np.median([st[slowest_i] for st in starts])
+    tail = np.median(
+        [
+            np.median(p.gap[2 * len(p.gap) // 3 :, slowest_i])
+            / max(p.gap[0, slowest_i], 1e-300)
+            for p in pairs
+        ]
+    )
+    floor_ratio = float(tail) if s0 > 0 else 0.0
+    return SlowMode(
+        float(t_s), gap, names[slowest_i], never_forgot, start, tripped, floor_ratio
+    )

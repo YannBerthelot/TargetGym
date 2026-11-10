@@ -148,3 +148,29 @@ def test_a_derived_quantity_stands_in_for_the_raw_state_it_replaces():
     )
     assert result.t_s == pytest.approx(-1 / np.log(0.98), rel=0.01)
     assert result.slowest == "path.slow_error"
+
+
+class Ring(NamedTuple):
+    c: jnp.ndarray
+    s: jnp.ndarray
+
+
+class Oscillator:
+    """An undamped rotation the action pushes: an excursion changes its amplitude
+    for good, so the gap keeps swinging back up although each element passes
+    through zero, as a limit cycle's phase or a path's phase does."""
+
+    def reset_env(self, key, params):
+        return jnp.zeros(1), Ring(jnp.zeros(()), jnp.zeros(()))
+
+    def step_env(self, key, st, action, params):
+        w = 0.1
+        c = jnp.cos(w) * st.c - jnp.sin(w) * st.s + action[0]
+        s = jnp.sin(w) * st.c + jnp.cos(w) * st.s
+        return jnp.stack([c]), Ring(c, s), -jnp.abs(c), False, {}
+
+
+def test_a_gap_that_keeps_swinging_back_never_forgot():
+    result = measure(Oscillator(), length=400, ignore=())
+    assert result.t_s == np.inf
+    assert result.floor > 0.5
