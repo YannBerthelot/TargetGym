@@ -34,6 +34,41 @@ def _glow(T):
     return rk.incandescence(T, *_MELT)
 
 
+def _arch(xc, y, z0, half_w, wall_h, rise, n=10):
+    """An arched opening on the plane ``y``: straight jambs from ``z0`` up
+    ``wall_h``, then an elliptic arch rising ``rise``."""
+    ts = np.linspace(0.0, np.pi, n)
+    top = [(xc + half_w * np.cos(t), y, z0 + wall_h + rise * np.sin(t)) for t in ts]
+    return [(xc + half_w, y, z0)] + top + [(xc - half_w, y, z0)]
+
+
+def _profile(length, n=14):
+    """A flame's run across the bath: ``(t, y offset, centre z, half height)``,
+    rooted in the full height of the port mouth (z 0.45 to 1.6) and tapering
+    and dipping toward the glass."""
+    t = np.linspace(0.0, 1.0, n)
+    half = 0.55 * (1.0 - t) ** 0.6 * (1.0 + 0.15 * np.sin(3.0 * np.pi * t))
+    return t, length * t, 1.02 - 0.6 * t**1.3, half
+
+
+def _sail(xc, y0, length, size=1.0):
+    """A flame in the vertical plane ``x = xc``, scaled by ``size`` about its
+    centre line."""
+    _, dy, zc, h = _profile(length * size)
+    top = [(xc, y0 + a, z + size * b) for a, z, b in zip(dy, zc, h)]
+    bot = [(xc, y0 + a, z - size * b) for a, z, b in zip(dy[::-1], zc[::-1], h[::-1])]
+    return top + bot
+
+
+def _sheet(xc, y0, length, half_w):
+    """The flame's spread across the port's width, on its centre line."""
+    t, dy, zc, _ = _profile(length)
+    w = half_w * (1.0 - t) ** 0.7
+    left = [(xc - a, y0 + b, z) for a, b, z in zip(w, dy, zc)]
+    right = [(xc + a, y0 + b, z) for a, b, z in zip(w[::-1], dy[::-1], zc[::-1])]
+    return left + right
+
+
 def _draw_furnace(ax, state, params):
     g = params.grid
     a = P.layout(g)
@@ -120,23 +155,36 @@ def _draw_furnace(ax, state, params):
         ax, (-_WALL, 0.0), (yc - half[0] - _WALL, yc), (-D, H), color=_BRICK, zorder=1
     )
 
-    # A burner port per melter bay in the back wall.
+    # A burner port per melter bay in the back wall: an arched mouth in a
+    # brick surround, glowing inside as hard as the bay fires.
     bay_w = xs[nm] / g.n_bays
     yb = yc - half[0]
+    fire = rk.clamp01(
+        (float(state.fuel) - params.fuel_min) / (params.fuel_max - params.fuel_min)
+    )
+    shares = np.asarray(params.plant.port_shares, dtype=float)
     for k in range(g.n_bays):
-        xc = (k + 0.5) * bay_w
+        xc, f = (k + 0.5) * bay_w, fire * shares[k] / shares.max()
+        for scale, col, bias in (
+            (1.25, rk.shade(_BRICK, 1.35), 0.4),
+            (1.0, "#0a0606", 0.5),
+        ):
+            iso.poly(
+                ax,
+                _arch(xc, yb, 0.45, 1.0 * scale, 0.75 * scale, 0.4 * scale),
+                fc=col,
+                ec=col,
+                lw=0.5,
+                bias=bias,
+            )
+        ember = rk.lerp_hex("#0a0606", "#c0400c", f)
         iso.poly(
             ax,
-            [
-                (xc - 1.0, yb, 0.5),
-                (xc + 1.0, yb, 0.5),
-                (xc + 1.0, yb, 1.5),
-                (xc - 1.0, yb, 1.5),
-            ],
-            fc="#0a0a0a",
-            ec="#0a0a0a",
-            lw=0.8,
-            bias=0.5,  # on the wall's face
+            _arch(xc, yb, 0.45, 0.8, 0.35, 0.0),
+            fc=ember,
+            ec=ember,
+            lw=0.5,
+            bias=0.55,
         )
 
     # Floor slab, cut at the centreline.
@@ -196,27 +244,35 @@ def _draw_furnace(ax, state, params):
             )
     iso.text(ax, 2.0, yc + 1.2, 0.3, "batch", color=_BATCH, size=6, zorder=8)
 
-    # Flames from each port across the bath, by the bay's gas and its share.
-    fire = rk.clamp01(
-        (float(state.fuel) - params.fuel_min) / (params.fuel_max - params.fuel_min)
-    )
-    shares = np.asarray(params.plant.port_shares, dtype=float)
+    # Flames from each port across the bath: a tongue tapering and dipping
+    # toward the glass, with a brighter core, its length by the bay's firing.
     for k in range(g.n_bays):
         xc, f = (k + 0.5) * bay_w, fire * shares[k] / shares.max()
-        reach = yb + (0.4 + 0.5 * f) * half[0]
+        length = (0.45 + 0.5 * f) * 2.0 * half[0]
+        # The gas's glow, warmed: an orange flame with a yellow-white core.
+        hot = rk.mcolors.to_hex(_glow(gas[k]))
+        outer = rk.lerp_hex(hot, rk.ORANGE, 0.55)
+        core = rk.lerp_hex(hot, "#ffe9a0", 0.5)
         iso.poly(
             ax,
-            [
-                (xc - 1.0, yb, 1.0),
-                (xc + 1.0, yb, 1.0),
-                (xc + 0.3, reach, 0.5),
-                (xc - 0.3, reach, 0.5),
-            ],
-            fc=_glow(gas[k]),
+            _sheet(xc, yb, length, 0.9),
+            fc=outer,
             ec="none",
-            alpha=0.35 + 0.55 * f,
-            zorder=4,
+            alpha=0.15 + 0.25 * f,
+            bias=0.6,
         )
+        for size, col, alpha, bias in (
+            (1.0, outer, 0.35 + 0.45 * f, 0.65),
+            (0.55, core, 0.5 + 0.4 * f, 0.7),
+        ):
+            iso.poly(
+                ax,
+                _sail(xc, yb, length, size),
+                fc=col,
+                ec="none",
+                alpha=alpha,
+                bias=bias,
+            )
 
     # The crown's back half, translucent, each melter bay tinted by its hot face.
     ys = np.linspace(yb, yc, 12)
