@@ -451,26 +451,32 @@ class Iso:
         z,
         *,
         color,
-        ec=FRAME,
+        ec=None,
         lw=0.6,
         alpha=1.0,
         zorder=2,
         hatch=None,
         split=None,
+        top=True,
     ):
         """A solid over ``x = (x0, x1)``, ``y``, ``z``: its three visible faces.
         ``split`` cuts it into pieces at most that long in ``x``, for the depth
         sort; only the last piece shows its +x end, and the seams between
-        pieces are hidden."""
+        pieces are hidden. ``ec=None`` edges each face in its own colour.
+        ``top=False`` leaves out a top that is always covered, such as a floor
+        under a bath, which the depth sort could otherwise draw over it."""
         (x0, x1), (y0, y1), (z0, z1) = x, y, z
         n = max(1, int(np.ceil((x1 - x0) / split))) if split else 1
         cuts = np.linspace(x0, x1, n + 1)
         faces = []
         for xa, xb in zip(cuts[:-1], cuts[1:]):
-            faces += [
-                ([(xa, y0, z1), (xb, y0, z1), (xb, y1, z1), (xa, y1, z1)], TOP),
-                ([(xa, y1, z0), (xb, y1, z0), (xb, y1, z1), (xa, y1, z1)], FRONT),
-            ]
+            if top:
+                faces.append(
+                    ([(xa, y0, z1), (xb, y0, z1), (xb, y1, z1), (xa, y1, z1)], TOP)
+                )
+            faces.append(
+                ([(xa, y1, z0), (xb, y1, z0), (xb, y1, z1), (xa, y1, z1)], FRONT)
+            )
         faces.append(([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], SIDE))
         for pts, f in faces:
             # A split solid's pieces are edged in their own colour, so its
@@ -479,7 +485,7 @@ class Iso:
                 ax,
                 pts,
                 fc=shade(color, f),
-                ec=shade(color, f) if n > 1 else ec,
+                ec=shade(color, f) if (n > 1 or ec is None) else ec,
                 lw=lw,
                 alpha=alpha,
                 zorder=zorder,

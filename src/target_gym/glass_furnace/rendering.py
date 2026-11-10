@@ -134,7 +134,7 @@ def _draw_furnace(ax, state, params):
                 (xc - 1.0, yb, 1.5),
             ],
             fc="#0a0a0a",
-            ec=rk.DIM,
+            ec="#0a0a0a",
             lw=0.8,
             bias=0.5,  # on the wall's face
         )
@@ -147,8 +147,8 @@ def _draw_furnace(ax, state, params):
             (yc - half[j] - _WALL, yc),
             (-D - _SLAB, -D),
             color=_BRICK,
-            ec="none",
             split=_SPLIT,
+            top=False,  # under the bath, never seen
         )
 
     # The melt: its surface, and its section on the cut, cell by cell.
@@ -303,8 +303,8 @@ def _draw_furnace(ax, state, params):
         (yc - cw - _WALL, yc),
         (-D - _SLAB, -0.3),
         color=_BRICK,
-        ec="none",
         split=_SPLIT,
+        top=False,  # under the canal's glass and wall
     )
     iso.poly(
         ax,
