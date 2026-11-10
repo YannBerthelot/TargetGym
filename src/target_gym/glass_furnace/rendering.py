@@ -27,6 +27,7 @@ _XS = 0.45  # lengths shortened, so the long plant fills the panel
 _WALL = 0.8  # m of refractory, decor
 _CANAL = (5.0, 1.0)  # m long and half-wide, decor
 _SLAB = 0.8  # m of floor under the bath, decor
+_SPLIT = 2.0  # m: long solids are cut this short for the depth sort
 
 
 def _glow(T):
@@ -60,6 +61,7 @@ def _draw_furnace(ax, state, params):
         x_scale=_XS,
         y_deg=25.0,
         y_scale=0.8,
+        deferred=True,  # drawn far to near by flush(), so walls hide only behind
     )
     zones = (  # (first column, last column + 1, wall height, name)
         (0, nm, H, "MELTER"),
@@ -78,19 +80,31 @@ def _draw_furnace(ax, state, params):
         zorder=1,
     )
     iso.text(ax, xs[nm] + 7.2, -_WALL - 1.7, H + 4.6, "STACK", color=rk.DIM, size=6)
-    # A narrower zone's back wall stands in front of the back of the wider bath
-    # before it, so it is drawn over the melt; the melter's own is behind it.
     for j0, j1, h, _ in zones:
         yb = yc - half[j0]
-        narrower = half[j0] < half[0]
         iso.box(
-            ax,
-            (xs[j0], xs[j1]),
-            (yb - _WALL, yb),
-            (-D, h),
-            color=_BRICK,
-            zorder=3.5 if narrower else 1,
+            ax, (xs[j0], xs[j1]), (yb - _WALL, yb), (-D, h), color=_BRICK, split=_SPLIT
         )
+    # Shoulder walls where the bath narrows or widens, so no glass shows past
+    # them: on the narrower side, outside its bath, as high as the wider zone.
+    runs = [(xs[j0], half[j0], h) for j0, _, h, _ in zones] + [(end, _CANAL[1], 0.6)]
+    for (_, ha, a_h), (xt, hb, b_h) in zip(runs[:-1], runs[1:]):
+        if hb < ha:
+            iso.box(
+                ax,
+                (xt, xt + _WALL),
+                (yc - ha - _WALL, yc - hb),
+                (-D, a_h),
+                color=_BRICK,
+            )
+        elif hb > ha:
+            iso.box(
+                ax,
+                (xt - _WALL, xt),
+                (yc - hb - _WALL, yc - ha),
+                (-D, b_h),
+                color=_BRICK,
+            )
     # The charger's hopper behind the back end wall, standing over it.
     iso.box(
         ax,
@@ -122,7 +136,7 @@ def _draw_furnace(ax, state, params):
             fc="#0a0a0a",
             ec=rk.DIM,
             lw=0.8,
-            zorder=2,
+            bias=0.5,  # on the wall's face
         )
 
     # Floor slab, cut at the centreline.
@@ -134,20 +148,25 @@ def _draw_furnace(ax, state, params):
             (-D - _SLAB, -D),
             color=_BRICK,
             ec="none",
-            zorder=2,
+            split=_SPLIT,
         )
 
     # The melt: its surface, and its section on the cut, cell by cell.
     zs = -np.concatenate([[0.0], np.cumsum(dz)])
     for j in range(len(dx)):
-        x0, x1, y0 = xs[j], xs[j + 1], yc - half[j]
-        iso.poly(
-            ax,
-            [(x0, y0, 0), (x1, y0, 0), (x1, yc, 0), (x0, yc, 0)],
-            fc=_glow(T[0, j]),
-            ec="none",
-            zorder=3,
-        )
+        y0 = yc - half[j]
+        n = max(1, int(np.ceil(dx[j] / _SPLIT)))
+        for x0, x1 in zip(
+            *(lambda c: (c[:-1], c[1:]))(np.linspace(xs[j], xs[j + 1], n + 1))
+        ):
+            iso.poly(
+                ax,
+                [(x0, y0, 0), (x1, y0, 0), (x1, yc, 0), (x0, yc, 0)],
+                fc=_glow(T[0, j]),
+                ec=_glow(T[0, j]),  # closes the hairline gaps between pieces
+                lw=0.4,
+            )
+        x0, x1 = xs[j], xs[j + 1]
         for i in range(T.shape[0]):
             iso.poly(
                 ax,
@@ -173,7 +192,7 @@ def _draw_furnace(ax, state, params):
                 (0.0, 0.12),
                 color=_BATCH,
                 ec="none",
-                zorder=4,
+                split=_SPLIT,
             )
     iso.text(ax, 2.0, yc + 1.2, 0.3, "batch", color=_BATCH, size=6, zorder=8)
 
@@ -202,21 +221,19 @@ def _draw_furnace(ax, state, params):
     # The crown's back half, translucent, each melter bay tinted by its hot face.
     ys = np.linspace(yb, yc, 12)
     rise = 0.45 * np.sqrt(np.clip(1.0 - ((yc - ys) / half[0]) ** 2, 0.0, 1.0))
-    for k in range(g.n_bays + 1):
-        x0 = k * bay_w if k < g.n_bays else xs[nm]
-        x1 = (k + 1) * bay_w if k < g.n_bays else xs[nr]
-        col = _glow(roof[k]) if k < g.n_bays else _BRICK
+    pieces = [(k * bay_w, (k + 1) * bay_w, _glow(roof[k])) for k in range(g.n_bays)]
+    cuts = np.linspace(xs[nm], xs[nr], int(np.ceil((xs[nr] - xs[nm]) / _SPLIT)) + 1)
+    pieces += [(c0, c1, _BRICK) for c0, c1 in zip(cuts[:-1], cuts[1:])]
+    for x0, x1, col in pieces:
         arch = [(x0, y, H + r) for y, r in zip(ys, rise)]
         arch += [(x1, y, H + r) for y, r in zip(ys[::-1], rise[::-1])]
-        iso.poly(
-            ax, arch, fc=col, ec=rk.shade(_BRICK, 1.3), lw=0.6, alpha=0.55, zorder=5
-        )
+        iso.poly(ax, arch, fc=col, ec=rk.shade(_BRICK, 1.3), lw=0.6, alpha=0.55)
     iso.line(
         ax,
         [(0.0, yc, H + 0.45), (xs[nr], yc, H + 0.45)],
         color=rk.shade(_BRICK, 1.5),
         lw=1.6,
-        zorder=6,
+        bias=3.0,  # the crown's cut edge, over the crown
     )
     hot = int(np.argmax(roof))
     iso.text(
@@ -235,7 +252,7 @@ def _draw_furnace(ax, state, params):
         [(tc, yc - 1.5, H + 0.4), (tc, yc - 1.5, H + 1.3)],
         color=rk.CYAN,
         lw=1.6,
-        zorder=7,
+        bias=3.0,  # through the crown
     )
     iso.text(ax, tc + 1.5, yc - 1.5, H + 1.3, "TC", color=rk.CYAN, size=6.5, zorder=8)
 
@@ -249,7 +266,7 @@ def _draw_furnace(ax, state, params):
             (h, h + 0.35),
             color=_BRICK,
             alpha=0.9,
-            zorder=5,
+            split=_SPLIT,
         )
     cool = rk.clamp01(float(state.cooling) / params.cooling_max)
     xm = 0.5 * (xs[nw] + end)
@@ -287,7 +304,7 @@ def _draw_furnace(ax, state, params):
         (-D - _SLAB, -0.3),
         color=_BRICK,
         ec="none",
-        zorder=5,
+        split=_SPLIT,
     )
     iso.poly(
         ax,
@@ -299,7 +316,6 @@ def _draw_furnace(ax, state, params):
         ],
         fc=_glow(T[0, -1]),
         ec="none",
-        zorder=6,
     )
     # The canal's back wall, standing over its glass.
     iso.box(
@@ -308,7 +324,7 @@ def _draw_furnace(ax, state, params):
         (yc - cw - _WALL, yc - cw),
         (-0.3, 0.6),
         color=_BRICK,
-        zorder=6,
+        split=_SPLIT,
     )
     # Along the line, out of the canal's end.
     u0, v0 = iso.p(total - 2.0, yc - 0.5, -0.3)
@@ -356,6 +372,7 @@ def _draw_furnace(ax, state, params):
         size=6.5,
         ha="left",
     )
+    iso.flush(ax, zorder=2.0)
     rk.caption(
         ax,
         f"melt {T.min() - 273.15:.0f} to {T.max() - 273.15:.0f} C"

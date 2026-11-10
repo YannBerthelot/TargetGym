@@ -351,6 +351,12 @@ class Iso:
     front and the +x end. ``zx`` exaggerates heights, as a stylised plant
     drawing does, and ``x_scale`` shortens a long one. The projection is
     fitted so the given extent fills ``box``.
+
+    With ``deferred``, faces and lines are queued instead of drawn, and
+    :meth:`flush` draws them far to near (the painter's algorithm), so a wall
+    hides the bath behind it but not the glass in front of it. Sorting is by
+    each face's centre, which holds for faces of similar size: split long
+    solids with ``box(split=...)``.
     """
 
     def __init__(
@@ -365,8 +371,11 @@ class Iso:
         y_deg=30.0,
         y_scale=1.0,
         x_scale=1.0,
+        deferred=False,
     ):
         self.zx = zx
+        self.deferred = deferred
+        self._queue = []
         ax_, ay_ = np.radians(x_deg), np.radians(y_deg)
         self._xc, self._xs = x_scale * np.cos(ax_), x_scale * np.sin(ax_)
         self._yc, self._ys = y_scale * np.cos(ay_), y_scale * np.sin(ay_)
@@ -378,6 +387,26 @@ class Iso:
         self._k = k
         self._u0 = 0.5 * (box[0] + box[1]) - k * 0.5 * (u.min() + u.max())
         self._v0 = 0.5 * (box[2] + box[3]) - k * 0.5 * (v.min() + v.max())
+        # Toward the viewer: the direction the projection flattens.
+        self.view = np.array(
+            [self._yc, self._xc, (self._xs * self._yc + self._ys * self._xc) / zx]
+        )
+
+    def depth(self, pts):
+        """How near the viewer a set of points' centre is (larger is nearer)."""
+        return float(np.asarray(pts, dtype=float).mean(axis=0) @ self.view)
+
+    def _draw(self, ax, artist, pts, bias):
+        if self.deferred:
+            self._queue.append((self.depth(pts) + bias, len(self._queue), artist))
+        else:
+            artist(ax)
+
+    def flush(self, ax, zorder=2.0):
+        """Draw the queued faces far to near, all at ``zorder``."""
+        for _, _, artist in sorted(self._queue, key=lambda q: (q[0], q[1])):
+            artist(ax, zorder)
+        self._queue = []
 
     def _raw(self, x, y, z):
         x, y, z = (np.asarray(a, dtype=float) for a in (x, y, z))
@@ -389,39 +418,68 @@ class Iso:
         u, v = self._raw(x, y, z)
         return self._u0 + self._k * u, self._v0 + self._k * v
 
-    def poly(self, ax, pts, *, fc, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, **kw):
-        """A face through 3D points ``pts``, as one polygon."""
+    def poly(
+        self, ax, pts, *, fc, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, bias=0.0, **kw
+    ):
+        """A face through 3D points ``pts``, as one polygon. ``bias`` moves it
+        nearer in the depth sort, for a face drawn on another (a port on a
+        wall)."""
         pts = np.asarray(pts, dtype=float)
         u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
-        patch = mpatches.Polygon(
-            np.column_stack([u, v]),
-            closed=True,
-            fc=fc,
-            ec=ec,
-            lw=lw,
-            alpha=alpha,
-            zorder=zorder,
-            **kw,
-        )
-        ax.add_patch(patch)
-        return patch
+
+        def artist(axis, z=zorder):
+            axis.add_patch(
+                mpatches.Polygon(
+                    np.column_stack([u, v]),
+                    closed=True,
+                    fc=fc,
+                    ec=ec,
+                    lw=lw,
+                    alpha=alpha,
+                    zorder=z,
+                    **kw,
+                )
+            )
+
+        self._draw(ax, artist, pts, bias)
 
     def box(
-        self, ax, x, y, z, *, color, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, hatch=None
+        self,
+        ax,
+        x,
+        y,
+        z,
+        *,
+        color,
+        ec=FRAME,
+        lw=0.6,
+        alpha=1.0,
+        zorder=2,
+        hatch=None,
+        split=None,
     ):
-        """A solid over ``x = (x0, x1)``, ``y``, ``z``: its three visible faces."""
+        """A solid over ``x = (x0, x1)``, ``y``, ``z``: its three visible faces.
+        ``split`` cuts it into pieces at most that long in ``x``, for the depth
+        sort; only the last piece shows its +x end, and the seams between
+        pieces are hidden."""
         (x0, x1), (y0, y1), (z0, z1) = x, y, z
-        faces = (
-            ([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)], TOP),
-            ([(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)], FRONT),
-            ([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], SIDE),
-        )
+        n = max(1, int(np.ceil((x1 - x0) / split))) if split else 1
+        cuts = np.linspace(x0, x1, n + 1)
+        faces = []
+        for xa, xb in zip(cuts[:-1], cuts[1:]):
+            faces += [
+                ([(xa, y0, z1), (xb, y0, z1), (xb, y1, z1), (xa, y1, z1)], TOP),
+                ([(xa, y1, z0), (xb, y1, z0), (xb, y1, z1), (xa, y1, z1)], FRONT),
+            ]
+        faces.append(([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], SIDE))
         for pts, f in faces:
+            # A split solid's pieces are edged in their own colour, so its
+            # seams do not show.
             self.poly(
                 ax,
                 pts,
                 fc=shade(color, f),
-                ec=ec,
+                ec=shade(color, f) if n > 1 else ec,
                 lw=lw,
                 alpha=alpha,
                 zorder=zorder,
@@ -459,10 +517,7 @@ class Iso:
             e1 = -e1
         light = np.array([-0.3, 0.6, 0.75])
         light = light / np.linalg.norm(light)
-        # Toward the viewer: the direction the projection flattens.
-        view = np.array(
-            [self._yc, self._xc, (self._xs * self._yc + self._ys * self._xc) / self.zx]
-        )
+        view = self.view
         ts = np.linspace(-np.pi, np.pi, n + 1)
         for t0, t1 in zip(ts[:-1], ts[1:]):
             tm = 0.5 * (t0 + t1)
@@ -488,10 +543,15 @@ class Iso:
         u, v = self.p(x, y, z)
         return label(ax, float(u), float(v), s, **kw)
 
-    def line(self, ax, pts, **kw):
+    def line(self, ax, pts, bias=0.0, **kw):
         pts = np.asarray(pts, dtype=float)
         u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
-        ax.plot(u, v, **kw)
+        zorder = kw.pop("zorder", 2)
+
+        def artist(axis, z=zorder):
+            axis.plot(u, v, zorder=z, **kw)
+
+        self._draw(ax, artist, pts, bias)
 
 
 # ---------------------------------------------------------------------------
