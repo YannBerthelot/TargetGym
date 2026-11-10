@@ -1,11 +1,93 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: reactor-v8 (next section) is the current design, on top of v7 and Amendment 3; the EDF rebuild
+Status: reactor-v9 (next section) is the current design, on top of v8, v7 and Amendment 3; the EDF rebuild
 of 2026-11-08 and the first attempt of 2026-11-07 below it are history, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
+
+## Starting tilt and the family sweep, 2026-11-10 (reactor-v9)
+
+**Finding 3** of the physics review: a day can start with yesterday's axial xenon tilt.
+A tilt table of 10 end-of-day pairs comes from the reference on training seeds 0 to 99
+of each load-follow scenario (`scripts/reactor_tilt_table.py`). A day draws one with
+share 0.108, the share of a year's days that follow load (ours: 250 load-follow days
+over a 5.5 + 50/60 day week, over 365). Delta I at reset is computed from the drawn
+tilt. On seeds 100 to 109 the reference and null moved by a few dollars from v8.
+
+### Family sweep (B7), 8 draws
+
+`scripts/family_sweep.py` draws the four `ours` numbers that have ranges
+(`reactor/ours.json`) on a Latin hypercube (seed 20261110). On each draw the reference
+is re-tuned by its recipe's bump tests, and run against the null on seeds 100 to 109 in
+every scenario. **The property holds on 2 of 8 draws**, 2 and 5, and draw 5 holds only
+on medians: its reference trips on 1 to 10 seeds in every scenario.
+
+| Draw | MTC, pcm/K | Boron worth, pcm/ppm | Reference beats null | Reference trips (of 10 seeds) |
+|---:|---:|---:|---|---|
+| 0 | -2.5 | -6.8 | 5 of 6, not fast_return | 0 to 10 |
+| 1 | -19.3 | -9.6 | none | 10 everywhere |
+| 2 | -16.9 | -10.5 | all | 0 |
+| 3 | -13.5 | -7.9 | none | 10 everywhere |
+| 4 | -7.9 | -8.8 | 3 of 6 | 10 everywhere |
+| 5 | -3.7 | -8.5 | all, on medians | 1 to 10 |
+| 6 | -12.4 | -7.5 | none | 10 everywhere |
+| 7 | -8.4 | -10.4 | none | 10 everywhere |
+
+The null at rest costs nothing on every draw (`at_rest_cost` 2e-6 dollars, no trip).
+
+**Why the reference trips:** on draws 1, 3 and 7 (checked on seed 100, edf_daily and
+baseload) the boron loop on Tavg has the wrong sign. Its bump test reads Tavg's slope
+over an hour after a step of boration, with no paired run without the step, so the
+day's own drift (xenon, burnup, the starting tilt) is read as the response. With a
+strong MTC, a ppm moves Tavg little (`boron_worth / (alpha_coolant + alpha_fuel)`) and
+the drift wins: `t_Kc` comes out +0.015 to +0.024 instead of the nominal -0.021. Then a
+cold Tavg brings more boration, Tavg runs 30 to 58 K cold with boron at full flow, and
+the floor's time limit trips the plant, again after each restart. The nominal draw is
+a lucky one, not a robust one.
+
+Two setup gaps, ours:
+
+- The sweep draws MTC and boron worth independently, over the MTC range of the whole
+  cycle (-1 to -20 pcm/K). Amendment 5 asks for the member's range and coupled numbers
+  moved together. `ours.json` predates the amendment's reading and was not revised.
+- The bump test's lack of a paired no-step run is a recipe fault. A practitioner
+  steps from a lined-out plant or subtracts the drift. Fixing it changes the recipe
+  after seeing results, so it waits for the owner (J1).
+
+### Ceilings, room and price sensitivity on reactor-v9
+
+Adam foresight, 3000 iterations, seeds 100 to 109. Room is the reference's cost over
+the ceiling, the mean over seeds.
+
+| Scenario | Reference mean | Ceiling mean | Room |
+|---|---:|---:|---:|
+| edf_daily | $4,609 | $2,575 | 1.94 |
+| edf_short_hold | $4,329 | $2,166 | 2.01 |
+| krsko_slow | $1,740 | $750 | 2.32 |
+| krsko_shallow | $1,157 | $416 | 2.79 |
+| baseload | $240 | $90 | 2.65 |
+| fast_return | $8.3M | $2.0M | 1.89 |
+
+- fast_return's mean is the two tripping seeds (107 and 109, rooms 7.8 and 3.0); Adam
+  stalls at its first plateau there. On the eight seeds without a trip the room is 1.00
+  to 1.04: Adam finds nothing under the reference.
+- edf_daily seed 101 also stalls (room 1.00).
+- Room at a third and at three times each price:
+
+| Scenario | Nominal | Rod step /3, x3 | Effluent /3, x3 | Derate /3, x3 |
+|---|---:|---|---|---|
+| edf_daily | 1.94 | 1.97, 1.86 | 3.10, 1.42 | 1.94, 1.94 |
+| edf_short_hold | 2.01 | 2.05, 1.90 | 3.12, 1.47 | 2.01, 2.01 |
+| krsko_slow | 2.32 | 2.42, 2.08 | 4.09, 1.53 | 2.32, 2.32 |
+| krsko_shallow | 2.79 | 2.97, 2.39 | 4.81, 1.82 | 2.79, 2.79 |
+| baseload | 2.65 | 2.77, 2.35 | 4.14, 1.98 | 2.65, 2.65 |
+| fast_return | 1.89 | 1.89, 1.89 | 1.89, 1.89 | 1.89, 1.89 |
+
+The effluent price (ours) sets most of the room; the derate price does not touch it.
+IPOPT (the convergence check) crashed on the v7 task tuple in `scripts/reactor_ipopt.py`;
+fixed and re-running.
 
 ## Physics review fixes, 2026-11-10 (reactor-v8)
 
