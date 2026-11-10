@@ -455,12 +455,19 @@ def failure_kernel(env, key, state, new_state, params):
     When the physics' proposal for the next state leaves the operating
     envelope the plant trips: the step is charged ``reward.trip_cost``
     (``restart_steps * failure_cost``) and the plant restarts at once, as
-    ``reset_env`` would, on the same window clock. The outside world does not
-    restart: the fields the task names in ``env.OUTSIDE_WORLD`` (disturbances,
-    targets, schedules, records) carry on from the proposal, so a policy that
-    trips meets the world one that does not would (long-strata S2). ``terminated`` stays false,
-    so the restart is an ordinary transition with a cost and every window has
-    the same length. Each restart is a fresh draw (``restart_key``).
+    ``reset_env`` would, on the same window clock. Two kinds of field carry on
+    from the proposal (long-strata S2):
+
+    - ``env.OUTSIDE_WORLD``: disturbances, targets, schedules and events, which
+      depend on the seed and the time only, so a policy that trips meets the
+      world one that does not would;
+    - ``env.RECORDS``: the plant's history the policy wrote, such as a surge
+      log or a permit clock, which a restart keeps but which no two policies
+      share.
+
+    ``terminated`` stays false, so the restart is an ordinary transition with a
+    cost and every window has the same length. Each restart is a fresh draw
+    (``restart_key``).
 
     - ``params.continuing = False``: a trip ends the episode instead;
       ``terminated`` is raised and the state is the proposal.
@@ -488,9 +495,10 @@ def failure_kernel(env, key, state, new_state, params):
     plant = getattr(env, "restart_plant", None)
     rkey = restart_key(key, new_state.time)
     fresh = plant(rkey, new_state, params) if plant else env.reset_env(rkey, params)[1]
-    outside = {f: getattr(new_state, f) for f in getattr(env, "OUTSIDE_WORLD", ())}
+    kept = (*getattr(env, "OUTSIDE_WORLD", ()), *getattr(env, "RECORDS", ()))
+    carried = {f: getattr(new_state, f) for f in kept}
     fresh = fresh.replace(
-        time=new_state.time, sensor_key=new_state.sensor_key, **outside
+        time=new_state.time, sensor_key=new_state.sensor_key, **carried
     )
     out = _select(jnp.logical_and(lost, continuing), fresh, new_state)
     return out, tripped, new_state, jnp.logical_and(lost, jnp.logical_not(continuing))

@@ -405,6 +405,43 @@ def _assert_tree_equal(a, b):
         np.testing.assert_array_equal(np.asarray(x), np.asarray(y))
 
 
+def test_a_trip_keeps_the_records_the_policy_wrote():
+    """A record (a surge log, a permit clock) is history the policy wrote. A
+    restart keeps it, as it keeps the outside world, and starts only the plant
+    afresh: ``env.RECORDS`` beside ``env.OUTSIDE_WORLD``, which the policy never
+    moves (docs/proposals/long-strata.md, S2)."""
+    from flax import struct
+
+    from target_gym.base import EnvParams, failure_kernel
+
+    @struct.dataclass
+    class Toy:
+        time: int
+        sensor_key: jax.Array
+        plant: jax.Array
+        world: jax.Array
+        record: jax.Array
+
+    class Trips:
+        OUTSIDE_WORLD = ("world",)
+        RECORDS = ("record",)
+        is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
+
+        @staticmethod
+        def reset_env(key, params):
+            zero = jnp.zeros(())
+            return None, Toy(0, jax.random.PRNGKey(0), zero, zero, zero)
+
+    proposal = Toy(9, jax.random.PRNGKey(1), *map(jnp.asarray, (5.0, 2.0, 3.0)))
+    out, tripped, _, terminated = failure_kernel(
+        Trips(), jax.random.PRNGKey(2), proposal, proposal, EnvParams()
+    )
+    assert bool(tripped) and not bool(terminated)
+    assert float(out.plant) == 0.0  # the plant restarts
+    assert float(out.world) == 2.0  # the outside world carries on
+    assert float(out.record) == 3.0  # and so does the record
+
+
 def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     """``base.failure_kernel``: when the physics' proposal leaves the envelope
     the step is scored on that proposal -- every term zero, the failure term
@@ -428,6 +465,7 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
         is_terminated = staticmethod(lambda s, params: jnp.ones((), bool))
         reset_env = staticmethod(env.reset_env)
         OUTSIDE_WORLD = env.OUTSIDE_WORLD
+        RECORDS = getattr(env, "RECORDS", ())
         restart_plant = getattr(env, "restart_plant", None)
 
     assert bool(p.continuing)
@@ -441,7 +479,7 @@ def test_a_trip_is_charged_once_and_the_plant_restarts_at_once(spec):
     for name in vars(fresh):
         if name in ("time", "sensor_key"):
             continue
-        kept = name in env.OUTSIDE_WORLD
+        kept = name in env.OUTSIDE_WORLD or name in getattr(env, "RECORDS", ())
         source = proposal if kept else fresh
         _assert_tree_equal(getattr(out, name), getattr(source, name))
     # The instruments stay through a restart.

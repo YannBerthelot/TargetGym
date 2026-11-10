@@ -4,7 +4,9 @@ A task opts in with ``STREAM_READY = True`` on its env; ``stream.make_stream``
 refuses the others. For each wired task:
 - the stream never signals done, past the task's window N and through trips;
 - two different policies on one seed meet the same outside world: every field the
-  task names in ``OUTSIDE_WORLD``, the scenario sequence and the event onsets;
+  task names in ``OUTSIDE_WORLD``, the scenario sequence and the event onsets.
+  ``RECORDS`` (a surge log, a permit clock) are history the policy writes, carried
+  through a trip but not shared, so they are not compared;
 - the observation is the task's own: its shape, and finite.
 
 The rates here are the test's, sized to the run so it switches and has events
