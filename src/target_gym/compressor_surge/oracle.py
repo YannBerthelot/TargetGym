@@ -144,7 +144,13 @@ def compressor_model(env, p) -> TaskModel:
         dp = x1[1]
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
         cost = p.energy_price * power * p.delta_t / 1000.0
-        past = jax.nn.softplus((jnp.abs(target - dp) - p.header_band) / KPA)
+        # Each side's hinge on its own (K2's abs, p_w(x) + p_w(-x)): softplus of
+        # abs keeps abs's corner at the setpoint, where the plan holds, and
+        # the solver stalled on it.
+        e = target - dp
+        past = jax.nn.softplus((e - p.header_band) / KPA) + jax.nn.softplus(
+            (-e - p.header_band) / KPA
+        )
         cost = cost + p.zone_price * p.delta_t * past
         y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis

@@ -34,6 +34,7 @@ import pytest
 from target_gym import records
 from target_gym.benchmark import episode_keys
 from target_gym.cement_kiln.oracle import soft_max
+from target_gym.compressor_surge.env import live_target
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.registry import REGISTRY
@@ -365,6 +366,37 @@ def test_the_compressors_planned_surge_limit_is_the_surge_line():
         y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
     planned = float(y[0]) - limit.lo
     assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+
+
+def test_the_compressors_planned_zone_cost_has_no_kink_at_the_setpoint():
+    """Every reward kink the plan keeps is smoothed (the smoothing protocol's
+    K2 and T2): the oracle holds the header at its setpoint, so a corner in
+    the planned cost there stalls the solver. From the reset, which sits at
+    the setpoint (asserted within half a pascal), the stage cost's slope in
+    the header pressure is taken over [-2h, -h] and [h, 2h] with h = 1 Pa;
+    any corner at the setpoint lies between them. A smooth cost's slopes
+    differ by its curvature over 3h, under 1e-4 per Pa here (the zone's
+    softplus at 1.2 band widths: 0.1/kPa x 0.18 / 1 kPa x 3 Pa, about 5e-5);
+    the corner of abs inside the hinge differs by about 2 x 0.1 x
+    sigmoid(-1.2), 0.046 per Pa."""
+    env, params, oracle = _oracle("compressor_surge")
+    m = oracle.model
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    with enable_x64():
+        s = float64(state)
+        d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+        x, hold = m.state_x(s), m.hold(s)
+
+        def cost(dp):
+            x1, c, *_ = m.step(d, x.at[1].set(x[1] + dp), hold, 0)
+            return float(c), float(x1[1])
+
+        h = 1.0
+        after = cost(0.0)[1]
+        cm2, cm1, cp1, cp2 = (cost(k * h)[0] for k in (-2, -1, 1, 2))
+    setpoint = float(live_target(state, params))
+    assert abs(after - setpoint) < 0.5
+    assert abs((cp2 - cp1) / h - (cm1 - cm2) / h) < 1e-4
 
 
 @pytest.mark.parametrize(
