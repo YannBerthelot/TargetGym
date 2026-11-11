@@ -53,6 +53,8 @@ CLIPS = {
     "boiler_drum": dict(steps=900, frames=110),
     "wind_turbine": dict(steps=600, frames=90),
     "battery": dict(steps=540, frames=100),
+    "unstable_cstr": dict(steps=600, frames=90),
+    "compressor_surge": dict(steps=600, frames=90),
 }
 
 
