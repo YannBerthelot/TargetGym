@@ -550,6 +550,13 @@ def recorded(name: str | None = None) -> dict:
     return records.load_row("protocol_results", name)
 
 
+def held(row: dict) -> bool:
+    """Whether a ``recorded`` row was scored on a hold of a tracking term. A
+    task charged in money has no such term (its record is the charter's), so
+    the hold protocol's chart and profiles leave it out as not measured."""
+    return "hold_tracking" in row.get("pid", {})
+
+
 def best_known(row: dict) -> dict:
     """The oracle's recorded move and settling ratios against the expert's,
     from a ``recorded`` row: the best known on the moves, for information.

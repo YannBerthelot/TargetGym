@@ -23,7 +23,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym.benchmark import run_policy, task_info
+from target_gym.benchmark import episode_keys, run_policy, task_info
 from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import oracle as O
 from target_gym.glass_furnace import physical as P
@@ -186,3 +186,13 @@ def test_the_registered_oracle_plays_its_plan_for_the_seed():
     action = oracle.step(obs, state)
     assert action == pytest.approx(float(E.to_action(oracle.plans[0].valve[0], p)[0]))
     assert len(oracle.plans) == 1 and oracle.plans[0].lost_steps == 0
+
+
+@pytest.mark.parametrize("seed, n", [(0, 1), (5, 30)])
+def test_the_oracle_replays_the_keys_the_benchmark_runs_its_seed_on(seed, n):
+    # Contract: the oracle plans on the disturbances the scored episode meets,
+    # which come from benchmark.episode_keys for one episode on PRNGKey(seed).
+    resets, steps = episode_keys(jax.random.PRNGKey(seed), 1, n)
+    reset, keys = O.episode_keys(seed, n)
+    np.testing.assert_array_equal(reset, resets[0])
+    np.testing.assert_array_equal(keys, steps[:, 0])

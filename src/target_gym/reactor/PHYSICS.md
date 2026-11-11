@@ -374,7 +374,7 @@ so the comparison between rungs stays fair.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 105 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 107 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -37,7 +37,6 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
-from target_gym import records
 from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
@@ -48,7 +47,13 @@ from target_gym.compressor_surge.env import (
     suction_density,
 )
 from target_gym.integration import integrate_dynamics
-from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
+from target_gym.oracles.controller import (
+    Oracle,
+    TaskModel,
+    raw_of,
+    softplus_clip,
+    widths_row,
+)
 from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
@@ -186,7 +191,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
 def make_compressor_surge_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``compressor_model``,
     its zone backed off by the widths file's measure."""
-    zone = records.load_row("oracle_widths", "compressor_surge")["zone"]
+    zone = widths_row("compressor_surge")["zone"]
     build = functools.partial(compressor_model, zone_backoff=zone["backoff_kpa"] * KPA)
     return Oracle(env, params, "compressor_surge", build)
 

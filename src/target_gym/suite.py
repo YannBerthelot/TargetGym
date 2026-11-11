@@ -155,10 +155,13 @@ def references(rows: dict | None = None, tags: dict | None = None) -> dict:
     """The expert's and the oracle's profiles from the recorded protocol rows
     (``scoring.recorded()``): the expert is the 0.5 ring wherever a task has
     room, and the oracle sits where its recorded hold and moves put it. A task
-    no oracle ships for (``wake_surf``) counts for the expert only."""
+    no oracle ships for (``wake_surf``) counts for the expert only, and one
+    charged in money (``scoring.held``) is not measured here."""
     rows = scoring.recorded() if rows is None else rows
     expert, oracle = {}, {}
     for name, row in rows.items():
+        if not scoring.held(row):
+            continue
         b = row["pid"]["hold_tracking"]
         best = scoring.best_known(row)["oracle_transient_ratio"]
         known = {"oracle_transient_ratio": best}

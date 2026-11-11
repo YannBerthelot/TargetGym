@@ -154,11 +154,10 @@ def _scan(env, params, state, keys, valve):
 
 def episode_keys(seed: int, n_steps: int):
     """``(reset key, step keys (n_steps, 2))`` that ``benchmark.run_policy`` runs
-    seed ``seed`` on."""
-    from target_gym.benchmark import episode_keys as keys
-
-    reset, steps = keys(jax.random.PRNGKey(seed), 1, n_steps)
-    return reset[0], steps[:, 0]
+    seed ``seed`` on: ``benchmark.episode_keys`` for one episode, restated here
+    so the oracle's fingerprint covers it (a test holds the two equal)."""
+    k_reset, k_steps = jax.random.split(jax.random.PRNGKey(seed))
+    return jax.random.split(k_reset, 1)[0], jax.random.split(k_steps, n_steps)
 
 
 def kkt(grad, rows, jac, lo_gap, hi_gap):
