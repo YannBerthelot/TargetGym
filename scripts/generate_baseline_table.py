@@ -121,8 +121,10 @@ def _seeds(counts) -> str:
 def chart_rows(data: dict) -> list[dict]:
     """One row per registered task in ``data``, in registry order: what the
     chart draws, as recorded. A task no oracle ships for has ``None`` for the
-    oracle's hold and gain."""
+    oracle's hold and gain. A task charged in money has no hold to draw
+    (``scoring.held``) and is left out."""
     from target_gym.registry import GROUPS, REGISTRY
+    from target_gym.scoring import held
 
     return [
         {
@@ -135,7 +137,7 @@ def chart_rows(data: dict) -> list[dict]:
             "oracle_gain": data[name].get("mpc", {}).get("gain"),
         }
         for name, spec in REGISTRY.items()
-        if name in data
+        if name in data and held(data[name])
     ]
 
 
@@ -397,11 +399,13 @@ def _glance() -> list[str]:
 
 
 def _room() -> list[str]:
-    from target_gym.scoring import headroom, score
+    from target_gym.scoring import headroom, held, score
 
     data = _protocol()
     rows = {}
     for name, r in data.items():
+        if not held(r):
+            continue
         pid, mpc, c = r.get("pid"), r.get("mpc"), r["ceiling"]
         b = pid and pid["hold_tracking"]
         x = mpc and mpc["hold_tracking"]
