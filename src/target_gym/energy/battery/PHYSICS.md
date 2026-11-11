@@ -351,3 +351,24 @@ dwells are ours, set once without tuning and open for the owner. The search
 for a sourced recalibration threshold found only vendor posts and a patent
 that calibrates at 99 %, none a standard. In a window nothing changes: a
 scored window is bit-identical to what it was.
+
+---
+
+<!-- BEGIN GENERATED FACTS -->
+
+<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
+     `make ci-docs` fails if this block does not match the code. Prose
+     about *why* these numbers are what they are belongs outside it. -->
+
+### Facts, generated from the code
+
+| environment | steps | step (s) | episode | action | obs | float state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `battery` | 14400 | 1 | 4.0 h | 1 in [-1, 1] | 17 | 120 |
+
+`float state` counts the scalar and array float fields the state carries,
+`time` excluded; the gap between it and `obs` is what the controller cannot
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
+
+<!-- END GENERATED FACTS -->

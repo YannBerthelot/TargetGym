@@ -249,7 +249,7 @@ are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a win
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 27 |
+| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
