@@ -535,8 +535,6 @@ def kiln_sites(_points) -> tuple[dict, list]:
     }, []  # fmt: skip
 
 
-
-
 SITES = {
     **{n: functools.partial(aircraft_sites, n) for n in AIRCRAFT},
     "reactor": reactor_sites,
