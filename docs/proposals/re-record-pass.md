@@ -24,6 +24,12 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
      (each keeps its kind busy about 14 h); reactor about 70 % of EDF's 39 load-follow
      days a year. Measure each task's delivered rate on a long stream, then set
      `events_per_h` so the delivered rate is the sourced one.
+   - **Aircraft references on long streams** (owner, 2026-11-11, from #190's E1 run:
+     4 seeds of 111 plant hours each). plane's and plane3d_heading's experts fall
+     into altitude limit cycles (±430 m, period 20 min; ±600 m, growing) that outlive
+     the upset that started them and last to the sortie's end; no window shows them.
+     formation's expert trips 387 times per 1 000 h (43 in 111 h). Diagnose each and
+     fix it by the practitioner's procedure (tuning by real protocol), then rerun E1.
 3. **Recipes.** Run `tune_process_experts.py` and `tune_industrial_experts.py` with
    `--write` at levels 1, 0.5 and 2 on every task they cover. The recipes run their
    bump tests at the level's sensor noise, so cstr's and unstable_cstr's gains will
