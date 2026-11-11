@@ -3,7 +3,10 @@
 The column is drawn as its composition profile: every one of the 41 stages is a
 band tinted from bottoms-rich to distillate-rich. Only the two ends are
 measured -- the interior profile is the column's memory and is hidden -- so the
-schematic shows exactly what the controller is flying blind through.
+schematic shows exactly what the controller is flying blind through. The
+product analysers are chromatographs that report a sample one cycle late, so
+the strips draw the true product beside the late reading the controller gets.
+The feed rate is metered; its composition is not.
 """
 
 import numpy as np
@@ -11,7 +14,25 @@ import numpy as np
 from target_gym import render_kit as rk
 from target_gym.pc_gym.distillation.env import N_STAGES, compute_reward
 
-HISTORY_KEYS = ("t", "yD", "xB", "tyD", "txB", "L", "V", "reward")
+HISTORY_KEYS = (
+    "t",
+    "yD",
+    "xB",
+    "yD_read",
+    "xB_read",
+    "tyD",
+    "txB",
+    "F",
+    "reward",
+)
+
+
+def _readings(state, params):
+    """``(yD, xB)`` as the analysers report them: late and with scatter."""
+    from target_gym.registry import REGISTRY
+
+    obs = REGISTRY["distillation"].make_env().get_obs(state, params)
+    return float(obs[0]), float(obs[1])
 
 
 def _comp_hex(x):
@@ -55,18 +76,28 @@ def _draw_column(ax, state, params):
 
     # Feed enters mid-column.
     fy = y0 + (y1 - y0) * 0.5
-    rk.pipe(ax, [(0.08, fy), (cx, fy)], color=rk.AMBER, lw=2.6)
+    F = float(state.F)
+    ff = rk.clamp01(F / ((1.0 + params.feed_step) * params.F))
+    rk.pipe(ax, [(0.08, fy), (cx, fy)], color=rk.AMBER, lw=1.2 + 2.4 * ff)
     rk.flow_arrow(ax, cx - 0.05, fy, cx + 0.005, fy, color=rk.AMBER, lw=1.4)
     rk.label(
         ax,
         0.08,
         fy + 0.045,
-        f"FEED  zF {float(state.zF):.3f}",
+        f"FEED  F {F:.2f} kmol/min",
         color=rk.AMBER,
         size=7,
         ha="left",
     )
-    rk.label(ax, 0.08, fy - 0.045, "● hidden", color=rk.PURPLE, size=6, ha="left")
+    rk.label(
+        ax,
+        0.08,
+        fy - 0.045,
+        f"zF {float(state.zF):.3f}  ● hidden",
+        color=rk.PURPLE,
+        size=6.5,
+        ha="left",
+    )
 
     # Condenser and reflux.
     rk.vessel(
@@ -207,10 +238,12 @@ def render_distillation(state, params, step, history):
     history["t"].append(step * params.delta_t)
     history["yD"].append(float(x[-1]))
     history["xB"].append(float(x[0]))
+    yD_read, xB_read = _readings(state, params)
+    history["yD_read"].append(yD_read)
+    history["xB_read"].append(xB_read)
     history["tyD"].append(float(state.target_yD))
     history["txB"].append(float(state.target_xB))
-    history["L"].append(float(state.L))
-    history["V"].append(float(state.V))
+    history["F"].append(float(state.F))
     history["reward"].append(float(compute_reward(state, params)))
 
     # Off spec past either zone's edge (PHYSICS.md, Limits).
@@ -222,16 +255,16 @@ def render_distillation(state, params, step, history):
 
     gauges = [
         rk.Gauge(
-            "yD  TOP",
-            f"{float(x[-1]):.5f}",
-            float(x[-1]),
+            "yD  READ",
+            f"{yD_read:.5f}",
+            yD_read,
             rk.CYAN,
             target_frac=float(state.target_yD),
         ),
         rk.Gauge(
-            "xB  BOTTOM",
-            f"{float(x[0]):.5f}",
-            float(x[0]) * 20.0,
+            "xB  READ",
+            f"{xB_read:.5f}",
+            xB_read * 20.0,
             rk.TEAL,
             target_frac=float(state.target_xB) * 20.0,
         ),
@@ -250,6 +283,13 @@ def render_distillation(state, params, step, history):
             limit_frac=1.0,
         ),
         rk.Gauge(
+            "FEED F",
+            f"{float(state.F):.3f} kmol/min",
+            float(state.F) / ((1.0 + params.feed_step) * params.F),
+            rk.AMBER,
+            target_frac=1.0 / (1.0 + params.feed_step),
+        ),
+        rk.Gauge(
             "FEED zF",
             f"{float(state.zF):.4f}",
             (float(state.zF) - params.zF_nominal + 2 * params.zF_step)
@@ -257,32 +297,29 @@ def render_distillation(state, params, step, history):
             rk.PURPLE,
             hidden=True,
         ),
-        rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:+.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
-        ),
+        rk.cost_gauge(history["reward"], params, "kmol"),
     ]
 
     strips = [
         rk.Strip(
             history["t"],
             [
-                rk.Series(history["yD"], "yD", rk.CYAN, fill_to=history["tyD"]),
+                rk.Series(history["yD"], "yD true", rk.CYAN, fill_to=history["tyD"]),
                 rk.Series(
-                    history["tyD"], "target", "white", ls="--", lw=1.0, alpha=0.6
+                    history["yD_read"], "analyser (late)", rk.TEXT, ls=":", lw=1.2
                 ),
+                rk.Series(history["tyD"], "spec", "white", ls="--", lw=1.0, alpha=0.6),
             ],
             ylabel="yD  top",
         ),
         rk.Strip(
             history["t"],
             [
-                rk.Series(history["xB"], "xB", rk.TEAL, fill_to=history["txB"]),
+                rk.Series(history["xB"], "xB true", rk.TEAL, fill_to=history["txB"]),
                 rk.Series(
-                    history["txB"], "target", "white", ls="--", lw=1.0, alpha=0.6
+                    history["xB_read"], "analyser (late)", rk.TEXT, ls=":", lw=1.2
                 ),
+                rk.Series(history["txB"], "spec", "white", ls="--", lw=1.0, alpha=0.6),
             ],
             ylabel="xB  bottom",
             xlabel="minutes",

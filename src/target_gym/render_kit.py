@@ -137,20 +137,11 @@ def incandescence(T, T_lo: float, T_hi: float) -> tuple:
 
 
 def duty_hex(frac, c_low=BLUE, c_high=ORANGE):
-    """Saturated low-to-high ramp for process fluids and surfaces.
-
-    Preferred over :func:`thermal_hex` inside vessels: matplotlib's coolwarm
-    passes through near-white at its midpoint, which renders a mid-range
-    temperature as muddy grey and reads as "no signal" rather than "middle".
+    """Saturated low-to-high ramp for process fluids and surfaces. Not
+    matplotlib's coolwarm, which passes through near-white at its midpoint,
+    so a mid-range temperature reads as muddy grey, "no signal", not "middle".
     """
     return lerp_hex(c_low, c_high, clamp01(frac))
-
-
-def thermal_hex(T, T_lo: float, T_hi: float) -> str:
-    """Cold-to-hot ramp for fluids: blue -> white -> red."""
-    return mcolors.rgb2hex(
-        plt.cm.coolwarm(clamp01((float(T) - T_lo) / (T_hi - T_lo)))[:3]
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +224,11 @@ def flow_arrow(
     )
 
 
+#: The smallest text a frame carries, pt. Frames are 1400 x 750 and are often
+#: shown at half that, where anything smaller cannot be read.
+MIN_TEXT = 8.5
+
+
 def label(
     ax,
     x,
@@ -240,20 +236,21 @@ def label(
     text,
     *,
     color=DIM,
-    size=7.5,
+    size=MIN_TEXT,
     ha="center",
     va="center",
     weight="normal",
     zorder=6,
     **kw,
 ):
-    """Monospaced annotation, the schematic's only typography."""
+    """Monospaced annotation, the schematic's only typography. ``size`` is
+    raised to :data:`MIN_TEXT` at least."""
     return ax.text(
         x,
         y,
         text,
         color=color,
-        fontsize=size,
+        fontsize=max(size, MIN_TEXT),
         ha=ha,
         va=va,
         family=MONO,
@@ -263,7 +260,7 @@ def label(
     )
 
 
-def caption(ax, text, *, color=DIM, size=7.5):
+def caption(ax, text, *, color=DIM, size=9.0):
     """A single caption under a schematic."""
     ax.text(
         0.5,
@@ -296,30 +293,242 @@ def glow(ax, x, y, r, *, color=CYAN, strength=1.0, layers=7, zorder=1):
         )
 
 
-def gradient_bar(ax, x, y, w, h, values, cmap_fn, *, ec=FRAME, lw=1.0, zorder=2):
-    """A horizontal strip coloured cell-by-cell.
+# ---------------------------------------------------------------------------
+# Isometric drawing
+# ---------------------------------------------------------------------------
 
-    For distributed plants: the kiln's axial profile, a column's tray
-    compositions, a regenerator stack.
+
+def shade(color, f: float) -> tuple:
+    """``color`` darkened (f < 1) or lightened (f > 1), for an isometric face."""
+    r, g, b = mcolors.to_rgb(color)
+    if f <= 1.0:
+        return (r * f, g * f, b * f)
+    t = f - 1.0
+    return (r + (1 - r) * t, g + (1 - g) * t, b + (1 - b) * t)
+
+
+#: Light on an isometric solid: its top, its front (+y) and its side (+x).
+TOP, FRONT, SIDE = 1.0, 0.72, 0.55
+
+
+class Iso:
+    """A parallel (axonometric) projection of plant coordinates into a schematic.
+
+    ``x`` runs along the plant, down to the right on screen at ``x_deg``, ``y``
+    across it toward the viewer, down to the left at ``y_deg`` and foreshortened
+    by ``y_scale``, and ``z`` up. 30, 30 and 1 are true isometric; a long plant
+    reads better flatter, with ``x`` near the horizontal. The viewer sits on the
+    +x, +y, +z side whatever the angles, so the faces it sees are the top, the +y
+    front and the +x end. ``zx`` exaggerates heights, as a stylised plant
+    drawing does, and ``x_scale`` shortens a long one. The projection is
+    fitted so the given extent fills ``box``.
+
+    With ``deferred``, faces and lines are queued instead of drawn, and
+    :meth:`flush` draws them far to near (the painter's algorithm), so a wall
+    hides the bath behind it but not the glass in front of it. Sorting is by
+    each face's centre, which holds for faces of similar size: split long
+    solids with ``box(split=...)``.
     """
-    n = len(values)
-    if n == 0:
-        return
-    cw = w / n
-    for i, v in enumerate(values):
-        ax.add_patch(
-            mpatches.Rectangle(
-                (x + i * cw, y),
-                cw,
-                h,
-                fc=cmap_fn(v),
-                ec="none",
-                zorder=zorder,
-            )
+
+    def __init__(
+        self,
+        xlim,
+        ylim,
+        zlim,
+        *,
+        zx=1.0,
+        box=(0.02, 0.98, 0.08, 0.92),
+        x_deg=30.0,
+        y_deg=30.0,
+        y_scale=1.0,
+        x_scale=1.0,
+        deferred=False,
+    ):
+        self.zx = zx
+        self.deferred = deferred
+        self._queue = []
+        ax_, ay_ = np.radians(x_deg), np.radians(y_deg)
+        self._xc, self._xs = x_scale * np.cos(ax_), x_scale * np.sin(ax_)
+        self._yc, self._ys = y_scale * np.cos(ay_), y_scale * np.sin(ay_)
+        corners = np.array(
+            [(x, y, z) for x in xlim for y in ylim for z in zlim], dtype=float
         )
-    ax.add_patch(
-        mpatches.Rectangle((x, y), w, h, fc="none", ec=ec, lw=lw, zorder=zorder + 1)
-    )
+        u, v = self._raw(corners[:, 0], corners[:, 1], corners[:, 2])
+        k = min((box[1] - box[0]) / np.ptp(u), (box[3] - box[2]) / np.ptp(v))
+        self._k = k
+        self._u0 = 0.5 * (box[0] + box[1]) - k * 0.5 * (u.min() + u.max())
+        self._v0 = 0.5 * (box[2] + box[3]) - k * 0.5 * (v.min() + v.max())
+        # Toward the viewer: the direction the projection flattens.
+        self.view = np.array(
+            [self._yc, self._xc, (self._xs * self._yc + self._ys * self._xc) / zx]
+        )
+
+    def depth(self, pts):
+        """How near the viewer a set of points' centre is (larger is nearer)."""
+        return float(np.asarray(pts, dtype=float).mean(axis=0) @ self.view)
+
+    def _draw(self, ax, artist, pts, bias):
+        if self.deferred:
+            self._queue.append((self.depth(pts) + bias, len(self._queue), artist))
+        else:
+            artist(ax)
+
+    def flush(self, ax, zorder=2.0):
+        """Draw the queued faces far to near, all at ``zorder``."""
+        for _, _, artist in sorted(self._queue, key=lambda q: (q[0], q[1])):
+            artist(ax, zorder)
+        self._queue = []
+
+    def _raw(self, x, y, z):
+        x, y, z = (np.asarray(a, dtype=float) for a in (x, y, z))
+        u = x * self._xc - y * self._yc
+        return u, -x * self._xs - y * self._ys + self.zx * z
+
+    def p(self, x, y, z):
+        """Screen ``(u, v)`` of a plant point (arrays broadcast)."""
+        u, v = self._raw(x, y, z)
+        return self._u0 + self._k * u, self._v0 + self._k * v
+
+    def poly(
+        self, ax, pts, *, fc, ec=FRAME, lw=0.6, alpha=1.0, zorder=2, bias=0.0, **kw
+    ):
+        """A face through 3D points ``pts``, as one polygon. ``bias`` moves it
+        nearer in the depth sort, for a face drawn on another (a port on a
+        wall)."""
+        pts = np.asarray(pts, dtype=float)
+        u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
+
+        def artist(axis, z=zorder):
+            axis.add_patch(
+                mpatches.Polygon(
+                    np.column_stack([u, v]),
+                    closed=True,
+                    fc=fc,
+                    ec=ec,
+                    lw=lw,
+                    alpha=alpha,
+                    zorder=z,
+                    **kw,
+                )
+            )
+
+        self._draw(ax, artist, pts, bias)
+
+    def box(
+        self,
+        ax,
+        x,
+        y,
+        z,
+        *,
+        color,
+        ec=None,
+        lw=0.6,
+        alpha=1.0,
+        zorder=2,
+        hatch=None,
+        split=None,
+        top=True,
+    ):
+        """A solid over ``x = (x0, x1)``, ``y``, ``z``: its three visible faces.
+        ``split`` cuts it into pieces at most that long in ``x``, for the depth
+        sort; only the last piece shows its +x end, and the seams between
+        pieces are hidden. ``ec=None`` edges each face in its own colour.
+        ``top=False`` leaves out a top that is always covered, such as a floor
+        under a bath, which the depth sort could otherwise draw over it."""
+        (x0, x1), (y0, y1), (z0, z1) = x, y, z
+        n = max(1, int(np.ceil((x1 - x0) / split))) if split else 1
+        cuts = np.linspace(x0, x1, n + 1)
+        faces = []
+        for xa, xb in zip(cuts[:-1], cuts[1:]):
+            if top:
+                faces.append(
+                    ([(xa, y0, z1), (xb, y0, z1), (xb, y1, z1), (xa, y1, z1)], TOP)
+                )
+            faces.append(
+                ([(xa, y1, z0), (xb, y1, z0), (xb, y1, z1), (xa, y1, z1)], FRONT)
+            )
+        faces.append(([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], SIDE))
+        for pts, f in faces:
+            # A split solid's pieces are edged in their own colour, so its
+            # seams do not show.
+            self.poly(
+                ax,
+                pts,
+                fc=shade(color, f),
+                ec=shade(color, f) if (n > 1 or ec is None) else ec,
+                lw=lw,
+                alpha=alpha,
+                zorder=zorder,
+                hatch=hatch,
+            )
+
+    def revolve(
+        self,
+        ax,
+        p0,
+        p1,
+        r0,
+        r1,
+        colour,
+        *,
+        n=28,
+        lw=0.3,
+        zorder=3,
+        alpha=1.0,
+        cap=False,
+    ):
+        """A solid of revolution from ``p0`` (radius ``r0``) to ``p1`` (``r1``):
+        a tube, a tyre, a cone. ``colour(theta)`` paints each facet by its
+        angle around the axis, 0 toward +y (the viewer) for a horizontal axis
+        and pi / 2 at its top; facets facing away are culled and the rest lit
+        from the top front. ``cap`` closes the ``p1`` end where it faces the
+        viewer."""
+        p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+        axis = (p1 - p0) / np.linalg.norm(p1 - p0)
+        ref = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([0, 1, 0])
+        e2 = ref - axis * (ref @ axis)
+        e2 = e2 / np.linalg.norm(e2)  # "up" around the axis
+        e1 = np.cross(e2, axis)  # toward the viewer for an axis along +x
+        if e1[1] < 0:
+            e1 = -e1
+        light = np.array([-0.3, 0.6, 0.75])
+        light = light / np.linalg.norm(light)
+        view = self.view
+        ts = np.linspace(-np.pi, np.pi, n + 1)
+        for t0, t1 in zip(ts[:-1], ts[1:]):
+            tm = 0.5 * (t0 + t1)
+            normal = np.cos(tm) * e1 + np.sin(tm) * e2
+            if normal @ view <= 0.0:
+                continue
+            ring = lambda p, r, t: p + r * (np.cos(t) * e1 + np.sin(t) * e2)  # noqa
+            pts = [
+                ring(p0, r0, t0),
+                ring(p1, r1, t0),
+                ring(p1, r1, t1),
+                ring(p0, r0, t1),
+            ]
+            lit = 0.5 + 0.5 * max(float(normal @ light), 0.0)
+            c = shade(colour(tm), 0.55 + 0.6 * lit)
+            self.poly(ax, pts, fc=c, ec=c, lw=lw, alpha=alpha, zorder=zorder)
+        if cap and axis @ view > 0.0:
+            rim = [p1 + r1 * (np.cos(t) * e1 + np.sin(t) * e2) for t in ts]
+            c = shade(colour(0.5 * np.pi), TOP)
+            self.poly(ax, rim, fc=c, ec=FRAME, lw=lw, alpha=alpha, zorder=zorder)
+
+    def text(self, ax, x, y, z, s, **kw):
+        u, v = self.p(x, y, z)
+        return label(ax, float(u), float(v), s, **kw)
+
+    def line(self, ax, pts, bias=0.0, **kw):
+        pts = np.asarray(pts, dtype=float)
+        u, v = self.p(pts[:, 0], pts[:, 1], pts[:, 2])
+        zorder = kw.pop("zorder", 2)
+
+        def artist(axis, z=zorder):
+            axis.plot(u, v, zorder=z, **kw)
+
+        self._draw(ax, artist, pts, bias)
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +543,8 @@ class Gauge:
     ``frac`` is 0..1, or -1..1 when ``bipolar`` (zero at the bar centre, which
     is how a signed quantity like rod reactivity or battery power should read).
     ``limit_frac`` draws a red trip line; ``target_frac`` a white setpoint
-    marker.
+    marker. ``band`` is a ``(lo, hi)`` pair in the same units as ``frac``,
+    drawn as two green ticks: an allowed zone such as a dead band.
     """
 
     label: str
@@ -346,6 +556,21 @@ class Gauge:
     bipolar: bool = False
     neg_color: Optional[str] = None
     hidden: bool = False  # mark quantities the controller cannot measure
+    band: Optional[tuple] = None
+
+
+def cost_gauge(rewards: Sequence[float], params, unit: str = "", label="STEP COST"):
+    """The last step's cost, for a task scored as ``reward = -cost``.
+
+    The bar is the cost over the task's per-step failure cost, which every
+    surviving step stays below, so a full bar reads as "as dear as a trip".
+    A task with no trip cost scales by the dearest step seen so far.
+    """
+    cost = -float(rewards[-1])
+    scale = float(getattr(params, "failure_cost", 0.0) or 0.0)
+    if scale <= 0.0:
+        scale = max([-float(r) for r in rewards] + [1e-12])
+    return Gauge(label, f"{cost:.3g} {unit}".rstrip(), cost / scale, ORANGE)
 
 
 def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
@@ -407,6 +632,19 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
             ls="--",
             alpha=0.75,
         )
+    if g.band is not None:
+        for b in g.band:
+            if g.bipolar:
+                bx = x0 + bw / 2 * (1.0 + float(np.clip(b, -1, 1)))
+            else:
+                bx = x0 + bw * clamp01(b)
+            ax.plot(
+                [bx, bx],
+                [y - 0.004, y + bar_h + 0.004],
+                color=GREEN,
+                lw=1.4,
+                alpha=0.85,
+            )
     if g.target_frac is not None:
         tx = x0 + bw * clamp01(g.target_frac)
         s = 0.013
@@ -424,7 +662,7 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
         g.label,
         ha="right",
         va="center",
-        fontsize=8,
+        fontsize=9.5,
         color=DIM,
         family=MONO,
         fontweight="bold",
@@ -435,7 +673,7 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
         g.value,
         ha="left",
         va="center",
-        fontsize=8.5,
+        fontsize=10,
         color=TEXT,
         family=MONO,
     )
@@ -473,7 +711,7 @@ def gauge_panel(
         title,
         ha="center",
         va="top",
-        fontsize=9.5,
+        fontsize=10.5,
         color=DIM,
         family=MONO,
         fontweight="bold",
@@ -500,7 +738,7 @@ def gauge_panel(
             txt,
             ha="left",
             va="center",
-            fontsize=9,
+            fontsize=10,
             color=c,
             family=MONO,
             fontweight="bold",
@@ -513,7 +751,7 @@ def gauge_panel(
             footnote,
             ha="center",
             va="top",
-            fontsize=7,
+            fontsize=8.5,
             color=DIM,
             family=MONO,
             alpha=0.85,
@@ -527,7 +765,7 @@ def gauge_panel(
             "● HIDDEN from the controller",
             ha="center",
             va="top",
-            fontsize=6.5,
+            fontsize=8.5,
             color=PURPLE,
             family=MONO,
             alpha=0.8,
@@ -569,7 +807,7 @@ def draw_strip(ax, s: Strip, *, legend=True):
     ax.set_facecolor(PANEL)
     for sp in ax.spines.values():
         sp.set_color(FRAME)
-    ax.tick_params(colors=DIM, labelsize=7)
+    ax.tick_params(colors=DIM, labelsize=8.5)
     ax.grid(color=FRAME, alpha=0.5, lw=0.5)
 
     if len(s.t) < 2:
@@ -580,16 +818,19 @@ def draw_strip(ax, s: Strip, *, legend=True):
     for y, c, lbl in s.lines:
         ax.axhline(y, color=c, lw=1.0, ls="--", alpha=0.65, zorder=1)
         if lbl:
+            # Inside the plot, at its right edge, just above the line: past
+            # the last sample it ran off the frame.
             ax.text(
-                s.t[-1],
+                0.995,
                 y,
-                f" {lbl}",
+                f"{lbl} ",
                 color=c,
-                fontsize=6,
+                fontsize=8.5,
                 family=MONO,
-                va="center",
-                ha="left",
+                va="bottom",
+                ha="right",
                 alpha=0.85,
+                transform=ax.get_yaxis_transform(),
             )
 
     for ser in s.series:
@@ -609,20 +850,24 @@ def draw_strip(ax, s: Strip, *, legend=True):
             )
 
     if s.ylabel:
-        ax.set_ylabel(s.ylabel, fontsize=7, color=DIM, family=MONO)
+        ax.set_ylabel(s.ylabel, fontsize=8.5, color=DIM, family=MONO)
     if s.xlabel:
-        ax.set_xlabel(s.xlabel, fontsize=7, color=DIM, family=MONO)
+        ax.set_xlabel(s.xlabel, fontsize=8.5, color=DIM, family=MONO)
     if s.ylim:
         ax.set_ylim(*s.ylim)
-    if legend and any(ser.label for ser in s.series):
+    labelled = [ser for ser in s.series if ser.label and not ser.label.startswith("_")]
+    if legend and labelled:
+        # One row over the plot's top right, clear of the traces it names.
         ax.legend(
-            loc="upper right",
-            fontsize=6,
-            framealpha=0.4,
-            facecolor=PANEL,
-            edgecolor=FRAME,
+            loc="lower right",
+            bbox_to_anchor=(1.0, 1.0),
+            fontsize=8.5,
+            frameon=False,
             labelcolor=TEXT,
-            ncol=2,
+            ncol=len(labelled),
+            borderaxespad=0.1,
+            handlelength=1.6,
+            columnspacing=1.2,
         )
 
 
@@ -686,7 +931,7 @@ def frame(
         title,
         ha="center",
         va="top",
-        fontsize=14,
+        fontsize=15,
         color=TEXT,
         fontweight="bold",
         family=MONO,
@@ -697,7 +942,7 @@ def frame(
         f"STEP {int(step)}",
         ha="left",
         va="top",
-        fontsize=10,
+        fontsize=11,
         color=DIM,
         family=MONO,
     )
@@ -707,7 +952,7 @@ def frame(
         format_clock(elapsed_s),
         ha="right",
         va="top",
-        fontsize=10,
+        fontsize=11,
         color=DIM,
         family=MONO,
     )
@@ -718,7 +963,7 @@ def frame(
             subtitle,
             ha="center",
             va="top",
-            fontsize=8,
+            fontsize=9.5,
             color=DIM,
             family=MONO,
         )
@@ -729,9 +974,9 @@ def frame(
         2,
         width_ratios=list(width_ratios),
         height_ratios=[2.8] + [1.0 / n_strips * 1.0] * n_strips,
-        hspace=0.30 if n_strips > 1 else 0.22,
+        hspace=0.42 if n_strips > 1 else 0.24,  # room for each strip's legend
         wspace=0.08,
-        left=0.03,
+        left=0.055,
         right=0.97,
         top=0.915 if subtitle else 0.93,
         bottom=0.065,
@@ -741,13 +986,13 @@ def frame(
     schematic_axes(ax_s)
     if schematic_title:
         ax_s.text(
-            0.5,
+            0.0,
             1.045,
             schematic_title,
             transform=ax_s.transAxes,
-            ha="center",
+            ha="left",
             va="top",
-            fontsize=9.5,
+            fontsize=10.5,
             color=DIM,
             family=MONO,
             fontweight="bold",

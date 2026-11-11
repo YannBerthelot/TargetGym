@@ -128,3 +128,11 @@ visual language — the suite reading as one instrument suite is the point.
 Mark every gauge the observation does not expose with `hidden=True`. It costs
 one keyword and it is the difference between a viewer understanding the task
 and assuming the agent can see what the picture shows.
+
+Draw a plant in 3D, as the glass furnace and the kiln are, with `rk.Iso`: a
+parallel projection fitted to your scene, with shaded boxes and solids of
+revolution. Pass `deferred=True` and call `iso.flush(ax)` at the end when walls
+must hide only what is behind them; it draws far to near.
+
+Keep text at or above `rk.MIN_TEXT` (8.5 pt). Gallery frames are often shown
+at half size, and `rk.label` raises anything smaller to that floor.

@@ -4,11 +4,44 @@ The schematic is the reactor itself: contents tinted by bulk temperature, a
 cooling jacket tinted by coolant temperature, and a reaction bloom whose
 intensity follows conversion. The exothermic loop the controller is fighting --
 hotter contents burn reactant faster, which releases more heat -- is the thing
-the picture is meant to make legible.
+the picture is meant to make legible. The scenario's event is drawn as it
+acts: the feed concentration the reactor actually receives, the catalyst's
+remaining activity (hidden), and a cooling-water failure.
 """
 
 from target_gym import render_kit as rk
-from target_gym.pc_gym.cstr.env import compute_reward
+from target_gym.pc_gym.cstr.env import compute_reward, events
+
+
+def _now(state, params):
+    """``(Caf, activity, cooling up)`` acting on the reactor now."""
+    _, Caf, k0, cooling = events(state, params, float(state.time) * params.delta_t)
+    return float(Caf), float(k0) / params.k0, bool(cooling)
+
+
+def _event_text(state, params):
+    """The scenario's event and its timing, or None in a normal run."""
+    p = params
+    minute = float(state.time) * p.delta_t
+    at = float(state.event_at)
+    if at > 1e8:
+        return None, rk.DIM
+    names = []
+    if p.feed_rise:
+        names.append(f"feed +{p.feed_rise:.0%}")
+    if p.k0_drop:
+        names.append(f"catalyst -{p.k0_drop:.0%}")
+    if p.cooling_loss:
+        names.append(f"cooling lost {p.cooling_loss:.0f} min")
+    if p.setpoint_step:
+        names.append(f"setpoint {p.setpoint_step:+.1f} K")
+    if not names:
+        return None, rk.DIM
+    what = ", ".join(names)
+    if minute < at:
+        return f"{what} in {at - minute:.0f} min", rk.AMBER
+    return what, rk.ORANGE
+
 
 HISTORY_KEYS = ("t", "C_a", "target", "T", "T_j", "reward")
 
@@ -20,6 +53,7 @@ def _draw_reactor(ax, state, params):
     C_a = float(state.C_a)
     T = float(state.T)
     T_j = float(state.T_j)
+    Caf, activity, cooling = _now(state, params)
 
     vx, vy, vw, vh = 0.26, 0.16, 0.46, 0.62
     jacket_pad = 0.055
@@ -57,7 +91,7 @@ def _draw_reactor(ax, state, params):
     rk.fill_level(ax, vx, vy, vw, vh, 0.84, color=body, alpha=0.45)
 
     # Reaction bloom: how much of the feed has been consumed.
-    conv = rk.clamp01((params.Caf - C_a) / max(params.Caf, 1e-9))
+    conv = rk.clamp01((Caf - C_a) / max(Caf, 1e-9))
     rk.glow(ax, vx + vw / 2, vy + vh * 0.42, 0.16, color=rk.AMBER, strength=conv * 2.2)
 
     # Impeller.
@@ -82,8 +116,8 @@ def _draw_reactor(ax, state, params):
         ax,
         0.06,
         0.945,
-        f"FEED  Caf {params.Caf:.2f}  Tf {float(state.T_feed):.0f}K",
-        color=rk.DIM,
+        f"FEED  Caf {Caf:.2f}  Tf {float(state.T_feed):.0f}K",
+        color=rk.ORANGE if Caf != params.Caf else rk.DIM,
         size=7,
         ha="left",
     )
@@ -95,8 +129,24 @@ def _draw_reactor(ax, state, params):
     )
 
     # Coolant loop.
-    rk.flow_arrow(ax, 0.10, 0.30, 0.10, 0.58, color=jc, lw=1.8)
+    if cooling:
+        rk.flow_arrow(ax, 0.10, 0.30, 0.10, 0.58, color=jc, lw=1.8)
+    else:
+        rk.label(ax, 0.10, 0.44, "NO\nWATER", color=rk.RED, size=7.5, weight="bold")
     rk.label(ax, 0.10, 0.25, f"Tj {T_j:.1f}K", color=jc, size=7.5)
+    if activity < 1.0:
+        rk.label(
+            ax,
+            vx + vw / 2,
+            vy + 0.05,
+            f"catalyst {activity:.0%} ●",
+            color=rk.PURPLE,
+            size=7,
+            zorder=8,
+        )
+    text, c = _event_text(state, params)
+    if text:
+        rk.label(ax, 0.02, 0.02, text, color=c, size=9, weight="bold", ha="left")
 
     rk.label(
         ax, cx, vy + vh + 0.14, f"T = {T:.1f} K", color=rk.TEXT, size=11, weight="bold"
@@ -114,9 +164,13 @@ def render_cstr(state, params, step, history):
 
     err = abs(float(state.T) - float(state.target_T))
     status = rk.NOMINAL if err < 0.5 else (rk.WATCH if err < 2.0 else rk.ALARM)
+    Caf, activity, cooling = _now(state, params)
+    status_text = None
+    if not cooling:
+        status, status_text = rk.ALARM, "COOLING WATER LOST"
     span = _T_HI - _T_LO
     water = (float(state.F_w) - params.Fw_min) / (params.Fw_max - params.Fw_min)
-    conv = rk.clamp01((params.Caf - float(state.C_a)) / params.Caf)
+    conv = rk.clamp01((Caf - float(state.C_a)) / Caf)
 
     gauges = [
         rk.Gauge(
@@ -142,13 +196,11 @@ def render_cstr(state, params, step, history):
         rk.Gauge(
             "WATER", f"{float(state.F_w) / 60.0:.0f} g/s", rk.clamp01(water), rk.CYAN
         ),
-        rk.Gauge("CONVERSION", f"{conv * 100:.1f} %", conv, rk.AMBER),
+        rk.Gauge("CONVERSION", f"{conv * 100:.1f} %", conv, rk.AMBER, hidden=True),
         rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
+            "CATALYST", f"{activity * 100:.0f} %", activity, rk.PURPLE, hidden=True
         ),
+        rk.cost_gauge(history["reward"], params),
     ]
 
     strip = rk.Strip(
@@ -171,6 +223,7 @@ def render_cstr(state, params, step, history):
         gauges=gauges,
         strips=[strip],
         status=status,
+        status_text=status_text,
         subtitle="exothermic first-order reaction  ·  cooling water is the input",
     )
     return rk.finish(fig), history

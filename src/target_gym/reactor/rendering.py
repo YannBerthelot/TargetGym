@@ -1,40 +1,41 @@
-"""Control-room-style reactor visualisation.
+"""Control-room rendering for the nuclear reactor, a pressurised water reactor.
 
-Left panel  -- reactor pressure-vessel cross-section (schematic):
-    * fuel assemblies coloured by fuel temperature (incandescence)
-    * control rods moving physically in/out of the core
-    * Cherenkov-blue glow whose intensity tracks neutron power
-    * purple xenon-135 fog overlay whose opacity tracks Xe_hat
-    * coolant channels coloured by coolant temperature
+The task (PHYSICS.md): follow the turbine's load while holding Tavg on its
+program, Tref, and the axial offset inside its band, with rods that move at one
+speed and boron that reaches the core late.
 
-Right panel -- horizontal instrument-gauge bars:
-    POWER, ROD WDN, T FUEL, T COOL, Xe-135, I-135, REWARD
+Left -- the pressure vessel: fuel tinted by temperature, rods entering from the
+top with the rod insertion limit beside them, a Cherenkov glow for power, a
+xenon fog, and the axial power split between the core's halves beside it.
+Boron is printed under it with the boronmeter's late reading.
 
-Bottom      -- rolling strip chart of power vs target.
+Right -- the instruments: power against load, Tavg against Tref with its dead
+band and DNB limit, the hot leg against its trip, the axial offset against its
+band and the day's allowance outside it, the rods against their insertion
+limit, boron, and the step's cost.
+
+Bottom -- Tavg against Tref above the floor, and the axial offset in its band.
 """
 
 import matplotlib.colors
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from target_gym.reactor.env import BETA_TOT, compute_revenue_rate, compute_reward
+from target_gym import render_kit as rk
+from target_gym.reactor.env import (
+    compute_reward,
+    rod_insertion_limit,
+    tavg_dnb_limit,
+)
 
-# -- Dark control-room palette ------------------------------------------------
-_BG = "#080c14"
-_PANEL = "#0e1824"
-_FRAME = "#1e3248"
-_TEXT = "#c4d8ec"
-_DIM = "#4a6678"
-_CYAN = "#00bcd4"
-_BLUE = "#42a5f5"
-_GREEN = "#66bb6a"
-_RED = "#ef5350"
-_AMBER = "#ffca28"
-_PURPLE = "#ab47bc"
+_FRAME = rk.FRAME
+_TEXT = rk.TEXT
+_DIM = rk.DIM
+_CYAN = rk.CYAN
+_RED = rk.RED
 
-_STRIP_LEN = 400  # timesteps shown in the strip chart
+HISTORY_KEYS = ("t", "T_avg", "T_ref", "ao", "n", "load", "reward")
 
 
 # -- Colour helpers ------------------------------------------------------------
@@ -61,9 +62,46 @@ def _coolant_hex(T, T_lo=550.0, T_hi=700.0):
 
 
 # -- Reactor vessel drawing ----------------------------------------------------
+def _offset(state, params):
+    """The axial offset, (top - bottom) / total: ``delta_I`` over power."""
+    return float(state.delta_I) / max(float(state.n), 1e-6)
+
+
+def _draw_offset(ax, state, params, x, y0, h):
+    """The power in each half of the core, and the offset against its band."""
+    n = float(state.n)
+    dI = float(state.delta_I)
+    top, bottom = 0.5 * (n + dI), 0.5 * (n - dI)
+    w = 0.05
+    for share, yy in ((top, y0 + h / 2), (bottom, y0)):
+        frac = rk.clamp01(share / (0.5 * params.n_max))
+        ax.add_patch(
+            mpatches.Rectangle(
+                (x, yy), w, h / 2, fc=rk.WELL, ec=_FRAME, lw=1.0, zorder=3
+            )
+        )
+        ax.add_patch(
+            mpatches.Rectangle(
+                (x, yy), w * frac, h / 2, fc=_CYAN, alpha=0.7, ec="none", zorder=4
+            )
+        )
+    ao = _offset(state, params)
+    outside = abs(ao - params.ao_ref) > params.ao_band
+    rk.label(
+        ax,
+        x + w / 2,
+        y0 + h + 0.035,
+        f"AO\n{ao:+.3f}",
+        color=_RED if outside else _TEXT,
+        size=6.5,
+    )
+    rk.label(ax, x + w + 0.012, y0 + 0.75 * h, "top", color=_DIM, size=6, ha="left")
+    rk.label(ax, x + w + 0.012, y0 + 0.25 * h, "bottom", color=_DIM, size=6, ha="left")
+
+
 def _draw_vessel(ax, state, params):
     ax.set_xlim(-0.05, 1.05)
-    ax.set_ylim(-0.12, 1.18)
+    ax.set_ylim(-0.14, 1.12)
     ax.axis("off")
 
     # Vessel outline (pressure vessel body)
@@ -147,16 +185,9 @@ def _draw_vessel(ax, state, params):
         )
 
     # -- Control rods --
-    rho = float(state.rho_ext)
-    rod_frac = float(
-        np.clip(
-            (rho - params.rho_ext_min) / (params.rho_ext_max - params.rho_ext_min),
-            0,
-            1,
-        )
-    )
-    # tip_y: frac=0 -> fully inserted (bottom of core), frac=1 -> withdrawn
-    tip_y = cy + rod_frac * (ch + 0.08)
+    # Rods enter from the top: ``rod_in`` is the fraction of the stroke in.
+    rod_in = float(state.rod_in)
+    tip_y = cy + (1.0 - rod_in) * ch
     shaft_top = vy + vh + 0.12
 
     ctrl_xs = rod_xs[1::2]  # interleaved with fuel assemblies
@@ -226,7 +257,7 @@ def _draw_vessel(ax, state, params):
         "IN",
         ha="center",
         va="top",
-        fontsize=6,
+        fontsize=8.5,
         color=_DIM,
         family="monospace",
     )
@@ -236,432 +267,186 @@ def _draw_vessel(ax, state, params):
         "OUT",
         ha="center",
         va="bottom",
-        fontsize=6,
+        fontsize=8.5,
         color=_DIM,
         family="monospace",
     )
 
     # -- Labels --
-    ax.text(
+    boron = float(state.boron)
+    meter = float(state.boron_meter[-1])
+    burn = getattr(state, "burn_rate", None)  # reactor v9: the fuel's burnup
+    drift = (
+        f"  ·  burnup {float(burn) * 86400.0:.1f} ppm/day ●"
+        if burn is not None and float(burn) > 0.0
+        else ""
+    )
+    rk.label(
+        ax,
         0.50,
-        1.14,
-        "REACTOR  VESSEL",
-        ha="center",
-        va="bottom",
-        fontsize=11,
-        color=_TEXT,
-        fontweight="bold",
-        family="monospace",
+        -0.10,
+        f"BORON {boron:.0f} ppm ●  ·  meter {meter:.0f} (late)" f"{drift}",
+        color=_CYAN,
+        size=7,
     )
-    ax.text(
-        0.93,
-        0.94,
-        f"RODS\n{rod_frac * 100:.0f}% WDN",
-        ha="center",
-        va="top",
-        fontsize=7,
-        color=_DIM,
-        family="monospace",
-    )
-
-
-# -- Horizontal gauge bar ------------------------------------------------------
-def _hbar(
-    ax,
-    y,
-    frac,
-    color,
-    label,
-    value_str,
-    *,
-    limit_frac=None,
-    target_frac=None,
-    bar_h=0.065,
-    x0=0.30,
-    bw=0.48,
-    bipolar=False,
-    neg_color=None,
-):
-    """Draw a horizontal gauge bar.
-
-    If *bipolar* is True, *frac* is in [-1, 1] with 0 at the bar center.
-    Positive fills right in *color*, negative fills left in *neg_color*.
-    """
-    # Background
-    ax.add_patch(
-        mpatches.FancyBboxPatch(
-            (x0, y),
-            bw,
-            bar_h,
-            boxstyle=mpatches.BoxStyle("Round", pad=0.004),
-            fc="#0a1018",
-            ec=_FRAME,
-            lw=1,
-        )
-    )
-    pad_x, pad_y = 0.005, 0.007
-    inner_h = bar_h - 2 * pad_y
-
-    if bipolar:
-        mid = x0 + bw / 2
-        clamped = float(np.clip(frac, -1, 1))
-        if clamped >= 0:
-            fw = (bw / 2) * clamped
-            if fw > 0.002:
-                ax.add_patch(
-                    mpatches.Rectangle(
-                        (mid, y + pad_y),
-                        fw,
-                        inner_h,
-                        fc=color,
-                        alpha=0.82,
-                        ec="none",
-                    )
-                )
-        else:
-            fw = (bw / 2) * (-clamped)
-            if fw > 0.002:
-                ax.add_patch(
-                    mpatches.Rectangle(
-                        (mid - fw, y + pad_y),
-                        fw,
-                        inner_h,
-                        fc=neg_color or _RED,
-                        alpha=0.82,
-                        ec="none",
-                    )
-                )
-        # Center zero line
-        ax.plot(
-            [mid, mid],
-            [y - 0.003, y + bar_h + 0.003],
-            color=_DIM,
-            lw=0.8,
-            alpha=0.6,
-        )
-    else:
-        fw = bw * float(np.clip(frac, 0, 1))
-        if fw > 0.002:
-            ax.add_patch(
-                mpatches.Rectangle(
-                    (x0 + pad_x, y + pad_y),
-                    fw - 2 * pad_x,
-                    inner_h,
-                    fc=color,
-                    alpha=0.82,
-                    ec="none",
-                )
-            )
-
-    # SCRAM / limit line
-    if limit_frac is not None:
-        lx = x0 + bw * float(np.clip(limit_frac, 0, 1))
-        ax.plot(
-            [lx, lx],
-            [y - 0.006, y + bar_h + 0.006],
-            color=_RED,
-            lw=1.4,
-            ls="--",
-            alpha=0.75,
-        )
-    # Target triangle
-    if target_frac is not None:
-        tx = x0 + bw * float(np.clip(target_frac, 0, 1))
-        s = 0.014
-        ax.fill(
-            [tx - s, tx + s, tx],
-            [y + bar_h + 0.010, y + bar_h + 0.010, y + bar_h - 0.003],
-            color="white",
-            alpha=0.90,
-            zorder=5,
-        )
-    # Label (left)
-    ax.text(
-        x0 - 0.02,
-        y + bar_h / 2,
-        label,
-        ha="right",
-        va="center",
-        fontsize=8,
-        color=_DIM,
-        family="monospace",
-        fontweight="bold",
-    )
-    # Value (right)
-    ax.text(
-        x0 + bw + 0.02,
-        y + bar_h / 2,
-        value_str,
-        ha="left",
-        va="center",
-        fontsize=8.5,
-        color=_TEXT,
-        family="monospace",
-    )
-
-
-# -- Instrument panel ----------------------------------------------------------
-def _draw_gauges(ax, state, params, cumul_revenue_M=0.0):
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis("off")
-
-    n = float(state.n)
-    target = float(state.target_n)
-    T_fuel = float(state.T_fuel)
-    T_cool = float(state.T_coolant)
-    xe = float(state.Xe_hat)
-    iod = float(state.I_hat)
-    rho = float(state.rho_ext)
-    rho_dol = rho / BETA_TOT
-    reward = float(compute_reward(state, params))
-    # Revenue is tracked cumulatively in the history dict by render_reactor.
-
-    rod_frac = float(
-        np.clip(
-            (rho - params.rho_ext_min) / (params.rho_ext_max - params.rho_ext_min),
-            0,
-            1,
-        )
-    )
-
-    # Max possible revenue: full power, perfect tracking → P_GW * 1000 * spot / 1000
-    max_rev = params.P_electric_GW * params.spot_price_per_MWh  # k$/h
-
-    ax.text(
-        0.50,
-        0.97,
-        "INSTRUMENTS",
-        ha="center",
-        va="top",
-        fontsize=11,
-        color=_TEXT,
-        fontweight="bold",
-        family="monospace",
-    )
-
-    y0, dy = 0.88, 0.098
-
-    # 1. Power -- cyan, target triangle, overpower limit
-    _hbar(
-        ax,
-        y0,
-        np.clip(n / params.n_max, 0, 1),
-        _CYAN,
-        "POWER",
-        f"{n:.3f}",
-        limit_frac=1.0,
-        target_frac=float(np.clip(target / params.n_max, 0, 1)),
-    )
-
-    # 2. Rod withdrawal %
-    _hbar(ax, y0 - dy, rod_frac, _BLUE, "ROD WDN", f"{rho_dol:+.2f} $")
-
-    # 3. Fuel temperature
-    tf_frac = float(np.clip((T_fuel - 500) / (params.T_fuel_max - 500), 0, 1))
-    _hbar(ax, y0 - 2 * dy, tf_frac, _AMBER, "T FUEL", f"{T_fuel:.0f} K", limit_frac=1.0)
-
-    # 4. Coolant temperature
-    tc_frac = float(np.clip((T_cool - 500) / (params.T_coolant_max - 500), 0, 1))
-    _hbar(
-        ax, y0 - 3 * dy, tc_frac, "#ff7043", "T COOL", f"{T_cool:.0f} K", limit_frac=1.0
-    )
-
-    # 5. Xe-135 (scale 0-3x equilibrium; eq marker at 1/3)
-    _hbar(
-        ax,
-        y0 - 4 * dy,
-        float(np.clip(xe / 3.0, 0, 1)),
-        _PURPLE,
-        "Xe-135",
-        f"{xe:.2f}",
-        target_frac=1.0 / 3.0,
-    )
-
-    # 6. I-135
-    _hbar(
-        ax,
-        y0 - 5 * dy,
-        float(np.clip(iod / 3.0, 0, 1)),
-        "#7e57c2",
-        "I-135",
-        f"{iod:.2f}",
-        target_frac=1.0 / 3.0,
-    )
-
-    # 7. Reward
-    _hbar(
-        ax, y0 - 6 * dy, float(np.clip(reward, 0, 1)), _GREEN, "REWARD", f"{reward:.2f}"
-    )
-
-    # 8. Cumulative revenue — bipolar bar, green right / red left.
-    # Scale: max_rev * 24h = perfect-tracking 24-hour revenue in M$.
-    max_cumul_M = max_rev * 24.0 / 1000.0  # k$/h * 24h / 1000 = M$
-    rev_frac = float(np.clip(cumul_revenue_M / max(max_cumul_M, 1e-6), -1, 1))
-    _hbar(
-        ax,
-        y0 - 7 * dy,
-        rev_frac,
-        _GREEN,
-        "CUM. REV",
-        f"{cumul_revenue_M:+.2f} M$",
-        bipolar=True,
-        neg_color=_RED,
-    )
-
-    # Status dot
-    scram = (
-        n > params.n_max or T_fuel > params.T_fuel_max or T_cool > params.T_coolant_max
-    )
-    sc, st = (_RED, "SCRAM") if scram else (_GREEN, "NOMINAL")
-    ax.text(
-        0.50,
-        y0 - 8 * dy + 0.02,
-        f"\u25cf {st}",
-        ha="center",
-        va="center",
-        fontsize=10,
-        color=sc,
-        fontweight="bold",
-        family="monospace",
-    )
-
-
-# -- Strip chart ---------------------------------------------------------------
-def _draw_strip(ax, history, params):
-    ax.set_facecolor(_PANEL)
-    for sp in ax.spines.values():
-        sp.set_color(_FRAME)
-    ax.tick_params(colors=_DIM, labelsize=7)
-    ax.grid(color=_FRAME, alpha=0.5, lw=0.5)
-
-    t_all = history["t"][-_STRIP_LEN:]
-    n_all = history["n"][-_STRIP_LEN:]
-    tgt_all = history["target_n"][-_STRIP_LEN:]
-    if len(t_all) < 2:
-        return
-
-    t_sec = [s * params.delta_t for s in t_all]
-    use_h = t_sec[-1] > 600
-    t_plot = [s / 3600 for s in t_sec] if use_h else t_sec
-
-    ax.plot(t_plot, n_all, color=_CYAN, lw=1.5, label="n", zorder=3)
+    # The rod insertion limit at this power, on the core's left edge.
+    ril = float(rod_insertion_limit(state.n, params))
+    ril_y = cy + (1.0 - ril) * ch
     ax.plot(
-        t_plot,
-        tgt_all,
-        color="white",
-        lw=1,
-        ls="--",
-        alpha=0.55,
-        label="target",
-        zorder=2,
+        [cx - 0.03, cx + 0.02], [ril_y, ril_y], color=_RED, lw=1.4, ls="--", zorder=6
     )
-    ax.fill_between(t_plot, n_all, tgt_all, color=_CYAN, alpha=0.07)
-
-    ax.set_ylabel("n", fontsize=7, color=_DIM, family="monospace")
-    ax.set_xlabel(
-        "hours" if use_h else "seconds",
-        fontsize=7,
-        color=_DIM,
-        family="monospace",
-    )
-    ax.legend(
-        loc="upper right",
-        fontsize=6,
-        framealpha=0.4,
-        facecolor=_PANEL,
-        edgecolor=_FRAME,
-        labelcolor=_TEXT,
+    rk.label(ax, cx - 0.035, ril_y, "RIL", color=_RED, size=6.5, ha="right")
+    rk.label(
+        ax,
+        cx,
+        cy + ch + 0.035,
+        f"rods {rod_in * 100:.0f}% in",
+        color=_TEXT,
+        ha="left",
+        va="bottom",
     )
 
+    _draw_offset(ax, state, params, cx + cw + 0.035, cy, ch)
 
-# -- Main entry point ----------------------------------------------------------
+
+def _status(state, params):
+    """``(status, text)``: trips and timed limits first, then the bands."""
+    T_avg = 0.5 * (float(state.T_coolant) + float(state.T_cold))
+    ao = _offset(state, params)
+    if float(state.below_floor) > 0.0:
+        return rk.ALARM, (
+            f"TAVG UNDER FLOOR {float(state.below_floor) / 60:.0f}"
+            f"/{params.floor_allowed / 60:.0f} min"
+        )
+    if float(state.above_dnb) > 0.0:
+        return rk.ALARM, "TAVG OVER DNB LIMIT"
+    if float(state.ril_outside) > 0.0:
+        return rk.WATCH, "RODS PAST INSERTION LIMIT"
+    if abs(ao - params.ao_ref) > params.ao_band:
+        return rk.WATCH, "AXIAL OFFSET OUT OF BAND"
+    if abs(T_avg - float(state.T_ref)) > params.e_tol:
+        return rk.WATCH, "TAVG OFF PROGRAM"
+    return rk.NOMINAL, None
+
+
 def render_reactor(state, params, step, history):
     """Render one control-room frame and append data to *history*."""
-    history["t"].append(step)
+    p = params
+    T_avg = 0.5 * (float(state.T_coolant) + float(state.T_cold))
+    T_ref = float(state.T_ref)
+    ao = _offset(state, p)
+    history["t"].append(step * p.delta_t / 3600.0)
+    history["T_avg"].append(T_avg)
+    history["T_ref"].append(T_ref)
+    history["ao"].append(ao)
     history["n"].append(float(state.n))
-    history["target_n"].append(float(state.target_n))
-    history["T_fuel"].append(float(state.T_fuel))
-    history["T_coolant"].append(float(state.T_coolant))
-    history["I_hat"].append(float(state.I_hat))
-    history["Xe_hat"].append(float(state.Xe_hat))
-    history["rho_ext"].append(float(state.rho_ext))
-    history["reward"].append(float(compute_reward(state, params)))
-    rev_rate_kph = float(compute_revenue_rate(state, params))
-    history["revenue"].append(rev_rate_kph)
-    # Cumulative revenue in M$ (integrate rate in k$/h over dt in seconds).
-    dt_h = params.delta_t / 3600.0
-    prev_cumul = history["cumul_revenue_M"][-1] if history["cumul_revenue_M"] else 0.0
-    history["cumul_revenue_M"].append(prev_cumul + rev_rate_kph * dt_h / 1000.0)
+    history["load"].append(float(state.target_n))
+    history["reward"].append(float(compute_reward(state, p)))
 
-    fig = plt.figure(figsize=(14, 7.5), facecolor=_BG, dpi=100)
+    dnb = float(tavg_dnb_limit(p))
+    t_lo, t_hi = p.T_avg_min - 4.0, dnb + 4.0  # Tavg's gauge span
+    tf = lambda T: (float(T) - t_lo) / (t_hi - t_lo)  # noqa: E731
+    h_lo = p.T_avg_min
+    hf = lambda T: (float(T) - h_lo) / (p.T_coolant_max + 5.0 - h_lo)  # noqa: E731
+    ao_span = 2.0 * p.ao_band
+    ril = float(rod_insertion_limit(state.n, p))
+    meter = float(state.boron_meter[-1])
 
-    # -- Header --
-    elapsed = step * params.delta_t
-    hrs, rem = divmod(elapsed, 3600)
-    mins, secs = divmod(rem, 60)
-    fig.text(
-        0.50,
-        0.975,
-        "NUCLEAR  REACTOR  \u2014  CONTROL  ROOM",
-        ha="center",
-        va="top",
-        fontsize=14,
-        color=_TEXT,
-        fontweight="bold",
-        family="monospace",
-    )
-    fig.text(
-        0.97,
-        0.975,
-        f"T+{int(hrs):02d}:{int(mins):02d}:{int(secs):02d}",
-        ha="right",
-        va="top",
-        fontsize=10,
-        color=_DIM,
-        family="monospace",
-    )
-    fig.text(
-        0.03,
-        0.975,
-        f"STEP {step}",
-        ha="left",
-        va="top",
-        fontsize=10,
-        color=_DIM,
-        family="monospace",
-    )
-
-    gs = fig.add_gridspec(
-        2,
-        2,
-        width_ratios=[1.0, 1.1],
-        height_ratios=[2.8, 1.0],
-        hspace=0.22,
-        wspace=0.08,
-        left=0.03,
-        right=0.97,
-        top=0.93,
-        bottom=0.06,
-    )
-
-    ax_vessel = fig.add_subplot(gs[0, 0], facecolor=_BG)
-    ax_gauges = fig.add_subplot(gs[0, 1], facecolor=_BG)
-    ax_strip = fig.add_subplot(gs[1, :])
-
-    _draw_vessel(ax_vessel, state, params)
-    cumul_M = history["cumul_revenue_M"][-1] if history["cumul_revenue_M"] else 0.0
-    _draw_gauges(ax_gauges, state, params, cumul_revenue_M=cumul_M)
-    _draw_strip(ax_strip, history, params)
-
-    canvas = FigureCanvas(fig)
-    canvas.draw()
-    w, h = canvas.get_width_height()
-    image = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)[
-        ..., :3
+    gauges = [
+        rk.Gauge(
+            "POWER",
+            f"{float(state.n) * 100:.1f} %",
+            float(state.n) / p.n_max,
+            _CYAN,
+            limit_frac=1.0,
+            target_frac=float(state.target_n) / p.n_max,
+        ),
+        rk.Gauge(
+            "T AVG",
+            f"{T_avg - 273.15:.1f} C",
+            tf(T_avg),
+            rk.ORANGE,
+            limit_frac=tf(dnb),
+            target_frac=tf(T_ref),
+            band=(tf(T_ref - p.e_tol), tf(T_ref + p.e_tol)),
+        ),
+        rk.Gauge(
+            "T HOT",
+            f"{float(state.T_coolant) - 273.15:.1f} C",
+            hf(state.T_coolant),
+            rk.RED,
+            limit_frac=hf(p.T_coolant_max),
+        ),
+        rk.Gauge(
+            "AXIAL OFFSET",
+            f"{ao:+.3f}",
+            (ao - p.ao_ref) / ao_span,
+            rk.BLUE,
+            bipolar=True,
+            neg_color=rk.BLUE,
+            band=(-p.ao_band / ao_span, p.ao_band / ao_span),
+        ),
+        rk.Gauge(
+            "AO TIME OUT",
+            f"{float(state.ao_outside) / 60:.0f} / {p.ao_allowed / 60:.0f} min",
+            float(state.ao_outside) / p.ao_allowed,
+            rk.AMBER,
+            limit_frac=1.0,
+        ),
+        rk.Gauge(
+            "RODS IN",
+            f"{float(state.rod_in) * 100:.0f} %",
+            float(state.rod_in),
+            rk.DIM,
+            limit_frac=ril,
+        ),
+        rk.Gauge(
+            "BORON",
+            f"{meter:.0f} ppm",
+            meter / (2.0 * p.boron_ref),
+            _CYAN,
+            target_frac=0.5,
+        ),
+        rk.cost_gauge(history["reward"], p, "$"),
     ]
-    plt.close(fig)
-    return image, history
+
+    strips = [
+        rk.Strip(
+            history["t"],
+            [
+                rk.Series(
+                    history["T_avg"], "Tavg", rk.ORANGE, fill_to=history["T_ref"]
+                ),
+                rk.Series(
+                    history["T_ref"], "Tref", "white", ls="--", lw=1.0, alpha=0.7
+                ),
+            ],
+            ylabel="Tavg  [K]",
+            lines=[(p.T_avg_min, _RED, "floor")],
+        ),
+        rk.Strip(
+            history["t"],
+            [rk.Series(history["ao"], "axial offset", rk.BLUE)],
+            ylabel="AO",
+            xlabel="hours",
+            bands=[(p.ao_ref - p.ao_band, p.ao_ref + p.ao_band, rk.GREEN)],
+            lines=[(p.ao_ref, _DIM, "")],
+        ),
+    ]
+    status, status_text = _status(state, p)
+    fig = rk.frame(
+        title="NUCLEAR  REACTOR  —  PRESSURISED  WATER",
+        step=step,
+        elapsed_s=step * p.delta_t,
+        schematic=lambda ax: _draw_vessel(ax, state, p),
+        schematic_title="NUCLEAR  CORE",
+        gauges=gauges,
+        strips=strips,
+        status=status,
+        status_text=status_text,
+        subtitle="Tavg on its program  ·  axial offset in its band  ·  boron late",
+    )
+    return rk.finish(fig), history
 
 
 # -- save_video hook -----------------------------------------------------------
@@ -669,34 +454,18 @@ def _render(cls, screen, state, params, frames, clock, stride: int | None = None
     """Render hook used by ``save_video`` -- subsamples frames by *stride*.
 
     The stride is derived from the episode via ``render_kit.frame_stride``
-    rather than fixed. It was pinned at 48, chosen for the 86 400-step day-long
-    episode, but ``runners._media_params`` caps a clip at 1 200 steps, so the
-    stride was 72x too coarse for the episode actually being rendered and a
-    whole reactor clip came out as two frames.
+    rather than fixed: a fixed stride chosen for one episode length leaves a
+    clip of another length with a handful of frames.
     """
-    from target_gym.render_kit import frame_stride
-
     if stride is None:
-        stride = frame_stride(params)
+        stride = rk.frame_stride(params)
     if state is None:
         if cls.state is None:
             raise ValueError("No state provided")
         state = cls.state
 
     if not hasattr(cls, "history") or state.time <= 1 or not frames:
-        cls.history = {
-            "t": [],
-            "n": [],
-            "target_n": [],
-            "T_fuel": [],
-            "T_coolant": [],
-            "I_hat": [],
-            "Xe_hat": [],
-            "rho_ext": [],
-            "reward": [],
-            "revenue": [],
-            "cumul_revenue_M": [],
-        }
+        cls.history = {k: [] for k in HISTORY_KEYS}
 
     step = state.time
     if step % stride == 0 or step <= 1 or not frames:

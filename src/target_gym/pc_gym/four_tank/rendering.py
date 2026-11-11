@@ -3,7 +3,10 @@
 The schematic is the plant's defining feature: each pump splits its flow, most
 of it going to the *diagonal* upper tank, which then drains into the lower tank
 on the other side. That cross-coupling is why independent loops struggle, and
-the picture shows it as plumbing rather than as a gain matrix.
+the picture shows it as plumbing rather than as a gain matrix. The episode's
+two disturbances, both hidden from the controller, are drawn where they act: an
+extra outlet opened in an upper tank, and a cup of water poured into a lower
+one.
 """
 
 from target_gym import render_kit as rk
@@ -112,6 +115,49 @@ def _draw_tanks(ax, state, params):
             alpha=0.7,
         )
 
+    # The hidden disturbances: the extra outlet while it is open, the cup for
+    # a minute after it is poured, and each one's time.
+    t = int(state.time)
+    leak_at, cup_at = int(state.leak_start), int(state.cup_time)
+    leak_x = (ux, rx)[int(state.leak_tank)] + tw * 0.8
+    if leak_at <= t < leak_at + params.leak_duration:
+        for i in range(3):
+            rk.disc(
+                ax,
+                leak_x + 0.012 * i,
+                uy - 0.03 - 0.025 * i,
+                0.006,
+                fc=rk.RED,
+                ec="none",
+                alpha=0.8,
+            )
+        rk.label(
+            ax,
+            leak_x + 0.03,
+            uy - 0.03,
+            "extra outlet ●",
+            color=rk.RED,
+            size=6.5,
+            ha="left",
+        )
+    cup_x = (lx, rx)[int(state.cup_tank)] + tw / 2
+    if cup_at >= 0 and 0 <= t - cup_at < 60.0 / params.delta_t:
+        rk.flow_arrow(
+            ax, cup_x, ly + th + 0.075, cup_x, ly + th - 0.02, color=rk.PINK, lw=2.0
+        )
+        rk.label(
+            ax, cup_x + 0.02, ly + th + 0.05, "cup ●", color=rk.PINK, size=7, ha="left"
+        )
+    plan = []
+    if leak_at >= 0:
+        tank = 3 + int(state.leak_tank)
+        plan.append(f"outlet T{tank} @ {leak_at * params.delta_t:.0f} s")
+    if cup_at >= 0:
+        plan.append(f"cup T{1 + int(state.cup_tank)} @ {cup_at * params.delta_t:.0f} s")
+    if plan:
+        rk.label(
+            ax, 0.5, 0.985, "  ·  ".join(plan) + "  (hidden)", color=rk.PURPLE, size=6.5
+        )
     rk.caption(ax, "each pump splits: most flow to the DIAGONAL upper tank")
 
 
@@ -168,12 +214,7 @@ def render_four_tank(state, params, step, history):
             rk.AMBER,
             limit_frac=1.0,
         ),
-        rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
-        ),
+        rk.cost_gauge(history["reward"], params),
     ]
 
     strip = rk.Strip(
