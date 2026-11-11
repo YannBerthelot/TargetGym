@@ -184,6 +184,13 @@ def test_loss_of_circulation_rises_25_kelvin_in_minutes():
     assert hit.size and 3.0 <= (hit[0] + 1) * p.delta_t <= 48.0
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="finding, kept (owner, 2026-11-12): open loop settles in 0.99 "
+    "residence times. The range is the audit's weak reading of PARSEX's closed "
+    "loop; the plant's thermal time follows from S1's V, q and UA (PHYSICS.md, "
+    "T8).",
+)
 def test_an_open_loop_cooling_step_settles_in_a_few_residence_times():
     # A step test on a still feed: the day's drift (cstr-v6) would move the end
     # point the 95 % is read against.

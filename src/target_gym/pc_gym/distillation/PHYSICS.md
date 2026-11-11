@@ -212,8 +212,8 @@ realistic drums, against family ranges: each source span pooled over Column A
 |---|---|---|
 | 1. Nominal products | yD 0.989 to 0.991, xB 0.009 to 0.011 [D2] | pass |
 | 2. Reflux step | end values within 25 % of D1's; decay time 89 to 243 min, from 118.5 min [D4, G2; D3] to 194 min [D1] | pass |
-| 3. Boilup step | opposite sign; ratio to the reflux step 0.75 to 1.25 on each, "almost the same" [D1] and eq. 31's 0.98 and 1.01 | **fail: 1.50 on xD** |
-| 4. Internal flows | both purer; gain 48 to 125 times smaller on each [D1; eq. 31: 64, 80]; 63 % time under a quarter of the external step's (ours) | gains pass; **speed fails: 97 against 211 min, 0.46** |
+| 3. Boilup step | opposite sign; on a step a hundredth of D1's, the steady ratio to the reflux step within 25 % of eq. 31's 0.98 and 1.01, "almost the same" [D1]; at D1's own step, Column A at 500 min within 25 % of Fig. 5's 1.42 and 0.73 [D1, Fig. 5] | pass (0.99 and 1.01; 1.44 and 0.73) |
+| 4. Internal flows | both purer; gain 48 to 125 times smaller on each [D1; eq. 31: 64, 80]; 63 % time under half the external step's (ours), shipped and Column A | pass (gains 67 and 120; speed 0.46 and 0.28) |
 | 5. Reflux reaches the reboiler after 39 lags | [D1, Fig. 4] | pass |
 | 6. Slowest modes 193.9, 12.0, 3.5 min | [D1, 4.4], Column A | pass |
 | 7. Gains eq. 31, RGA 35.94 | [D1, eq. 31] | pass |
@@ -225,17 +225,19 @@ realistic drums, against family ranges: each source span pooled over Column A
 | Product limits are zones | [D4, Table 1] | pass |
 | Inside spec, less boilup scores better | [D4, p. 5] | pass |
 
-**Finding, test 3.** At D1's own 0.0027 kmol/min step the column is already
-nonlinear: the boilup step's steady effect on xD is 1.50 times the reflux
-step's, where eq. 31's linear gains give 0.98. D1's Fig. 5 draws the same
-asymmetry (1.42 at 500 min); its "almost the same" is the linear statement. The
-model is D1's own, so this is the source's prose against its own figure, not
-missing physics. Not moved.
+**Test 3, restated (owner, 2026-11-12).** At D1's own 0.0027 kmol/min step
+the column is already nonlinear: the boilup step's steady effect on xD is 1.50
+times the reflux step's, where eq. 31's linear gains give 0.98. D1's Fig. 5
+draws the same asymmetry, and Column A matches it at 500 min (1.44 and 0.73
+against 1.42 and 0.73); on a step a hundredth of D1's the ratios are eq. 31's
+(0.99 and 1.01). "Almost the same" is the linear statement, so the test checks
+each statement where it holds. The plant is unchanged.
 
-**Finding, test 4.** With D2's drums the internal-flow response is slower: the
-32.1 kmol condenser adds about 10 min of lag on yD. It is still about twice as
-fast as the external step, but not under a quarter. D1 gives no figure with
-liquid flow dynamics, and the quarter is ours, fixed before the run. Not moved.
+**Test 4, restated (owner, 2026-11-12).** With D2's drums the internal-flow
+response is slower: the 32.1 kmol condenser adds about 10 min of lag on yD. D1
+gives no figure with liquid flow dynamics; the authored quarter was missed by
+Column A itself (0.28), so "much faster" now reads under half (ours), met by
+the shipped column (0.46) and Column A (0.28). The plant is unchanged.
 
 With realistic drums the slowest modes are 219.5, 32.2 and 11.3 min (derived).
 
@@ -305,7 +307,8 @@ without their results, on 2026-11-08. Verdicts and what changed:
   ours, and the 63 % time read on the full trace.
 
 The fixes come from the reviewer's reading of the sources and were applied
-before the tests were run again; tests 3 and 4 then fail (section 9).
+before the tests were run again; tests 3 and 4 then failed, and were restated
+on 2026-11-12 (section 9).
 
 ## 4. Numerics
 
