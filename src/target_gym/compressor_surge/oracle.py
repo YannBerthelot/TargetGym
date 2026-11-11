@@ -146,7 +146,7 @@ def compressor_model(env, p) -> TaskModel:
         cost = p.energy_price * power * p.delta_t / 1000.0
         past = jax.nn.softplus((jnp.abs(target - dp) - p.header_band) / KPA)
         cost = cost + p.zone_price * p.delta_t * past
-        y = jnp.stack([phi_min - 2.0 * p.W])
+        y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
     K = history(p)

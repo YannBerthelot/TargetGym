@@ -347,6 +347,26 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         )
 
 
+def test_the_compressors_planned_surge_limit_is_the_surge_line():
+    """The surge line is Phi = 2W (compressor_surge/PHYSICS.md; env.py's
+    ``psi_surge``). One step from the reset under the held move: the plan's
+    surge margin, its output less the limit's bound, is the env's phi_min
+    less 2W after the same step. Float32 env against the float64 model on
+    a margin of order 0.1: 1e-5."""
+    env, params, oracle = _oracle("compressor_surge")
+    m, (limit,) = oracle.model, oracle.model.limits
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    hold = m.hold(state)
+    after = env.step_env(key, state, hold, params)[1]
+    with enable_x64():
+        s = float64(state)
+        d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+        y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
+    planned = float(y[0]) - limit.lo
+    assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+
+
 @pytest.mark.parametrize(
     "name, budget",
     [(name, 0.25) for name in FIVE + AIRCRAFT]
