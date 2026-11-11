@@ -21,4 +21,7 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
    stamp of the plant they ran on; the pH oracle is not rebuilt, so its MPC line reads
    "not measured".
 5. **Old records** (`baseline_returns`, `protocol_results`, `credibility`) only for
-   tasks still scored on tracking, the aircraft.
+   tasks still scored on tracking, the aircraft. Before them, re-measure the oracle's
+   best hold (`rho`, `scripts/measure_hold.py`) for `plane3d_circle` and
+   `plane3d_figure8`: both still carry the hold measured before they moved to the
+   amended plant on 2026-11-10.
