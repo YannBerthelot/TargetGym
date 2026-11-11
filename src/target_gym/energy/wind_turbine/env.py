@@ -56,6 +56,8 @@ RPM_PER_RAD_S = 60.0 / (2.0 * jnp.pi)
 
 #: The extreme operating gust's duration, s (IEC 61400-1 via [S13]).
 EOG_SECONDS = 10.5
+#: Salt for the mean wind's draw, apart from the turbulence's ``fold_in(key, t)``.
+_MEAN_WIND = 0x4D45414E
 
 
 @struct.dataclass
@@ -110,6 +112,13 @@ class WindTurbineParams(EnvParams):
     turbulence_lambda1: float = 42.0
     #: Kaimal longitudinal length scale over Lambda1 [S19].
     kaimal_factor: float = 8.1
+    #: The mean wind's correlation time in a stream, s: its score is an
+    #: Ornstein-Uhlenbeck process of this time, and the mean wind its quantile
+    #: on ``v_mean_range``, uniform in the long run as a window draws it
+    #: (``mean_wind``). At a switch the range's ends move to the new regime's
+    #: over the same time, a first-order lag, so the mean wind does not jump
+    #: (owner, 2026-11-11). 0, as a window has it: the mean wind holds its draw.
+    v_mean_tau: float = 0.0
     #: Reference wind of the class, m/s (ours: class I, 50 m/s [S13]); only
     #: the gust's 1.35 (Ve1 - V) branch reads it, which never binds here.
     v_ref: float = 50.0
@@ -136,6 +145,9 @@ class WindTurbineParams(EnvParams):
     #: is ours: 10 %, S11's continuous AGC de-rate (p. xix).
     derate_to: float = 1.0
     derate_window: Tuple[float, float] = (60.0, 300.0)
+    #: How long a curtailment holds before the rating returns, s. Only a stream
+    #: sets it (scenarios.py); in a window the de-rate holds to the end.
+    derate_hold: float = 1.0e9
     #: 0.25 s steps (ours: controllers run at 80 to 100 Hz [S1, S3]; 12 per
     #: tower period).
     delta_t: float = 0.25
@@ -208,9 +220,11 @@ PARAM_UNITS = {
     "turbulence_iref": "-",
     "turbulence_lambda1": "m",
     "kaimal_factor": "-",
+    "v_mean_tau": "s",
     "v_ref": "m/s",
     "gust": "-",
     "derate_to": "-",
+    "derate_hold": "s",
     "energy_price": "$/MWh",
     "capex_per_kw": "$/kW",
     "turbine_share": "-",
@@ -261,6 +275,24 @@ class WindTurbineState(EnvState):
     #: When this episode's gust and curtailment start, s (-1 for none).
     gust_t0: float = -1.0
     derate_t0: float = -1.0
+    #: The mean wind's standard-normal score: ``v_mean`` is its quantile on the
+    #: scenario's ``v_mean_range`` (``mean_wind``).
+    v_mean_z: float = 0.0
+    #: The ends of the range ``v_mean`` is the quantile on, m/s: the scenario's
+    #: ``v_mean_range``, or on their way to it after a stream's switch.
+    v_mean_lo: float = 0.0
+    v_mean_hi: float = 0.0
+    #: Each event carries its own size, so it runs to its end through a switch
+    #: (docs/proposals/long-strata.md, S1): the gust's V_gust as it started (m/s;
+    #: 0 reads it off the params, as a window does), the de-rate's rating and when
+    #: it returns (s).
+    gust_size: float = 0.0
+    derate_level: float = 1.0
+    derate_until: float = 1.0e9
+    #: The steps the gust's and the de-rate's times count from: 0 in a window; a
+    #: stream sets each at its event's onset, so float32 keeps them exact.
+    gust_c0: jax.Array = 0
+    derate_c0: jax.Array = 0
     #: Tower-base moment (N m) last step and at the last turning point, its
     #: direction (+1, -1, 0), and the damage the last step closed, (MN m)^m:
     #: half-cycles counted between turning points (PHYSICS.md, Score).
@@ -407,15 +439,45 @@ def gust_magnitude(v_hub, params: WindTurbineParams):
     )
 
 
-def gust(t, v_hub, t0, params: WindTurbineParams):
+def gust(t, v_hub, t0, params: WindTurbineParams, size=0.0):
     """The gust's departure from the mean at time ``t`` (s), for a gust that
-    starts at ``t0`` (none if negative) [S13]."""
+    starts at ``t0`` (none if negative) [S13]. ``size`` is its V_gust as it
+    started (m/s); 0 reads it off the params at ``v_hub``."""
     tau = t - t0
     on = (t0 >= 0.0) & (tau >= 0.0) & (tau <= EOG_SECONDS)
     shape = jnp.sin(3.0 * jnp.pi * tau / EOG_SECONDS) * (
         1.0 - jnp.cos(2.0 * jnp.pi * tau / EOG_SECONDS)
     )
-    return jnp.where(on, -0.37 * gust_magnitude(v_hub, params) * shape, 0.0)
+    magnitude = jnp.where(size > 0.0, size, gust_magnitude(v_hub, params))
+    return jnp.where(on, -0.37 * magnitude * shape, 0.0)
+
+
+def mean_wind(state: "WindTurbineState", key, params: WindTurbineParams):
+    """The mean wind's next ``(score, value, range's low end, high end)``. In a
+    stream (``v_mean_tau`` > 0) the score is an Ornstein-Uhlenbeck process,
+    stationary N(0, 1), and the mean wind its quantile on the range: uniform on
+    ``v_mean_range`` in the long run, the law a window draws it from
+    (docs/proposals/long-strata.md, E4). The range's ends close their gap to
+    ``v_mean_range`` at the score's rate, so after a switch the mean wind moves
+    to the new regime's over ``v_mean_tau``. In a window all hold."""
+    p = params
+    tau = jnp.maximum(p.v_mean_tau, p.delta_t)
+    a = jnp.exp(-p.delta_t / tau)
+    eps = jax.random.normal(
+        jax.random.fold_in(jax.random.fold_in(key, state.time), _MEAN_WIND)
+    )
+    z = a * state.v_mean_z + jnp.sqrt(-jnp.expm1(-2.0 * p.delta_t / tau)) * eps
+    lo, hi = p.v_mean_range
+    lo = lo + (state.v_mean_lo - lo) * a
+    hi = hi + (state.v_mean_hi - hi) * a
+    v = lo + (hi - lo) * jax.scipy.special.ndtr(z)
+    moves = p.v_mean_tau > 0.0
+    return (
+        jnp.where(moves, z, state.v_mean_z),
+        jnp.where(moves, v, state.v_mean),
+        jnp.where(moves, lo, state.v_mean_lo),
+        jnp.where(moves, hi, state.v_mean_hi),
+    )
 
 
 def tower_base_moment(x_tower, params: WindTurbineParams):
@@ -507,9 +569,12 @@ def compute_next_state(
     decay = jnp.exp(-p.delta_t / turbulence_time_constant(state.v_mean, p))
     sigma = turbulence_sigma(state.v_mean, p)
     v_turb = state.v_turb * decay + sigma * jnp.sqrt(1.0 - decay**2) * noise
-    t_new = (state.time + 1) * p.delta_t
+    t_gust = (state.time + 1 - state.gust_c0) * p.delta_t
     v_wind = jnp.maximum(
-        state.v_mean + v_turb + gust(t_new, state.v_mean, state.gust_t0, p), 0.1
+        state.v_mean
+        + v_turb
+        + gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size),
+        0.1,
     )  # 0.1 m/s: a numerical floor, never reached
 
     rates = (
@@ -542,8 +607,14 @@ def compute_next_state(
     moment, turn, direction, damage = count_half_cycles(
         state, tower_base_moment(new[3], p), p
     )
-    derated = (state.derate_t0 >= 0.0) & (t_new >= state.derate_t0)
-    rating = jnp.where(derated, p.derate_to, p.rating)
+    t_derate = (state.time + 1 - state.derate_c0) * p.delta_t
+    derated = (
+        (state.derate_t0 >= 0.0)
+        & (t_derate >= state.derate_t0)
+        & (t_derate < state.derate_until)
+    )
+    rating = jnp.where(derated, state.derate_level, p.rating)
+    v_mean_z, v_mean, v_mean_lo, v_mean_hi = mean_wind(state, key, p)
 
     return (
         state.replace(
@@ -556,6 +627,10 @@ def compute_next_state(
             a_tower=accel,
             v_wind=v_wind,
             v_turb=v_turb,
+            v_mean=v_mean,
+            v_mean_z=v_mean_z,
+            v_mean_lo=v_mean_lo,
+            v_mean_hi=v_mean_hi,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
             target_power=rating * p.P_rated,

@@ -124,6 +124,13 @@ class PHParams(EnvParams):
     # Influent flow swings (Amendment 3), metered [P3, Figure 2]: two an
     # episode, within +-flow_swing of nominal, ramped like the acid. Ours.
     flow_swing: float = 0.2  # fraction of q1
+    #: The window's own upsets: 1 runs them as drawn at reset; 0, which only a
+    #: stream sets (scenarios.py), leaves the influent at nominal, and the
+    #: stream starts its upsets through ``start_event``.
+    window_upsets: float = 1.0
+    #: Seconds an upset holds before it ramps back to nominal: the producing
+    #: unit's batch ends. Only a stream sets it; a window's upsets never return.
+    event_hold: float = 1.0e9  # s
 
     # ---- Limits (REALITY.md, "Limits"; charter rule 14) ----
     # Zone: the permit range, which the guideline sets [P8]. Ours, from the one
@@ -204,6 +211,8 @@ PARAM_UNITS = {
     "acid_upset_size": "-",
     "acid_upset_ramp": "s",
     "flow_swing": "-",
+    "window_upsets": "-",
+    "event_hold": "s",
     "permit_low": "pH",
     "permit_high": "pH",
     "excursion_limit": "s",
@@ -253,6 +262,14 @@ class PHState(EnvState):
     q3_trim: float = struct.field(default=0.0, kw_only=True)
     basin: float = struct.field(default=0.0, kw_only=True)  # L held
     q1: float = struct.field(default=16.6, kw_only=True)  # influent, mL/s, metered
+    #: The step each influent schedule counts its times from: 0 in a window, the
+    #: upset's onset once a stream starts one (``start_upset``).
+    upset_base: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
+    flow_base: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
     Wa_basin: float = struct.field(default=0.0, kw_only=True)
     Wb_basin: float = struct.field(default=0.0, kw_only=True)
 
@@ -295,26 +312,49 @@ def solve_pH(Wa, Wb, params: PHParams):
     return 0.5 * (lo + hi)
 
 
-def ramp_schedule(times, levels, state, params: PHParams, xp=jnp):
+def ramp_schedule(times, levels, state, params: PHParams, xp=jnp, base=0):
     """A multiple of nominal at ``state.time``: piecewise ramps over
     ``acid_upset_ramp`` from ``levels[i]`` to ``levels[i + 1]`` at
-    ``times[i]``."""
-    t = state.time * params.delta_t
-    starts = times * params.delta_t
+    ``times[i]``. Times are steps counted from ``base``, the schedule's own
+    origin (0 in a window, its onset in a stream), so a ramp keeps its shape
+    however long the plant has run."""
+    t = (state.time - base) * params.delta_t
+    starts = (times - base) * params.delta_t
     ramp = jnp.maximum(params.acid_upset_ramp, params.delta_t)
     frac = xp.clip((t - starts) / ramp, 0.0, 1.0)
     return levels[0] + xp.sum(frac * (levels[1:] - levels[:-1]))
 
 
+def start_upset(times, levels, base, state, params: PHParams, size, key):
+    """An influent upset starting now (long-strata draft 4, S1): from the level
+    now, a ramp to a level drawn within ``size`` of nominal, held
+    ``event_hold``, then a ramp back to nominal. Returns the schedule's
+    ``(times, levels, base)``, its origin now. With ``size`` 0 the schedule in
+    progress is kept, so an upset of one kind never ends one of the other."""
+    p = params
+    now = jnp.asarray(state.time, jnp.int32)
+    hold = jnp.maximum(jnp.round(p.event_hold / p.delta_t), 1.0).astype(jnp.int32)
+    level = 1.0 + size * jax.random.uniform(key, minval=-1.0, maxval=1.0)
+    current = ramp_schedule(times, levels, state, p, base=base)
+    on = size > 0.0
+    return (
+        jnp.where(on, jnp.stack([now, now + hold]), times),
+        jnp.where(on, jnp.stack([current, level, 1.0]), levels),
+        jnp.where(on, now, base),
+    )
+
+
 def acid_scale(state, params: PHParams, xp=jnp):
     """The influent's strong acid strength now, as a multiple of ``Wa1``."""
-    return ramp_schedule(state.upset_times, state.upset_levels, state, params, xp)
+    return ramp_schedule(
+        state.upset_times, state.upset_levels, state, params, xp, state.upset_base
+    )
 
 
 def influent_flow(state, params: PHParams, xp=jnp):
     """The influent flow now, mL/s, as its meter reads it."""
     return params.q1 * ramp_schedule(
-        state.flow_times, state.flow_levels, state, params, xp
+        state.flow_times, state.flow_levels, state, params, xp, state.flow_base
     )
 
 

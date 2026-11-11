@@ -137,6 +137,24 @@ season (`scenarios.py`): normal 6, shoulder season 4, sunny spell 1.5, cold
 snap 1, low gains 0.5. All are ours, with family ranges in `scenarios.py`;
 REALITY.md has no weather statistics.
 
+**The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
+(`target_gym.stream`) a cold snap lasts 5.5 d on average, as western European
+cold spells do (`REALITY.md` [ST1]), and the other regimes a fortnight
+(`dwell_h` 336), inside the week to a month weather regimes hold ([ST2]). Each
+brings no event of its own (`events_per_h` 0): the building's scenarios are
+weather and gains, not upsets. A sunny spell's fortnight is ours: blocking highs
+last 5.7 to 10 d ([ST3], [ST4]), and no source gives how long a clear spell or an
+office's low-gain spell lasts (schools close 1 to 2 weeks, [ST5]). The day
+(weather cycle, sun, office hours, tariff) reads a step count wrapped on
+`DAY_STEPS`, exact however long the plant runs; the weather's deviation is
+already mean-reverting from its long-run law. At a switch the outdoor mean does
+not jump: it moves to the new regime's as a first-order lag of `T_out_mean_tau`,
+6 h, as a front takes hours to pass (ours, owner 2026-11-11; no source gives it
+as a time constant, `REALITY.md` [ST6]). A linear lag keeps the long-run mean and the regimes'
+shares. The 24 h forecast includes where the mean is heading, as a forecast sees
+a front coming. In a window nothing changes: a scored window is bit-identical to
+what it was.
+
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
@@ -233,7 +251,7 @@ scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 1344 | 900 | 336.0 h | 1 in [-1, 1] | 12 | 109 |
+| `hvac` | 1344 | 900 | 336.0 h | 1 in [-1, 1] | 12 | 110 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

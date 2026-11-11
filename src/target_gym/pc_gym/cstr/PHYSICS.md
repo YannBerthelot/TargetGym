@@ -62,6 +62,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `k0_decay` | 90 | min (scenario) | ours: no source gives a rate inside hours; the slowest linear decay that ends inside the 240 min episode from the latest event, at 150 min |
 | `feed_rise` | 0.1 | - (scenario) | ours: feed build-up is sourced [S3], its size is not |
 | `cooling_loss` | 5 | min (scenario) | ours: cooling failures are sourced [S2; S3], their length is not |
+| `event_hold` | 480, 1440, 120 | min (stream, per scenario) | ours: how long a setpoint move (a shift), a catalyst loss (until a catalyst change, a day) and a feed rise (until its batch runs out) last before they return; no source gives these; a window never sets it, so its events hold to the end |
 | readings | 0.04 K; lag 13 s; dead time 2 min | - | Pt100 scatter as before; thin-walled well about 13 s [S10, Fig. 2]; jacket outlet about 2 min [S6] |
 
 ---
@@ -226,6 +227,18 @@ window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
+and each upset regime a shift, 8 h, with one event per visit on average
+(`events_per_h` 1/8). Each event carries the size it started with, so it runs to
+its return through a switch of regime, and the feed's day wraps on a step count.
+The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a window nothing changes:
+`event_hold` is never reached and a scored window is bit-identical to v6's.
+
 <!-- BEGIN GENERATED FACTS -->
 
 <!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
@@ -236,7 +249,7 @@ draws them.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 27 |
+| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

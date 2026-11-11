@@ -36,6 +36,13 @@ class FirstOrderSystem(
     Action (1,): [input], raw in [-1, 1] -> [u_min, u_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = ("target_x",)
+    #: Runs as a continuing plant (``target_gym.stream``): it starts and
+    #: restarts on target, and ``start_event`` changes the target.
+    STREAM_READY = True
+
     registry_name: str = "first_order"
 
     render_car = classmethod(_render)
@@ -125,9 +132,25 @@ class FirstOrderSystem(
             maxval=params.target_x_range[1],
         )
 
+        initial_x = jnp.where(params.start_on_target > 0.0, target_x, initial_x)
         state = FirstOrderState(time=0, x=initial_x, target_x=target_x, u=0.0)
         obs = self.get_obs(state)
         return obs, state
+
+    def restart_plant(self, key: chex.PRNGKey, state, params: FirstOrderParams):
+        """After a trip the plant restarts as ``reset_env`` would; a stream's
+        (``start_on_target``) on the target it is held to then, which carries on
+        (``OUTSIDE_WORLD``)."""
+        fresh = self.reset_env(key, params)[1]
+        on = params.start_on_target > 0.0
+        return fresh.replace(x=jnp.where(on, state.target_x, fresh.x))
+
+    def start_event(self, state: FirstOrderState, key, params: FirstOrderParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        target changes now, a fresh draw over ``target_x_range``, as a window's
+        reset draws it."""
+        lo, hi = params.target_x_range
+        return state.replace(target_x=jax.random.uniform(key, minval=lo, maxval=hi))
 
     def action_space(self, params: FirstOrderParams | None = None) -> spaces.Box:
         return spaces.Box(

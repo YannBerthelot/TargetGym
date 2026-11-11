@@ -115,6 +115,21 @@ the setpoints on the levels, as after "start pumps, wait for steady state"
 
 Sizes and timing are ours (section 2). Nothing else moves.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the rig starts at the operating
+point with none of the window's schedule (`window_events` 0) and draws the same
+events instead (`start_event`), at the window's own density, five per 3300 s
+(`events_per_h` about 5.45), and in its mix (`event_shares` 0.6, 0.2, 0.2): a
+setpoint step of 1.25 cm either way on one lower tank, held 1000 s (the window's
+spacing between moves) before it returns to the operating point; an extra
+outlet in one upper tank for 300 s; a cup into one lower tank. A new move takes
+back one in progress, so moves never stack. `scenarios.py` declares the one
+scenario, the window as scored (weight 1), only to carry these numbers. No
+source gives how often the rig is upset, so they are ours, set once without
+tuning and open for the owner. In a window nothing changes and a scored window
+is bit-identical.
+
 ---
 
 ## 6. Score (rule 15)
@@ -186,7 +201,7 @@ sensor type, noise and lag are not found.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `four_tank` | 3300 | 1 | 55 min | 2 in [-1, 1] | 6 | 14 |
+| `four_tank` | 3300 | 1 | 55 min | 2 in [-1, 1] | 6 | 16 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

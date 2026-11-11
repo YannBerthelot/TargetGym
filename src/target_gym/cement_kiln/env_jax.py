@@ -40,6 +40,16 @@ class CementKiln(
     Action      (2): [fuel, kiln_speed], raw in [-1, 1]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_lime",
+        "raw_meal",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its target changes
+    #: through ``start_event``; the raw meal is already mean-reverting.
+    STREAM_READY = True
+
     registry_name: str = "cement_kiln"
 
     render_kiln = classmethod(_render)
@@ -150,6 +160,15 @@ class CementKiln(
             target_lime=target_lime,
         )
         return self.get_obs(state), state
+
+    def start_event(
+        self, state: CementKilnState, key, params: CementKilnParams
+    ) -> CementKilnState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        free-lime target changes now, a fresh draw over ``target_lime_range``,
+        as a window's reset draws it."""
+        lo, hi = params.target_lime_range
+        return state.replace(target_lime=jax.random.uniform(key, minval=lo, maxval=hi))
 
     def action_space(self, params: CementKilnParams | None = None) -> spaces.Box:
         return spaces.Box(

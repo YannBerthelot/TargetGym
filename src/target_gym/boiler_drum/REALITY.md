@@ -224,6 +224,61 @@ between full and part load; [S3] has setpoints "change several times during
 every 24 h", and [S10] calls runback tests necessary after any change to the
 gas pass, fans or mills. The weights are therefore ours (PHYSICS.md).
 
+### Stream numbers, second search (2026-11-11)
+
+Every figure below was read once and confirmed on a second fetch; the
+Spurlock rows were read a third time.
+
+- **How long a runback or a feed pump trip lasts.** East Kentucky Power's
+  2023 event report for Spurlock units 1 to 4 lists six immediate forced
+  derates (D1) that name the ID fan or a feed pump: 0.35 h (ID fan bearing
+  temperature, a failed thermocouple), 2.38 h (ID fan tripped on high furnace
+  pressure), 2.75 h (feed pump turbine tripped on bearing vibration), 2.80 h
+  (booster pump bearing cooling fan, two consecutive derates), 5.45 h (feed
+  pump lube oil leak) and 67.05 h (feed pump motor tripped on bearing
+  temperature) [ST1]. Median 2.775 h, range 0.35 to 67 h. The stream's
+  runback and feed pump trip regimes last, and hold the unit back for,
+  2.775 h on average (was 1 h, ours). Three damper faults (ID fan control
+  damper, FD fan inlet damper; 10 to 45 MW for 7.8 to 53 h) are left out:
+  they trim the load, they do not run the unit back. On units 2 to 4 the
+  derates left 37 to 56 % of capacity (the log's Cap over Red plus Cap).
+- **How often.** In that one plant-year, two of the six are ID fan events
+  and four are feed pump events, on four units: 0.5 and 1 a unit-year
+  (0.75 counting only the three trips) [ST1]. EPRI's 1978 survey counted 763
+  boiler feed pump failures from large fossil units, on 203 units over three
+  years [ST2, sec. 3.4], about 1.25 a unit-year (our division; failures, not
+  all of them trips), with pump outages of "about 3 days" on average
+  [ST2, sec. 3.6], the repair time while a spare pump runs. Family range:
+  0.5 ID fan runbacks and 0.75 to 1.25 feed pump trips a unit-year. The
+  weights are kept: they move the scored headline, so the owner decides.
+- **Load changes a day.** Not found as a count. [S24] calls a load follow
+  significant above 15 to 20 % of capacity and gives typical sizes of 30 to
+  35 %, but no number a year. Searched: [S24], WECC and Intertek's 2020
+  study, "load follows per year". The four a day stay ours.
+- **Restart after a trip.** [S17] Table 1: hard coal minimum load 25 to 40 %
+  (state of the art 25 to 30 % in recirculation mode), CCGT 40 to 50 % (30 to
+  40 % state of the art), and p. 12 has a German coal unit at 12 %; hot start
+  2.5 to 3 h, 80 min to 2.5 h state of the art. Spurlock unit 4's four
+  unplanned outages lasted 0.87 h (furnace pressure excursion), 2.50 h
+  (secondary air fan trip), 3.63 h (lost power to the DCS clients) and
+  11.28 h (a plugged coal feed, then a master fuel trip) [ST1]. NFPA 85's
+  multiple-burner purge (25 % of full-load airflow for at least 5 min or five
+  volume changes) was found only in an insurer's paraphrase (FM Global data
+  sheet 6-5), not opened. A 2018 NFPA 85 committee revision for single-burner
+  boilers asks for at least 70 % of the airflow at maximum continuous
+  capacity and eight air changes for watertube boilers [ST3]; it is not
+  final code text, and not this family's burner count.
+
+Sources for this section:
+
+- [ST1] East Kentucky Power Cooperative, "Event Report 01/01/2023 To
+  12/31/2023", Spurlock units 1 to 4, filed in Kentucky PSC case 2024-00109.
+  https://psc.ky.gov/pscecf/2024-00109/jacob.watson%40ekpc.coop/09062024074731/EVENT_DATA_Spurlock2023.pdf
+- [ST2] Makay, Szamody, "Survey of Feed Pump Outages", EPRI FP-754, April
+  1978, secs. 3.4 and 3.6. https://www.osti.gov/servlets/purl/7039347
+- [ST3] NFPA, Second Revision No. 721, NFPA 85 (2018 cycle), single burner
+  boilers. https://docinfofiles.nfpa.org/files/AboutTheCodes/85/85_BCS_SBB_F2018_SD_SRStatements.pdf
+
 ## For the owner to open by hand
 
 - https://www.control.lth.se/fileadmin/control/Education/DoctorateProgram/PhysicalModeling/Lectures/Astrom-Bell.pdf

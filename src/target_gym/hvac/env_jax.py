@@ -48,6 +48,18 @@ class BuildingHVAC(
                       [T_supply_min, T_supply_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "T_out",
+        "T_out_hist",
+        "weather_dev",
+        "T_out_level",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its day wraps on a step
+    #: count, and its scenarios are regimes with no event of their own.
+    STREAM_READY = True
+
     registry_name: str = "hvac"
 
     render_hvac = classmethod(_render)
@@ -153,6 +165,7 @@ class BuildingHVAC(
             T_out=T_out,
             T_out_hist=history,
             weather_dev=weather_dev,
+            T_out_level=jnp.asarray(params.T_out_mean) + jnp.zeros_like(weather_dev),
             T_supply=T_supply,
             Q_slab=slab_heat(T_supply, T_core, params),
             T_return=return_temperature(T_supply, T_core, params),
@@ -160,6 +173,13 @@ class BuildingHVAC(
             frost=jnp.zeros(()),
         )
         return self.get_obs(state), state
+
+    def start_event(self, state: HVACState, key, params: HVACParams) -> HVACState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1). The
+        building's scenarios are regimes of weather and gains with no event of
+        their own, so nothing starts: the state is returned as it is."""
+        del key, params
+        return state
 
     def initial_action(self, state: HVACState, params: HVACParams):
         """The raw action that keeps the reset's supply water."""

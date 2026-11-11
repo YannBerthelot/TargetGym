@@ -631,6 +631,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
         # bands (plane/PHYSICS.md). v8: the altitude band travels with the
         # 500 fpm profile instead of starting where it ends.
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("energy_suite", module="target_gym.plane.scenarios"),
         version=9,
     ),
     EnvSpec(
@@ -651,6 +653,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         },
         noise_fields=("turbulence_sigma",),
         # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("sine_suite", module="target_gym.plane.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -682,6 +686,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane/experts_tecs.py",
             "scenarios.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
@@ -712,7 +718,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("circle_suite", module="target_gym.plane3d.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -743,6 +753,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane/experts_tecs.py",
             "scenarios.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
@@ -775,8 +787,12 @@ _SPECS: tuple[EnvSpec, ...] = (
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v4: the distance to the curve observed as the tracked output.
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("figure8_suite", module="target_gym.plane3d.scenarios"),
         version=6,
     ),
     EnvSpec(
@@ -803,7 +819,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "experts/pid.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -846,7 +866,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "experts/pid.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
         version=5,
     ),
     # -- Process control ----------------------------------------------------
@@ -890,6 +914,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="first_order",
         oracle_data=_shared_oracle("first_order"),
         version=4,
+        # One scenario, the window as scored, declared for the stream's target
+        # changes (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "first_order_scenarios", module="target_gym.pc_gym.first_order.scenarios"
+        ),
     ),
     EnvSpec(
         name="four_tank",
@@ -916,6 +945,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # point with an extra upper outlet and a cup. 6: failure_cost 0, as
         # for every plant with no trip (charter B5).
         version=6,
+        # One scenario, the window as scored, declared for the stream's event
+        # rate (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "four_tank_scenarios", module="target_gym.pc_gym.four_tank.scenarios"
+        ),
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -1067,6 +1101,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # mean (``plan_params``) rather than on one fixed noise path.
         oracle_data=_shared_oracle("cement_kiln"),
         noise_fields=("feed_noise_std",),
+        # One scenario, the normal kiln as scored, declared for the stream's
+        # target-change rate (long-strata draft 4, S1).
+        scenarios=_scenarios(
+            "cement_kiln_scenarios", module="target_gym.cement_kiln.scenarios"
+        ),
     ),
     EnvSpec(
         name="boiler_drum",
@@ -1242,6 +1281,13 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
+            "patrol/scenarios.py",
+        ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios(
+            "formation_suite", module="target_gym.formation.scenarios"
         ),
         version=4,
     ),
@@ -1266,7 +1312,11 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/env.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("wake_surf_suite", module="target_gym.patrol.scenarios"),
         version=2,
     ),
 )

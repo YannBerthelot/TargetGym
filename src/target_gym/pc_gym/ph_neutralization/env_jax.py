@@ -22,6 +22,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     compute_reward_terms,
     get_obs,
     solve_pH,
+    start_upset,
     steady_base_flow,
     steady_state_invariants,
 )
@@ -38,6 +39,27 @@ class PHNeutralization(
                        q1, basin_pct]
     Action      (2,): stage-1 base flow and stage-2 trim, raw in [-1, 1]
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_pH",
+        "upset_times",
+        "upset_levels",
+        "flow_times",
+        "flow_levels",
+        "q1",
+        "q2",
+        "upset_base",
+        "flow_base",
+    )
+    #: The plant's history a restart keeps too (``base.failure_kernel``): the
+    #: permit monitor's excursion clock, which the policy writes, so it is not
+    #: part of the outside world (long-strata S2).
+    RECORDS = ("excursion",)
+    #: Runs as a continuing plant (``target_gym.stream``): its upsets ramp back
+    #: and start through ``start_event``; its ramps count steps.
+    STREAM_READY = True
 
     registry_name: str = "ph_neutralization"
 
@@ -134,7 +156,8 @@ class PHNeutralization(
         def schedule(times_key, levels_key, size):
             times = jnp.sort(jax.random.randint(times_key, (2,), 0, span))
             draws = jax.random.uniform(levels_key, (2,), minval=-1.0, maxval=1.0)
-            return times, jnp.concatenate([jnp.ones((1,)), 1.0 + size * draws])
+            moves = size * draws * params.window_upsets
+            return times, jnp.concatenate([jnp.ones((1,)), 1.0 + moves])
 
         upset_times, upset_levels = schedule(keys[1], keys[2], params.acid_upset_size)
         flow_times, flow_levels = schedule(keys[3], keys[4], params.flow_swing)
@@ -164,6 +187,38 @@ class PHNeutralization(
             Wb_basin=Wb,
         )
         return self.get_obs(state), state
+
+    def start_event(self, state: PHState, key, params: PHParams) -> PHState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's influent upsets start now, each at a level drawn from ``key``
+        within its size, and ramp back ``event_hold`` seconds later."""
+        acid_key, flow_key = jax.random.split(key)
+        acid = start_upset(
+            state.upset_times,
+            state.upset_levels,
+            state.upset_base,
+            state,
+            params,
+            params.acid_upset_size,
+            acid_key,
+        )
+        flow = start_upset(
+            state.flow_times,
+            state.flow_levels,
+            state.flow_base,
+            state,
+            params,
+            params.flow_swing,
+            flow_key,
+        )
+        return state.replace(
+            upset_times=acid[0],
+            upset_levels=acid[1],
+            upset_base=acid[2],
+            flow_times=flow[0],
+            flow_levels=flow[1],
+            flow_base=flow[2],
+        )
 
     def initial_action(self, state, params):
         """The raw actions that hold the reset valves where they run."""

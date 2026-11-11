@@ -10,6 +10,32 @@ Each row holds ``target_gym.scenarios.Scenario``'s fields; the registry builds
 them, so this package imports nothing outside its fingerprint.
 """
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). REALITY.md ("How
+#: often each window occurs", second search 2026-11-11) sources one: a runback or a
+#: feed pump trip lasts 2.775 h, the median of the six ID fan and feed pump forced
+#: derates in one plant-year of four units ([ST1], 0.35 to 67 h). It brings one
+#: upset a visit and holds the unit back that long before it ramps up; with the
+#: weights below unchanged, that is 1.1 runbacks and 0.72 feed pump trips a year
+#: (sourced, 0.5 and 0.75 to 1.25 a unit-year [ST1, ST2]). [S3] has setpoints
+#: "change several times during every 24 h". The rest is ours, set once without
+#: tuning and open for the owner:
+#: - normal load following lasts a day and changes load four times in it (S3's
+#:   "several"; no count a year was found);
+#: - industrial swings and low load last a shift and bring one load change a visit.
+_DAY_H, _SHIFT_H, _UPSET_H = 24.0, 8.0, 2.775
+_LOAD_CHANGES_PER_DAY = 4.0
+#: A stream starts with neither of the window's events: its plan is flat until the
+#: stream starts a load change or an upset.
+_NO_WINDOW_EVENT = {"window_ramp": False, "event_time_range": (1.0e9, 1.0e9)}
+_REGIME = dict(
+    dwell_h=_SHIFT_H, events_per_h=1.0 / _SHIFT_H, stream_overrides=_NO_WINDOW_EVENT
+)
+_UPSET = dict(
+    dwell_h=_UPSET_H,
+    events_per_h=1.0 / _UPSET_H,
+    stream_overrides={**_NO_WINDOW_EVENT, "event_hold": _UPSET_H * 3600.0},
+)
+
 
 def boiler_drum_scenarios() -> tuple:
     return (
@@ -21,6 +47,9 @@ def boiler_drum_scenarios() -> tuple:
             description="one planned ramp at 1 to 6 %/min between 40 and 100 % load",
             # hours a year. Ours, family range 4000 to 7000: most of a utility unit's running hours load-follow [S3, S10]
             weight=5600.0,
+            dwell_h=_DAY_H,
+            events_per_h=_LOAD_CHANGES_PER_DAY / _DAY_H,
+            stream_overrides=_NO_WINDOW_EVENT,
         ),
         dict(
             name="industrial_swing",
@@ -30,6 +59,7 @@ def boiler_drum_scenarios() -> tuple:
             description="one steam demand swing at 15 to 25 %/min",
             # hours a year. Ours, family range 0 to 2000: the industrial members of the family [S3, S15]
             weight=800.0,
+            **_REGIME,
         ),
         dict(
             name="low_load",
@@ -40,6 +70,7 @@ def boiler_drum_scenarios() -> tuple:
             description="one planned ramp at 1 to 6 %/min between 25 and 50 % load",
             # hours a year. Ours, family range 500 to 3000: part-load hours [S11, S17]
             weight=1600.0,
+            **_REGIME,
         ),
         dict(
             name="id_fan_runback",
@@ -48,8 +79,9 @@ def boiler_drum_scenarios() -> tuple:
             "over two minutes' to below the three-mill minimum [S10, Figs. 5, 6]",
             description="an ID fan trip caps firing and runs the unit back from 75 to "
             "100 % load",
-            # hours a year. Ours, family range 1 to 5 runbacks a year, an hour each; no source gives the rate
-            weight=3.0,
+            # hours a year: 0.5 ID fan runbacks a unit-year of 2.775 h, one plant's 4 unit-years (REALITY.md [ST1]; owner, 2026-11-11)
+            weight=1.4,
+            **_UPSET,
         ),
         dict(
             name="feed_pump_trip",
@@ -59,7 +91,8 @@ def boiler_drum_scenarios() -> tuple:
             "over 30 s [S11]",
             description="one of two feed pumps trips, the unit runs back, and the "
             "standby pump delivers after 30 to 60 s",
-            # hours a year. Ours, family range 1 to 3 trips a year, an hour each; no source gives the rate
-            weight=2.0,
+            # hours a year: 1 feed pump trip a unit-year of 2.775 h; sourced 0.75 to 1.25 a unit-year (REALITY.md [ST1, ST2]; owner, 2026-11-11)
+            weight=2.8,
+            **_UPSET,
         ),
     )

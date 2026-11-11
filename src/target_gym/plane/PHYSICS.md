@@ -816,9 +816,9 @@ sites (2D, 3D and patrol) now say so.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
-| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
-| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 24 |
+| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 27 |
+| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 27 |
+| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 27 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -896,3 +896,59 @@ on the true state, including its throttle loop, so it stays a full-state bound.
 `reward`, trips and the score read the true state. `info["measured_reward"]` is
 the same cost on the readings, with any trip taken from the true state, and a
 learner can train on it.
+
+## The stream (docs/proposals/long-strata.md, S1, S1b and R8)
+
+As a continuing plant (`target_gym.stream`) `plane`, `plane_energy` and
+`plane_sine` fly a sequence of sorties. Each scenario's `stream_overrides` set
+`stream_mode`, and the stream starts every event through `start_event`, which
+picks a sortie, a turbulence zone or the task's own event by `event_mix`, each at
+its own rate (`plane/stream_events.py`). Sources and searches: `REALITY.md`, "The
+stream".
+
+- **Sorties** (S1b; owner, 2026-11-11). A sortie lasts a memoryless time of mean
+  1.90 h, the A320 fleet's average flight [AIRBUS-A320]. It starts established in
+  cruise, level and in trim, with an all-up mass drawn uniform over
+  `sortie_mass_range` (60 to 78 t, ours: the span of the scored corners) and a
+  level drawn over the task's levels up to the ceiling that mass allows, linear
+  between FL370 at 73.5 t and FL350 at 78 t (`ceiling_masses`, `ceiling_levels`,
+  the two scored corners). In a stream the burn no longer lowers the mass, which
+  is held for the sortie; the economy term still charges the fuel flow. The
+  model's mass is its zero-fuel mass plus `fuel`, so a sortie's mass is set
+  through `fuel`, which can then read above the tanks' figure.
+- **Mass corners.** `heavy_high` and `light_low` stop moving the mass in flight:
+  in a stream they keep `initial_mass` at 73.5 t, and a sortie that starts in
+  them flies at their mass and levels. A pinned scoring run of either still
+  starts at its corner.
+- **Turbulence zones** start at 0.45 an hour in every scenario but `calm`, with
+  the scenario's intensity and a length over `zone_duration_range` (3 to 30 min
+  [BEA447]). Each carries its intensity (`zone_sigma`) and its end, so it runs to
+  its end through a switch; one starting inside another merges with it. The rate
+  is set so that over `plane`'s suite the stream spends 7.9 % of its time in a
+  zone [LEE-SPRENGER], which leaves 2.2 h of calm between zones on average, "over
+  an hour" [BEA447]. The window's own zone never starts in a stream.
+- **Regimes** last 2 h on average (ours).
+- **`plane_energy`'s clearances** are events at 12 an hour (ours: the window's
+  one per 300 s). A clearance moves the level 1 000 or 2 000 ft, or the speed
+  10 kt, with chance 0.58 of a level, from ATC's recorded instructions [PRINZO].
+  A level stays inside `initial_altitude_range` and a speed within 10 kt of the
+  schedule; a move that would leave them goes the other way. Each carries its
+  size in the state (`cleared_speed`, `level_change_at`, `level_change_size`), and
+  the band closes at 500 fpm from it [AIM 4-4-10].
+- **`plane_sine`'s sinusoid** reads its clock wrapped on whole periods, as many as
+  cover a window and one more, so it repeats exactly however long the plant runs.
+- **Restart** (R8; owner, 2026-11-11). `REALITY.md` names no post-trip state: no
+  source has a trip end a flight. A crash loses the sortie, and the plant
+  restarts as its replacement, established in cruise at the sortie's level with
+  its mass (`restart_plant`). Both are the outside world, so two policies keep
+  meeting the same sorties; the hour of `restart_steps` prices the gap.
+- **Outside world and records.** The sortie's mass (`m`, `fuel`), the levels, the
+  zone and the clearances are the outside world. The gust (`gust_x`, `gust_z`) is
+  a record: the turbulence's draws are the world's, but the Dryden filter runs on
+  the aircraft's airspeed, so two policies meet different gusts.
+- **Time.** Zones keep their times in seconds of float32, exact to 2^24 s (194
+  days of 1 s steps).
+
+In a window nothing changes: `stream_mode` is off, and the scored windows are
+bit-identical to `ad6ece5`'s in observation, reward and trips, with params traced
+and constant, on bob and on the Mac (PR description).

@@ -46,6 +46,8 @@ from target_gym.utils import convert_raw_action_to_range
 #: Settlement periods a baseline array holds: one day, so a long run (the 24 h
 #: neutrality check) has a period for every step. A 4 h block uses 8.
 N_PERIODS = 48
+#: Salt for a recalibration's error draw, apart from the signal's ``fold_in(key, t)``.
+_RECALIBRATE = 0x43414C42
 
 
 @struct.dataclass
@@ -85,6 +87,11 @@ class BatteryParams(EnvParams):
     soc_drift_rate: float = 0.10 / (14.0 * 86400.0)  # 1/s: 10 % after 14 days
     soc_temp_coeff: float = 0.0051  # per degC, on the 25 degC curve
     T_bms_curve: float = 25.0  # degC
+    #: Where the BMS recalibrates on the OCV, true SoC: the LFP plateau runs from
+    #: roughly 20 % to 80 % (ARX-LFP), and past either end the curve's knee lets
+    #: the BMS correct its estimate (owner, 2026-11-11). A stream sets them; a
+    #: window's (-1, 2) are never reached, so its estimate drifts from the reset.
+    knee_soc: Tuple[float, float] = (-1.0, 2.0)
 
     # ---- Service: Dynamic Regulation (NESO-SOE, NESO-ST, NESO-GUIDE) ----
     reserve_fraction: float = 0.4  # DR, of the offered quantity
@@ -123,6 +130,14 @@ class BatteryParams(EnvParams):
     bias_pu_range: Tuple[float, float] = (0.0, 0.0)
     bias_duration_range: Tuple[float, float] = (1800.0, 5400.0)  # s, ours
 
+    # ---- The stream (docs/proposals/long-strata.md, S1) ----
+    #: The block's own price event and deviation. A stream turns them off and
+    #: starts each as an event (``start_event``).
+    window_events: bool = True
+    #: The day-ahead prices as a ring: each period's price returns to the base
+    #: once it has passed, so the day never runs out. A stream sets it.
+    price_ring: bool = False
+
     # ---- Score (rule 15), in GBP ----
     reward_version: int = 3
     #: No limit of this plant trips (PHYSICS.md, Limits), so a trip costs 0.
@@ -155,6 +170,7 @@ PARAM_UNITS = {
     "soc_drift_rate": "1/s",
     "soc_temp_coeff": "1/degC",
     "T_bms_curve": "degC",
+    "knee_soc": "-",
     "reserve_fraction": "-",
     "volume_hours": "h",
     "recovery_fraction": "-",
@@ -173,6 +189,8 @@ PARAM_UNITS = {
     "availability_price": "GBP/(MW h)",
     "bias_pu_range": "-",
     "bias_duration_range": "s",
+    "window_events": "-",
+    "price_ring": "-",
     "reward_version": "-",
     "restart_steps": "steps",
     "failure_cost": "GBP",
@@ -209,6 +227,10 @@ class BatteryState(EnvState):
     availability_cost: float  # GBP of availability lost on the last step
     losses_cost: float  # GBP of energy lost on the last step
     trade_cost: float  # GBP the last step's energy cost against the base price
+    #: The step the BMS last recalibrated at a knee: its drift counts from it.
+    calibrated_at: jax.Array = 0
+    #: The step the deviation's start and end count from, s since it.
+    bias_c0: jax.Array = 0
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -242,8 +264,10 @@ def steps_per_period(params: BatteryParams):
 
 
 def period_of(time, params: BatteryParams):
-    """The settlement period live at step ``time``."""
-    return jnp.clip(time // steps_per_period(params), 0, N_PERIODS - 1)
+    """The settlement period live at step ``time``, counted from the start. The
+    prices and baselines hold a day of periods as a ring: period ``k`` is at
+    ``k % N_PERIODS``."""
+    return time // steps_per_period(params)
 
 
 def cell_ocv(soc, params: BatteryParams):
@@ -336,13 +360,8 @@ def misses_requirement(rep_soc, deficit_export, deficit_import, params):
 def submitted_period(time, params: BatteryParams):
     """The first settlement period still open at step ``time``: its start is
     more than gate closure away (NESO-GUIDE p. 36)."""
-    now = time * params.delta_t
-    return (
-        jnp.floor((now + params.gate_closure_seconds) / params.period_seconds).astype(
-            jnp.int32
-        )
-        + 1
-    )
+    gate = jnp.round(params.gate_closure_seconds / params.delta_t).astype(jnp.int32)
+    return (time + gate) // steps_per_period(params) + 1
 
 
 def signal_steps(params: BatteryParams):
@@ -369,15 +388,11 @@ def compute_next_state(
     limit = baseline_limit(p)
     baseline = convert_raw_action_to_range(action_raw, -limit, limit)
     open_period = submitted_period(t, p)
-    baselines = jnp.where(
-        open_period < N_PERIODS,
-        state.baselines.at[jnp.clip(open_period, 0, N_PERIODS - 1)].set(baseline),
-        state.baselines,
-    )
+    baselines = state.baselines.at[open_period % N_PERIODS].set(baseline)
 
     # The unit delivers what is required, unless its BMS refuses.
     soc, delivered, _, v = plant_step(state.soc, state.T_cell, state.target_power, p)
-    k = period_of(t, p)
+    k = period_of(t, p) % N_PERIODS
     period_s = steps_per_period(p) * p.delta_t
     short = jnp.abs(state.target_power - delivered) > p.shortfall_tolerance
     short_seconds = state.short_seconds + p.delta_t * short
@@ -390,7 +405,7 @@ def compute_next_state(
     # The drift is computed from the clock, not summed step by step, which
     # float32 would bias by about 1e-4 over a block.
     t1 = t + 1
-    drifted = state.soc_drift * (t1 * p.delta_t)
+    drifted = state.soc_drift * ((t1 - state.calibrated_at) * p.delta_t)
 
     # Energy at the period's price; stored energy valued at the base price.
     # The trade term is offset by the most any step could win against the base
@@ -434,14 +449,14 @@ def compute_next_state(
     # The regulation signal: an OU process every ``signal_interval``, pulled
     # back onto its own integral so that it stays energy neutral. The draw is
     # folded with the step, so a constant key still gives a fresh one.
-    now_s = t * p.delta_t
+    now_s = (t - state.bias_c0) * p.delta_t
     mean = jnp.where(
         (now_s >= state.bias_start) & (now_s < state.bias_end), state.bias_pu, 0.0
     )
     signal_energy = state.signal_energy + (
         jnp.clip(state.signal_x, -1.0, 1.0) - mean
     ) * (p.delta_t)
-    after = t1 * p.delta_t
+    after = (t1 - state.bias_c0) * p.delta_t
     mean_next = jnp.where(
         (after >= state.bias_start) & (after < state.bias_end), state.bias_pu, 0.0
     )
@@ -454,7 +469,23 @@ def compute_next_state(
     )
     signal_x = jnp.where(t1 % signal_steps(p) == 0, moved, state.signal_x)
     regulation = contracted * jnp.clip(signal_x, -1.0, 1.0)
-    target = baselines[period_of(t1, p)] + regulation
+    target = baselines[period_of(t1, p) % N_PERIODS] + regulation
+
+    # A passed period's price returns to the base, on a stream's ring.
+    passed = (jnp.arange(N_PERIODS) == (period_of(t1, p) - 1) % N_PERIODS) & boundary
+    prices = jnp.where(passed & p.price_ring, p.price_base, state.prices)
+
+    # The BMS recalibrates on the OCV once the cells leave the plateau: the error
+    # is drawn afresh from the family's spread as they enter a knee, and the
+    # drift counts from the last step there (owner, 2026-11-11).
+    lo_knee, hi_knee = p.knee_soc
+    in_knee = (soc <= lo_knee) | (soc >= hi_knee)
+    entered = in_knee & (state.soc > lo_knee) & (state.soc < hi_knee)
+    fresh = p.soc_error_std * jax.random.normal(
+        jax.random.fold_in(jax.random.fold_in(key, t), _RECALIBRATE)
+    )
+    soc_error = jnp.where(entered, fresh, state.soc_error)
+    calibrated_at = jnp.where(in_knee, t1, state.calibrated_at)
 
     return (
         state.replace(
@@ -467,6 +498,9 @@ def compute_next_state(
             signal_x=signal_x,
             signal_energy=signal_energy,
             baselines=baselines,
+            prices=prices,
+            soc_error=soc_error,
+            calibrated_at=calibrated_at,
             period_response=response,
             deficit_export=deficit_export,
             deficit_import=deficit_import,
@@ -501,10 +535,8 @@ def get_obs(state: BatteryState, params: BatteryParams):
     need_out, need_in = requirements(state.deficit_export, state.deficit_import, p)
     per = steps_per_period(p)
     to_next = (per - state.time % per) * p.delta_t
-    ahead = lambda i: state.baselines[jnp.minimum(k + i, N_PERIODS - 1)]  # noqa: E731
-    ahead_price = lambda i: state.prices[
-        jnp.minimum(k + i, N_PERIODS - 1)
-    ]  # noqa: E731
+    ahead = lambda i: state.baselines[(k + i) % N_PERIODS]  # noqa: E731
+    ahead_price = lambda i: state.prices[(k + i) % N_PERIODS]  # noqa: E731
     return jnp.array(
         [
             rep,
@@ -580,9 +612,11 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
     # The day-ahead prices: the base, and one event of two periods.
     lo, hi = p.price_event_range
     level = jax.random.uniform(k_lvl, minval=lo, maxval=hi)
-    first = jax.random.randint(
-        k_ev, (), p.price_event_first[0], p.price_event_first[1] + 1
-    )
+    # A stream starts with neither: its event's periods are past the day, its
+    # deviation's start out of reach (``window_events``).
+    first_lo = jnp.where(p.window_events, p.price_event_first[0], N_PERIODS)
+    first_hi = jnp.where(p.window_events, p.price_event_first[1], N_PERIODS)
+    first = jax.random.randint(k_ev, (), first_lo, first_hi + 1)
     periods = jnp.arange(N_PERIODS)
     in_event = (periods >= first) & (periods < first + p.price_event_periods)
     prices = jnp.where(in_event, level, p.price_base)
@@ -595,7 +629,9 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
     length = jax.random.uniform(k_bd, minval=dlo, maxval=dhi)
     block = p.max_steps_in_episode * p.delta_t
     start = jax.random.uniform(
-        k_bt, minval=0.0, maxval=jnp.maximum(block - length, 0.0)
+        k_bt,
+        minval=jnp.where(p.window_events, 0.0, 1.0e9),
+        maxval=jnp.where(p.window_events, jnp.maximum(block - length, 0.0), 1.0e9),
     )
     return BatteryState(
         time=0,
@@ -623,4 +659,6 @@ def initial_state(key, params: BatteryParams) -> Tuple[BatteryState, jax.Array]:
         availability_cost=zero,
         losses_cost=zero,
         trade_cost=zero,
+        calibrated_at=jnp.zeros((), jnp.int32),
+        bias_c0=jnp.zeros((), jnp.int32),
     )

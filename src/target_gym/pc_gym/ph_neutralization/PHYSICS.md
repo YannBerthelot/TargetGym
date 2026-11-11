@@ -74,6 +74,8 @@ family's documented range, or ours with a reason.
 | `q2_min`, `q2_max` | 0, 2.5 | mL/s | ours: keeps the buffer flow physical |
 | `acid_upset_size`, `acid_upset_ramp` | 0.2, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not |
 | `flow_swing` | 0.2 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found |
+| `event_hold` | 2 | h (stream) | ours: how long an influent upset holds before it ramps back, until the producing unit's batch ends; no source gives it; a window never sets it, so its upsets never return |
+| `window_upsets` | 1, 0 | - | the window's own upsets on (1), or off in a stream (0), which starts its own |
 | `permit_low`, `permit_high` | 6, 8 | pH | cited: the example spec pH 7 +- 1 [P7, p. 2] |
 | `excursion_limit` | 3600 | s | cited: no single excursion over 60 min [P8] |
 | `sewer_floor` | 5.0 | pH | cited [P9] |
@@ -252,6 +254,25 @@ re-measured for 20 min of residence. Not run.
 window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.
+
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
+and each upset regime a shift, 8 h. `acid_strength`, `flow_swing` and `bad_day`
+bring one upset per visit on average (`events_per_h` 1/8); `buffer_loss` is the
+regime itself and brings none. An upset ramps over `acid_upset_ramp` to a level
+drawn within its scenario's size, holds `event_hold`, then ramps back to nominal,
+so it runs to its return through a switch of regime; an upset of one kind never
+ends one of the other. Each schedule counts its steps from its own onset, so a
+ramp keeps its shape however long the plant runs. The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a window nothing changes: the window's upsets run as drawn,
+the schedules count from step 0, and a scored window is bit-identical.
+
+The permit monitor's excursion clock is a record, not part of the outside world:
+a trip's restart keeps it as a record (`RECORDS`), as before, and `OUTSIDE_WORLD`
+names only what a policy cannot move (long-strata S2).
 
 <!-- BEGIN GENERATED FACTS -->
 

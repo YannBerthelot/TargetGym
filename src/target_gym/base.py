@@ -14,6 +14,15 @@ _SENSORS = 0x53454E53
 _ACTUATOR = 0x41435455
 
 
+def canonical_dtypes(state):
+    """``state`` with every leaf an array of the dtype a stepped state has: a
+    Python float becomes float32, as ``canonical_reset`` gives a reset. A task's
+    ``restart_plant`` returns through it, so a restart matches a step."""
+    return jax.tree_util.tree_map(
+        lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), state
+    )
+
+
 def canonical_reset(reset_env):
     """Give ``reset_env`` the same state dtypes a stepped state has, and store
     the episode's ``sensor_key``.
@@ -34,9 +43,7 @@ def canonical_reset(reset_env):
     @functools.wraps(reset_env)
     def wrapper(self, key, params=None):
         obs, state = reset_env(self, key, params)
-        state = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), state
-        )
+        state = canonical_dtypes(state)
         state = state.replace(
             sensor_key=jax.random.key_data(jax.random.fold_in(key, _SENSORS))
         )
@@ -455,9 +462,19 @@ def failure_kernel(env, key, state, new_state, params):
     When the physics' proposal for the next state leaves the operating
     envelope the plant trips: the step is charged ``reward.trip_cost``
     (``restart_steps * failure_cost``) and the plant restarts at once, as
-    ``reset_env`` would, on the same window clock. ``terminated`` stays false,
-    so the restart is an ordinary transition with a cost and every window has
-    the same length. Each restart is a fresh draw (``restart_key``).
+    ``reset_env`` would, on the same window clock. Two kinds of field carry on
+    from the proposal (long-strata S2):
+
+    - ``env.OUTSIDE_WORLD``: disturbances, targets, schedules and events, which
+      depend on the seed and the time only, so a policy that trips meets the
+      world one that does not would;
+    - ``env.RECORDS``: the plant's history the policy wrote, such as a surge
+      log or a permit clock, which a restart keeps but which no two policies
+      share.
+
+    ``terminated`` stays false, so the restart is an ordinary transition with a
+    cost and every window has the same length. Each restart is a fresh draw
+    (``restart_key``).
 
     - ``params.continuing = False``: a trip ends the episode instead;
       ``terminated`` is raised and the state is the proposal.
@@ -480,8 +497,16 @@ def failure_kernel(env, key, state, new_state, params):
     in_place = jnp.asarray(getattr(params, "restart_in_place", False), bool)
     continuing = jnp.asarray(getattr(params, "continuing", False), bool)
     lost = jnp.logical_and(tripped, jnp.logical_not(in_place))
-    fresh = env.reset_env(restart_key(key, new_state.time), params)[1]
-    fresh = fresh.replace(time=new_state.time, sensor_key=new_state.sensor_key)
+    # A task whose plant must be put back into a world that flew on (a follower
+    # re-forming on a lead that kept its route) draws it with ``restart_plant``.
+    plant = getattr(env, "restart_plant", None)
+    rkey = restart_key(key, new_state.time)
+    fresh = plant(rkey, new_state, params) if plant else env.reset_env(rkey, params)[1]
+    kept = (*getattr(env, "OUTSIDE_WORLD", ()), *getattr(env, "RECORDS", ()))
+    carried = {f: getattr(new_state, f) for f in kept}
+    fresh = fresh.replace(
+        time=new_state.time, sensor_key=new_state.sensor_key, **carried
+    )
     out = _select(jnp.logical_and(lost, continuing), fresh, new_state)
     return out, tripped, new_state, jnp.logical_and(lost, jnp.logical_not(continuing))
 

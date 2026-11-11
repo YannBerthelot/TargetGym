@@ -303,3 +303,15 @@ The expert reads these values, and so does every tuner. The oracle plans and act
 on the true state, so it stays a full-state bound. `reward`, trips and the score
 read the true state. `info["measured_reward"]` is the same cost on the readings,
 with any trip taken from the true state.
+
+## The stream (docs/proposals/long-strata.md, S1b)
+
+As a continuing plant (`target_gym.stream`) the formation flies the patrol's
+sorties (patrol/PHYSICS.md, "The stream"): 7.8 h on average [OKRA], each starting
+the formation in cruise on a fresh route and slots, every aircraft at a mass
+drawn over the Hornet's `sortie_mass_range` and held, in the air and on the
+clocks the last sortie left. The lead's route cycles on whole routes. The
+formation has no other event. `restart_plant` re-forms the formation on the
+route (unchanged); in a stream every aircraft keeps the sortie's mass.
+
+In a window nothing changes (PR description: bit-identical, traced and constant).

@@ -9,6 +9,17 @@ Each row holds ``target_gym.scenarios.Scenario``'s fields; the registry builds
 them, so this package imports nothing outside its fingerprint.
 """
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How long each regime lasts", 2026-11-11). A cold snap lasts 5.5 days on
+#: average: western European cold spells last 5 to 6 days in KNMI's model composite
+#: [ST1]. The other regimes last, on average, the fortnight this suite defines them
+#: as, inside the week to a month weather regimes last [ST2]; that number is ours,
+#: set once without tuning and open for the owner (a sunny spell is not a block, and
+#: office closures were not found). The regimes carry no event of their own:
+#: ``events_per_h`` stays 0.
+_FORTNIGHT_H = 14 * 24.0
+_COLD_SPELL_H = 5.5 * 24.0
+
 
 def hvac_scenarios() -> tuple:
     return (
@@ -21,6 +32,7 @@ def hvac_scenarios() -> tuple:
             description="a heating fortnight, 5 C mean",
             # fortnights of a 13-fortnight heating season. Ours, family range 4 to 8
             weight=6.0,
+            dwell_h=_FORTNIGHT_H,
         ),
         dict(
             name="cold_snap",
@@ -31,6 +43,7 @@ def hvac_scenarios() -> tuple:
             description="a cold fortnight, -5 C mean, near the -10 C design point",
             # fortnights a season. Ours, family range 0.5 to 2
             weight=1.0,
+            dwell_h=_COLD_SPELL_H,
         ),
         dict(
             name="shoulder_season",
@@ -40,6 +53,7 @@ def hvac_scenarios() -> tuple:
             description="a mild fortnight, 12 C mean, around the heating limit",
             # fortnights a season. Ours, family range 3 to 5: the months around the heating limit [11]
             weight=4.0,
+            dwell_h=_FORTNIGHT_H,
         ),
         dict(
             name="sunny_spell",
@@ -50,6 +64,7 @@ def hvac_scenarios() -> tuple:
             description="a clear fortnight: twice the season's mean sun on the glass",
             # fortnights a season. Ours, family range 1 to 3
             weight=1.5,
+            dwell_h=_FORTNIGHT_H,
         ),
         dict(
             name="low_gains",
@@ -59,5 +74,6 @@ def hvac_scenarios() -> tuple:
             description="occupied hours with the unoccupied gains only",
             # fortnights a season. Ours, family range 0.3 to 1: holidays and low-occupancy weeks [9]
             weight=0.5,
+            dwell_h=_FORTNIGHT_H,
         ),
     )

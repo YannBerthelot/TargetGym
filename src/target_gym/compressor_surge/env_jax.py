@@ -26,6 +26,7 @@ from target_gym.compressor_surge.env import (
     draw_schedule,
     equilibrium_phi,
     get_obs,
+    renew_schedule,
     suction_density,
 )
 from target_gym.compressor_surge.rendering import _render
@@ -42,6 +43,24 @@ class CompressorSurge(
 
     Action (2,): [speed command, recycle command], raw in [-1, 1] -> [N_min, N_max] of rated and [0, 1] opening.
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world, which depends on the seed and the time only, never the plant
+    #: (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "demand_dev",
+        "setpoint_levels",
+        "demand_levels",
+        "block_clock",
+        "demand_ramp",
+    )
+    #: The plant's history a restart keeps too: the surge counter's times and
+    #: the last step's count, which the policy writes.
+    RECORDS = ("surge_times", "surges")
+    #: Runs as a continuing plant (``target_gym.stream``): its demand schedule
+    #: renews, its clocks count on the schedule, and ``start_event`` moves the
+    #: demand now.
+    STREAM_READY = True
 
     registry_name: str = "compressor_surge"
 
@@ -211,10 +230,17 @@ class CompressorSurge(
             demand_levels=demand_levels,
             block_clock=0,
             valve_cmds=jnp.full((VALVE_HISTORY,), params.x_reset),
+            demand_ramp=jnp.asarray(params.demand_ramp_s, jnp.float32),
         )
 
         obs = self.get_obs(state, params)
         return obs, state
+
+    def start_event(self, state, key, params: CompressorSurgeParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        consumers' demand moves now, from the opening it holds, onto a fresh
+        schedule drawn from ``key`` in the scenario's range."""
+        return renew_schedule(state, params, key)
 
     def action_space(self, params: CompressorSurgeParams | None = None) -> spaces.Box:
         """Action space of the environment."""

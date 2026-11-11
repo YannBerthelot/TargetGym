@@ -20,6 +20,8 @@ from target_gym.pc_gym.unstable_cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    draw_grade,
+    event_sizes,
     feed_temperature,
     get_obs,
     steady_state,
@@ -39,7 +41,23 @@ class UnstableCSTR(
     Action      (1,): initiator in the feed, raw in [-1, 1] -> [I_f_min, I_f_max]
     """
 
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_T",
+        "event_at",
+        "feed_phase",
+        "event_until",
+        "event_size",
+        "grade",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its events end, carry
+    #: their own size and start through ``start_event``; its wander wraps.
+    STREAM_READY = True
+
     registry_name: str = "unstable_cstr"
+    #: Salt for a reset's grade, apart from its other draws.
+    _GRADE = 0x47524144
 
     render_car = classmethod(_render)
     screen_width = 600
@@ -110,15 +128,18 @@ class UnstableCSTR(
     ) -> Tuple[jnp.ndarray, UnstableCSTRState]:
         """Established operation (charter rule 17): the reactor on its steady
         state at the setpoint, the initiator where that needs it, as the PID
-        holds it [L1]. The scenario's event comes later."""
+        holds it [L1]. A stream starts on a grade drawn from ``grades``, a
+        window on its setpoint's. The scenario's event comes later."""
         if params is None:
             params = self.default_params
         event_key, feed_key = jax.random.split(key)
+        grade = draw_grade(jax.random.fold_in(key, self._GRADE), params)
         phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
-        T = jnp.asarray(params.T_setpoint)
+        T = jnp.asarray(params.T_setpoint + grade)
         T_f = feed_temperature(phase, params, 0.0)
         I, M, I_f = steady_state(T, params.replace(T_feed=T_f))
         lo, hi = params.event_window
+        event_at = jax.random.uniform(event_key, minval=lo, maxval=hi)
         state = UnstableCSTRState(
             time=0,
             I=I,
@@ -126,10 +147,43 @@ class UnstableCSTR(
             T=T,
             target_T=T,
             I_f=I_f,
-            event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
+            event_at=event_at,
             feed_phase=phase,
+            event_until=event_at + params.event_hold,
+            event_size=event_sizes(params),
+            grade=grade,
         )
         return self.get_obs(state, params), state
+
+    def restart_plant(
+        self, key: chex.PRNGKey, state: UnstableCSTRState, params: UnstableCSTRParams
+    ) -> UnstableCSTRState:
+        """A trip's restart (``base.failure_kernel``): established operation, as
+        ``reset_env`` draws it, on the grade the plant held, which a trip does
+        not change. A plant of one grade, as in a window, restarts as it
+        resets."""
+        if len(params.grades) > 1:
+            params = params.replace(grades=(state.grade,))
+        return self.reset_env(key, params)[1]
+
+    def start_event(
+        self, state: UnstableCSTRState, key, params: UnstableCSTRParams
+    ) -> UnstableCSTRState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1). A
+        setpoint move is a grade change: the plant's grade moves to another of
+        ``grades``, drawn by ``key``, and holds there; an upset running then
+        runs on to its return. Any other upset starts now with the scenario's
+        size, and returns ``event_hold`` seconds later."""
+        now = state.time * params.delta_t
+        upset = state.replace(
+            event_at=now,
+            event_until=now + params.event_hold,
+            event_size=event_sizes(params),
+        )
+        moved = state.replace(grade=draw_grade(key, params, state.grade))
+        return jax.tree_util.tree_map(
+            lambda a, b: jnp.where(params.setpoint_step != 0.0, a, b), moved, upset
+        )
 
     def action_space(self, params: UnstableCSTRParams | None = None) -> spaces.Box:
         return spaces.Box(

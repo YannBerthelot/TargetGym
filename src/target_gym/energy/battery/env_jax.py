@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import chex
+import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
@@ -13,6 +14,7 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.energy.battery.env import (
+    N_PERIODS,
     BatteryParams,
     BatteryState,
     check_is_terminal,
@@ -21,6 +23,7 @@ from target_gym.energy.battery.env import (
     compute_reward_terms,
     get_obs,
     initial_state,
+    period_of,
 )
 from target_gym.energy.battery.rendering import _render
 from target_gym.expert_access import RegistryExperts
@@ -40,6 +43,38 @@ class GridBattery(
     contracted power (positive = export), for the first period past gate
     closure
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``), never the
+    #: plant (docs/proposals/long-strata.md, S2): the outside world, which depends
+    #: on the seed and the time only...
+    OUTSIDE_WORLD = (
+        "prices",
+        "bias_pu",
+        "bias_start",
+        "bias_end",
+        "bias_c0",
+        "signal_x",
+        "signal_energy",
+        "regulation",
+    )
+    #: ...and the records the policy writes: its declared baselines, what they
+    #: require, and the settlement accounts.
+    RECORDS = (
+        "baselines",
+        "target_power",
+        "period_response",
+        "deficit_export",
+        "deficit_import",
+        "short_seconds",
+        "unavailable",
+        "availability_cost",
+        "losses_cost",
+        "trade_cost",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its BMS recalibrates at
+    #: the knees, its day-ahead prices are a ring, gate closure counts steps, and
+    #: its price events and deviations start through ``start_event``.
+    STREAM_READY = True
 
     registry_name: str = "battery"
 
@@ -121,6 +156,42 @@ class GridBattery(
             params = self.default_params
         state = initial_state(key, params)
         return self.get_obs(state), state
+
+    def start_event(self, state, key, params: BatteryParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now, drawn from its ranges.
+
+        - A price event (``price_event_range`` off the base): an hourly price at a
+          level in the range, cleared for the first period not yet in view (four
+          on, the observation shows this one and the next three), so a known
+          day-ahead price never changes. It holds ``price_event_periods``.
+        - A long deviation (``bias_pu_range`` above 0): a one-way response at a
+          size in the range, either way, from now for a length in
+          ``bias_duration_range``. Its clock counts from now.
+        """
+        p = params
+        k_lvl, k_size, k_sign, k_len = jax.random.split(key, 4)
+        lo, hi = p.price_event_range
+        level = jax.random.uniform(k_lvl, minval=lo, maxval=hi)
+        first = period_of(state.time, p) + 4
+        offset = (jnp.arange(N_PERIODS) - first) % N_PERIODS
+        priced = jnp.where(offset < p.price_event_periods, level, state.prices)
+        blo, bhi = p.bias_pu_range
+        size = jax.random.uniform(k_size, minval=blo, maxval=bhi)
+        bias = size * jnp.where(jax.random.bernoulli(k_sign), 1.0, -1.0)
+        dlo, dhi = p.bias_duration_range
+        length = jax.random.uniform(k_len, minval=dlo, maxval=dhi)
+        is_price = (lo != p.price_base) | (hi != p.price_base)
+        is_bias = bhi > 0.0
+        return state.replace(
+            prices=jnp.where(is_price, priced, state.prices),
+            bias_pu=jnp.where(is_bias, bias, state.bias_pu),
+            bias_start=jnp.where(is_bias, 0.0, state.bias_start),
+            bias_end=jnp.where(is_bias, length, state.bias_end),
+            bias_c0=jnp.where(
+                is_bias, jnp.asarray(state.time, jnp.int32), state.bias_c0
+            ),
+        )
 
     def action_space(self, params: BatteryParams | None = None) -> spaces.Box:
         return spaces.Box(

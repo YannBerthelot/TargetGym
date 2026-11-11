@@ -100,6 +100,10 @@ class CSTRParams(EnvParams):
     k0_decay: float = 0.0  # min
     feed_rise: float = 0.0  # fraction of Caf [S3: feed build-up], size ours
     cooling_loss: float = 0.0  # min the cooling water fails [S2; S3]
+    #: Minutes a setpoint move, a catalyst loss or a feed rise lasts before it
+    #: returns: a move back, a catalyst change, the feed batch run out. Only a
+    #: stream sets it (scenarios.py); in a window the event holds to the end.
+    event_hold: float = 1.0e9  # min
 
     # ---- Score (charter rule 15) ----
     # The job is holding the temperature [S5; S6], so the score tracks it:
@@ -147,6 +151,7 @@ PARAM_UNITS = {
     "k0_decay": "min",
     "feed_rise": "-",
     "cooling_loss": "min",
+    "event_hold": "min",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -173,6 +178,13 @@ class CSTRState(EnvState):
     feed_phase: float = struct.field(default=0.0, kw_only=True)
     #: The scenario's event minute (a long-past or never time for none).
     event_at: float = struct.field(default=1.0e9, kw_only=True)
+    #: When the event returns (min), and its size as it started (``event_sizes``):
+    #: an event carries its own size, so it runs to its return whatever the
+    #: params do meanwhile (docs/proposals/long-strata.md, S1).
+    event_until: float = struct.field(default=1.0e9, kw_only=True)
+    event_size: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(5), kw_only=True
+    )
 
     actuator_held: jax.Array = actuator_field(1)
 
@@ -210,21 +222,42 @@ def feed_temperature(phase, params: CSTRParams, minute):
     return 0.5 * (lo + hi) + 0.5 * (hi - lo) * jnp.sin(phase + 2.0 * jnp.pi * turn)
 
 
-def events(state: CSTRState, params: CSTRParams, minute):
-    """The scenario's event at ``minute``: ``(setpoint, Caf, k0, cooling up)``."""
+def event_sizes(params: CSTRParams):
+    """An event's size as it starts: the setpoint move, the activity lost, its
+    decay, the feed's rise and the cooling loss, from the scenario's params."""
     p = params
+    return jnp.array(
+        [p.setpoint_step, p.k0_drop, p.k0_decay, p.feed_rise, p.cooling_loss]
+    )
+
+
+def day_minute(state: CSTRState, params: CSTRParams):
+    """The feed's day at the next step, in minutes, from a step count wrapped on
+    the day: float32 holds a minute count exactly only to about 4 million, so the
+    cycle stays exact however long the plant runs."""
+    p = params
+    per_day = jnp.maximum(jnp.round(p.feed_T_period / p.delta_t), 1.0)
+    return (state.time % per_day.astype(jnp.int32)) * p.delta_t + p.delta_t
+
+
+def events(state: CSTRState, params: CSTRParams, minute):
+    """The event at ``minute``: ``(setpoint, Caf, k0, cooling up)``, with the size
+    it started with, active from ``event_at`` until ``event_until``."""
+    p = params
+    step, drop, decay, rise, loss = (state.event_size[i] for i in range(5))
     after = minute >= state.event_at
-    lost = jnp.logical_and(after, minute < state.event_at + p.cooling_loss)
+    on = jnp.logical_and(after, minute < state.event_until)
+    lost = jnp.logical_and(after, minute < state.event_at + loss)
     since = minute - state.event_at
     decayed = jnp.where(
-        p.k0_decay > 0.0,
-        jnp.clip(since / jnp.maximum(p.k0_decay, 1e-9), 0.0, 1.0),
+        decay > 0.0,
+        jnp.clip(since / jnp.maximum(decay, 1e-9), 0.0, 1.0),
         jnp.where(after, 1.0, 0.0),
     )
     return (
-        p.T_setpoint + jnp.where(after, p.setpoint_step, 0.0),
-        p.Caf * (1.0 + jnp.where(after, p.feed_rise, 0.0)),
-        p.k0 * (1.0 - p.k0_drop * decayed),
+        p.T_setpoint + jnp.where(on, step, 0.0),
+        p.Caf * (1.0 + jnp.where(on, rise, 0.0)),
+        p.k0 * (1.0 - drop * jnp.where(on, decayed, 0.0)),
         jnp.logical_not(lost),
     )
 
@@ -259,7 +292,7 @@ def compute_next_state(
             T_j=T_j,
             F_w=F_w,
             target_T=target_next,
-            T_feed=feed_temperature(state.feed_phase, p, minute + p.delta_t),
+            T_feed=feed_temperature(state.feed_phase, p, day_minute(state, p)),
             time=state.time + 1,
         ),
         metrics,

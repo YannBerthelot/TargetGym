@@ -15,11 +15,14 @@ from target_gym.base import (
 from target_gym.boiler_drum.env import (
     BoilerDrumParams,
     BoilerDrumState,
+    _base_plan,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
     get_obs,
+    load_plan,
+    plan_seconds,
     steady_state,
 )
 from target_gym.boiler_drum.rendering import _render
@@ -39,6 +42,28 @@ class BoilerDrum(
                        s_to_ramp, fuel_cap_pct, feed_cap_pct]
     Action      (2): [fuel, feedwater], raw in [-1, 1]
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "q_demand",
+        "target_pressure",
+        "level_ref",
+        "load_from",
+        "load_to",
+        "ramp_start",
+        "ramp_rate",
+        "event_time",
+        "event_rate",
+        "standby_delay",
+        "event_kind",
+        "event_until",
+        "plan_t0",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its load changes and
+    #: upsets start through ``start_event``, a runback returns, and the plan's
+    #: clock is rebased at each event.
+    STREAM_READY = True
 
     registry_name: str = "boiler_drum"
 
@@ -122,6 +147,11 @@ class BoilerDrum(
         nominal = params.q_steam_nominal
         lo, hi = params.load_range
         load_from = nominal * jax.random.uniform(k_from, minval=lo, maxval=hi)
+        # A stream starts on a flat plan: its load changes are events, so its
+        # load_to is load_from's own draw and its ramp has started. The key is
+        # selected, not the draw: a select on the draw changes how XLA fuses it
+        # on x86, by an ulp, in a window too.
+        k_to = jnp.where(params.window_ramp, k_to, k_from)
         load_to = nominal * jax.random.uniform(k_to, minval=lo, maxval=hi)
         rate_pct = jax.random.uniform(
             k_rate,
@@ -133,6 +163,7 @@ class BoilerDrum(
             minval=params.ramp_start_range[0],
             maxval=params.ramp_start_range[1],
         )
+        ramp_start = jnp.where(params.window_ramp, ramp_start, 0.0)
         event_time = jnp.where(
             params.event_kind > 0,
             jax.random.uniform(
@@ -178,8 +209,103 @@ class BoilerDrum(
             standby_delay=standby + zero,
             time_high=zero,
             time_low=zero,
+            event_kind=jnp.asarray(params.event_kind, jnp.int32),
+            event_until=event_time + params.event_hold + zero,
+            plan_t0=jnp.zeros((), jnp.int32),
         )
         return self.get_obs(state), state
+
+    def start_event(
+        self, state: BoilerDrumState, key, params: BoilerDrumParams
+    ) -> BoilerDrumState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now, drawn from its ranges.
+
+        - ``event_kind`` 0: a planned load change. From where the plan stands it
+          ramps to a load in ``load_range`` at a rate in ``ramp_rate_range``,
+          announced ``ramp_start_range`` ahead, as the window's one ramp is.
+        - ``event_kind`` 1 or 2: an ID fan runback or a feed pump trip, as the
+          window's, that returns ``event_hold`` later.
+
+        The plan's clock is rebased on now, the ramp in progress going on from
+        where it stands. While a runback is still holding the load down, the
+        unit master takes no new event: the draw is absorbed (ours).
+        """
+        p = params
+        now = plan_seconds(state, p)
+        base = _base_plan(state, now)
+        busy = (
+            (state.event_kind > 0)
+            & (now >= state.event_time)
+            & ((now < state.event_until) | (load_plan(state, now, p) < base))
+        )
+        rebased = state.replace(
+            plan_t0=jnp.asarray(state.time, jnp.int32),
+            load_from=base,
+            ramp_start=jnp.maximum(state.ramp_start - now, 0.0),
+        )
+        k_to, k_rate, k_start, k_back, k_wait = jax.random.split(key, 5)
+        nominal = p.q_steam_nominal
+
+        def draw(k, bounds):
+            return jax.random.uniform(k, minval=bounds[0], maxval=bounds[1])
+
+        ramp = rebased.replace(
+            load_to=nominal * draw(k_to, p.load_range),
+            ramp_rate=draw(k_rate, p.ramp_rate_range) / 100.0 * nominal / 60.0,
+            ramp_start=draw(k_start, p.ramp_start_range),
+            event_kind=jnp.zeros((), jnp.int32),
+            event_time=jnp.full((), 1.0e9),
+            event_until=jnp.full((), 1.0e9),
+        )
+        upset = rebased.replace(
+            event_kind=jnp.asarray(p.event_kind, jnp.int32),
+            event_time=jnp.zeros(()),
+            event_rate=draw(k_back, p.runback_rate_range) / 100.0 * nominal / 60.0,
+            standby_delay=draw(k_wait, p.standby_delay_range),
+            event_until=jnp.asarray(p.event_hold, jnp.float32),
+        )
+        started = jax.tree_util.tree_map(
+            lambda u, r: jnp.where(p.event_kind > 0, u, r), upset, ramp
+        )
+        return jax.tree_util.tree_map(
+            lambda old, new: jnp.where(busy, old, new), state, started
+        )
+
+    def restart_plant(
+        self, key: chex.PRNGKey, state: BoilerDrumState, params: BoilerDrumParams
+    ) -> BoilerDrumState:
+        """A trip's restart (long-strata R8; owner, 2026-11-11): the unit is
+        purged and relit hot, at nominal pressure and normal water level, firing
+        for ``restart_load`` of nominal steam whatever its plan calls for. The
+        plan carries on (``OUTSIDE_WORLD``), so the policy takes the unit back
+        to it and the dynamics charge the steam it delivers off plan meanwhile;
+        the trip's lump prices the dead time before. The turbine reloads from
+        there at the plan's rate (``pickup``)."""
+        del key
+        p = params
+        q_min = p.restart_load * p.q_steam_nominal
+        V_wt, alpha_r, V_sd, _, Q = steady_state(p, p.p_nominal, q_min)
+        values = dict(
+            pressure=p.p_nominal,
+            V_wt=V_wt,
+            alpha_r=alpha_r,
+            V_sd=V_sd,
+            level=0.0,
+            q_steam=q_min,
+            Q_fuel=Q,
+            q_feed=q_min,
+            time_high=0.0,
+            time_low=0.0,
+            pickup=q_min,
+        )
+        hot = state.replace(
+            **{
+                f: jnp.asarray(v, jnp.asarray(getattr(state, f)).dtype)
+                for f, v in values.items()
+            }
+        )
+        return hot.replace(actuator_held=self.initial_action(hot, p))
 
     def initial_action(self, state: BoilerDrumState, params: BoilerDrumParams):
         """The raw action that keeps the reset's firing and feedwater."""

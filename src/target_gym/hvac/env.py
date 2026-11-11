@@ -110,6 +110,10 @@ class HVACParams(EnvParams):
     T_out_mean: float = 5.0  # C, seasonal mean (heating season)
     T_out_amplitude: float = 5.0  # C, half daily swing
     T_out_noise_std: float = 3.0  # C, OU deviation std
+    #: How fast the outdoor mean moves to a new regime's at a stream's switch, s:
+    #: a first-order lag, as a weather front takes hours to pass (ours, 6 h; owner,
+    #: 2026-11-11). A window never switches, so its mean holds ``T_out_mean``.
+    T_out_mean_tau: float = 6.0 * 3600.0
     solar_peak: float = 175.0  # W/m^2 on the glazing at noon
 
     # ---- Internal gains (ours, PHYSICS.md) ----
@@ -200,6 +204,7 @@ PARAM_UNITS = {
     "T_out_mean": "degC",
     "T_out_amplitude": "K",
     "T_out_noise_std": "K",
+    "T_out_mean_tau": "s",
     "solar_peak": "W/m^2",
     "gain_occupied": "W/m^2",
     "gain_unoccupied": "W/m^2",
@@ -274,7 +279,15 @@ def total_heat_loss_coefficient(params: HVACParams) -> float:
 
 
 def hour_of_day(time, params: HVACParams):
-    return jnp.mod(time * params.delta_t, SECONDS_PER_DAY) / SECONDS_PER_HOUR
+    """The hour at step ``time``, from the step count wrapped on the day
+    (``DAY_STEPS`` steps of 15 min): float32 holds the seconds exactly only to
+    about 16.7 million, 194 days, so the day stays exact however long the plant
+    runs (docs/proposals/long-strata.md, S1). The seconds-of-day mod is a no-op
+    on the wrapped count, kept so a window compiles to the same arithmetic: with
+    params as compile-time constants XLA would fold the scale differently."""
+    return jnp.mod((time % DAY_STEPS) * params.delta_t, SECONDS_PER_DAY) / (
+        SECONDS_PER_HOUR
+    )
 
 
 def is_occupied(time, params: HVACParams):
@@ -282,14 +295,25 @@ def is_occupied(time, params: HVACParams):
     return jnp.logical_and(h >= params.occupied_start_h, h < params.occupied_end_h)
 
 
-def outdoor_temperature(time, weather_dev, params: HVACParams):
-    """Daily sinusoid (coldest ~05:00, warmest ~15:00) plus the OU deviation."""
+def outdoor_temperature(time, weather_dev, params: HVACParams, level=None):
+    """Daily sinusoid (coldest ~05:00, warmest ~15:00) plus the OU deviation, about
+    the outdoor mean where it stands (``level``), the regime's by default."""
     h = hour_of_day(time, params)
     # +cos peaks at h = 15 (warmest mid-afternoon) and troughs 12 h later at
     # h = 3 (coldest before dawn). The sign was inverted originally, which put
     # the daily maximum at 3 a.m.
     daily = params.T_out_amplitude * jnp.cos(2.0 * jnp.pi * (h - 15.0) / 24.0)
-    return params.T_out_mean + daily + weather_dev
+    mean = params.T_out_mean if level is None else level
+    return mean + daily + weather_dev
+
+
+def outdoor_mean_ahead(level, steps, params: HVACParams):
+    """The outdoor mean ``steps`` ahead: the regime's, closing the gap from
+    ``level`` as a first-order lag of ``T_out_mean_tau`` (exact at 0 in a window,
+    where ``level`` is the regime's)."""
+    tau = jnp.maximum(params.T_out_mean_tau, 1e-9)
+    left = jnp.exp(-steps * params.delta_t / tau)
+    return params.T_out_mean + (level - params.T_out_mean) * left
 
 
 def solar_gain(time, params: HVACParams):
@@ -357,13 +381,17 @@ def hours_to_price_change(time, params: HVACParams):
     return jnp.min(jnp.where(edges > h, edges - h, 99.0))
 
 
-def outdoor_forecast(time, weather_dev, params: HVACParams):
+def outdoor_forecast(time, weather_dev, params: HVACParams, level=None):
     """The next 24 h's mean outdoor temperature, as a forecast gives it: the
-    daily cycle, and today's deviation decaying at the weather's rate. Its
-    error is the weather's own unforecast innovation."""
+    daily cycle, today's deviation decaying at the weather's rate, and the
+    outdoor mean on its way to the regime's, as a forecast sees a front coming.
+    Its error is the weather's own unforecast innovation."""
     ahead = jnp.arange(1, DAY_STEPS + 1)
     decay = (1.0 - WEATHER_OU_THETA * params.delta_t) ** ahead
-    return jnp.mean(outdoor_temperature(time + ahead, weather_dev * decay, params))
+    mean = None if level is None else outdoor_mean_ahead(level, ahead, params)
+    return jnp.mean(
+        outdoor_temperature(time + ahead, weather_dev * decay, params, mean)
+    )
 
 
 def scheduled_band(params: HVACParams):
@@ -447,13 +475,15 @@ def floor_surface_temperature(T_core, T_air, params: HVACParams):
     return T_air + (T_core - T_air) * s["floor_share"]
 
 
-def compute_velocity(position, action, time, weather_dev, params: HVACParams):
+def compute_velocity(
+    position, action, time, weather_dev, params: HVACParams, level=None
+):
     """RHS for ``[T_mass, T_core]``. ``action`` is the supply water temperature."""
     p = params
     T_mass, T_core = position[0], position[1]
     c = zone_conductances(p)
     s = slab_conductances(p)
-    T_out = outdoor_temperature(time, weather_dev, p)
+    T_out = outdoor_temperature(time, weather_dev, p, level)
     phi_ia, phi_st, phi_m = split_gains(internal_gain(time, p), solar_gain(time, p), p)
     T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
     dT_mass = (
@@ -488,12 +518,14 @@ def compute_next_state(
         - WEATHER_OU_THETA * state.weather_dev * p.delta_t
         + sigma * noise
     )
+    level = outdoor_mean_ahead(state.T_out_level, 1, p)
     _compute_velocity = partial(
         compute_velocity,
         action=T_supply,
         time=state.time,
         weather_dev=weather_dev,
         params=p,
+        level=level,
     )
     new_positions, _ = integrate_dynamics(
         positions=jnp.array([state.T_mass, state.T_core]),
@@ -504,7 +536,7 @@ def compute_next_state(
     T_mass, T_core = new_positions[0], new_positions[1]
 
     new_time = state.time + 1
-    T_out = outdoor_temperature(new_time, weather_dev, p)
+    T_out = outdoor_temperature(new_time, weather_dev, p, level)
     phi_ia, phi_st, _ = split_gains(
         internal_gain(new_time, p), solar_gain(new_time, p), p
     )
@@ -522,6 +554,7 @@ def compute_next_state(
             T_out=T_out,
             T_out_hist=history,
             weather_dev=weather_dev,
+            T_out_level=level,
             T_supply=T_supply,
             Q_slab=slab_heat(T_supply, T_core, p),
             T_return=return_temperature(T_supply, T_core, p),
@@ -560,7 +593,7 @@ def get_obs(state: "HVACState", params: HVACParams):
             jnp.sin(angle),
             jnp.cos(angle),
             band_centre(params) + 0.0 * state.T_air,
-            outdoor_forecast(state.time, state.weather_dev, params),
+            outdoor_forecast(state.time, state.weather_dev, params, state.T_out_level),
             electricity_price(state.time, params),
             hours_to_price_change(state.time, params),
         ]
@@ -666,6 +699,9 @@ class HVACState(EnvState):
     T_out: float  # outdoor air, measured
     T_out_hist: jax.Array  # the last 24 h of outdoor readings, oldest first
     weather_dev: float  # OU deviation from the daily cycle, hidden
+    #: The outdoor mean where it stands, hidden: the regime's ``T_out_mean`` in a
+    #: window, on its way to a new regime's after a stream's switch.
+    T_out_level: float
     T_supply: float  # supply water the valve gave, C
     Q_slab: float  # heat into the slab from the water, W
     T_return: float  # return water, measured [12]

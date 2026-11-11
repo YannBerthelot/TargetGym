@@ -20,6 +20,7 @@ from target_gym.pc_gym.cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    event_sizes,
     feed_temperature,
     get_obs,
     steady_state,
@@ -34,6 +35,20 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     Observation (4,): [T, T_j, F_w_pct, T_setpoint]
     Action      (1,): cooling water, raw in [-1, 1] -> [Fw_min, Fw_max]
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_T",
+        "T_feed",
+        "feed_phase",
+        "event_at",
+        "event_until",
+        "event_size",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its events end, carry
+    #: their own size and start through ``start_event``; its day wraps.
+    STREAM_READY = True
 
     registry_name: str = "cstr"
 
@@ -137,6 +152,7 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         T = jnp.asarray(params.T_setpoint)
         C_a, T_j, F_w = steady_state(T, T_feed, params)
         lo, hi = params.event_window
+        event_at = jax.random.uniform(event_key, minval=lo, maxval=hi)
         state = CSTRState(
             time=0,
             C_a=C_a,
@@ -146,11 +162,24 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
             T_j=T_j,
             T_feed=T_feed,
             feed_phase=phase,
-            event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
+            event_at=event_at,
+            event_until=event_at + params.event_hold,
+            event_size=event_sizes(params),
         )
 
         obs = self.get_obs(state)
         return obs, state
+
+    def start_event(self, state: CSTRState, key, params: CSTRParams) -> CSTRState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now with its size, and returns ``event_hold``
+        minutes later. Sizes are the scenario's own, so ``key`` is unused."""
+        now = state.time * params.delta_t
+        return state.replace(
+            event_at=now,
+            event_until=now + params.event_hold,
+            event_size=event_sizes(params),
+        )
 
     def initial_action(self, state, params):
         """The raw action that holds the reset's cooling water."""

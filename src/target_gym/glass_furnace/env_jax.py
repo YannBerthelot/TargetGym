@@ -128,6 +128,10 @@ class GlassFurnaceParams(EnvParams):
     # scenario), over a ramp, at a time the seed draws in the same window.
     gas_swing: float = 0.0
     gas_swing_h: float = 6.0
+    #: Hours a pull change or a gas swing holds from its start before it goes back
+    #: over its own ramp. Only a stream sets it (``physical_scenarios``); in a
+    #: window the event holds to the end.
+    event_hold_h: float = 1.0e9
     reward_version: int = 2
     # No trip: the crown is protected and the canal and fining are zones, priced.
     failure_cost: float = 0.0
@@ -159,6 +163,7 @@ PARAM_UNITS = {
     "pull_notice_h": "h",
     "gas_swing": "-",
     "gas_swing_h": "h",
+    "event_hold_h": "h",
     "reward_version": "-",
     "failure_cost": "reward",
     "restart_steps": "steps",
@@ -177,6 +182,20 @@ class GlassFurnaceState(EnvState):
     cullet: jax.Array  # cullet ratio charged, last step: measured
     events: jax.Array  # h: when the pull change and the gas swing start
     actuator_held: jax.Array = actuator_field(1)
+    #: When each goes back (h), and its size as it started (``event_sizes``): an
+    #: event carries its own size, so it runs to its return whatever the params do
+    #: meanwhile (docs/proposals/long-strata.md, S1). Never, in a window.
+    event_until: jax.Array = struct.field(
+        default_factory=lambda: jnp.full(2, 1.0e9), kw_only=True
+    )
+    event_size: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(2), kw_only=True
+    )
+    #: The step the events' clock counts hours from: 0 in a window; a stream
+    #: rebases it at each event, so the clock stays exact however long it runs.
+    event_t0: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
 
 
 def _decay(params):
@@ -214,16 +233,34 @@ def _ramp(hours, start, length):
     return jnp.clip((hours - start) / jnp.maximum(length, 1e-9), 0.0, 1.0)
 
 
-def planned_pull(hours, events, params):
+def event_hours(time, state, params):
+    """Hours at step ``time`` on the events' clock, counted from ``event_t0``."""
+    return (time - state.event_t0) * params.delta_t / 3600.0
+
+
+def event_sizes(params):
+    """An event's size as it starts: the pull change and the gas swing, as
+    fractions, from the scenario's params."""
+    return jnp.stack([jnp.asarray(params.pull_change), jnp.asarray(params.gas_swing)])
+
+
+def _shape(hours, i, state, length):
+    """Event ``i``'s share of its size at ``hours``: up a ramp from its start, back
+    down the same ramp from its return."""
+    up = _ramp(hours, state.events[i], length)
+    return up - _ramp(hours, state.event_until[i], length)
+
+
+def planned_pull(hours, state, params):
     """The pull the plan sets at ``hours``, kg/s, before the wander."""
-    ramp = _ramp(hours, events[0], params.pull_ramp_h)
-    return params.pull * (1.0 + params.pull_change * ramp)
+    shape = _shape(hours, 0, state, params.pull_ramp_h)
+    return params.pull * (1.0 + state.event_size[0] * shape)
 
 
-def gas_factor(walk, time, events, params):
+def gas_factor(walk, time, state, params):
     """The gas's heating value off nominal, as a fraction, at step ``time``."""
-    hours = time * params.delta_t / 3600.0
-    return walk[0] + params.gas_swing * _ramp(hours, events[1], params.gas_swing_h)
+    hours = event_hours(time, state, params)
+    return walk[0] + state.event_size[1] * _shape(hours, 1, state, params.gas_swing_h)
 
 
 def batch_line(plant, params):
@@ -257,7 +294,7 @@ def costs(fuel, canal, fining, pull, params):
 def compute_reward_terms(state, params, tripped=None, xp=jnp):
     """The reward's additive cost terms in EUR per step (``target_gym.reward``)."""
     read = P.sensors(state.plant, params.grid, params.plant)
-    gas = gas_factor(state.walk, state.time, state.events, params)
+    gas = gas_factor(state.walk, state.time, state, params)
     fired = state.fuel * P.mean_firing(params.plant) * (1.0 + gas)
     terms = costs(fired, read["canal"], read["fining"], state.pull, params)
     tripped = False if tripped is None else tripped
@@ -291,6 +328,22 @@ class GlassFurnace(
     Observation (12,): OBS_NAMES.
     Action (1,): fuel valve, raw in [-1, 1] -> [fuel_min, fuel_max] kg/s.
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "walk",
+        "pull",
+        "cullet",
+        "events",
+        "event_until",
+        "event_size",
+        "event_t0",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its pull changes and gas
+    #: swings start through ``start_event``, carry their size and go back, and
+    #: their clock is rebased at each event.
+    STREAM_READY = True
 
     registry_name: str = "glass_furnace"
     obs_value_index: int = 4  # the fining share read at the cold end
@@ -348,14 +401,13 @@ class GlassFurnace(
         walk = walk_step(state.walk, jax.random.fold_in(key, state.time), p)
         _, pull, cullet, thick, sulfate = (walk[i] for i in range(len(WALKS)))
         time = state.time + 1
-        hours = time * p.delta_t / 3600.0
-        charge = planned_pull(hours, state.events, p) * (1.0 + pull)
+        charge = planned_pull(event_hours(time, state, p), state, p) * (1.0 + pull)
         plant_p = p.plant.replace(
             delta_t=p.delta_t, sulfate_batch=p.sulfate * (1.0 + sulfate)
         )
         plant, _ = P.plant_step(
             state.plant, fuel, charge, p.cullet + cullet, p.thickness * (1.0 + thick),
-            state.cooling, p.grid, plant_p, lhv=gas_factor(walk, time, state.events, p),
+            state.cooling, p.grid, plant_p, lhv=gas_factor(walk, time, state, p),
         )  # fmt: skip
         # The refiner's own loop: PI on the canal, clamped to what the coolers can take.
         e = (
@@ -380,7 +432,7 @@ class GlassFurnace(
     def get_obs(self, state: GlassFurnaceState, params: GlassFurnaceParams = None):
         p = self.default_params if params is None else params
         read = P.sensors(state.plant, p.grid, p.plant)
-        hours = state.time * p.delta_t / 3600.0
+        hours = event_hours(state.time, state, p)
         values = (
             read["crown"],
             read["floor_bay"],
@@ -391,7 +443,7 @@ class GlassFurnace(
             state.cooling / p.cooling_max,
             state.fuel,
             state.pull,
-            planned_pull(hours + p.pull_notice_h, state.events, p),
+            planned_pull(hours + p.pull_notice_h, state, p),
             state.cullet,
             batch_line(state.plant, p),
         )
@@ -424,11 +476,47 @@ class GlassFurnace(
             integral=jnp.asarray(cooling, jnp.float32),
             fuel=jnp.asarray(fuel, jnp.float32),
             limit=jnp.asarray(fuel, jnp.float32),
-            pull=planned_pull(0.0, events, p) * (1.0 + walk[WALKS.index("pull")]),
+            pull=jnp.zeros(()),
             cullet=p.cullet + walk[WALKS.index("cullet")],
             events=events,
+            event_until=events + p.event_hold_h,
+            event_size=event_sizes(p),
+            event_t0=jnp.zeros((), jnp.int32),
         )
+        charged = planned_pull(0.0, state, p) * (1.0 + walk[WALKS.index("pull")])
+        state = state.replace(pull=charged)
         return self.get_obs(state, params), state
+
+    def start_event(
+        self, state: GlassFurnaceState, key: chex.PRNGKey, params: GlassFurnaceParams
+    ) -> GlassFurnaceState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's event starts now. A pull change is announced now and starts
+        ``pull_notice_h`` later, as the plan shows it; a gas swing starts at once.
+        Each holds ``event_hold_h`` from its start, goes back over its own ramp, and
+        carries the size it started with.
+
+        One change of each kind at a time: one drawn while its kind is under way,
+        from its announcement until its return has ramped, is absorbed (ours). The
+        events' clock is rebased on now. Sizes and times are the scenario's, so
+        ``key`` is unused.
+        """
+        del key
+        p = params
+        now = event_hours(state.time, state, p)
+        lead = jnp.stack([jnp.asarray(p.pull_notice_h), jnp.zeros(())])
+        ramps = jnp.stack([jnp.asarray(p.pull_ramp_h), jnp.asarray(p.gas_swing_h)])
+        busy = (now >= state.events - lead) & (now < state.event_until + ramps)
+        sizes = event_sizes(p)
+        fresh = (sizes != 0.0) & jnp.logical_not(busy)
+        return state.replace(
+            event_t0=jnp.asarray(state.time, jnp.int32),
+            events=jnp.where(fresh, lead, state.events - now),
+            event_until=jnp.where(
+                fresh, lead + p.event_hold_h, state.event_until - now
+            ),
+            event_size=jnp.where(fresh, sizes, state.event_size),
+        )
 
     def initial_action(self, state: GlassFurnaceState, params: GlassFurnaceParams):
         """The raw action that keeps the design valve."""

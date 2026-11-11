@@ -88,6 +88,8 @@ times slower.
 | `v_ref` | 50 m/s | ours, class I of 37.5 to 50 m/s [S13]; the branch it feeds never binds |
 | `gust`, `gust_window` | 0; 60 to 580 s | [S13]: a 1-year event; the window is ours (any time a whole gust fits after a minute) |
 | `derate_to`, `derate_window` | 1.0; 60 to 300 s | [S11 Fig. ES-8]; the 10 % size of the scenario is S11's AGC de-rate (p. xix); the window is ours |
+| `v_mean_tau` | 0 (window); 6 h (stream) | ours: the mean wind's correlation time in a stream, and the time over which a switch moves the range's ends (owner, 2026-11-11); inside the 4.5 to 19.5 h that measured one-hour autocorrelations of 0.80 to 0.95 give (REALITY.md [ST3]); 0 holds the window's draw |
+| `derate_hold` | 1e9 s (window); 8 h (stream, curtailment) | ours: how long a curtailment holds before the rating returns, the shift its regime lasts; no source; a window never reaches it |
 | `overspeed_factor` | 1.20 | [S17], "approximately 20 %" |
 | `rating` | 1.0 | [S1 Sec. 7], [S9 Ex. 29] |
 | `delta_t` | 0.25 s | ours, family range 80 Hz [S1] to 100 Hz [S3] for controllers; 12 steps per tower period |
@@ -267,6 +269,36 @@ extreme gust 0.17 (one 10 min window a year, the gust being a one-year event
 [S13]). The rest are ours, from a Rayleigh wind of mean 8.5 to 10 m/s, with the
 family ranges in `scenarios.py`.
 
+## The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) a stream starts with neither of the
+window's events, and the scenario's event starts through `start_event`:
+
+- A normal day and a gusty day last a day on average; near rated and near
+  cut-out a shift; none brings an event.
+- The extreme gust's regime lasts its 10 min window and brings one gust a visit,
+  so its 0.17 h a year make the one gust a year [S13]. The gust carries the
+  size the mean wind gave it at its onset, so it runs its 10.5 s whatever the
+  regime does meanwhile.
+- A curtailment lasts a shift, brings one de-rate a visit, and carries its
+  rating and its return (`derate_hold`, the shift) through a switch.
+- The mean wind is no longer drawn once and held (E4): its score follows an
+  Ornstein-Uhlenbeck process with a 6 h correlation time, and the mean wind is
+  its quantile on the regime's `v_mean_range`, so in the long run it is uniform
+  on the range, the law a window draws it from. A switch of regime keeps the
+  score, and the range's ends (`v_mean_lo`, `v_mean_hi`) move to the new
+  regime's as a first-order lag of the same 6 h (owner, 2026-11-11), so the
+  mean wind does not jump. A linear lag keeps the long-run mean.
+- Each event's clock counts from its own onset (`gust_c0`, `derate_c0`), so
+  float32 keeps it exact however long the plant runs.
+
+The gust's one a year is sourced [S13]. A curtailment's 8 h dwell and hold are
+inside the 2 to 12 h curtailments last (`REALITY.md` [ST1]), near cut-out's 8 h
+inside the 4 to 11.5 h of high-wind shutdowns ([ST2]), and the 6 h inside measured
+autocorrelations ([ST3]). The normal, gusty and near-rated dwells are ours,
+searched again on 2026-11-11 without a source. In a window nothing
+changes: a scored window is bit-identical to what it was.
+
 ---
 
 <!-- BEGIN GENERATED FACTS -->
@@ -279,7 +311,7 @@ family ranges in `scenarios.py`.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 24 |
+| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 30 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

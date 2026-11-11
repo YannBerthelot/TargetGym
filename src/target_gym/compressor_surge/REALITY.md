@@ -140,3 +140,35 @@ Meet the header pressure or flow demand while keeping the operating point right 
 ## How often each window occurs (2026-11-08)
 
 How often a normal day and each bad day occur: not found in the sources read.
+
+### Stream numbers, second search (2026-11-11)
+
+A second search looked for plant records, operator surveys and standards on
+how long a plant runs between upsets and how long each upset lasts. Every
+figure below was read once and confirmed on a second fetch.
+
+- **A normal day.** The ASM consortium's visits to large process plants found
+  that abnormal situations "occur almost on a daily basis in most large
+  process" plants; most are small, and they are more likely during startup,
+  feed changes, product grade changes and shutdown [ST1, p. 3]. The stream's
+  normal regime keeps its day, now sourced for a large plant.
+- **A shift.** Most US refineries have staffed process operations with two
+  12-hour shifts since the 1990s, and 91.7 % of 351 refinery workers surveyed
+  worked 12-hour shifts [ST2, pp. 118, 120]. Across 400 shift operations in
+  all industries, 37 % ran 12-hour and 34 % 8-hour shifts [ST3]. Family range
+  8 to 12 h; the stream's 8 h is inside it. That an upset regime lasts a
+  shift, and brings one event a visit, is ours.
+- **Not found.** How long low or swinging demand lasts, and how often the
+  anti-surge valve opens in normal operation. Searched: field data on the
+  anti-surge valve's open time at low demand; the sources say only that it is
+  normally closed.
+
+- [ST1] P. Bullemer, D. Reising, "Managing Human Reliability: An Abnormal
+  Situation Management Historical Perspective", Mary Kay O'Connor Process
+  Safety Center Symposium, 2015, p. 3.
+  https://process.honeywell.com/content/dam/process/en/documents/document-lists/doc_asm-consortium/white-papers/October%2031%202015%20-%20Managing%20Human%20Reliability%20An%20Abnormal%20Situation%20Management%20Historical%20Perspective.pdf
+- [ST2] McNamara, Robbins, "Shift Work and Sleep Disturbance in the Oil
+  Industry", Workplace Health & Safety 71(3), 2023, pp. 118, 120 (journal
+  pages). https://stacks.cdc.gov/view/cdc/230000/cdc_230000_DS1.pdf
+- [ST3] Circadian, "8-Hour vs. 12-Hour Shift Schedules" (survey year not
+  given). https://circadian.com/managing-247-article-1-0712

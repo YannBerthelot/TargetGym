@@ -6,16 +6,43 @@ events' timing from their ranges. Sources are REALITY.md's. Each is a dict that
 the registry turns into a ``target_gym.scenarios.Scenario``.
 """
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). The extreme
+#: operating gust is a one-year event [S13]. REALITY.md ("How often each window
+#: occurs", second search 2026-11-11) puts a curtailment at 2 to 12 h [ST1], so the
+#: curtailment's 8 h dwell and hold are sourced; near cut-out's 8 h sits inside the
+#: 4 to 11.5 h of high-wind shutdowns [ST2], and the 6 h correlation time inside the
+#: 4.5 to 19.5 h of measured hourly autocorrelations [ST3]. Every other number here
+#: is ours, set once without tuning and open for the owner:
+#: - a normal day and a gusty day last a day; near rated and near cut-out last a
+#:   shift; none brings an event;
+#: - the extreme gust's regime lasts its 10 min window and brings one gust a visit,
+#:   so its 0.17 h a year make the one gust a year [S13];
+#: - a curtailment lasts a shift, brings one de-rate a visit and holds it that shift;
+#: - the mean wind's correlation time is 6 h.
+_DAY_H, _SHIFT_H, _GUST_WINDOW_H = 24.0, 8.0, 10.0 / 60.0
+#: A stream starts with neither of the window's events, and its mean wind moves.
+_STREAM = {
+    "gust_window": (-1.0, -1.0),
+    "derate_window": (-1.0, -1.0),
+    "v_mean_tau": 6.0 * 3600.0,
+}
 
-def Scenario(name, overrides, source, description, weight):
+
+def Scenario(
+    name, overrides, source, description, weight, dwell_h, events_per_h=0.0, **stream
+):
     """One scenario as the registry reads it (``target_gym.scenarios.Scenario``).
-    ``weight`` is its real operating time, hours a year (charter J4)."""
+    ``weight`` is its real operating time, hours a year (charter J4); ``stream``
+    holds the stream-only overrides beyond ``_STREAM``."""
     return dict(
         name=name,
         overrides=overrides,
         source=source,
         description=description,
         weight=weight,
+        dwell_h=dwell_h,
+        events_per_h=events_per_h,
+        stream_overrides={**_STREAM, **stream},
     )
 
 
@@ -28,6 +55,7 @@ def wind_turbine_scenarios() -> tuple:
             description="above rated, 13 to 25 m/s, IEC class B normal turbulence",
             # ours, family range 1400 to 2300: 16 to 26 % of hours above rated at 13 to 25 m/s, from a Rayleigh wind of mean 8.5 to 10 m/s
             weight=1800.0,
+            dwell_h=_DAY_H,
         ),
         Scenario(
             "gusty_class_a",
@@ -36,6 +64,7 @@ def wind_turbine_scenarios() -> tuple:
             description="a gusty day: class A turbulence intensity",
             # ours, family range 250 to 650: 10 to 25 % of above-rated hours at a class A site (not found)
             weight=400.0,
+            dwell_h=_DAY_H,
         ),
         Scenario(
             "extreme_gust",
@@ -44,6 +73,8 @@ def wind_turbine_scenarios() -> tuple:
             description="one extreme operating gust at a time the seed draws",
             # one 10 min window a year: the extreme operating gust is a one-year event [S13]
             weight=0.17,
+            dwell_h=_GUST_WINDOW_H,
+            events_per_h=1.0 / _GUST_WINDOW_H,
         ),
         Scenario(
             "near_rated",
@@ -53,6 +84,7 @@ def wind_turbine_scenarios() -> tuple:
             "and peak shaving act",
             # ours, family range 700 to 1400: about 12 % of hours at 11.4 to 14 m/s
             weight=1050.0,
+            dwell_h=_SHIFT_H,
         ),
         Scenario(
             "near_cut_out",
@@ -61,6 +93,7 @@ def wind_turbine_scenarios() -> tuple:
             description="high winds below cut-out, the pitch far toward feather",
             # ours, family range 60 to 210: 0.7 to 2.4 % of hours at 21 to 25 m/s
             weight=130.0,
+            dwell_h=_SHIFT_H,
         ),
         Scenario(
             "curtailment",
@@ -69,5 +102,8 @@ def wind_turbine_scenarios() -> tuple:
             description="a 10 % de-rate set point at a time the seed draws",
             # ours, family range 90 to 440: 1 to 5 % of hours curtailed (not found)
             weight=260.0,
+            dwell_h=_SHIFT_H,
+            events_per_h=1.0 / _SHIFT_H,
+            derate_hold=_SHIFT_H * 3600.0,
         ),
     )

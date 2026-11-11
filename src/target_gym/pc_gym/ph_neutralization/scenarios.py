@@ -18,6 +18,27 @@ def _row(name, overrides, **kw):
 
 _QUIET = {"acid_upset_size": 0.0, "flow_swing": 0.0}
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How often each window occurs", second search 2026-11-11). A normal day lasts a
+#: day: a large process plant meets an abnormal situation almost daily [ST1]. The
+#: rest is ours, set once without tuning and open for the owner (no source gives how
+#: long an influent upset lasts): an upset regime lasts a shift, 8 h (shifts run 8
+#: to 12 h [ST2, ST3]), and brings one upset per visit on average (the buffer loss
+#: is the regime itself and brings none). An influent upset holds 2 h, until the
+#: producing unit's batch ends, then ramps back.
+_DAY_H, _SHIFT_H, _UPSET_HOLD_H = 24.0, 8.0, 2.0
+#: A stream starts none of its window's upsets: only the stream starts them.
+_NO_WINDOW_UPSETS = {"window_upsets": 0.0}
+
+
+def _upset(events=True):
+    """An upset regime's stream fields: a shift's dwell, one upset per visit."""
+    return dict(
+        dwell_h=_SHIFT_H,
+        events_per_h=1.0 / _SHIFT_H if events else 0.0,
+        stream_overrides={**_NO_WINDOW_UPSETS, "event_hold": _UPSET_HOLD_H * 3600.0},
+    )
+
 
 def ph_neutralization_scenarios() -> tuple[dict, ...]:
     return (
@@ -27,6 +48,8 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             source="[P5, p. 1]; [P2]",
             description="waste flows in, buffering drifts, reagent holds the pH",
             weight=0.7,
+            dwell_h=_DAY_H,
+            stream_overrides=_NO_WINDOW_UPSETS,
         ),
         _row(
             "acid_strength",
@@ -34,6 +57,7 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             source="[P3, p. 4]",
             description="unknown changes in the influent's strong acid",
             weight=0.1,
+            **_upset(),
         ),
         _row(
             "flow_swing",
@@ -41,6 +65,7 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             source="[P3, Figure 2]; charter Amendment 3",
             description="the influent flow swings, metered",
             weight=0.1,
+            **_upset(),
         ),
         _row(
             "buffer_loss",
@@ -48,6 +73,7 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             source="[P1]; [P2]",
             description="buffering falls away and the curve steepens",
             weight=0.05,
+            **_upset(events=False),
         ),
         _row(
             "bad_day",
@@ -55,5 +81,6 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             source="[P3, p. 8]",
             description="calm to rocking and reeling: acid and flow both move",
             weight=0.05,
+            **_upset(),
         ),
     )

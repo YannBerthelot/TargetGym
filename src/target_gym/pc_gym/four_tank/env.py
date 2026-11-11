@@ -64,6 +64,17 @@ class FourTankParams(EnvParams):
     leak_duration: int = 300
     #: a cup of water poured into one lower tank at a random time (m^3).
     cup_volume: float = 1.0e-4
+    # ---- The stream (docs/proposals/long-strata.md, S1) ----
+    #: The window's own events: 1 runs its schedule as drawn at reset; 0, which
+    #: only a stream sets (scenarios.py), runs none, and the stream starts its
+    #: events through ``start_event``.
+    window_events: float = 1.0
+    #: A stream event's kind, as shares: a setpoint move, an extra outlet, a
+    #: cup. Ours: the window's own mix, three moves, one outlet, one cup.
+    event_shares: Tuple[float, float, float] = (0.6, 0.2, 0.2)
+    #: Seconds a stream's setpoint move holds before it returns to the
+    #: operating point. Only a stream sets it (scenarios.py).
+    event_hold: float = 1.0e9  # s
 
     delta_t: float = 1.0
     max_steps_in_episode: int = 3300
@@ -112,6 +123,9 @@ PARAM_UNITS = {
     "leak_fraction": "-",
     "leak_duration": "steps",
     "cup_volume": "m^3",
+    "window_events": "-",
+    "event_shares": "-",
+    "event_hold": "s",
     "e_floor": "m",
     "reward_version": "-",
     "e_tol": "m",
@@ -159,6 +173,14 @@ class FourTankState(EnvState):
     cup_tank: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
     )
+    #: A stream's setpoint move (``start_event``): the step it returns at (-1
+    #: for none) and the move per lower tank, taken back then.
+    sp_until: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(-1, jnp.int32), kw_only=True
+    )
+    sp_delta: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(2), kw_only=True
+    )
     actuator_held: jax.Array = actuator_field(2)
 
 
@@ -194,6 +216,40 @@ def setpoint_move(state: FourTankState, params: FourTankParams, time):
     delta = jnp.zeros(2)
     delta = delta.at[state.sp_tank].add(first)
     return delta.at[1 - state.sp_tank].add(third)
+
+
+def start_event(state: FourTankState, key, params: FourTankParams):
+    """A stream's event starting now (long-strata draft 4, S1), its kind drawn
+    in ``event_shares``: a setpoint move of ``setpoint_step`` either way on one
+    lower tank, held ``event_hold`` (a move in progress returns first, so moves
+    never stack); an extra outlet in one upper tank for ``leak_duration``; a cup
+    into one lower tank at the next step."""
+    p = params
+    k_kind, k_tank, k_sign = jax.random.split(key, 3)
+    kind = jax.random.categorical(k_kind, jnp.log(jnp.asarray(p.event_shares)))
+    tank = jax.random.randint(k_tank, (), 0, 2)
+    sign = jnp.where(jax.random.bernoulli(k_sign), 1.0, -1.0)
+    now = jnp.asarray(state.time, jnp.int32)
+    hold = jnp.maximum(jnp.round(p.event_hold / p.delta_t), 1.0).astype(jnp.int32)
+    # The move: the one in progress taken back, the new one put on.
+    pending = state.sp_until > now
+    delta = jnp.zeros(2).at[tank].set(sign * p.setpoint_step)
+    target = (
+        jnp.stack([state.target_h1, state.target_h2])
+        - jnp.where(pending, state.sp_delta, 0.0)
+        + delta
+    )
+    move, leak, cup = kind == 0, kind == 1, kind == 2
+    return state.replace(
+        target_h1=jnp.where(move, target[0], state.target_h1),
+        target_h2=jnp.where(move, target[1], state.target_h2),
+        sp_delta=jnp.where(move, delta, state.sp_delta),
+        sp_until=jnp.where(move, now + hold, state.sp_until),
+        leak_start=jnp.where(leak, now, state.leak_start),
+        leak_tank=jnp.where(leak, tank, state.leak_tank),
+        cup_time=jnp.where(cup, now, state.cup_time),
+        cup_tank=jnp.where(cup, tank, state.cup_tank),
+    )
 
 
 def compute_velocity(
@@ -289,6 +345,8 @@ def compute_next_state(
     target = jnp.stack([state.target_h1, state.target_h2]) + setpoint_move(
         state, params, t + 1
     )
+    # A stream's setpoint move returns after its hold.
+    target = target - jnp.where(t + 1 == state.sp_until, state.sp_delta, 0.0)
     return (
         state.replace(
             h1=h1,

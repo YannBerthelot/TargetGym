@@ -109,6 +109,17 @@ The environment exists so that a new algorithm, wrapper or integration method
 can be checked against something with a known answer before being pointed at a
 kiln.
 
+### The stream (docs/proposals/long-strata.md, S1)
+
+A window starts off target and draws the target once. As a continuing plant
+(`target_gym.stream`) the lag starts on its target (`start_on_target` 1), a
+trip's restart puts it back on the target it is held to then (`restart_plant`),
+and the target changes as events (`start_event`), each a fresh draw over
+`target_x_range`. `scenarios.py` declares the one scenario, the window as scored
+(weight 1), only to carry the rate: one change per 7.5 s window on average (480
+an hour), ours, since this abstract plant has no plant hours. In a window
+nothing changes and a scored window is bit-identical.
+
 ---
 
 ## 5. Known deviations

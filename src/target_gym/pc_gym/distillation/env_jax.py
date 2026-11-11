@@ -23,6 +23,8 @@ from target_gym.pc_gym.distillation.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    hold_steps,
+    start_step,
     steady_liquid,
 )
 from target_gym.pc_gym.distillation.rendering import _render
@@ -41,6 +43,26 @@ class DistillationColumn(
     Observation (8,): [yD, xB, L_pct, V_pct, spec_yD, spec_xB, T_15, F]
     Action      (2,): [L_raw, V_raw] in [-1, 1] -> reflux and boilup
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_yD",
+        "target_xB",
+        "zF",
+        "F",
+        "feed_step_at",
+        "feed_sign",
+        "zF_step_at",
+        "zF_sign",
+        "feed_size",
+        "feed_until",
+        "zF_size",
+        "zF_until",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its feed steps return,
+    #: carry their own size and start through ``start_event``.
+    STREAM_READY = True
 
     registry_name: str = "distillation"
 
@@ -131,6 +153,8 @@ class DistillationColumn(
         # design point [D2], the converged profile at the nominal flows, with
         # the products on their specs. The feed's two steps come later.
         lo, hi = params.step_window
+        feed_step_at = jax.random.randint(keys[0], (), lo, hi)
+        zF_step_at = jax.random.randint(keys[2], (), lo, hi)
         state = DistillationState(
             time=0,
             x=_NOMINAL_PROFILE,
@@ -141,12 +165,54 @@ class DistillationColumn(
             target_yD=jnp.asarray(params.yD_spec),
             target_xB=jnp.asarray(params.xB_spec),
             F=jnp.asarray(params.F),
-            feed_step_at=jax.random.randint(keys[0], (), lo, hi),
+            feed_step_at=feed_step_at,
             feed_sign=jnp.where(jax.random.bernoulli(keys[1]), 1.0, -1.0),
-            zF_step_at=jax.random.randint(keys[2], (), lo, hi),
+            zF_step_at=zF_step_at,
             zF_sign=jnp.where(jax.random.bernoulli(keys[3]), 1.0, -1.0),
+            feed_size=jnp.asarray(params.feed_step, jnp.float32),
+            feed_until=feed_step_at + hold_steps(params),
+            zF_size=jnp.asarray(params.zF_step, jnp.float32),
+            zF_until=zF_step_at + hold_steps(params),
         )
         return self.get_obs(state), state
+
+    def start_event(
+        self, state: DistillationState, key, params: DistillationParams
+    ) -> DistillationState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1): the
+        scenario's feed steps start now at its sizes, each with a sign drawn
+        from ``key``, and return ``event_hold`` minutes later."""
+        feed_key, zF_key = jax.random.split(key)
+        feed = start_step(
+            state.feed_step_at,
+            state.feed_sign,
+            state.feed_size,
+            state.feed_until,
+            state,
+            params,
+            params.feed_step,
+            feed_key,
+        )
+        zF = start_step(
+            state.zF_step_at,
+            state.zF_sign,
+            state.zF_size,
+            state.zF_until,
+            state,
+            params,
+            params.zF_step,
+            zF_key,
+        )
+        return state.replace(
+            feed_step_at=feed[0],
+            feed_sign=feed[1],
+            feed_size=feed[2],
+            feed_until=feed[3],
+            zF_step_at=zF[0],
+            zF_sign=zF[1],
+            zF_size=zF[2],
+            zF_until=zF[3],
+        )
 
     def action_space(self, params: DistillationParams | None = None) -> spaces.Box:
         return spaces.Box(

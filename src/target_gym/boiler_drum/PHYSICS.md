@@ -69,10 +69,12 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `load_range` | 0.40 to 1.0 | of nominal | [S17] Table 1, hard coal minimum load 25 to 40 %; three-element control holds above 20 to 30 % [S12] |
 | `ramp_rate_range` | 1 to 6 | %/min | Family range: 1 to 2 typical [S10], 1.5 to 6 for coal [S17] |
 | `event_time_range` | 300 to 900 | s | Ours: inside the window, with an hour after it |
-| `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17] |
+| `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17]; inside the 37 to 56 % one plant's ID fan and feed pump derates ran to (REALITY.md [ST1]) |
 | `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
 | `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
 | `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
+| `event_hold` | 9990 | s (stream, upsets) | 2.775 h, the median of six ID fan and feed pump forced derates at one plant, 0.35 to 67 h (REALITY.md [ST1]): how long a runback holds the unit back before it ramps up at its plan's rate; a window never sets it, so its runback holds to the end |
+| `window_ramp` | on | - | The window's one planned ramp; a stream turns it off and plans each load change as an event |
 | `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
 | `imbalance_price` | 80 | GBP/MWh | Ours, family range 30 to 156: 59 % of 2018's periods in 30 to 60, short-system mean 78.84 [S22]; annual means 44.61 (2017 to 2020) and 156.20 (2021 to 2022) [S22b] |
 | `steam_resolution` | 0.047 | kg/s | The steam meter's scatter (Readings): off-plan steam it cannot see is not counted |
@@ -81,7 +83,8 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `level_trip_low` | -0.330 | m | [S9], "Drum Level Low-low (-330 mm)" |
 | `level_trip_high` | +0.254 | m | [S20], "Drum Level HH (+254 mm)" |
 | `level_trip_delay` | 10 | s | [S9] items 23 and 24, "for more than ten seconds"; [S21] on why trips are delayed |
-| `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps |
+| `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps; one plant's trips came back in 0.87 to 11.3 h (REALITY.md [ST1]) |
+| `restart_load` | 0.25 | of nominal steam | [S17] Table 1, hard coal minimum load 25 to 40 %, low end: the minimum fire a hot restart relights at (owner, 2026-11-11) |
 | `failure_cost` | 4.267 | GBP per step | `q_steam_nominal` for one 2 s step, at `steam_rate` and `imbalance_price`: the generation a restart does not make |
 | `e_floor_level`, `e_floor_pressure` | 2.67e-3 m, 0.05 bar | - | Ours, read only by the time-in-band KPI tables, never by the score |
 | `delta_t` | 2 | s | Ours: S1 logged at 0.1 Hz and shows the swell within one or two samples, so 2 s resolves it |
@@ -108,8 +111,18 @@ off the plan, resting on plan costs a learner `0.047 sqrt(2 / pi) * 2e-3 =
 | Firing and feedwater ranges | Actuator range | `Q_max`, `q_feed_max` |
 
 A trip charges `restart_steps * failure_cost = GBP 19,203`, the generation of
-840 t of nominal steam over a 2.5 h hot start, and the plant restarts at a new
-planned load (`base.failure_kernel`).
+840 t of nominal steam over a 2.5 h hot start. The unit restarts hot
+(`restart_plant`; long-strata R8, owner 2026-11-11): purged and relit at nominal
+pressure and normal water level, on minimum fire (`restart_load`, 25 % of
+nominal steam), while the plan it tripped on carries on. The turbine then
+reloads at the plan's ramp rate: the valve passes the smaller of the plan and
+25 % plus the rate times the time since the restart (`pickup`), until it meets
+the plan. The steam the valve does not pass is off plan, and the score charges
+it; the policy holds pressure and level through the reload. The observation's
+load now stays the plan's; the steam flow reading shows the valve's. The
+boiler's expert reloads without a second trip from plan loads of 0.41 to 0.96,
+its level within -0.09 to +0.12 m. Without the reload (the valve passing the
+whole plan at once) the swell reached the high trip level above a 0.9 load.
 
 **Zones and cheap side (rule 22).** The score prices no zone. The level window
 between the trips, -330 to +254 mm, is a trip limit with no price inside it, so
@@ -145,11 +158,38 @@ the plan ramps once to another load, 5 to 15 minutes in. The suite
 
 **Weights (charter J4).** Each scenario's real operating time, in hours a year
 (`scenarios.py`): normal 5600, low load 1600, industrial swing 800, ID fan
-runback 3, feed pump trip 2. All are ours, with the family ranges in
-`scenarios.py`; REALITY.md finds no source for how often a runback or a feed
-pump trip happens. The bad days weigh 0.06 % of the headline together, so it
+runback 1.4, feed pump trip 2.8. The normal, low-load and swing hours are ours,
+with the family ranges in `scenarios.py`. The bad days are sourced (owner,
+2026-11-11): one plant's event log shows 0.5 ID fan runbacks and about 1 feed
+pump trip a unit-year, each holding 2.775 h (REALITY.md [ST1]; EPRI's 1978 survey
+gives 0.75 to 1.25 feed pump failures a unit-year, [ST2]). One plant is a thin
+base. The bad days weigh 0.06 % of the headline together, so it
 is mostly a normal day's; the per-scenario savings and the worst scenario
 show the rest.
+
+**The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
+(`target_gym.stream`) a stream starts on a flat plan with neither of the
+window's events, and the scenario's event starts through `start_event`:
+
+- In normal load following (a day on average, four load changes in it) and in
+  the industrial swing and low-load regimes (a shift on average, one load
+  change a visit), the event is a planned load change, as the window's one
+  ramp: announced 300 to 900 s ahead, from where the plan stands to a load in
+  the regime's `load_range`, at a rate in its `ramp_rate_range`.
+- In the ID fan runback and feed pump trip regimes (an hour on average, one
+  upset a visit, as the weights count them), the event is the window's upset.
+  It carries its kind and its return in the state, so it runs to its return
+  through a switch: the runback holds `event_hold` (1 h), then the fans are
+  back and the unit ramps up to its plan at the plan's rate.
+- While a runback still holds the load down the unit master takes no new
+  event (ours).
+- Plan times count from `plan_t0`, the step the plan was last rebased at
+  (each event), so float32 keeps them exact however long the plant runs.
+
+[S3]'s "several times during every 24 h" is the only source for any of these
+numbers; four a day, the dwells and the hold are ours, set once without
+tuning and open for the owner. In a window nothing changes: a scored window is
+bit-identical to what it was.
 
 **Score** (rule 15), in GBP: each step charges the steam delivered off the plan
 beyond the steam meter's resolution, as generation at `steam_rate`, at the
@@ -237,6 +277,11 @@ The two failures are known deviations (rule 13), on S1's own model:
 
 ## 7. Deviations still in the model
 
+- A trip's lump still prices a whole 2.5 h hot start [S17], while the restart
+  now plays out the reload from minimum fire to the plan. If [S17]'s hot start
+  runs to full load, the lump pays twice for part of that reload (long-strata
+  R8); the dead time to light-off alone is not found yet. The reload's rate is
+  the plan's (ours).
 - The feedwater flow loop is perfect: the action is flow, as a cascade's
   setpoint, with no pump or valve characteristic (cold review 7).
 - The level reading is white noise with no delay; S3 fits coloured noise from
@@ -287,7 +332,7 @@ The two failures are known deviations (rule 13), on S1's own model:
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `boiler_drum` | 1800 | 2 | 60 min | 2 in [-1, 1] | 12 | 23 |
+| `boiler_drum` | 1800 | 2 | 60 min | 2 in [-1, 1] | 12 | 25 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

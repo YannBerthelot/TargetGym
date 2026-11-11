@@ -88,6 +88,10 @@ class DistillationParams(EnvParams):
     feed_step: float = 0.2  # fraction of F
     zF_step: float = 0.1  # mole fraction
     step_window: Tuple[int, int] = (30, 300)  # min
+    #: Minutes a feed step holds before the feed returns to nominal: the
+    #: upstream unit's rate or crude restored. Only a stream sets it
+    #: (scenarios.py); in a window a step holds to the end.
+    event_hold: float = 1.0e9  # min
 
     # ---- Manipulated variables (LV configuration) ----
     # Ours: no Column A flow limits were found. Wide enough to hold both specs
@@ -166,6 +170,7 @@ PARAM_UNITS = {
     "qF": "-",
     "feed_step": "-",
     "zF_step": "-",
+    "event_hold": "min",
     "step_window": "min",
     "L_min": "kmol/min",
     "L_max": "kmol/min",
@@ -229,8 +234,43 @@ class DistillationState(EnvState):
         default_factory=lambda: jnp.asarray(10**9, jnp.int32), kw_only=True
     )
     zF_sign: jax.Array = struct.field(default=1.0, kw_only=True)
+    #: Each step's size as it started and the minute it returns after: a step
+    #: carries its own size, so it runs to its return whatever the params do
+    #: meanwhile (docs/proposals/long-strata.md, S1). A state built by hand has
+    #: steps of size 0 that never return.
+    feed_size: jax.Array = struct.field(default=0.0, kw_only=True)
+    feed_until: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(2 * 10**9, jnp.int32), kw_only=True
+    )
+    zF_size: jax.Array = struct.field(default=0.0, kw_only=True)
+    zF_until: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(2 * 10**9, jnp.int32), kw_only=True
+    )
     # Liquid leaving each tray, ordered as ``steady_liquid`` (HIDDEN).
     liquid: jax.Array = struct.field(default_factory=_nominal_liquid, kw_only=True)
+
+
+def hold_steps(params: DistillationParams):
+    """``event_hold`` in steps, at least one."""
+    return jnp.maximum(jnp.round(params.event_hold / params.delta_t), 1.0).astype(
+        jnp.int32
+    )
+
+
+def start_step(at, sign, size, until, state, params, new_size, key):
+    """A feed step starting now (long-strata draft 4, S1): ``new_size`` with a
+    drawn sign, held ``event_hold``. Returns ``(at, sign, size, until)``. With
+    ``new_size`` 0 the step in progress is kept, so a step of one kind never
+    ends one of the other."""
+    now = jnp.asarray(state.time, jnp.int32)
+    on = new_size > 0.0
+    drawn = jnp.where(jax.random.bernoulli(key), 1.0, -1.0)
+    return (
+        jnp.where(on, now, at),
+        jnp.where(on, drawn, sign),
+        jnp.where(on, new_size, size),
+        jnp.where(on, now + hold_steps(params), until),
+    )
 
 
 def vle(x, params: DistillationParams):
@@ -305,10 +345,13 @@ def compute_next_state(
         action_raw[1], min_action=p.V_min, max_action=p.V_max
     )
 
-    # The feed's two steps [D1, Fig. 18], on the episode's schedule.
+    # The feed's two steps [D1, Fig. 18], each at its own size, on from its
+    # minute until it returns.
     t_next = state.time + 1
-    F = p.F * (1.0 + p.feed_step * state.feed_sign * (t_next > state.feed_step_at))
-    zF = p.zF_nominal + p.zF_step * state.zF_sign * (t_next > state.zF_step_at)
+    feed_on = (t_next > state.feed_step_at) & (t_next <= state.feed_until)
+    zF_on = (t_next > state.zF_step_at) & (t_next <= state.zF_until)
+    F = p.F * (1.0 + state.feed_size * state.feed_sign * feed_on)
+    zF = p.zF_nominal + state.zF_size * state.zF_sign * zF_on
 
     _compute_velocity = partial(
         compute_velocity, action=(L, V), zF=zF, params=params, F=F

@@ -35,13 +35,22 @@ class Scenario:
     """One operating window: ``overrides`` on the scored configuration, the
     ``source`` (a ``REALITY.md`` reference) that shows this event happening, and its
     ``weight``, its share of real operating time (any positive scale; ``weights``
-    turns them into shares). The headline weighs scenarios by it (charter J4)."""
+    turns them into shares). The headline weighs scenarios by it (charter J4).
+
+    In a stream (``target_gym.stream``) a scenario lasts a memoryless time of mean
+    ``dwell_h`` hours, and its events start at ``events_per_h`` per hour, both from
+    the plant record (long-strata draft 4, S1). ``stream_overrides`` are parameters
+    only a continuing plant reads, applied after ``overrides``: how long an event
+    holds before it returns, or turning off the window's own event."""
 
     name: str
     overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     source: str = ""
     description: str = ""
     weight: float = 1.0
+    dwell_h: float | None = None
+    events_per_h: float = 0.0
+    stream_overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
 
 NORMAL = Scenario("normal", {}, description="the scored configuration as it is")

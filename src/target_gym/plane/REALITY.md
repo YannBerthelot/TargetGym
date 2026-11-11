@@ -210,3 +210,95 @@ the flight controls, not the pilot, keep load factor, bank and AOA inside their 
 - Cost index: operators trade fuel against time; long-range cruise is the speed at 99 %
   of the best specific range, the curve being flat there (secondary accounts of Airbus,
   "Getting to grips with the cost index"; the document was not reached).
+
+## The stream (2026-11-11)
+
+What a continuing aircraft plant needs (docs/proposals/long-strata.md, S1b and R8),
+for `plane`, `plane_energy`, `plane_sine`, the four `plane3d` tasks, `patrol`,
+`patrol_range_bearing`, `wake_surf` and `formation`. Searched on 2026-11-11 with web
+lookups; each figure below was fetched a second time, as noted. Arithmetic marked
+"ours" is ours, on the sourced counts.
+
+### Sources
+
+- **[AIRBUS-A320]** Airbus, "A320neo: a future-proof solution", case study, October
+  2024: "Average Flight duration: 1.90 FH" for the world A320 fleet, with 8.99 FH
+  and 4.73 cycles a day. Fetched twice. Confirmed by Flightglobal, "Airbus begins
+  testing to extend A320 family's design life", quoting Airbus: the fleet's
+  "actual average flight duration" was 1.82 h.
+  <https://www.aircraft.airbus.com/en/newsroom/case-study/2024-10-a320neo-future-proof-solution>,
+  <https://flightglobal.com/airbus-begins-testing-to-extend-a320-familys-design-life/78429.article>
+- **[OKRA]** Defence Connect, "Super Hornets to return to Australia": the RAAF's
+  Hornets and Super Hornets flew "more than 2,700 sorties and over 21,000 flying
+  hours" on Operation Okra, about 7.8 h a sortie (ours), with tanker support. The
+  same figures appear in the Department of Defence release of 16 January 2018,
+  seen in search results only (the page timed out).
+  <https://www.defenceconnect.com.au/air/1783-super-hornets-to-return-to-australia>
+- **[NATS-HOLDS]** NATS, November 2016 release on Heathrow's holds: an average of
+  about 8.5 min at the start of 2014, then just over 7.5 min, with a low of 6.5 min
+  in August 2016; about 10 000 flights use the holds each month. The release does
+  not say whether the average is per held flight or per arrival. The nats.aero
+  original is gone; read on two reprints.
+  <https://www.atc-network.com/atc-news/nats/heathrow-holding-times-on-the-decline-thanks-to-new-technology>
+- **[PRINZO]** Prinzo et al., DOT/FAA/AM-06/25 (five TRACONs, 2003 and 2004):
+  approach instructions were "headings (22%), speeds (21%), and altitudes (16%)" of
+  10 957 elements to 1 184 aircraft; departure, headings 31 % of 6 665 elements to
+  1 295 aircraft. Per aircraft and sector (ours): about 2.0 headings, 1.9 speeds and
+  1.5 altitudes on approach; 1.4 altitudes and 0.2 speeds on departure. Re-read.
+  <https://libraryonline.erau.edu/online-full-text/faa-aviation-medicine-reports/AM06-25.pdf>
+- **[PRINZO-EN]** DOT/FAA/AM-09/02 (five centres, 2006, 1 487 aircraft): en route,
+  about 0.94 altitude, 0.19 speed and 0.14 heading instructions per aircraft per
+  sector (ours). Re-read.
+  <https://libraryonline.erau.edu/online-full-text/faa-aviation-medicine-reports/AM09-02.pdf>
+- **[LEE-SPRENGER]** Lee and Sprenger, EGUsphere-2025-1949 (a preprint, not yet
+  peer reviewed): of 53 392 181 IATA Turbulence Aware reports above FL200, January
+  2019 to September 2022, 7.9 % had a peak EDR of 0.1 or more and 1.1 % of 0.2 or
+  more. Routine reports come every 15 to 20 min and strong turbulence triggers extra
+  ones, so these shares bound the time share from above. Re-read.
+  <https://egusphere.copernicus.org/preprints/2025/egusphere-2025-1949/egusphere-2025-1949.pdf>
+- **[AC00-30C]** FAA AC 00-30C, Clear Air Turbulence Avoidance (2016; cancelled in
+  2022 and folded into FAA-H-8083-28): jet-stream turbulent areas are "100 to 300
+  miles long", 50 to 100 miles wide, and "may persist from 30 minutes to 1 day";
+  moderate turbulence is likely where "horizontal wind shear is 40 kts per 150 miles
+  or greater". Re-read; the same 40 kt per 150 miles is in AC 00-6's text.
+  <https://www.faa.gov/documentlibrary/media/advisory_circular/ac_00-30c.pdf>
+
+### What the stream takes from them
+
+- An A320 sortie lasts 1.90 h on average [AIRBUS-A320]; a Hornet patrol sortie
+  7.8 h [OKRA]; a hold 7.5 min [NATS-HOLDS].
+- A clearance moves the level with chance 2.9 / (2.9 + 2.1) = 0.58 over a departure
+  and an approach sector [PRINZO].
+- Turbulence zones start at 0.45 an hour in a turbulent regime, so that over
+  `plane`'s suite the stream spends 7.9 % of its time in a zone [LEE-SPRENGER], with
+  zones of 3 to 30 min [BEA447]; the calm between them then averages 2.2 h, "over an
+  hour" [BEA447].
+- The steady wind lags a switch with a time constant of 2 010 s, so the largest
+  switch, 67 kt, starts at 40 kt per 150 NM crossed at 450 kt [AC00-30C].
+
+### Ours, and what was searched
+
+- **A sortie's mass** is drawn uniform over 60 to 78 t for the A320, the span of
+  `plane`'s scored corners, and over the zero-fuel mass with a quarter to all of
+  the internal 4 926 kg for the Hornet. No source for the distribution of cruise
+  masses was searched beyond the TCDS's MTOW.
+- **How long a weather regime lasts**: 2 h. Searched: turbulent areas' extent and
+  persistence (found, [AC00-30C], too wide a range to set a dwell), Sharman's EDR
+  climatology (AMS refused the download).
+- **Vectors and clearances an hour**: the windows' own spacing, 150 s and 300 s.
+  Searched: controller-pilot communication studies give counts per aircraft and
+  sector [PRINZO, PRINZO-EN] but not the time on frequency; Cardosi 1996 is a
+  scanned image.
+- **Not found**: the share of an A320 flight spent in cruise (EUROCONTROL, ADS-B
+  phase studies), a Hornet training sortie's length (CBO, NPS fuel-use thesis,
+  Swiss and Finnish fleet reviews), holding time per held flight from EUROCONTROL or
+  the CAA, how often a holding stack steps down a level, step-climb spacing (forums
+  only), and how fast the wind aloft changes over time (forecast-error papers only).
+
+### The restart after a trip
+
+No source above or in this record describes a trip that ends a flight, so none
+names a post-trip state. The owner's call (2026-11-11): a crash loses the sortie,
+and the plant restarts as the sortie's replacement, established in cruise; the hour
+of `restart_steps` prices the gap. Since the sortie's level and mass are the outside
+world in a stream, the replacement flies at them.

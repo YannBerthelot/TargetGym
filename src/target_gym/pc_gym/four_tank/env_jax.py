@@ -21,6 +21,7 @@ from target_gym.pc_gym.four_tank.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    start_event,
     steady_levels,
 )
 from target_gym.pc_gym.four_tank.rendering import _render
@@ -34,6 +35,24 @@ class FourTank(
 
     Action (2,): [pump 1 voltage, pump 2 voltage], raw in [-1, 1] -> [v_min, v_max]
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "target_h1",
+        "target_h2",
+        "sp_tank",
+        "sp_sign",
+        "leak_start",
+        "leak_tank",
+        "cup_time",
+        "cup_tank",
+        "sp_until",
+        "sp_delta",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): its events start
+    #: through ``start_event`` and its setpoint moves return.
+    STREAM_READY = True
 
     registry_name: str = "four_tank"
 
@@ -134,14 +153,28 @@ class FourTank(
             v1=v,
             v2=v,
             sp_tank=jax.random.randint(keys[0], (), 0, 2),
-            sp_sign=jnp.where(jax.random.bernoulli(keys[1], 0.5, (3,)), 1.0, -1.0),
-            leak_start=jax.random.randint(keys[2], (), 0, span - p.leak_duration),
+            sp_sign=jnp.where(jax.random.bernoulli(keys[1], 0.5, (3,)), 1.0, -1.0)
+            * p.window_events,
+            leak_start=jnp.where(
+                p.window_events > 0.0,
+                jax.random.randint(keys[2], (), 0, span - p.leak_duration),
+                -(10**9),
+            ),
             leak_tank=jax.random.randint(keys[3], (), 0, 2),
-            cup_time=jax.random.randint(keys[4], (), 0, span),
+            cup_time=jnp.where(
+                p.window_events > 0.0, jax.random.randint(keys[4], (), 0, span), -1
+            ),
             cup_tank=jax.random.randint(keys[5], (), 0, 2),
         )
         obs = self.get_obs(state)
         return obs, state
+
+    def start_event(
+        self, state: FourTankState, key, params: FourTankParams
+    ) -> FourTankState:
+        """The stream's event hook (docs/proposals/long-strata.md, S1):
+        ``env.start_event``, a setpoint move, an extra outlet or a cup."""
+        return start_event(state, key, params)
 
     def action_space(self, params: FourTankParams | None = None) -> spaces.Box:
         return spaces.Box(

@@ -84,6 +84,55 @@ off full power for about 6.3 h, so 250 h is about 40 days a year, 11 % of days. 
 task weighs baseload days (with frequency control) at 0.892 and the five load-follow
 days at 0.0216 each, an equal split that no source gives (ours).
 
+## 8. The stream: regimes, restarts and the cycle (2026-11-11)
+
+Searched for the continuing plant (docs/proposals/long-strata.md, S1 and R8). A
+figure counts when it was read twice on separate fetches; "seen once" marks the
+rest.
+
+- **The offset's allowance is a rolling day.** Westinghouse's CAOC bases: between
+  50 % and 90 % of rated power the flux difference may sit outside its target band
+  for "a 1 hour cumulative penalty deviation time limit, cumulative during the
+  preceding 24 hours", alarmed past "1 hour in the previous 24 hours"; below 50 %
+  the time counts half [ST1, B 3.2.3A]. The task's clock now looks back 24 h; it
+  still counts in full at every power, EDF's scope (section 4).
+- **How load-follow days come.** EDF's units load-follow 250 h a year [S17]; units
+  stood at their minimum on weekend nights "and sometimes longer", and one made two
+  variations a day down to 20 % [S17, slides 4 and 5]. How many days in a row a unit
+  load-follows, and the gaps between: not found. Seen once: downward modulation now
+  comes more at midday in spring and summer, historically more at night and at
+  weekends (RTE, 2025); day-ahead programmes are due the day before at 16:30 (CRE
+  deliberation 2024-45), which would make a day's notice hours rather than the
+  task's 0.5 to 2 h. The stream keeps the day as a 24 h regime and the window's
+  notice, ours.
+- **Load following through the cycle.** EDF's units keep the full range, an 80 %
+  amplitude down to 20 % of rated power, up to 90 % of the normal cycle, and only
+  the floor rises after [S17, slides 6 and 12]. Seen once: past about 90 % of the
+  cycle units take part only in frequency control (World Nuclear Association); EDF's
+  1300 MWe campaigns went from 12 to 18 months; below about 100 ppm boron, removal is
+  too slow to follow xenon (US 4,432,930). The stream's refuelling every 30 days is
+  ours: it keeps the core at the start of cycle the coefficients describe.
+- **Restart after a trip.** Restart times as in section 5 [S15; S16]. After a
+  refuelling outage most plants ramp at 10 to 30 % an hour below about 20 % of rated
+  power and 3 % an hour above it [ST2]; Exelon's plants about 15 % an hour below the
+  threshold and at most 3 % above, with 0.5 % an hour recommended from 75 to 100 %
+  [ST3]. Seen once: for EDF, time shut down leaves the fuel's damage margin where it
+  was, so a mid-cycle trip does not restart the conditioning (IRSN 2023-00018). The
+  post-trip state operators restart from: not found. The restart's xenon is the
+  plant's own zero-power decay over the lump's time (PHYSICS.md section 4).
+- **Not found.** EDF's critical boron at the start and end of a cycle; post-trip
+  ramp limits specific to a trip. NRC, OECD-NEA, IAEA and some EDF documents could
+  not be opened by an automated reader.
+
+### Sources for section 8
+
+- [ST1] US NRC, NUREG-1431 Rev. 3.0, Standard Technical Specifications,
+  Westinghouse Plants, Bases B 3.2.3A, pp. B 3.2.3A-1, -3, -5 (copy at
+  https://naygn.org/wp-content/uploads/2013/09/PWR-TS-Basis.pdf).
+- [ST2] EPRI 1000847 (2001), report summary: power ascension after refuelling.
+- [ST3] EPRI 1012915 (2006), summary and section 1: fuel reliability and power
+  ascension rates.
+
 ## Sources
 
 - [S1] IAEA Nuclear Energy Series NP-T-3.23 (2018), *Non-baseload operation in

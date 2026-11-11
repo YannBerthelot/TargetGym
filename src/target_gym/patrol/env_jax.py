@@ -22,6 +22,7 @@ from target_gym.base import (
     ChannelReading,
     FieldReading,
     actuate,
+    canonical_dtypes,
     canonical_reset,
     finish_step,
     measured_obs,
@@ -43,10 +44,17 @@ from target_gym.patrol.env import (
     get_obs_range_bearing,
     initial_wake,
     lead_cruise_speed,
+    lead_leg,
     make_cruise_state,
 )
 from target_gym.patrol.rendering import _render
 from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
+from target_gym.plane.stream_events import (
+    fuel_for,
+    in_stream,
+    sortie_key,
+    sortie_mass,
+)
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.plane3d.experts import Plane3DGuidanceState
 from target_gym.video import SavesVideo
@@ -79,6 +87,24 @@ class _PlanePatrolBase(
     Subclasses set ``obs_shape``, ``obs_value_index``, ``obs_target_index`` and
     implement :meth:`get_obs`.
     """
+
+    #: What a trip's restart carries over (``base.failure_kernel``): the outside
+    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    OUTSIDE_WORLD = (
+        "lead",
+        "lead_memory",
+        "slot_back",
+        "slot_right",
+        "slot_up",
+        "lead_turn_rate",
+        "lead_turn_schedule",
+        "gust_history",
+        "gust_own",
+        "wake_history",
+    )
+    #: Runs as a continuing plant (``target_gym.stream``): sorties renew with a
+    #: held mass, and the lead's route cycles on whole routes.
+    STREAM_READY = True
 
     render_plane = classmethod(_render)
     screen_width = 600
@@ -201,6 +227,16 @@ class _PlanePatrolBase(
             up_key, minval=params.slot_up_range[0], maxval=params.slot_up_range[1]
         )
 
+        # In a stream a reset is a sortie: each aircraft draws its mass
+        # (long-strata S1b). A window keeps the scored configuration's.
+        lead_mass, follower_mass = (
+            in_stream(
+                params,
+                sortie_mass(jax.random.fold_in(sortie_key(key), seat), params),
+                params.initial_mass,
+            )
+            for seat in (0, 1)
+        )
         speed = lead_cruise_speed(lead_alt, params)
         lead = make_cruise_state(
             x=0.0,
@@ -211,6 +247,7 @@ class _PlanePatrolBase(
             params=params,
             target_altitude=lead_alt,
             target_heading=lead_heading,
+            **_loaded(lead_mass, params),
         )
 
         # Provisional state to compute the world-frame slot position.
@@ -240,10 +277,53 @@ class _PlanePatrolBase(
             params=params,
             target_altitude=lead_alt,
             target_heading=lead_heading,
+            **_loaded(follower_mass, params),
         )
 
         state = provisional.replace(follower=follower)
         return self.get_obs(state, params), state
+
+    def start_event(self, state: PatrolState, key, params: PatrolParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1b): a new
+        sortie, the pair in cruise on a fresh route and station, each aircraft
+        at a fresh mass, in the air the last sortie left (its gusts) and on the
+        same clocks. The patrol has no other event."""
+        fresh = self.reset_env(key, params)[1]
+        return fresh.replace(
+            time=state.time,
+            sensor_key=state.sensor_key,
+            gust_history=state.gust_history,
+            gust_own=state.gust_own,
+            lead_turn_rate=fresh.lead_turn_schedule[lead_leg(state.time, params)],
+            lead=fresh.lead.replace(time=state.lead.time),
+            follower=fresh.follower.replace(time=state.follower.time),
+        )
+
+    def restart_plant(self, key: chex.PRNGKey, state: PatrolState, params):
+        """After a trip the scripted lead flies on (``OUTSIDE_WORLD``), so the
+        follower re-forms on it: at its slot plus the spawn noise, at the
+        lead's heading and cruise speed, with its clock running on so the
+        turbulence it meets is the one it would have met (long-strata S2)."""
+        fresh = self.reset_env(key, params)[1]
+        noise = params.follower_spawn_noise * jax.random.normal(
+            jax.random.fold_in(key, 1), (3,)
+        )
+        slot_x, slot_y, slot_z = desired_slot_position(state)
+        lead = state.lead
+        follower = make_cruise_state(
+            x=slot_x + noise[0],
+            y=slot_y + noise[1],
+            z=slot_z + noise[2],
+            psi=lead.psi,
+            speed=lead_cruise_speed(lead.target_altitude, params),
+            params=params,
+            target_altitude=state.follower.target_altitude,
+            target_heading=state.follower.target_heading,
+            # In a stream the sortie's mass, which the burn never lowers.
+            mass=in_stream(params, state.follower.m, params.initial_mass),
+            fuel=in_stream(params, state.follower.fuel, params.initial_fuel_quantity),
+        ).replace(time=state.follower.time)
+        return canonical_dtypes(fresh.replace(follower=follower))
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: PatrolState, params: PatrolParams, frames, clock):
@@ -368,3 +448,10 @@ class WakeSurf(PlanePatrol):
         if tripped is not None:
             state = _read_angles(state, params)
         return compute_reward_terms_wake_surf(state, params, tripped=tripped)
+
+
+def _loaded(mass, params):
+    """``make_cruise_state``'s mass and fuel for an aircraft of all-up ``mass``:
+    a stream's sortie, or the scored configuration in a window."""
+    fuel = in_stream(params, fuel_for(mass, params), params.initial_fuel_quantity)
+    return dict(mass=mass, fuel=fuel)
