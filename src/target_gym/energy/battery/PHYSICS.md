@@ -81,6 +81,7 @@ r  = clip(x, -1, 1),   dS/dt = r - m
 | `T_cell_start` | 25 | degC | TESLA-MP2XL rating temperature |
 | `soc_error_std` | 0.075 | - | MPS-ACCURE, +-15 % read as 2 sigma; ours within the family's 0 to 40 % |
 | `soc_drift_rate` | 8.27e-8 | 1/s | MPS-ACCURE, 10 % after 14 days; the random sign is ours |
+| `knee_soc` | -1, 2 (window); 0.20, 0.80 (stream) | - | The plateau's ends, ARX-LFP's "roughly SOC 20% to 80%"; that the BMS corrects right there is ours, family range 0.05 to 0.20 and 0.80 to 0.99 (owner, 2026-11-11: it recalibrates at a knee) |
 | `soc_temp_coeff` | 0.0051 | 1/degC | ARX-LFP Fig. 5 |
 | `T_bms_curve` | 25 | degC | ARX-LFP, the 25 degC curve |
 | `reserve_fraction` | 0.4 | - | NESO-SOE sec. 3, DR |
@@ -247,8 +248,10 @@ Amendment 3 and pass.
   2026-11-08 for that reason: it tests a service the task does not model.
 - **The signal's shape is ours**, inside the family range above. It is
   PJM-style regulation under GB rules.
-- **No BMS recalibration** at the voltage knees; the temperature shift applies
-  over the whole range, where ARX-LFP measured it on the second plateau.
+- **No BMS recalibration in a window**: its knees are out of reach, so the
+  estimate drifts from the reset as before. A stream recalibrates (section
+  "The stream"). The temperature shift applies over the whole range, where
+  ARX-LFP measured it on the second plateau.
 - **No thermal model**: the cells sit at 25 degC.
 - **Losses are lumped on charge** (CAISO's form), and the cell sees the meter's
   power; the 0.25 mOhm is an AC figure used for the DC drop.
@@ -311,3 +314,38 @@ Each scenario's real operating time, in 4 h blocks a year of 2190
 spike 60, long deviation 20, long deviation with a wrong estimate 1. All are
 ours, with family ranges in `scenarios.py`; REALITY.md gives the events but
 not how many blocks a year hold them.
+
+## The stream (docs/proposals/long-strata.md, S1; owner's calls of 2026-11-11)
+
+As a continuing plant (`target_gym.stream`) the battery runs block after block:
+
+- **The BMS recalibrates at a voltage knee.** Once the true state of charge
+  leaves the LFP plateau (at or below 20 %, at or above 80 %, ARX-LFP), the BMS
+  corrects on the OCV: as the cells enter a knee the estimate's error is drawn
+  afresh from the family's spread (`soc_error_std`), and its drift counts from
+  the last step in the knee. A policy that never visits a knee pays for the
+  drift: 10 % in 14 days (MPS-ACCURE). Reaching a knee costs availability, since
+  the service's requirement keeps the reported energy near the middle. The
+  drift keeps its sign, the Ah counter's bias. The error a recalibration draws
+  shows from the next step.
+- **The wrong estimate acts through the same mechanism**: each recalibration in
+  that regime, and a stream's start in it, draws the error at sd 20 %.
+- **Each regime lasts one EFA block** on average (4 h, the unit the weights
+  count in) and brings the window's one event a visit. So the long deviation
+  keeps its real, rare rate: 20 a year (Q8, ours, family range 5 to 50).
+- **A price event is cleared past the visible horizon**: an hourly price at a
+  level in the regime's range, for the first period the observation does not
+  yet show (four on), so a known day-ahead price never changes.
+- **The day-ahead prices are a ring** of 48 periods: each period's price returns
+  to the base once it has passed, so the day never runs out and an event never
+  comes back a day later. The baselines share the ring: each period's is
+  written while it is open, before it is read.
+- **Gate closure counts steps**, and the deviation's clock counts from its own
+  onset, so both stay exact however long the plant runs.
+- **A stream starts with neither of the window's events.**
+
+The knees' reading (that the BMS corrects at the plateau's ends) and the
+dwells are ours, set once without tuning and open for the owner. The search
+for a sourced recalibration threshold found only vendor posts and a patent
+that calibrates at 99 %, none a standard. In a window nothing changes: a
+scored window is bit-identical to what it was.
