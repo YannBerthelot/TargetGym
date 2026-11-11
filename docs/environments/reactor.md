@@ -13,7 +13,7 @@ env, params = tg.make("reactor")
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((11,))` |
+| Observation space | `Box((13,))` |
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
 | Cite as | `reactor-v9` |
@@ -31,21 +31,23 @@ actuator range inside the environment.
 
 ## Observation space
 
-11 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
+13 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
 | 0 | `n`, power relative to rated |
 | 1 | hot-leg temperature (K) |
 | 2 | rod position, +1 fully out, -1 fully in |
-| 3 | turbine load |
+| 3 | turbine load: the plan's, or while the turbine reloads after a trip's restart, the reload's |
 | 4 | `T_avg` (K) |
 | 5 | `T_ref` (K) |
 | 6 | `delta_I`, top minus bottom, a fraction of rated |
 | 7 | boron in the core (ppm), as the boronmeter read it 20 min ago |
 | 8 | hours until the planned ramp down starts, 0 once it has |
 | 9 | hours until the planned ramp up starts, 0 once it has |
-| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history) |
+| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history); after a trip's restart, the power whose balance is the restart's xenon, 1 when it is above full power's |
+| 11 | the day's ramp rate, % of rated load a minute, as the dispatch gives it (owner, 2026-11-12) |
+| 12 | the day's minimum load, a fraction of rated, as the dispatch gives it |
 
 ## Rewards
 
@@ -63,7 +65,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 37 fields.
+`reset` samples the initial condition and the target; state has 44 fields.
 
 ## Episode end
 
@@ -140,6 +142,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
+| `renewal_days` | 0 | d |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
@@ -165,7 +168,11 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |
-| `standby_steps` | 1800 | steps |
+| `standby_steps` | 720 | steps |
+| `restart_load` | 0.15 | fraction of rated load |
+| `reload_knee` | 0.5 | fraction of rated load |
+| `reload_fast_rate` | 4.16667e-05 | 1/s |
+| `reload_rate` | 8.33333e-06 | 1/s |
 | `rho_floor_tracking` | 0.0958333 | reward |
 | `rho_floor` | 0.0958333 | reward |
 

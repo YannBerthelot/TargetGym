@@ -332,6 +332,22 @@ The next release is 0.8.0, because these changes break code written for
   - `plane`, `plane_sine` and `plane_energy`: the oracles move to the shared solver.
     Recorded oracle numbers for these tasks no longer apply. Oracle horizons for all
     ten aircraft tasks are new.
+- **`reactor`'s restart and its dispatch (the re-record pass, step 2).** Upgrade
+  notes:
+  - The observation grows from 11 to 13 channels: obs 11 is the day's ramp rate (%
+    of rated load a minute) and obs 12 its minimum load. The first 11 are unchanged.
+  - After a trip the plant restarts at 15 % of rated power and the turbine reloads
+    at 15 %/h to 50 % and 3 %/h above, until it meets the plan. Obs 3 shows the
+    reloading turbine's load, and the plan it does not take is charged in tracking.
+    New params: `restart_load`, `reload_knee`, `reload_fast_rate`, `reload_rate`.
+    `target_n` and `T_ref` left `Reactor.OUTSIDE_WORLD`.
+  - A hot standby's lump falls from 15 h to 6 h (`standby_steps` 1800 to 720), and
+    its xenon decays over 6 h: a standby trip costs $480,000, not $1.2 M.
+  - The expert reads each day's dispatch, with the day's own rate and minimum, and
+    feeds forward only the load the turbine takes. Its edf_daily, edf_short_hold and
+    baseload windows are unchanged; its Krsko and fast_return windows no longer trip.
+  - Windows are unchanged up to their first trip. Recorded reactor numbers no longer
+    apply.
 
 ### Changed
 

@@ -115,6 +115,9 @@ class ReferenceParams:
     # reference, half the 0.05 target band (owner, 2026-11-08; PHYSICS.md section 6).
     action_band: float = 0.025
     lead: float = 20.0 * 30.0  # s, the middle of the line's 10 to 30 steps
+    # The turbine reloads after a trip's restart when its load reads this far under
+    # the plan (owner, 2026-11-12): ours, 10 times the frequency wobble's 0.5 % sd.
+    reload_band: float = 0.05
     park: float = 1.0 - 2.0 * 3.0 / 228.0
     reach: float = 30.0 * 72.0 / 60.0 / 228.0 * 2.0
 
@@ -132,6 +135,8 @@ class ReferenceState:
     clock: float = 0.0
     down: float = 0.0
     up: float = 0.0
+    rate: float = 0.0  # the day held: its ramp rate (1/s) and depth, as dispatched
+    depth: float = 0.0
     I_hat: float = 0.0
     Xe_hat: float = 0.0
     debt: float = 0.0  # ppm the xenon tool has not moved (its play)
@@ -221,22 +226,62 @@ def xenon_play(debt, ppm_rate, plant, dt, lead, dead_band, xp=jnp):
     return debt - left, left
 
 
+def reload_from(load, seconds, plant, xp=jnp):
+    """The reloading turbine's load ``seconds`` after it read ``load``: the
+    plant's conditioning ramps, ``reload_fast_rate`` up to ``reload_knee`` and
+    ``reload_rate`` above (``ReactorParams.restart_load``), which the operators run
+    and so know."""
+    p = plant
+    to_knee = xp.maximum(p.reload_knee - load, 0.0) / p.reload_fast_rate
+    below = load + p.reload_fast_rate * seconds
+    above = xp.maximum(load, p.reload_knee) + p.reload_rate * xp.maximum(
+        seconds - to_knee, 0.0
+    )
+    return xp.where(seconds <= to_knee, below, above)
+
+
 def reference_step(params, state, obs, xp=jnp):
     """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron
-    (20 min late), to_down, to_up, xenon's power history]``, the action ``[rod
-    demand, boron flow]``."""
-    from target_gym.reactor.env import (
-        ReactorParams,
-        rod_insertion_limit,
-        scheduled_load,
-    )
+    (20 min late), to_down, to_up, xenon's power history, the day's ramp rate
+    (%/min), its minimum load]``, the action ``[rod demand, boron flow]``."""
+    from target_gym.reactor.env import ReactorParams, rod_insertion_limit
 
     p, plant = params, ReactorParams()
     n, rod, T_avg, T_ref = obs[..., 0], obs[..., 2], obs[..., 4], obs[..., 5]
     di, to_down, to_up = obs[..., 6], obs[..., 8], obs[..., 9]
     first = state.clock == 0.0
-    down = xp.where(first, to_down * 3600.0, state.down)
-    up = xp.where(first, to_up * 3600.0, state.up)
+    # Each day's dispatch is read as it comes (re-record pass, step 2): on the first
+    # step, and when the hours ahead show a new day once the day held has ended,
+    # with the day's own ramp rate and minimum (owner, 2026-11-12). A ramp the
+    # dispatch reads 0 for has already run: it is placed a ramp before now.
+    held_span = state.depth / xp.maximum(state.rate, 1e-12)
+    ended = state.clock >= state.up + held_span
+    read = first | ((to_down > 0.0) & ended)
+    day_rate = xp.where(read, obs[..., 11] / 6000.0, state.rate)
+    day_depth = xp.where(read, 1.0 - obs[..., 12], state.depth)
+    span = day_depth / xp.maximum(day_rate, 1e-12)
+
+    def start(hours):
+        return xp.where(hours > 0.0, state.clock + hours * 3600.0, state.clock - span)
+
+    down = xp.where(read, start(to_down), state.down)
+    up = xp.where(read, start(to_up), state.up)
+
+    def plan(t):
+        fall = xp.minimum(day_rate * xp.maximum(t - down, 0.0), day_depth)
+        rise = xp.minimum(day_rate * xp.maximum(t - up, 0.0), day_depth)
+        return 1.0 - fall + rise
+
+    # The load the turbine takes: the plan, or while it reloads after a restart
+    # (its load reads well under the plan), the reload until it meets the plan.
+    # Only that load is fed forward (owner, 2026-11-12).
+    load = obs[..., 3]
+    reloading = load < plan(state.clock) - p.reload_band
+
+    def taken(t):
+        planned = plan(t)
+        climbed = reload_from(load, t - state.clock, plant, xp)
+        return xp.where(reloading, xp.minimum(planned, climbed), planned)
 
     off = p.ao_ref - di / xp.maximum(n, 0.05)
     ao = xp.sign(off) * xp.maximum(xp.abs(off) - p.action_band, 0.0)
@@ -244,8 +289,7 @@ def reference_step(params, state, obs, xp=jnp):
     rods = held + p.wd_Kc * ((ao - state.last_ao) + p.dt / p.wd_Ti * ao)
     # Through a ramp boron can't follow, the rod program takes Tavg; the offset
     # loop picks up from where it leaves the rods (PHYSICS.md section 6).
-    now = scheduled_load(state.clock + p.dt, down, up, plant, xp=xp)
-    now = (now - scheduled_load(state.clock, down, up, plant, xp=xp)) / p.dt
+    now = (taken(state.clock + p.dt) - taken(state.clock)) / p.dt
     fast = ~boron_can_follow(now, obs[..., 7], plant, xp)
     rc_state = RodControlState(state.rc_lag, state.rc_moving, state.rc_started)
     rc_action, rc_state = rod_control_step(
@@ -255,9 +299,7 @@ def reference_step(params, state, obs, xp=jnp):
     rods = xp.clip(rods, rod - p.reach, rod + p.reach)
     # Above the insertion limit where the plan puts the power by the step's end:
     # on a ramp up the limit tightens as the power rises.
-    after = xp.maximum(
-        n, now * p.dt + scheduled_load(state.clock, down, up, plant, xp=xp)
-    )
+    after = xp.maximum(n, now * p.dt + taken(state.clock))
     rods = xp.clip(rods, 1.0 - 2.0 * rod_insertion_limit(after, plant), p.park)
 
     error = T_ref - T_avg
@@ -266,8 +308,7 @@ def reference_step(params, state, obs, xp=jnp):
     boron = xp.clip(boron, -1.0, 1.0)
 
     t = state.clock + p.lead
-    planned = scheduled_load(t + p.dt, down, up, plant, xp=xp)
-    planned = planned - scheduled_load(t, down, up, plant, xp=xp)
+    planned = taken(t + p.dt) - taken(t)
     rate, I_hat, Xe_hat = xenon_rate(
         state.I_hat, state.Xe_hat, n, first, plant, p.dt, xp, obs[..., 10]
     )
@@ -276,7 +317,8 @@ def reference_step(params, state, obs, xp=jnp):
     out = xp.clip(boron + p.ff * planned + xenon, -1.0, 1.0)
     new = ReferenceState(
         rods=rods, boron=boron, last_ao=ao, last_e=e, clock=state.clock + p.dt,
-        down=down, up=up, I_hat=I_hat, Xe_hat=Xe_hat, debt=debt,
+        down=down, up=up, rate=day_rate, depth=day_depth, I_hat=I_hat,
+        Xe_hat=Xe_hat, debt=debt,
         rc_lag=rc_state.mismatch_lag, rc_moving=rc_state.moving,
         rc_started=rc_state.started,
     )  # fmt: skip
