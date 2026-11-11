@@ -35,20 +35,20 @@
     "tuning_rule": "SIMC (Skogestad and Grimholt 2012), tau_c = theta, on one bump test of the cooling water (+0.2 raw) from the design steady state, noise and events off (cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it; the bump test is noise-free, so every level shares it"
   },
   "ph_neutralization": {
-    "Kp": 0.199303,
-    "Ti": 98.547178,
+    "Kp": 0.654774,
+    "Ti": 180.0,
     "Tf": 0.0,
     "model": {
       "demand": {
-        "k": 19.778344,
-        "tau1": 98.547178,
-        "theta": 12.500001,
-        "band": 0.057769,
-        "step": 0.016667,
-        "bands": 34.236953,
-        "spread": 1.073746,
+        "k": 19.212721,
+        "tau1": 566.099537,
+        "theta": 22.5,
+        "band": 0.067522,
+        "step": 0.009091,
+        "bands": 28.454135,
+        "spread": 1.094651,
         "tests": 10.0,
-        "tau_c": 12.500001
+        "tau_c": 22.5
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -288,19 +288,11 @@
   },
   "hvac": {
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "kp": 0.2018905979455138,
-    "Ti": 1100.2272025202958,
     "model": {
-      "T_air": {
-        "k": 3.027567,
-        "tau1": 1100.227203,
-        "theta": 450.0,
-        "band": 0.1,
-        "step": 0.164261,
-        "bands": 4.973125,
-        "spread": 1.035059,
-        "tests": 10.0,
-        "tau_c": 450.0
+      "curve": {
+        "T_set": 21.0,
+        "T_out_design": -10.0,
+        "T_supply_design": 27.71875
       }
     }
   },
