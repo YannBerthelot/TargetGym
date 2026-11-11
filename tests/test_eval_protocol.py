@@ -488,16 +488,16 @@ def test_without_anticipation_every_number_is_unchanged(law):
     _assert_same_as_before(episodes, burn_in=50)
 
 
-@pytest.mark.parametrize("name", ["battery", "hvac", "plane_energy"])
+@pytest.mark.parametrize("name", ["battery", "plane_energy"])
 def test_real_pid_episodes_are_unchanged(name):
-    """The same on the three plants whose test episodes hold more than one
-    target: the shipped PID on the battery (dispatch blocks under white
-    dispatch noise), the building (occupancy switches under weather, with a
-    dead band at night) and the energy-managed aircraft (a ladder of speed
-    and altitude targets), on the seeds ``evaluate_controller`` runs. Nothing
-    in the protocol reads a run's cost to find its window any more, so with no
-    lead every number is what the protocol gave before the rule. The
-    building's lead has its own test."""
+    """The same on the plants whose test episodes hold more than one target:
+    the shipped PID on the battery (dispatch blocks under white dispatch
+    noise) and the energy-managed aircraft (a ladder of speed and altitude
+    targets), on the seeds ``evaluate_controller`` runs. Nothing in the
+    protocol reads a run's cost to find its window any more, so with no lead
+    every number is what the protocol gave before the rule. The building left
+    this list on the owner's word (2026-11-11): rebuilt, it holds one setpoint
+    all year with no night setback, so its episodes have one target."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
 

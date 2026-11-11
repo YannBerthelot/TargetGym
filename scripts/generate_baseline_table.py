@@ -389,7 +389,8 @@ def _glance() -> list[str]:
         "and where the ceiling sits: tracking every quantity within its",
         "instrument's resolution. Switch the anchor to the ceiling to see how far",
         "each controller is from as good as a real plant can verify. Hover a row",
-        "for the numbers, including the whole episode.",
+        "for the numbers, including the whole episode. Only tasks scored on",
+        "tracking are drawn; a task charged in money is under Charter lines.",
         "",
         '<div class="tg-results-chart"></div>',
         '<script type="application/json" id="tg-results-data">'

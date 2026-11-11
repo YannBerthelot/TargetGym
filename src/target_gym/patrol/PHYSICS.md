@@ -178,7 +178,7 @@ definition depends on.
 | Collision trips the plant | the version-2 reward is at most minus the trip cost | `test_collision_terminates_with_penalty` |
 | Losing formation trips the plant | at `max_slot_error` | `test_lost_formation_terminates` |
 | Separation trips before the wingtips meet | span + 0.5 m trips, 41 m does not | `test_separation_trips_before_the_wingtips_meet` |
-| Either aircraft past the envelope trips | load, bank, VMO, MMO, on each seat | `test_any_aircraft_past_the_envelope_trips` |
+| No aircraft trips past its protected envelope | load, bank, MMO past the protection, on each seat, the slot out of reach | `test_no_aircraft_trips_past_its_protected_envelope` |
 | Both aircraft spawn on the schedule, inside the envelope | the schedule's speed at the drawn height | `test_every_aircraft_spawns_on_the_schedule_inside_the_envelope` |
 | The lead holds its level on the schedule at any mass | 2 m and 1 m/s in still air, 73.5 and 62 t | `test_the_scripted_lead_holds_its_level_on_the_schedule` |
 | The hard turn is coordinated | 0.03 rad/s, `tan(bank) = V w / g` | `test_the_hard_turn_is_a_coordinated_30_deg_bank` |

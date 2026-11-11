@@ -43,6 +43,7 @@ from target_gym.base import (
 from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace import physical as P
 from target_gym.glass_furnace.rendering import _render
+from target_gym.video import SavesVideo
 
 WALKS = ("gas", "pull", "cullet", "thickness", "sulfate")
 OBS_NAMES = (
@@ -281,7 +282,9 @@ def compute_reward(state, params):
 
 
 class GlassFurnace(
-    RegistryExperts, environment.Environment[GlassFurnaceState, GlassFurnaceParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[GlassFurnaceState, GlassFurnaceParams],
 ):
     """A regenerative float glass furnace, its melt in two dimensions.
 

@@ -81,7 +81,6 @@ aircraft, in the JaxMARL style; every agent receives the team reward and
 | Each wingman meets the lead's wake on its own side | one upwash in still air | `test_each_wingman_meets_the_wake_on_its_own_side` |
 | The expert's lead seat flies the schedule | 2 m/s of it at 3000 m, no trip | `test_the_formation_lead_seat_flies_the_schedule` |
 | The multi-agent view is the joint task split by seat | same observations, same reward | `tests/formation/test_formation_marl.py` |
-| The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_the_formation_lead_holds_altitude_and_heading` |
 | The expert flies every held-out seed | no trip on seeds 200-209, and the lead's altitude within 2 m on average; the slot and heading objectives are reported, not required of a reference (owner, 2026-11-10) | `test_the_expert_never_trips`, `test_the_formation_lead_holds_its_altitude` |
 
 The environment also passes every shared contract in

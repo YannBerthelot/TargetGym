@@ -28,7 +28,7 @@ the surge line, with as little recycle as possible and no counted surge.
 | `zone_price` | 1000 | kJ/s | ours: a second outside the zone costs about 16 s of the hold's recycle power |
 | `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
 
-The hidden surge-line offset (`surge_offset_max`), the moving setpoint
+The hidden surge-line offset, the moving setpoint
 schedule (`p_ref_range`) and the travel, tracking and running terms are gone:
 none had a source.
 
@@ -278,7 +278,7 @@ run with `xp=np` (float64); the velocity, its Jacobian and the step run under
 | Damping near the line, 24 kPa, recycle shut | falls as the margin shrinks | zeta 0.619 at an 8 % margin to 0.105 on the line, monotone over 41 margins (derived) | `test_damping_collapses_toward_the_line` | ✅ |
 | Stability boundaries over the action box | none at or right of the line | 107 (speed, recycle) families reach the peak with opening in [0.2, 1]; the trace on the peak is at most -1.58 /s; the Hopf point sits 0.70 % (105 %, recycle 0.30) to 3.77 % (70 %, recycle shut) left of the peak in the 105 families that meet one (derived) | `test_boundaries_lie_left_of_the_peak` | ✅ |
 | Fan laws | flow as N, pressure as N^2 (exact) | to 1e-5 at 70, 87.5 and 105 %, no static head, recycle shut | `test_fan_laws` | ✅ |
-| Surge line | dp = K m^2, K = 215.51 Pa/(kg/s)^2 (derived) | the smallest trip-free opening at 80, 90 and 100 % lies on it to 1 % | `test_surge_line_is_a_parabola` | ✅ |
+| Surge line | dp = K m^2, K = 215.51 Pa/(kg/s)^2 (derived) | Phi = 2W, the peak at every speed (`surge_constant`, derived) | no test of the parabola since version 4; `test_the_compressors_planned_surge_limit_is_the_surge_line` checks the oracle's limit is Phi = 2W | ⚠️ |
 | Plenum mass balance | V_p / a01^2 (dp_end - dp_0) = integral of m_c | agrees to 0.1 % of the integral of \|m_c\| over a 2 s fill into deep surge, valves sealed, a01 from the ISA table | `test_plenum_mass_balance_closes` | ✅ |
 | Reset | right of the line, converged | six Newton steps equal a bisection root to 1e-6 in float32; Phi 0.530 to 0.728 over openings 0.2 to 1.0 (derived) | `test_reset_is_surge_safe_and_converged` | ✅ |
 | Integrator | `rk4_10` against `rk4_40` | section 1 | `test_integrator_is_converged` | ✅ |
@@ -334,7 +334,6 @@ at the end, with their sources.
 | `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the moving setpoint (section 6) | ⚠️ |
 | `setpoint_block_steps` | 300 (30 s) | steps | ours | four blocks per episode | ✅ |
 | `setpoint_ramp_s` | 10.0 | s | ours | linear ramp at the start of every block, from the reset's own pressure in the first: twice the 4.9 s the drive needs for a full 20 to 28 kPa move on the control line (section 4), and under half a block so that the scorer still reads each move | ⚠️ |
-| `surge_offset_max` | 0.05 | fraction of flow | ours | the episode's line sits uniformly 0 to 5 % right of the map's. Half the conventional 10 % margin (Mirsky et al. pp.11, 13). Mirsky et al. p.11 list the line's uncertainty among what the margin pays for, and give no figure, so this is ours for the owner to accept | ⚠️ |
 | `demand_range` | (0.35, 0.95) | opening | ours | six levels per episode | ⚠️ |
 | `demand_block_steps` | 200 (20 s) | steps | ours | | ✅ |
 | `demand_ramp_s` | 5.0 | s | ours | linear ramp at the start of blocks 2 to 6; section 6 rows at 2 and 10 s | ⚠️ |
@@ -362,14 +361,14 @@ All derived from the parameter table (`--section params` and
 | omega_H, f_H, Helmholtz period | 13.892 rad/s, 2.211 Hz, 0.452 s | `test_helmholtz_pair_on_the_peak` |
 | B at 70 / 87.5 / 100 / 105 % | 1.260 / 1.575 / 1.800 / 1.890 | |
 | rated peak, pressure ratio | 32.34 kPa, 1.319 | |
-| surge constant K, surge flow at rated | 215.51 Pa/(kg/s)^2, 12.25 kg/s | `test_surge_line_is_a_parabola` |
+| surge constant K, surge flow at rated | 215.51 Pa/(kg/s)^2, 12.25 kg/s | derived, `surge_constant` |
 | surge flow at 20 / 24 / 28 kPa | 9.633 / 10.553 / 11.398 kg/s | |
 | zero-head Phi of the tangent line | 0.8316 | `test_characteristic_is_the_moore_greitzer_cubic` |
 | deliverable flow at 105 %, 20 / 28 kPa | 18.70 / 17.08 kg/s against 12.00 / 16.10 at full opening | `test_every_block_is_feasible` |
-| blocks that force recycle (setpoint and demand uniform) | 66 % with no margin | `test_most_blocks_force_recycle` |
-| fixed-recycle band | at least 0.256 to keep off the line, at most 0.071 for 105 % to hold 28 kPa at demand 0.95 | `test_no_fixed_valve_is_both_safe_and_able` |
+| blocks that force recycle (setpoint and demand uniform) | 66 % with no margin | version 2's moving setpoint, not tested since version 4 |
+| fixed-recycle band | at least 0.256 to keep off the line, at most 0.071 for 105 % to hold 28 kPa at demand 0.95 | version 2's moving setpoint, not tested since version 4 |
 | recycle opening that alone carries the surge flow | 0.454, at any pressure | `test_zero_action_never_trips` |
-| lowest pressure an untripped plant holds | 7.32 kPa (70 %, recycle and consumers fully open) | `test_restart_and_failure_cost_are_derived` |
+| lowest pressure an untripped plant holds | 7.32 kPa (70 %, recycle and consumers fully open) | `--section params` |
 | duct Mach number | 0.29 on the rated peak, 0.48 at Phi 0.777 and 105 % | D2 |
 | blocks that force recycle at a 5 / 10 / 15 % margin | 73 / 80 / 88 % | |
 | fixed-recycle band at a 5 / 10 / 15 % margin | at least 0.280 / 0.306 / 0.335 to keep off the line | |
@@ -406,8 +405,7 @@ integrates with, so the total opening can be inferred from it. Hidden: how
 that opening splits into block level and deviation, both schedules' future
 values, the clock and `phi_min`. The surge margin,
 `obs[1] / (12.25 obs[3] / 100) - 1` against the map, has no channel of its own and
-is left for the agent to learn. The true margin is up to `surge_offset_max` less,
-and nothing observed says how much.
+is left for the agent to learn.
 
 **Action** (2): speed command in [70, 105] % and recycle command in [0, 1],
 from raw [-1, 1]. Raw 0 is 87.5 % speed and a half-open recycle. A recycle
@@ -445,29 +443,25 @@ which `reset_env` sets to 0.
 opening, drifted by an initial deviation drawn from its stationary law and
 clipped at 3 sd. Every such equilibrium is right of the line (Phi 0.530 to
 0.728, `test_reset_is_surge_safe_and_converged`). The reset is off the first
-level. Its pressure spans 18.06 to 32.14 kPa against setpoints of 20 to 28 kPa
-(derived, `--section steady`), so the target opens on that pressure and ramps onto
-level 0 in 10 s, an approach the hold measurement's burn-in excludes
-(`test_the_first_move_ramps_from_the_resets_own_pressure`). Over 256 resets the first step
+level. Since version 4 the reset runs at the speed that holds the constant
+24 kPa setpoint (section above), so the target no longer ramps from the
+reset's own pressure. Over 256 resets the first step
 never trips, under zero action or full travel low (smallest phi_min 0.584,
 measured, `--section reach`).
 
 **Switch step.** The reward and the observation of one state use the same
 live setpoint, and a step on a ramp is scored against where the ramp has reached
-(`test_live_target_follows_the_block_clock`). The scorer reads a ramp as one move, at
+(`test_a_setpoint_ramps_linearly_between_its_levels`). The scorer reads a ramp as one move, at
 its start (`test_a_compressor_ramp_starts_one_cycle`), so the 100-step fixed settle
 is the ramp itself and the hold opens as the ramp ends. The pair settles about 147
 steps after a ramp starts (training seeds 100 to 109), so PR 8's settle should cover
 that.
 
-**Trip and restart.** The plant trips when the soft minimum of Phi over a
-step's substeps falls below the episode's line, 2W (1 + `surge_offset`). The map's
-line, offset 0, is 2W = 0.5, the peak at every speed; in (m, dp) terms the parabola
-dp = 215.51 m^2 (`test_trip_reads_the_substep_minimum`,
-`test_surge_line_is_a_parabola`). The offset is drawn per episode, uniform up to
-`surge_offset_max`, and hidden, so a controller has the map and a margin, as a real
-one does (D7, `test_the_trip_reads_the_episodes_line`). The oracle reads it, as it
-reads the rest of the true state. A dip between control samples trips. The
+**Trip and restart.** Since version 4 the plant trips on counted surges, not
+on the line: three flow reversals within 15 s (section above,
+`test_one_short_surge_does_not_trip_and_three_in_the_window_do`). The line is
+2W = 0.5, the peak at every speed, the same in every episode; in (m, dp)
+terms the parabola dp = 215.51 m^2 (`surge_constant`). The tripped
 step is charged the trip cost and the plant restarts at once from a fresh
 draw of the reset, schedule clock at 0 (`base.failure_kernel`,
 `test_a_trip_restarts_fresh_on_the_same_clock`); with `continuing = False`
@@ -724,7 +718,7 @@ The tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
 pair. `test_default_gains_are_finite_and_tuned_ones_nonzero` and
 `test_gains_are_read_under_the_task_key` check the gains and where they are
 read from. `test_shipped_gains_pass_the_guard` and
-`test_guard_refuses_known_bad_gains` check the guard below.
+`test_the_guard_reads_a_settled_loop` check the guard below.
 `test_override_opens_fully_and_holds`, `test_integrators_do_not_wind_up`
 and `test_reset_clears_the_pair` check the override, the anti-windup and the
 reset. `test_functional_core_matches_the_class` checks that the functional
@@ -779,9 +773,7 @@ leaves the tuner room to trade margin for tracking.
 | speed (0.3, 0.3) | -3.9 to -3.0 (grows) | 0.1127 | 0.0716 | refused on decay, travel |
 
 (decay derived, battery minimum and travel measured, `--section guard`;
-`test_guard_refuses_known_bad_gains` asserts the refusals of the anti-surge
-sets (3, 0.3), (0.5, 0.05), (12, 1.2), (3, 3) and (1, 1) and of speed
-(0.3, 0.3)). The shipped gains pass all three checks
+no test asserts the refusals). The shipped gains pass all three checks
 (`test_shipped_gains_pass_the_guard`).
 
 The pair's float64 host controller and its float32 functional core, run on
@@ -1080,7 +1072,7 @@ recycle is forced pay a running cost no controller can avoid.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `dp_error_max` | 20.68 kPa (derived) | the 28 kPa top level against the 7.32 kPa lowest pressure an untripped plant holds (`--section params`, `test_restart_and_failure_cost_are_derived`); `test_the_error_envelope_is_certified` checks it against random bang-bang on both actuators over 512 episodes; the version-1 envelope and the base of `failure_cost` |
+| `dp_error_max` | 20.68 kPa (derived) | the 28 kPa top level against the 7.32 kPa lowest pressure an untripped plant holds (`--section params`); `test_the_error_envelope_is_certified` checks it against random bang-bang on both actuators over 512 episodes; the version-1 envelope and the base of `failure_cost` |
 | `precision_floor` | 0.0275 kPa (derived) | the header-pressure transmitter's reference accuracy, 0.055 % of calibrated span (read: Yokogawa EJA530E gauge transmitter, GS 01C31F01-01EN, p.1, capsule A at spans of 20 kPa or more, https://web-material3.yokogawa.com/GS01C31F01-01EN.pdf; Siemens SITRANS P320, catalog FI 01 09/2026, p.1/14, 1 bar cell at a turn-down of 5 or less, https://support.industry.siemens.com/cs/attachments/109765052/sitransp_p320_p420_fi01_en.pdf), times a 0 to 50 kPa calibrated span (ours). It covers linearity, hysteresis and repeatability together, and the Yokogawa sheet states it as a 3-sigma bound, so an error below it is one the instrument cannot tell from a smaller one. Neither sheet gives a finer measuring resolution; the one resolution found, the current output's quantisation (Endress+Hauser Cerabar PMP71B, TI01509P, p.24, https://bdih-download.endress.com/file/11181feb66c9cd03e4256402f1eff641/TI01509PEN_1025-00.pdf), is finer than the repeatability and is not used. The value scales with the span. Version 1's floor and the clamp on `e_floor`, so while the clamp binds it sets the version-2 scale |
 | `floor_is_documented_minimum` | False | the plant is disturbed |
 
@@ -1098,10 +1090,8 @@ the pair's 2250. The per-seed NMPC holds are 2.07e-4, 2.89e-4 and 1.03e-4
 kPa, 2.0e-4 pooled, and the pair's 0.043, 0.048 and 0.083 kPa, 0.058 pooled.
 Over the hold the NMPC spends a mean recycle power of 62.27 kW and the pair
 66.1 kW (measured, `src/target_gym/data/hold_measurements.json`).
-`test_floor_is_the_recorded_mpc_hold` checks `e_floor`, `c_hold`,
-`rho_floor_tracking` and `rho_floor` against the recorded hold to 1 %, and
-that the protocol's NMPC hold tracking cost, 0.0018, is at least 0.98 of the
-reference.
+No test checks these figures against the recorded hold since version 4,
+where `e_floor` became the header zone's half-width.
 
 `rho_floor_tracking` is the oracle's best hold for tracking: the lowest per-seed
 hold the reference controller demonstrated, divided by `e_floor` and
@@ -1148,11 +1138,7 @@ lowest hold. `failure_cost` is unchanged by the measurement, since
 - **The shared floor check cannot fail here.** It compares the protocol's
   whole-episode MPC tracking, 60.4 (measured), which includes up to
   (8 / 0.0275)^2 = 84628 per step (derived) while settling after a setpoint
-  move, with a reference of 1.40e-5. `test_floor_is_the_recorded_mpc_hold`
-  in `tests/compressor_surge/test_compressor_surge_experts.py` compares the
-  floor with the recorded MPC hold: `e_floor`, `c_hold`, `rho_floor_tracking`
-  and `rho_floor` against the NMPC's hold in `hold_measurements.json`, and
-  the protocol's MPC hold tracking, 0.0018, against that reference.
+  move, with a reference of 1.40e-5.
 
 ## Readings
 

@@ -30,7 +30,7 @@ wind it sees, the free wind less the tower top's velocity:
     P_elec    = eta N tau_gen w
 
 **Dynamic inflow** (owner, 2026-11-08). The tables hold equilibrium induction, so
-the rotor-average induced velocity `w_i` is a state that lags its quasi-steady value
+the rotor-average induced velocity w_i (the state's `w_induced`) is a state that lags its quasi-steady value
 `w_qs` by Oye's tau1, as OpenFAST's DBEMT writes it [S22]. The tables are read at the
 wind that gives the rotor plane its lagging inflow, so a wind or pitch step changes
 the loads at once and then relaxes as the wake catches up. `a` comes from Ct by
