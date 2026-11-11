@@ -40,13 +40,18 @@ plot-reading tolerance):
    (the decay time 2 / 0.01688 of D4's plant model G2, matching its 118.6 min
    term and D3's "about 2 h") to 194 min [D1], so 89 to 243 min;
 3. the boilup step by the same amount moves both products the other way, "almost
-   the same" [D1]: at steady state eq. 31 gives ratios 0.98 and 1.01, so 0.75 to
-   1.25 on each;
+   the same" [D1]. That is the linear statement: on a step small enough to be
+   linear, the steady ratios are eq. 31's 0.98 and 1.01, so 0.75 to 1.25 on
+   each. At D1's own 0.0027 step Column A is already nonlinear, and Fig. 5 draws
+   the ratios at 500 min as 1.42 (xD) and 0.73 (xB), checked within 25 % on
+   Column A (owner, 2026-11-12: the linear ratio applied to the finite step was
+   a misreading, not missing physics);
 4. L and V up 0.27 together: both purer, with a gain "about 100 times" smaller
    [D1], which eq. 31 puts at 64 (xD) and 80 (xB), so 48 to 125 on each; and
-   "much faster" [D1], read as a 63 % time under a quarter of the external
-   step's: that threshold is authored (ours), as D1 gives no figure with liquid
-   flow dynamics.
+   "much faster" [D1], read as a 63 % time under half the external step's, on
+   the shipped column and on Column A: that threshold is authored (ours), as D1
+   gives no figure with liquid flow dynamics (a quarter until 2026-11-12, which
+   Column A itself misses at 0.28; the owner chose half).
 The three were restated after a cold review (PHYSICS.md section 13).
 Rule 17: the episode starts on spec, the specs sitting the family's give-away
 margin from Column A's products [D7].
@@ -177,14 +182,26 @@ def test_a_reflux_step_moves_both_products_in_the_family_range(shipped):
     assert 89 <= _tail_tau(tr[:, 0]) <= 243
 
 
-def test_a_boilup_step_moves_both_products_the_other_way_in_the_family_range(
-    shipped,
-):
-    dL, _ = _step(shipped, L0 + DL, V0, minutes=3000)
-    dV, _ = _step(shipped, L0, V0 + DL, minutes=3000)
-    for j, (lo, hi) in enumerate(((0.75, 1.25), (0.75, 1.25))):
+#: A step small enough for the column to answer linearly: a hundredth of D1's.
+SMALL = DL / 100
+
+
+def test_a_small_boilup_step_moves_both_products_the_other_way_by_eq_31(shipped):
+    dL, _ = _step(shipped, L0 + SMALL, V0, minutes=3000)
+    dV, _ = _step(shipped, L0, V0 + SMALL, minutes=3000)
+    for j, ratio in enumerate((0.8618 / 0.8754, 1.0982 / 1.0846)):  # eq. 31
         assert np.sign(dV[-1, j]) == -np.sign(dL[-1, j])
-        assert lo <= abs(dV[-1, j]) / abs(dL[-1, j]) <= hi
+        assert 0.75 * ratio <= abs(dV[-1, j]) / abs(dL[-1, j]) <= 1.25 * ratio
+
+
+def test_d1s_boilup_step_moves_the_products_as_fig_5_draws(rest):
+    """[D1, Fig. 5], Column A at 500 min: the boilup step's effect over the
+    reflux step's, 1.42 on xD and 0.73 on xB as read off the figure."""
+    dL, _ = _step(rest, L0 + DL, V0, minutes=500)
+    dV, _ = _step(rest, L0, V0 + DL, minutes=500)
+    for j, ratio in enumerate((1.42, 0.73)):
+        assert np.sign(dV[-1, j]) == -np.sign(dL[-1, j])
+        assert 0.75 * ratio <= abs(dV[-1, j]) / abs(dL[-1, j]) <= 1.25 * ratio
 
 
 def test_internal_flows_purify_both_products_with_a_smaller_faster_gain(shipped):
@@ -195,7 +212,13 @@ def test_internal_flows_purify_both_products_with_a_smaller_faster_gain(shipped)
         gain_step = abs(dL[-1, j]) / DL
         gain_internal = abs(d[-1, j]) / (100 * DL)
         assert 48 <= gain_step / gain_internal <= 125, j
-    assert t63(tr[:, 0]) < 0.25 * t63(ext[:, 0])
+    assert t63(tr[:, 0]) < 0.5 * t63(ext[:, 0])
+
+
+def test_internal_flows_answer_faster_on_column_a(rest):
+    _, ext = _step(rest, L0 + DL, V0, minutes=3000)
+    _, tr = _step(rest, L0 + 100 * DL, V0 + 100 * DL, minutes=3000)
+    assert t63(tr[:, 0]) < 0.5 * t63(ext[:, 0])
 
 
 def test_an_episode_starts_on_spec():
