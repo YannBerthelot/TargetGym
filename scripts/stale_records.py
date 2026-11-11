@@ -11,7 +11,9 @@ A row has two parts, the expert's and the oracle's, each with its own
 fingerprint (``target_gym.provenance``), so ``list`` names the stale parts of
 each environment and its job re-records those alone (``--part expert`` or
 ``--part oracle`` to record_baselines.py and evaluate_baselines.py, neither
-when both are stale).
+when both are stale). ``list`` also prints each charter record's stale parts
+(``target_gym.charter``) to stderr as ``{"charter": {task: parts}}``, so stdout
+stays the jobs; a task with no record lists every part.
 
 ``merge`` writes only the tasks whose rows moved beyond the tolerance
 (``target_gym.records.same``), and only their files, so a weekly run that
@@ -27,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import sys
 
 from target_gym import records
 
@@ -93,6 +96,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         print(json.dumps(jobs(pairs)))
+        from target_gym import charter
+
+        print(json.dumps({"charter": charter.stale_report()}), file=sys.stderr)
     elif args.cmd == "migrate":
         for kind in KINDS:
             for name, row in records.load(kind).items():

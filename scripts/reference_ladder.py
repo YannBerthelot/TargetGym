@@ -576,26 +576,33 @@ def run_rung(name, row, label, controller, spec=None) -> dict:
     return run_suite(name, row, Reference(label, controller), spec)
 
 
-def run_suite(name, row, policy, spec=None) -> dict:
-    """``run_rung`` for any ``benchmark.Policy``."""
+def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
+    """``run_rung`` for any ``benchmark.Policy``. ``seeds`` replaces the ladder's,
+    as one tuple or ``{scenario: seeds}``; with counts that differ by scenario,
+    ``costs`` (per seed across scenarios) is None and ``trips`` the scenarios' sum."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
     weights = scenarios.weights(spec)
     per = {}
     for s in scenarios.suite(spec):
+        own = seeds.get(s.name, SEEDS) if isinstance(seeds, dict) else seeds
+        own = tuple(own or SEEDS)
         params = scenarios.params_for(spec, s, sensor_noise_scale=NOISE, **row.score)
-        task = task_info(name, env, params, len(SEEDS))
+        task = task_info(name, env, params, len(own))
         if hasattr(policy, "bind"):  # a null that reads each episode's reset
-            policy.bind(env, params, SEEDS)
-        episodes = episodes_of(run_policy(policy, env, params, task, seeds=SEEDS))
+            policy.bind(env, params, own)
+        episodes = episodes_of(run_policy(policy, env, params, task, seeds=own))
         per[s.name] = (
             np.array([float(e.cost.mean()) for e in episodes]),
             np.array([bool(np.any(e.failed)) for e in episodes]),
         )
-    costs = sum(weights[n] * c for n, (c, _) in per.items())
-    tripped = np.any([t for _, t in per.values()], axis=0)
+    if len({len(c) for c, _ in per.values()}) > 1:
+        costs, tripped = None, np.array([t.sum() for _, t in per.values()])
+    else:
+        costs = [float(c) for c in sum(weights[n] * c for n, (c, _) in per.items())]
+        tripped = np.any([t for _, t in per.values()], axis=0)
     return {
-        "costs": [float(c) for c in costs],
+        "costs": costs,
         "trips": int(tripped.sum()),
         "scenarios": {
             n: {"costs": [float(x) for x in c], "trips": int(t.sum())}
