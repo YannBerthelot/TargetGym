@@ -138,17 +138,19 @@ snap 1, low gains 0.5. All are ours, with family ranges in `scenarios.py`;
 REALITY.md has no weather statistics.
 
 **The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
-(`target_gym.stream`) each regime lasts a fortnight on average (`dwell_h` 336),
-the fortnight the suite defines it as, and brings no event of its own
-(`events_per_h` 0): the building's scenarios are weather and gains, not upsets.
-No source gives how long a cold snap or a sunny spell lasts (REALITY.md), so
-the dwell is ours, set once without tuning and open for the owner. The day
+(`target_gym.stream`) a cold snap lasts 5.5 d on average, as western European
+cold spells do (`REALITY.md` [ST1]), and the other regimes a fortnight
+(`dwell_h` 336), inside the week to a month weather regimes hold ([ST2]). Each
+brings no event of its own (`events_per_h` 0): the building's scenarios are
+weather and gains, not upsets. A sunny spell's fortnight is ours: blocking highs
+last 5.7 to 10 d ([ST3], [ST4]), and no source gives how long a clear spell or an
+office's low-gain spell lasts (schools close 1 to 2 weeks, [ST5]). The day
 (weather cycle, sun, office hours, tariff) reads a step count wrapped on
 `DAY_STEPS`, exact however long the plant runs; the weather's deviation is
 already mean-reverting from its long-run law. At a switch the outdoor mean does
 not jump: it moves to the new regime's as a first-order lag of `T_out_mean_tau`,
-6 h, as a front takes hours to pass (ours, owner 2026-11-11; REALITY.md has no
-source for how fast). A linear lag keeps the long-run mean and the regimes'
+6 h, as a front takes hours to pass (ours, owner 2026-11-11; no source gives it
+as a time constant, `REALITY.md` [ST6]). A linear lag keeps the long-run mean and the regimes'
 shares. The 24 h forecast includes where the mean is heading, as a forecast sees
 a front coming. In a window nothing changes: a scored window is bit-identical to
 what it was.

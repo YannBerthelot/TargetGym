@@ -69,11 +69,11 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `load_range` | 0.40 to 1.0 | of nominal | [S17] Table 1, hard coal minimum load 25 to 40 %; three-element control holds above 20 to 30 % [S12] |
 | `ramp_rate_range` | 1 to 6 | %/min | Family range: 1 to 2 typical [S10], 1.5 to 6 for coal [S17] |
 | `event_time_range` | 300 to 900 | s | Ours: inside the window, with an hour after it |
-| `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17] |
+| `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17]; inside the 37 to 56 % one plant's ID fan and feed pump derates ran to (REALITY.md [ST1]) |
 | `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
 | `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
 | `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
-| `event_hold` | 3600 | s (stream, upsets) | Ours: how long a runback holds the unit back before it ramps up at its plan's rate, the hour each runback's weight counts; no source gives it; a window never sets it, so its runback holds to the end |
+| `event_hold` | 9990 | s (stream, upsets) | 2.775 h, the median of six ID fan and feed pump forced derates at one plant, 0.35 to 67 h (REALITY.md [ST1]): how long a runback holds the unit back before it ramps up at its plan's rate; a window never sets it, so its runback holds to the end |
 | `window_ramp` | on | - | The window's one planned ramp; a stream turns it off and plans each load change as an event |
 | `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
 | `imbalance_price` | 80 | GBP/MWh | Ours, family range 30 to 156: 59 % of 2018's periods in 30 to 60, short-system mean 78.84 [S22]; annual means 44.61 (2017 to 2020) and 156.20 (2021 to 2022) [S22b] |
@@ -83,8 +83,8 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `level_trip_low` | -0.330 | m | [S9], "Drum Level Low-low (-330 mm)" |
 | `level_trip_high` | +0.254 | m | [S20], "Drum Level HH (+254 mm)" |
 | `level_trip_delay` | 10 | s | [S9] items 23 and 24, "for more than ten seconds"; [S21] on why trips are delayed |
-| `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps |
-| `restart_load` | 0.25 | of nominal steam | Ours, the family's low-load floor (`low_load`'s 25 %): the minimum fire a hot restart relights at (owner, 2026-11-11) |
+| `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps; one plant's trips came back in 0.87 to 11.3 h (REALITY.md [ST1]) |
+| `restart_load` | 0.25 | of nominal steam | [S17] Table 1, hard coal minimum load 25 to 40 %, low end: the minimum fire a hot restart relights at (owner, 2026-11-11) |
 | `failure_cost` | 4.267 | GBP per step | `q_steam_nominal` for one 2 s step, at `steam_rate` and `imbalance_price`: the generation a restart does not make |
 | `e_floor_level`, `e_floor_pressure` | 2.67e-3 m, 0.05 bar | - | Ours, read only by the time-in-band KPI tables, never by the score |
 | `delta_t` | 2 | s | Ours: S1 logged at 0.1 Hz and shows the swell within one or two samples, so 2 s resolves it |
@@ -158,9 +158,12 @@ the plan ramps once to another load, 5 to 15 minutes in. The suite
 
 **Weights (charter J4).** Each scenario's real operating time, in hours a year
 (`scenarios.py`): normal 5600, low load 1600, industrial swing 800, ID fan
-runback 3, feed pump trip 2. All are ours, with the family ranges in
-`scenarios.py`; REALITY.md finds no source for how often a runback or a feed
-pump trip happens. The bad days weigh 0.06 % of the headline together, so it
+runback 1.4, feed pump trip 2.8. The normal, low-load and swing hours are ours,
+with the family ranges in `scenarios.py`. The bad days are sourced (owner,
+2026-11-11): one plant's event log shows 0.5 ID fan runbacks and about 1 feed
+pump trip a unit-year, each holding 2.775 h (REALITY.md [ST1]; EPRI's 1978 survey
+gives 0.75 to 1.25 feed pump failures a unit-year, [ST2]). One plant is a thin
+base. The bad days weigh 0.06 % of the headline together, so it
 is mostly a normal day's; the per-scenario savings and the worst scenario
 show the rest.
 

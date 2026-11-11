@@ -264,9 +264,10 @@ regime itself and brings none. An upset ramps over `acid_upset_ramp` to a level
 drawn within its scenario's size, holds `event_hold`, then ramps back to nominal,
 so it runs to its return through a switch of regime; an upset of one kind never
 ends one of the other. Each schedule counts its steps from its own onset, so a
-ramp keeps its shape however long the plant runs. No source gives how often or
-how long (`REALITY.md`), so these numbers are ours, set once without tuning and
-open for the owner. In a window nothing changes: the window's upsets run as drawn,
+ramp keeps its shape however long the plant runs. The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a window nothing changes: the window's upsets run as drawn,
 the schedules count from step 0, and a scored window is bit-identical.
 
 The permit monitor's excursion clock is a record, not part of the outside world:

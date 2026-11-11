@@ -88,7 +88,7 @@ times slower.
 | `v_ref` | 50 m/s | ours, class I of 37.5 to 50 m/s [S13]; the branch it feeds never binds |
 | `gust`, `gust_window` | 0; 60 to 580 s | [S13]: a 1-year event; the window is ours (any time a whole gust fits after a minute) |
 | `derate_to`, `derate_window` | 1.0; 60 to 300 s | [S11 Fig. ES-8]; the 10 % size of the scenario is S11's AGC de-rate (p. xix); the window is ours |
-| `v_mean_tau` | 0 (window); 6 h (stream) | ours: the mean wind's correlation time in a stream, and the time over which a switch moves the range's ends (owner, 2026-11-11); no source in REALITY.md; 0 holds the window's draw |
+| `v_mean_tau` | 0 (window); 6 h (stream) | ours: the mean wind's correlation time in a stream, and the time over which a switch moves the range's ends (owner, 2026-11-11); inside the 4.5 to 19.5 h that measured one-hour autocorrelations of 0.80 to 0.95 give (REALITY.md [ST3]); 0 holds the window's draw |
 | `derate_hold` | 1e9 s (window); 8 h (stream, curtailment) | ours: how long a curtailment holds before the rating returns, the shift its regime lasts; no source; a window never reaches it |
 | `overspeed_factor` | 1.20 | [S17], "approximately 20 %" |
 | `rating` | 1.0 | [S1 Sec. 7], [S9 Ex. 29] |
@@ -292,6 +292,9 @@ window's events, and the scenario's event starts through `start_event`:
 - Each event's clock counts from its own onset (`gust_c0`, `derate_c0`), so
   float32 keeps it exact however long the plant runs.
 
-Only the gust's one a year is sourced; the dwells, the hold and the 6 h are
-ours, set once without tuning and open for the owner. In a window nothing
+The gust's one a year is sourced [S13]. A curtailment's 8 h dwell and hold are
+inside the 2 to 12 h curtailments last (`REALITY.md` [ST1]), near cut-out's 8 h
+inside the 4 to 11.5 h of high-wind shutdowns ([ST2]), and the 6 h inside measured
+autocorrelations ([ST3]). The normal, gusty and near-rated dwells are ours,
+searched again on 2026-11-11 without a source. In a window nothing
 changes: a scored window is bit-identical to what it was.

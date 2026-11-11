@@ -233,8 +233,10 @@ As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
 and each upset regime a shift, 8 h, with one event per visit on average
 (`events_per_h` 1/8). Each event carries the size it started with, so it runs to
 its return through a switch of regime, and the feed's day wraps on a step count.
-No source gives how often or how long (`REALITY.md`), so these numbers are ours,
-set once without tuning and open for the owner. In a window nothing changes:
+The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a window nothing changes:
 `event_hold` is never reached and a scored window is bit-identical to v6's.
 
 <!-- BEGIN GENERATED FACTS -->

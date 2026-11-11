@@ -79,8 +79,8 @@ def boiler_drum_scenarios() -> tuple:
             "over two minutes' to below the three-mill minimum [S10, Figs. 5, 6]",
             description="an ID fan trip caps firing and runs the unit back from 75 to "
             "100 % load",
-            # hours a year. Ours: 1.1 runbacks a year of 2.775 h; one plant-year shows 0.5 ID fan runbacks a unit-year (REALITY.md [ST1])
-            weight=3.0,
+            # hours a year: 0.5 ID fan runbacks a unit-year of 2.775 h, one plant's 4 unit-years (REALITY.md [ST1]; owner, 2026-11-11)
+            weight=1.4,
             **_UPSET,
         ),
         dict(
@@ -91,8 +91,8 @@ def boiler_drum_scenarios() -> tuple:
             "over 30 s [S11]",
             description="one of two feed pumps trips, the unit runs back, and the "
             "standby pump delivers after 30 to 60 s",
-            # hours a year. Ours: 0.72 trips a year of 2.775 h; sourced 0.75 to 1.25 feed pump trips or failures a unit-year (REALITY.md [ST1, ST2])
-            weight=2.0,
+            # hours a year: 1 feed pump trip a unit-year of 2.775 h; sourced 0.75 to 1.25 a unit-year (REALITY.md [ST1, ST2]; owner, 2026-11-11)
+            weight=2.8,
             **_UPSET,
         ),
     )

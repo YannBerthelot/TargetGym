@@ -1057,9 +1057,10 @@ scenario's own rate. The schedule carries the ramp it was drawn with
 (`demand_ramp`), so a ramp in progress at a switch keeps its rate. The valve's
 dead time and the surge counter read the schedule's clock, which a renewal moves
 back with them, so no clock in the plant grows without bound. `start_event`
-moves the demand now, for a stream given event rates. No source gives how often
-or how long (`REALITY.md`), so these numbers are ours, set once without tuning
-and open for the owner. In a window nothing changes: the schedule never runs out
+moves the demand now, for a stream given event rates. The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The regimes bring no event; the demand
+ranges are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a window nothing changes: the schedule never runs out
 inside it, its clock is the window's, and a scored window is bit-identical.
 
 The surge record (`surge_times`, `surges`) is the plant's history, which the

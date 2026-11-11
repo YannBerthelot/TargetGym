@@ -355,9 +355,11 @@ and each upset regime a shift, 8 h, with one event per visit on average
 (`events_per_h` 1/8): it steps every feed its scenario moves, at the scenario's
 size with a drawn sign. Each step carries its own size and returns after
 `event_hold`, so it runs to its return through a switch of regime, and a step of
-one kind never ends one of the other. No source gives how often or how long
-(`REALITY.md`), so these numbers are ours, set once without tuning and open for
-the owner. In a window nothing changes: `event_hold` is never reached and a
+one kind never ends one of the other. The normal day is sourced: abnormal situations arise almost daily in large
+process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
+ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`). A crude
+unit switches crude every 2 to 5 days ([ST4]), outside this splitter's family. In a window nothing changes: `event_hold` is never reached and a
 scored window is bit-identical.
 
 <!-- BEGIN GENERATED FACTS -->

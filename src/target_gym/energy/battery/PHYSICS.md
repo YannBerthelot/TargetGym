@@ -81,7 +81,7 @@ r  = clip(x, -1, 1),   dS/dt = r - m
 | `T_cell_start` | 25 | degC | TESLA-MP2XL rating temperature |
 | `soc_error_std` | 0.075 | - | MPS-ACCURE, +-15 % read as 2 sigma; ours within the family's 0 to 40 % |
 | `soc_drift_rate` | 8.27e-8 | 1/s | MPS-ACCURE, 10 % after 14 days; the random sign is ours |
-| `knee_soc` | -1, 2 (window); 0.20, 0.80 (stream) | - | The plateau's ends, ARX-LFP's "roughly SOC 20% to 80%"; that the BMS corrects right there is ours, family range 0.05 to 0.20 and 0.80 to 0.99 (owner, 2026-11-11: it recalibrates at a knee) |
+| `knee_soc` | -1, 2 (window); 0.20, 0.80 (stream) | - | The plateau's ends, ARX-LFP's "roughly SOC 20% to 80%"; that the BMS corrects right there is ours, family range 0.05 to 0.34 and 0.80 to 0.93 from gauge practice on LiFePO4 (REALITY.md [ST1], [ST2]) (owner, 2026-11-11: it recalibrates at a knee) |
 | `soc_temp_coeff` | 0.0051 | 1/degC | ARX-LFP Fig. 5 |
 | `T_bms_curve` | 25 | degC | ARX-LFP, the 25 degC curve |
 | `reserve_fraction` | 0.4 | - | NESO-SOE sec. 3, DR |
@@ -332,7 +332,9 @@ As a continuing plant (`target_gym.stream`) the battery runs block after block:
   that regime, and a stream's start in it, draws the error at sd 20 %.
 - **Each regime lasts one EFA block** on average (4 h, the unit the weights
   count in) and brings the window's one event a visit. So the long deviation
-  keeps its real, rare rate: 20 a year (Q8, ours, family range 5 to 50).
+  keeps its real, rare rate: 20 a year (Q8, ours, family range 4 to 50: ENTSO-E
+  counts the 20 most significant over 2017 to 2021, so at least 4 a year, REALITY.md
+  [ST3]).
 - **A price event is cleared past the visible horizon**: an hourly price at a
   level in the regime's range, for the first period the observation does not
   yet show (four on), so a known day-ahead price never changes.
