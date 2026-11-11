@@ -61,7 +61,8 @@ at fixed T), since decomposition grows stiff near the trip.
 | `event_window` | 120, 900 | s | ours |
 | `setpoint_step` | 24 | K (scenario) | cited: zones at 513 and 537 K [L1] |
 | `feed_T_step`, `efficiency_drop`, `feed_flow_step` | 5 K, 0.2, 0.1 (scenarios) | - | ours: the events are the family's, their sizes are not found |
-| `event_hold` | 8, 2, 24, 8 | h (stream, per scenario) | ours: how long a grade change, a warm feed (until its cooler recovers), a lost initiator efficiency (until its batch is changed) and a throughput step last before they return; no source gives these; a window never sets it, so its events hold to the end |
+| `event_hold` | 2, 24, 8 | h (stream, per scenario) | ours: how long a warm feed (until its cooler recovers), a lost initiator efficiency (until its batch is changed) and a throughput step last before they return; no source gives these; a window never sets it, so its events hold to the end |
+| `grades` | 0, 24 | K above `T_setpoint` (stream) | cited: zones held at 513 and 537 K [L1, p. 3]; the plant holds one and a grade change moves it to the other; a window runs on one, 0 |
 | reading | 0.5 K, lag 2 s | - | ours, family: a zone thermocouple |
 | derived at 513 K | conversion 12 %, initiator 1.4e-5 kmol/m3 in the reactor | - | from the balances |
 
@@ -93,30 +94,50 @@ would hold. `scenarios.py`, each event once at a second drawn in 120 to 900:
 
 | Scenario | Event | Source | Weight |
 |---|---|---|---|
-| `normal` | the feed's 1 K wander only (size ours) | [L1, p. 3] | 0.7 |
-| `grade_change` | setpoint +24 K | [L1]; [L2, section 3.2] | 0.1 |
+| `normal` | the feed's 1 K wander only (size ours) | [L1, p. 3] | 0.7945 |
+| `grade_change` | setpoint +24 K | [L1]; [L2, section 3.2]; [ST4]; [ST5] | 0.0055 |
 | `feed_temperature` | the feed 5 K warmer | [L1, p. 3] | 0.1 |
 | `initiator_efficiency` | 20 % fewer radicals | [L2, pp. 21-22] | 0.05 |
 | `throughput_step` | the feed 10 % more | [L2, section 3.2]; [L3] | 0.05 |
 
-The weights are ours: no source says how often each occurs. Family range for
-the normal day's share: 0.5 to 0.9, the rest split between the upsets.
+The grade change's weight is the share of time spent in a transition, from the
+sources: about 2 transitions a month on a specialty line ([ST5]), each 50 min to
+3 h 5 min ([ST4]), 2 h taken (ours, the middle). That is 2 / 730.5 h x 2 h =
+0.0055 (0.0023 to 0.0084 over [ST4]'s range). The share it gave up (0.0945,
+from the 0.1 it had before 2026-11-11) went to `normal`: that time runs on a
+held grade. The other weights are ours: no source says how often each upset
+occurs. Family range for the normal day's share: 0.5 to 0.9, the rest split
+between the upsets.
 
 ### The stream (docs/proposals/long-strata.md, S1)
 
 As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
 and each upset regime a shift, 8 h, with one event per visit on average
-(`events_per_h` 1/8). Each event carries the size it started with, so it runs to
+(`events_per_h` 1/8). Each upset carries the size it started with, so it runs to
 its return through a switch of regime (`event_hold` above), and the feed's wander
 reads a step count wrapped on whole periods, so it keeps its period however long
 the plant runs. The normal day is sourced: abnormal situations arise almost daily in large
 process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
 ours; shifts run 8 to 12 h ([ST2], [ST3]). The events per visit and the holds
-are ours, searched again on 2026-11-11 without a source (`REALITY.md`). A real
-grade holds about two weeks with a 1 to 3 h transition ([ST4], [ST5]); the
-grade change becomes a held level switch in its own change (owner, 2026-11-11). In a window
-nothing changes: `event_hold` is never reached, the wrap covers the window, and a
-scored window is bit-identical to v6's.
+are ours, searched again on 2026-11-11 without a source (`REALITY.md`).
+
+A grade is a held level (owner, 2026-11-11). The plant runs on one of two
+grades, 513 and 537 K (`grades`), in every regime, and the grade belongs to the
+outside world: a trip keeps it, and the plant restarts in established
+operation at it. A stream starts on either grade with chance 1/2, the grades'
+long-run law. The `grade_change` regime is the transition: it lasts 2 h on
+average (`dwell_h`) and brings one move per visit on average (`events_per_h`
+1/2). The move is a step of the zone setpoint to the other grade, held until
+the next change, and any upset running then runs on to its return. The grade
+changes 0.0055 x 0.5 = 0.0027 times an hour, 2 a month, so a grade holds 365 h,
+about 15 days, as [ST4] and [ST5] give. A step, not a ramp: the 1 to 3 h a real
+transition takes is the polymer's off-spec time while its quality moves, which
+the model does not carry (D2); the zone temperature itself settles within a few
+residence times [L1], and the shipped PID brings it within 2 K of either new
+grade in 50 to 65 s (measured, 2026-11-11). In a window nothing changes: there
+is one grade, `event_hold` is never reached, the wrap covers the window, and
+every scored window is bit-identical to v6's (checked against a866234 with
+params traced and constant).
 
 ---
 
@@ -212,7 +233,7 @@ event held from the state. Not run.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 15 |
+| `unstable_cstr` | 1800 | 1 | 30 min | 1 in [-1, 1] | 3 | 16 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

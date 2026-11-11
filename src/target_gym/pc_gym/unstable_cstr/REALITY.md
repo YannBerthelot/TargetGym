@@ -283,12 +283,14 @@ figure below was read once and confirmed on a second fetch.
   PDF pp. about 172 and 181]. A specialty polyethylene line averaged 2
   transitions a month [ST5, a vendor case study; the process is not stated].
   On those figures a grade holds about two weeks and the move between grades
-  takes 1 to 3 h. The stream's `grade_change` regime instead steps the
-  setpoint for an 8 h hold and comes back, and its weight (0.1) and one event
-  per 8 h visit make about 9 grade changes a month. Kept as is: a two-week
-  hold at that rate would leave the zone on the stepped setpoint most of the
-  time. A grade change as a level switch at about 2 a month is the owner's
-  call.
+  takes 1 to 3 h. Until 2026-11-11 the stream's `grade_change` regime
+  stepped the setpoint for an 8 h hold and came back, about 9 grade changes a
+  month. The owner's call of 2026-11-11 makes a grade a held level: the plant
+  runs on 513 or 537 K [L1, p. 3], and a grade change moves it to the other,
+  where it holds until the next, about 2 a month. The regime is the
+  transition, 2 h (ours, the middle of 50 min to 3 h 5 min), so its weight,
+  the share of time spent in transitions, is 2 / 730.5 h x 2 h = 0.0055
+  (`PHYSICS.md`, section 5).
 - **Not found.** How long an initiator batch or makeup lasts, and how fast
   the feed cooler recovers after the ethylene feed warms. Searched: LDPE
   grade changes per week or month, peroxide initiator day tanks, the
