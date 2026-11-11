@@ -45,24 +45,22 @@ class CompressorSurge(
     """
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
-    #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    #: world, which depends on the seed and the time only, never the plant
+    #: (docs/proposals/long-strata.md, S2).
     OUTSIDE_WORLD = (
         "demand_dev",
         "setpoint_levels",
         "demand_levels",
         "block_clock",
         "demand_ramp",
-        "surge_times",
-        "surges",
     )
-    #: Ready to run as a continuing plant (``target_gym.stream``): its demand
-    #: schedule renews, its clocks count on the schedule, and ``start_event``
-    #: moves the demand now. Not opted in (``STREAM_READY``) while the shared
-    #: conformance suite runs 2 events an hour over 2 N steps, 0.13 events on
-    #: this 0.1 s plant, and reads every ``OUTSIDE_WORLD`` field as untouched by
-    #: the policy, which the surge record is not;
-    #: tests/compressor_surge/test_compressor_surge_stream.py checks its S2
-    #: contract at rates scaled to its window, the record aside.
+    #: The plant's history a restart keeps too: the surge counter's times and
+    #: the last step's count, which the policy writes.
+    RECORDS = ("surge_times", "surges")
+    #: Runs as a continuing plant (``target_gym.stream``): its demand schedule
+    #: renews, its clocks count on the schedule, and ``start_event`` moves the
+    #: demand now.
+    STREAM_READY = True
 
     registry_name: str = "compressor_surge"
 

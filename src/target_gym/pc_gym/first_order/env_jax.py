@@ -39,13 +39,9 @@ class FirstOrderSystem(
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
     #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
     OUTSIDE_WORLD = ("target_x",)
-    #: Ready to run as a continuing plant (``target_gym.stream``): it starts and
-    #: restarts on target, and ``start_event`` changes the target. Not opted in
-    #: (``STREAM_READY``) while the shared conformance suite runs 2 events an
-    #: hour, 0.008 events in this 0.05 s plant's 2 N steps; the stream's scenario
-    #: (tests/pc_gym/first_order/test_first_order_stream.py) is not declared on
-    #: the registry yet, since tests/test_scenarios.py uses this task as its
-    #: example of one with no declared suite.
+    #: Runs as a continuing plant (``target_gym.stream``): it starts and
+    #: restarts on target, and ``start_event`` changes the target.
+    STREAM_READY = True
 
     registry_name: str = "first_order"
 

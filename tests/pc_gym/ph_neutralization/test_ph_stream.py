@@ -8,7 +8,9 @@ Contract:
   nominal;
 - an upset of one kind does not end an upset of the other kind in progress;
 - an upset keeps its shape however long the plant has run;
-- a stream starts with none of the window's upsets: only the stream starts them.
+- a stream starts with none of the window's upsets: only the stream starts them;
+- a permit violation (an excursion past 60 min [P8]) restarts the plant and keeps
+  the monitor's record: right after it the clock still reads past 60 min.
 
 Oracles: the scenarios' declared sizes and holds, the ramp's length, nominal 1.
 """
@@ -124,3 +126,22 @@ def test_a_stream_starts_without_the_window_s_upsets():
     ]
     np.testing.assert_array_equal(np.asarray(acid), 1.0)
     np.testing.assert_allclose(np.asarray(flow), 1.0, rtol=1e-6)
+
+
+def test_a_permit_violation_restarts_the_plant_and_keeps_the_monitor_s_record():
+    p = _params("normal")
+    _, s = ENV.reset_env(jax.random.PRNGKey(0), p)
+    none = jnp.array([-1.0, -1.0])  # no reagent: the discharge leaves the permit
+
+    def body(s, k):
+        obs, s, _, _, info = ENV.step_env(k, s, none, p)
+        return s, (obs[3], info["tripped"], s.pH)
+
+    n = int(p.excursion_limit / p.delta_t) + 200
+    keys = jax.random.split(jax.random.PRNGKey(1), n)
+    minutes, tripped, pH = (np.asarray(x) for x in jax.lax.scan(body, s, keys)[1])
+    first = int(np.argmax(tripped))
+    assert tripped[first]
+    # The plant restarts inside the permit; the clock reads the violation.
+    assert p.permit_low <= pH[first] <= p.permit_high
+    assert minutes[first] > p.excursion_limit / 60.0

@@ -53,9 +53,9 @@ class PHNeutralization(
         "upset_base",
         "flow_base",
     )
-    #: The record a trip's restart carries over (``restart_plant``): the permit
-    #: monitor's excursion clock. It is the plant's own, so a policy moves it,
-    #: and it is not part of the outside world (long-strata S2).
+    #: The plant's history a restart keeps too (``base.failure_kernel``): the
+    #: permit monitor's excursion clock, which the policy writes, so it is not
+    #: part of the outside world (long-strata S2).
     RECORDS = ("excursion",)
     #: Runs as a continuing plant (``target_gym.stream``): its upsets ramp back
     #: and start through ``start_event``; its ramps count steps.
@@ -187,12 +187,6 @@ class PHNeutralization(
             Wb_basin=Wb,
         )
         return self.get_obs(state), state
-
-    def restart_plant(self, key: chex.PRNGKey, state: PHState, params: PHParams):
-        """After a trip the plant restarts as ``reset_env`` would, and the permit
-        monitor keeps its record (``RECORDS``)."""
-        fresh = self.reset_env(key, params)[1]
-        return fresh.replace(**{f: getattr(state, f) for f in self.RECORDS})
 
     def start_event(self, state: PHState, key, params: PHParams) -> PHState:
         """The stream's event hook (docs/proposals/long-strata.md, S1): the

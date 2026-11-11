@@ -10,19 +10,17 @@ Contract:
   counter, the same way;
 - a demand move started now (``start_event``) ramps from the opening now to a
   fresh level within the range, at its scenario's ramp through a switch;
+- a counted-surge trip restarts the plant and keeps its record: the counter
+  still reads the surges that tripped it [C5];
 - two policies on one seed meet one outside world (S2): every ``OUTSIDE_WORLD``
-  field but the surge record, the scenarios and the events, through trips and
-  switches. The record (``surge_times``, ``surges``) is the plant's own: a trip's
-  restart carries it with the world (``base.failure_kernel``), and a policy moves
-  it.
+  field, the scenarios and the events, through trips and switches. The surge
+  record (``surge_times``, ``surges``) is the plant's own history, which a policy
+  writes: a ``RECORDS`` field, kept through a trip but not the outside world.
 
 Oracles: the scenarios' declared ranges and ramps, the block's length, the
 valve's dead time (0.15 s, longer than a step).
 
-The task is not opted in (``STREAM_READY``) while the shared conformance suite's
-rates, 2 events an hour over 2 N steps, give a 0.1 s plant 0.13 events, and the
-suite reads the surge record as outside world: the S2 check here runs at rates
-scaled to the 2-minute window, the record aside.
+The S2 check here runs at rates of its own, scaled to the 2-minute window.
 """
 
 from __future__ import annotations
@@ -33,14 +31,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from target_gym import scenarios
 from target_gym.compressor_surge.env import schedule_ramp, scheduled_demand
-from target_gym.registry import REGISTRY
-from target_gym.stream import StreamEnv
+from target_gym.stream import StreamEnv, make_stream
 
-SPEC = REGISTRY["compressor_surge"]
-ENV = SPEC.make_env()
-STREAM = StreamEnv(ENV, SPEC.make_test_params(), scenarios.suite(SPEC))
+STREAM = make_stream("compressor_surge")
+ENV = STREAM.env
 NAMES = [s.name for s in STREAM.scenarios]
 STEP = jax.jit(ENV.step_env)
 
@@ -125,6 +120,23 @@ def test_the_plant_does_not_read_how_long_it_has_run():
     assert float(now[0][7]) == float(later[0][7])
 
 
+def test_a_trip_restarts_the_plant_and_keeps_the_surge_record():
+    # Low demand with the recycle shut surges again and again [C1; C4] until the
+    # counter reaches its trip count.
+    p = _params("normal").replace(demand_range=(0.2, 0.2), demand_sigma=0.0)
+    _, s = ENV.reset_env(jax.random.PRNGKey(0), p)
+    s = s.replace(x=jnp.asarray(0.0), valve_cmds=jnp.zeros_like(s.valve_cmds))
+    shut = _hold(s, p).at[1].set(-1.0)
+    for k in range(400):
+        obs, s, _, _, info = STEP(jax.random.PRNGKey(k), s, shut, p)
+        if bool(info["tripped"]):
+            break
+    assert bool(info["tripped"])
+    # The plant restarts at its reset recycle; the counter keeps its surges.
+    assert float(s.x) == float(jnp.float32(p.x_reset))
+    assert float(obs[7]) >= float(p.surge_trip_count)
+
+
 def test_a_demand_move_started_now_ramps_to_a_fresh_level_in_range():
     p = _params("fast_approach")
     _, s = ENV.reset_env(jax.random.PRNGKey(0), p)
@@ -155,10 +167,6 @@ def test_a_demand_ramp_keeps_its_scenario_s_rate_through_a_switch():
     np.testing.assert_allclose(seen[steps - 1 : block - 1], level, rtol=1e-6)
 
 
-#: The outside world a policy cannot move: ``OUTSIDE_WORLD`` but the surge record.
-WORLD = tuple(f for f in ENV.OUTSIDE_WORLD if f not in ("surge_times", "surges"))
-
-
 def test_two_policies_meet_one_world_through_trips_and_switches():
     fast = [
         dataclasses.replace(c, dwell_h=0.002, events_per_h=360.0)
@@ -175,7 +183,7 @@ def test_two_policies_meet_one_world_through_trips_and_switches():
 
         def body(state, k):
             _, state, _, term, trunc, info = stream.step(k, state, action, params)
-            world = {f: getattr(state.env, f) for f in WORLD}
+            world = {f: getattr(state.env, f) for f in ENV.OUTSIDE_WORLD}
             return state, (
                 term | trunc,
                 info["scenario"],
@@ -194,7 +202,7 @@ def test_two_policies_meet_one_world_through_trips_and_switches():
     np.testing.assert_array_equal(low[2], high[2])
     assert int(low[2].sum()) > 0 and len(set(np.asarray(low[1]).tolist())) > 1
     assert bool(low[3].any()) != bool(high[3].any())  # one of them trips
-    for field in WORLD:
+    for field in ENV.OUTSIDE_WORLD:
         np.testing.assert_array_equal(
             np.asarray(low[4][field]), np.asarray(high[4][field]), err_msg=field
         )
