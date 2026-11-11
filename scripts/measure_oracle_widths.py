@@ -548,6 +548,8 @@ N_SITES = {
     "wind_turbine": 5,
 }
 #: A noisy task's planner model, and its deviation's (decay per step, std).
+#: boiler_drum and unstable_cstr draw their upsets at reset and step without
+#: noise, so K11 has no innovation to back off from there.
 NOISY = {
     "reactor": (
         "target_gym.reactor.oracle:reactor_model",
@@ -557,23 +559,9 @@ NOISY = {
         "target_gym.compressor_surge.oracle:compressor_model",
         lambda p: (np.exp(-p.demand_theta * p.delta_t), p.demand_sigma),
     ),
-    "unstable_cstr": (
-        "target_gym.pc_gym.unstable_cstr.oracle:unstable_cstr_model",
-        lambda p: (np.exp(-p.delta_t / p.Ti_tau), p.Ti_sigma),
-    ),
-    "boiler_drum": (
-        "target_gym.boiler_drum.oracle:boiler_model",
-        lambda p: (
-            1.0 - _theta("boiler_drum.env", "STEAM_OU_THETA") * p.delta_t,
-            p.q_steam_noise_std,
-        ),
-    ),
     "wind_turbine": (
         "target_gym.energy.wind_turbine.oracle:wind_model",
-        lambda p: (
-            1.0 - _theta("energy.wind_turbine.env", "WIND_OU_THETA") * p.delta_t,
-            p.turbulence_std,
-        ),
+        lambda p: _turbulence(p, max(p.v_mean_range)),
     ),
     "cement_kiln": (
         "target_gym.cement_kiln.oracle:kiln_model",
@@ -592,6 +580,19 @@ NOISY = {
 }
 
 
+def _turbulence(p, v_mean):
+    """The wind's turbulence over a step at the mean wind ``v_mean``: its
+    decay, and its stationary std (env.py, Kaimal time scale, IEC sigma). The
+    innovation grows with the mean wind, so the range's top bounds it."""
+    from target_gym.energy.wind_turbine.env import (
+        turbulence_sigma,
+        turbulence_time_constant,
+    )
+
+    decay = np.exp(-p.delta_t / float(turbulence_time_constant(v_mean, p)))
+    return decay, float(turbulence_sigma(v_mean, p))
+
+
 def _theta(module, name):
     """A noise's reversion rate, imported when its task is measured, so a task
     whose constant has moved does not stop the others."""
@@ -605,9 +606,8 @@ def _wobble(p, period):
     return a**period, p.demand_sigma * np.sqrt(p.delta_t / (1.0 - a**2))
 
 
-#: Where a task's deviation sits in its model's task data, if not last: the
-#: compressor's ``time`` came after it with the valve's dead time.
-DEVIATION_AT = {"compressor_surge": 3}
+#: Where a task's deviation sits in its model's task data, if not last.
+DEVIATION_AT = {"compressor_surge": 3, "hvac": 1, "reactor": 3, "wind_turbine": 2}
 
 
 def _with_deviation(name, task, d):
