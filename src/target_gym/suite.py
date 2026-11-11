@@ -120,7 +120,12 @@ def _reach_score(m: dict) -> float:
     best = m.get("oracle_transient_ratio", _NAN)
     if not best >= MIN_REACH_ROOM:
         return _NAN
-    return math.log(max(m["transient_ratio"], 1e-300)) / math.log(best)
+    ratio = m["transient_ratio"]
+    if math.isinf(best):
+        # The best known's moves cost nothing: only a policy that matches it
+        # reaches the edge (inf / inf would be NaN, and hide the point).
+        return 1.0 if ratio == best else 0.0
+    return math.log(max(ratio, 1e-300)) / math.log(best)
 
 
 def profile(results: dict, tags: dict | None = None) -> dict:

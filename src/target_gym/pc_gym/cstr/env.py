@@ -205,7 +205,8 @@ def feed_temperature(phase, params: CSTRParams, minute):
     """The feed's temperature at ``minute``: the middle of ``feed_T_range``
     plus half its width along the day's cycle, from ``phase``."""
     lo, hi = params.feed_T_range
-    turn = jnp.where(params.feed_T_period > 0.0, minute / params.feed_T_period, 0.0)
+    held = params.feed_T_period <= 0.0
+    turn = jnp.where(held, 0.0, minute / jnp.where(held, 1.0, params.feed_T_period))
     return 0.5 * (lo + hi) + 0.5 * (hi - lo) * jnp.sin(phase + 2.0 * jnp.pi * turn)
 
 

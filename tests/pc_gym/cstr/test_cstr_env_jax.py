@@ -21,3 +21,18 @@ def test_only_the_interlock_trips():
     _, s = env.reset_env(jax.random.PRNGKey(0))
     assert not bool(env.is_terminated(s.replace(T=jnp.asarray(300.0)), p))
     assert bool(env.is_terminated(s.replace(T=jnp.asarray(p.T_trip)), p))
+
+
+def test_a_zero_feed_period_holds_the_feed_where_it_starts():
+    """CSTRParams: ``feed_T_period`` 0 holds the feed where it starts. Run
+    eagerly too, where the params are plain floats rather than tracers."""
+    env = CSTR()
+    p = env.default_params.replace(feed_T_period=0.0)
+    with jax.disable_jit():
+        _, s = env.reset_env(jax.random.PRNGKey(0), p)
+        start = float(s.T_feed)
+        for k in range(3):
+            _, s, *_ = env.step_env(
+                jax.random.PRNGKey(k), s, jnp.zeros((1,), jnp.float32), p
+            )
+            assert float(s.T_feed) == start

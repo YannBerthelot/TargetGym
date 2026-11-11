@@ -220,3 +220,24 @@ scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
 - Its horizon must reach across a night to the next occupied day, at least 24
   h (96 steps), for night charging to show; the slab's time constant (150 min
   for its flux) sets how far ahead a supply move pays.
+
+---
+
+<!-- BEGIN GENERATED FACTS -->
+
+<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
+     `make ci-docs` fails if this block does not match the code. Prose
+     about *why* these numbers are what they are belongs outside it. -->
+
+### Facts, generated from the code
+
+| environment | steps | step (s) | episode | action | obs | float state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `hvac` | 1344 | 900 | 336.0 h | 1 in [-1, 1] | 12 | 109 |
+
+`float state` counts the scalar and array float fields the state carries,
+`time` excluded; the gap between it and `obs` is what the controller cannot
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
+
+<!-- END GENERATED FACTS -->
