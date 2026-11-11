@@ -37,6 +37,7 @@ from target_gym.plane.dynamics import (
     step_key,
     total_wind_2d,
 )
+from target_gym.plane.stream_events import in_stream
 from target_gym.utils import log_scaled_reward
 
 DEBUG = False
@@ -86,6 +87,16 @@ class PlaneState(EnvState):
     # time scales: zones of 3 to 30 min with calm between [BEA447 Figure 24]).
     zone_start: float = 0.0
     zone_end: float = 0.0
+    #: The zone's intensity as it started, m/s, so in a stream a zone runs to its
+    #: end through a scenario switch (docs/proposals/long-strata.md, S1). A window
+    #: reads ``turbulence_sigma``.
+    zone_sigma: float = 0.0
+    #: ``plane_energy``'s clearances in a stream, each carrying its own size: the
+    #: assigned speed's offset (m/s), and the latest level clearance's step and
+    #: size (m), which the capture allowance runs from (S1b).
+    cleared_speed: float = 0.0
+    level_change_at: int = 0
+    level_change_size: float = 0.0
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -409,6 +420,31 @@ class PlaneParams(EnvParams):
     #: ... charged past it in widths of 500 fpm, half the AIM's 500 to
     #: 1 500 fpm range (ours: the band's half-width, as the other bands).
     level_off_rate_band: float = 500.0 * 0.3048 / 60.0
+    # ---- The stream (docs/proposals/long-strata.md, S1 and S1b) ----
+    #: A continuing plant (``target_gym.stream``): the burn no longer lowers the
+    #: mass, held for a sortie and drawn afresh at the next (S1b); turbulence
+    #: zones start as the stream's events, each with its own intensity; the
+    #: clearances of ``plane_energy`` are events, each with its own size. Only a
+    #: scenario's ``stream_overrides`` set it; a window leaves it off.
+    stream_mode: bool = False
+    #: Each kind's share of the stream's events: a new sortie, a turbulence
+    #: zone, the task's own event (a clearance). Thinning one Poisson clock by
+    #: fixed shares gives each kind its own rate (``plane.stream_events``).
+    event_mix: Tuple[float, float, float] = (0.0, 1.0, 0.0)
+    #: A sortie's all-up mass, kg, drawn uniform at its start in a stream: ours,
+    #: the span of the scored corners, ``light_low``'s 60 t to ``heavy_high``'s
+    #: 78 t (MTOW [TCDS]).
+    sortie_mass_range: Tuple[float, float] = (60_000.0, 78_000.0)
+    #: The highest level a sortie's mass allows, m, linear in the mass between
+    #: two scored corners and flat outside them: FL370 at 73.5 t (``plane``'s
+    #: top level) and FL350 at 78 t (``heavy_high``: the highest it keeps 1.3 g
+    #: to buffet). A heavy aircraft still flies high, on thin margins (S1b).
+    ceiling_masses: Tuple[float, float] = (73_500.0, 78_000.0)
+    ceiling_levels: Tuple[float, float] = (37_000.0 * 0.3048, 35_000.0 * 0.3048)
+    #: A clearance event's chance of being a level change rather than a speed
+    #: change: three of ``plane_energy``'s five clearances move the level; its
+    #: stream sets the share ATC's recorded instructions give (plane/scenarios.py).
+    clearance_level_share: float = 0.6
     # Impulse gust mode. impulse_prob = 0 (default) => the OU turbulence above. When
     # impulse_prob > 0 the gust is instead a rare, memoryless "kick": each step a kick
     # arrives with per-step probability impulse_prob and jumps the gust by ~sigma*N,
@@ -526,6 +562,12 @@ PARAM_UNITS = {
     "level_off_height": "m",
     "level_off_rate_max": "m/s",
     "level_off_rate_band": "m/s",
+    "stream_mode": "-",
+    "event_mix": "-",
+    "sortie_mass_range": "kg",
+    "ceiling_masses": "kg",
+    "ceiling_levels": "m",
+    "clearance_level_share": "-",
 }
 
 
@@ -627,9 +669,29 @@ def level_change_allowance(time, params, xp=jnp):
     return params.e_tol + xp.where(on_clearances, xp.maximum(left, 0.0), 0.0)
 
 
+def assigned_cas_now(state: PlaneState, params: PlaneParams, xp=jnp):
+    """The CAS assigned to ``state``: the window's schedule (``assigned_cas``),
+    or in a stream the schedule's speed plus the latest speed clearance."""
+    scheduled = assigned_cas(state.time, params, xp)
+    cleared = params.target_cas + state.cleared_speed
+    return in_stream(params, cleared, scheduled, xp)
+
+
+def level_allowance_now(state: PlaneState, params: PlaneParams, xp=jnp):
+    """``level_change_allowance`` for ``state``: in a stream the band closes at
+    500 fpm from the latest level clearance the state carries [AIM 4-4-10]."""
+    scheduled = level_change_allowance(state.time, params, xp)
+    since = xp.asarray(state.time - state.level_change_at, jnp.float32)
+    left = state.level_change_size - params.level_change_rate_min * since * (
+        params.delta_t
+    )
+    cleared = params.e_tol + xp.maximum(left, 0.0)
+    return in_stream(params, cleared, scheduled, xp)
+
+
 def target_airspeed(state: PlaneState, params: PlaneParams):
     """The airspeed demanded at the aircraft's altitude."""
-    cas = assigned_cas(state.time, params)
+    cas = assigned_cas_now(state, params)
     return scheduled_airspeed(state.z, cas, params.target_mach)
 
 
@@ -652,7 +714,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     legacy = R.excess_cost(
         xp.abs(ground - target_airspeed(state, p)), p.c_hold, p.running_weight, xp
     )
-    cas = assigned_cas(state.time, p, xp)
+    cas = assigned_cas_now(state, p, xp)
     band = speed_band_excess(state.z, airspeed(state, p, xp), p, xp, cas=cas) ** 2
     # On the clearances (``plane_energy``) the altitude band trails a 500 fpm
     # climb or descent from each level clearance [AIM 4-4-10]; elsewhere the
@@ -660,7 +722,7 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     error = xp.abs(state.target_altitude - state.z)
     # Past the allowance, measured from ``e_tol`` so the shared cost reads it;
     # ahead of the profile is zero, never wrapped by the cost's absolute value.
-    allowance = level_change_allowance(state.time, p, xp)
+    allowance = level_allowance_now(state, p, xp)
     behind = xp.maximum(error - allowance, 0.0) + p.e_tol
     terms = {
         "tracking": R.tracking_cost(
@@ -787,6 +849,16 @@ def clip_acceleration(a: jnp.ndarray, min: tuple, max: tuple):
 _STEP_LEVELS = jnp.array([0.0, 0.5, 0.1, -0.3, 0.3, -0.5, -0.1, 0.4])
 
 
+def _on_cycle(time, params: PlaneParams, xp=jnp):
+    """Step ``time`` wrapped on whole periods of the sinusoid, as many as cover a
+    window and one more, so a planner's horizon past the window's end reads the
+    same count: in a stream, a count the float32 clock holds exactly however
+    long the plant runs (long-strata S1)."""
+    period = xp.maximum(xp.round(params.target_period / params.delta_t), 1.0)
+    cycles = xp.ceil(params.max_steps_in_episode / period) + 1.0
+    return xp.mod(time, xp.asarray(period * cycles, jnp.int32))
+
+
 def commanded_altitude(base: float, time, params: PlaneParams, xp=jnp):
     """The altitude being commanded at this step.
 
@@ -798,7 +870,7 @@ def commanded_altitude(base: float, time, params: PlaneParams, xp=jnp):
     function traces to a single ``select`` and the pattern can live in params
     rather than forcing a separate environment class per shape.
     """
-    t = xp.asarray(time, dtype=jnp.float32) * params.delta_t
+    t = xp.asarray(_on_cycle(time, params, xp), dtype=jnp.float32) * params.delta_t
     span = params.target_amplitude
     total = xp.maximum(params.max_steps_in_episode * params.delta_t, 1.0)
 
@@ -863,7 +935,7 @@ def compute_next_state(
             state.x_dot - params.wind_x - previous[0],
             state.z_dot - params.wind_z - previous[1],
         ),
-        jnp.where(zone, params.turbulence_sigma, 0.0),
+        jnp.where(zone, _zone_sigma(state, params), 0.0),
         params.gust_scale_length,
         params.delta_t,
         step_key(key, state.time),
@@ -983,6 +1055,9 @@ def compute_next_state(
 
     alpha, gamma = compute_alpha(theta, x_dot, z_dot)
     fuel = jnp.clip(state.fuel - burned, 0.0, params.initial_fuel_quantity)
+    # In a stream a sortie's mass is held (long-strata S1b); the economy term
+    # still charges the fuel flow.
+    fuel = in_stream(params, state.fuel, fuel)
     # Below the tanks running dry the engines cannot produce thrust; the mass
     # simply stops falling, and the aircraft is a glider from there.
     m = params.initial_mass - (params.initial_fuel_quantity - fuel)
@@ -1003,9 +1078,7 @@ def compute_next_state(
         time=state.time + 1,
         sensor_key=state.sensor_key,
         actuator_held=state.actuator_held,
-        target_altitude=commanded_altitude(
-            state.base_target_altitude, state.time + 1, params
-        ),
+        target_altitude=_next_target(state, params),
         base_target_altitude=state.base_target_altitude,
         gust_x=gust[0],
         gust_z=gust[1],
@@ -1014,5 +1087,23 @@ def compute_next_state(
         n_z=metrics[1][-1] / (mass_now * params.gravity),
         zone_start=state.zone_start,
         zone_end=state.zone_end,
+        zone_sigma=state.zone_sigma,
+        cleared_speed=state.cleared_speed,
+        level_change_at=state.level_change_at,
+        level_change_size=state.level_change_size,
     )
     return new_state, metrics
+
+
+def _zone_sigma(state: PlaneState, params: PlaneParams):
+    """The zone's intensity: the scenario's in a window, the zone's own in a
+    stream, where a zone runs to its end through a switch (long-strata S1)."""
+    return in_stream(params, state.zone_sigma, params.turbulence_sigma)
+
+
+def _next_target(state: PlaneState, params: PlaneParams):
+    """The level commanded at the next step: the window's pattern, or in a
+    stream on ``plane_energy`` the latest level clearance, held."""
+    scheduled = commanded_altitude(state.base_target_altitude, state.time + 1, params)
+    held = jnp.where(params.target_pattern == 5, state.target_altitude, scheduled)
+    return in_stream(params, held, scheduled)

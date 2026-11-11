@@ -39,9 +39,17 @@ from target_gym.patrol.env import (
     N_LEAD_LEGS,
     initial_wake,
     lead_cruise_speed,
+    lead_leg,
     make_cruise_state,
 )
 from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
+from target_gym.plane.stream_events import (
+    fuel_for,
+    in_stream,
+    in_window,
+    sortie_key,
+    sortie_mass,
+)
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.video import SavesVideo
 
@@ -88,6 +96,9 @@ class Formation(
         "gust_history",
         "gust_own",
     )
+    #: Runs as a continuing plant (``target_gym.stream``): sorties renew with a
+    #: held mass, and the lead's route cycles on whole routes.
+    STREAM_READY = True
 
     render_plane = classmethod(_render)
     screen_width = 600
@@ -204,7 +215,19 @@ class Formation(
             k,
         )
 
-        state = self._spawn(noise_key, lead_alt, lead_heading, back, right, up, params)
+        # In a stream a reset is a sortie: each aircraft draws its mass
+        # (long-strata S1b). A window keeps the scored configuration's.
+        drawn = jax.vmap(
+            lambda seat: sortie_mass(jax.random.fold_in(sortie_key(key), seat), params)
+        )(jnp.arange(k + 1))
+        masses = (
+            None
+            if in_window(params)
+            else jnp.where(params.stream_mode, drawn, params.initial_mass)
+        )
+        state = self._spawn(
+            noise_key, lead_alt, lead_heading, back, right, up, params, masses
+        )
         state = state.replace(
             lead_turn_rate=schedule[0],
             lead_turn_schedule=schedule,
@@ -212,12 +235,24 @@ class Formation(
         )
         return self.get_obs(state, params), state
 
-    def _spawn(self, noise_key, lead_alt, lead_heading, back, right, up, params):
+    def _spawn(
+        self, noise_key, lead_alt, lead_heading, back, right, up, params, masses=None
+    ):
         """The formation in cruise: the lead at the origin on ``lead_heading``,
         each wingman in its slot plus isotropic noise, at the lead's velocity
-        and heading: solvable, not trimmed. The route and gusts are left at
-        their reset values for the caller to set."""
+        and heading: solvable, not trimmed. ``masses`` are the aircraft's, lead
+        first: in a stream the sortie's, held (long-strata S1b); None, the scored
+        configuration's. The route and gusts are left at their reset values for
+        the caller to set."""
         k = self.num_wingmen
+        loads = []
+        if masses is not None:
+            masses = jnp.broadcast_to(jnp.asarray(masses, jnp.float32), (k + 1,))
+            fuels = in_stream(
+                params, fuel_for(masses, params), params.initial_fuel_quantity
+            )
+            fuels = jnp.broadcast_to(jnp.asarray(fuels, jnp.float32), (k + 1,))
+            loads = [masses, fuels]
         speed = lead_cruise_speed(lead_alt, params)
         lead = make_cruise_state(
             x=0.0,
@@ -228,12 +263,13 @@ class Formation(
             params=params,
             target_altitude=lead_alt,
             target_heading=lead_heading,
+            **dict(zip(("mass", "fuel"), [a[0] for a in loads])),
         )
         forward = jnp.array([jnp.cos(lead_heading), jnp.sin(lead_heading)])
         starboard = jnp.array([jnp.sin(lead_heading), -jnp.cos(lead_heading)])
         noise = params.follower_spawn_noise * jax.random.normal(noise_key, (k, 3))
 
-        def spawn(b, r, u, n):
+        def spawn(b, r, u, n, *load):
             xy = -b * forward + r * starboard
             return make_cruise_state(
                 x=xy[0] + n[0],
@@ -244,11 +280,12 @@ class Formation(
                 params=params,
                 target_altitude=lead_alt,
                 target_heading=lead_heading,
+                **dict(zip(("mass", "fuel"), load)),
             )
 
         return FormationState(
             lead=lead,
-            wingmen=jax.vmap(spawn)(back, right, up, noise),
+            wingmen=jax.vmap(spawn)(back, right, up, noise, *[a[1:] for a in loads]),
             slot_back=back,
             slot_right=right,
             slot_up=up,
@@ -267,6 +304,9 @@ class Formation(
         aircraft's clock runs on so the turbulence it meets is the one it
         would have met (long-strata S2). The kernel restores the rest of the
         outside world from ``OUTSIDE_WORLD``."""
+        # In a stream every aircraft keeps the sortie's mass; a window's
+        # restart flies the scored configuration's.
+        flown = jnp.concatenate([state.lead.m[None], state.wingmen.m])
         fresh = self._spawn(
             key,
             state.lead.target_altitude,
@@ -275,6 +315,11 @@ class Formation(
             state.slot_right,
             state.slot_up,
             params,
+            (
+                None
+                if in_window(params)
+                else in_stream(params, flown, params.initial_mass)
+            ),
         )
         return canonical_dtypes(
             fresh.replace(
@@ -285,6 +330,22 @@ class Formation(
                     target_altitude=state.wingmen.target_altitude,
                 ),
             )
+        )
+
+    def start_event(self, state: FormationState, key, params: FormationParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1b): a new
+        sortie, the formation in cruise on a fresh route and slots, each
+        aircraft at a fresh mass, in the air the last sortie left (its gusts)
+        and on the same clocks. The formation has no other event."""
+        fresh = self.reset_env(key, params)[1]
+        return fresh.replace(
+            time=state.time,
+            sensor_key=state.sensor_key,
+            gust_history=state.gust_history,
+            gust_own=state.gust_own,
+            lead_turn_rate=fresh.lead_turn_schedule[lead_leg(state.time, params)],
+            lead=fresh.lead.replace(time=state.lead.time),
+            wingmen=fresh.wingmen.replace(time=state.wingmen.time),
         )
 
     # -- rendering / video -------------------------------------------------

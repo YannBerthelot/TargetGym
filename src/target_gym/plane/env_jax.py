@@ -3,7 +3,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
+from target_gym.base import (
+    actuate,
+    canonical_dtypes,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import (
     LONGITUDINAL,
@@ -21,7 +27,7 @@ from target_gym.plane.env import (
     PlaneParams,
     PlaneState,
     airspeed,
-    assigned_cas,
+    assigned_cas_now,
     check_is_terminal,
     commanded_altitude,
     compute_next_state,
@@ -37,6 +43,16 @@ from target_gym.plane.env import (
 # imported it, and once the aircraft renderers were unified it was drawing in a
 # style that matched nothing else shipped, so it is gone.
 from target_gym.plane.rendering_console import _render
+from target_gym.plane.stream_events import (
+    carry,
+    event_kind,
+    fuel_for,
+    in_stream,
+    pick,
+    sortie_key,
+    sortie_mass,
+    start_zone,
+)
 from target_gym.video import SavesVideo
 
 
@@ -53,16 +69,31 @@ class Airplane2D(
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
     #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    #: The mass is the sortie's: in a stream it is held (S1b), drawn from the
+    #: stream's seed, so the outside world; in a window the burn moves it, and a
+    #: restart keeps what was burned.
     OUTSIDE_WORLD = (
         "target_altitude",
         "base_target_altitude",
-        "gust_x",
-        "gust_z",
         "zone_start",
         "zone_end",
+        "zone_sigma",
         "m",
         "fuel",
+        "cleared_speed",
+        "level_change_at",
+        "level_change_size",
     )
+    #: The gust the aircraft is in: the turbulence's draws are the world's, but
+    #: the Dryden filter runs on the aircraft's airspeed, so two policies meet
+    #: different gusts. A restart keeps the air it flew into.
+    RECORDS = ("gust_x", "gust_z")
+    #: Runs as a continuing plant (``target_gym.stream``): sorties renew with a
+    #: held mass, turbulence zones and clearances are events carrying their own
+    #: size, the sinusoid wraps on whole periods.
+    STREAM_READY = True
+    #: What a new sortie flies into: the weather carries on (S1b).
+    WEATHER = ("zone_start", "zone_end", "zone_sigma", "gust_x", "gust_z")
 
     registry_name: str = "plane"
 
@@ -145,14 +176,18 @@ class Airplane2D(
         )
 
     def assigned_cas(self, state, params=None):
-        """The CAS assigned at ``state``'s step (``plane.env.assigned_cas``)."""
+        """The CAS assigned at ``state``'s step (``plane.env.assigned_cas_now``):
+        the window's schedule, or in a stream the latest speed clearance."""
         params = self.default_params if params is None else params
-        return assigned_cas(state.time, params)
+        return assigned_cas_now(state, params)
 
     def commanded_level(self, state, params=None):
-        """The level commanded at ``state``'s step."""
+        """The level commanded at ``state``'s step: the window's pattern, or in
+        a stream the latest level clearance on ``plane_energy``."""
         params = self.default_params if params is None else params
-        return commanded_altitude(state.base_target_altitude, state.time, params)
+        scheduled = commanded_altitude(state.base_target_altitude, state.time, params)
+        held = jnp.where(params.target_pattern == 5, state.target_altitude, scheduled)
+        return in_stream(params, held, scheduled)
 
     def trim_action(self, state, params=None):
         """The action that holds ``state``'s throttle and pitch: on a reset
@@ -216,6 +251,7 @@ class Airplane2D(
         """
         if params is None:
             params = self.default_params
+        sortie = sortie_key(key)
         key, altitude_key, target_key, zone_key = jax.random.split(key, 4)
 
         target_altitude = jax.random.uniform(
@@ -223,6 +259,24 @@ class Airplane2D(
             minval=params.target_altitude_range[0],
             maxval=params.target_altitude_range[1],
         )
+        # In a stream a reset is a sortie: it draws its mass, and its level in
+        # the band that mass allows (long-strata S1b). A window keeps its own.
+        drawn = sortie_mass(sortie, params)
+        top = jnp.minimum(
+            params.target_altitude_range[1],
+            jnp.interp(
+                drawn,
+                jnp.asarray(params.ceiling_masses),
+                jnp.asarray(params.ceiling_levels),
+            ),
+        )
+        level = jax.random.uniform(
+            jax.random.fold_in(sortie, 1),
+            minval=params.target_altitude_range[0],
+            maxval=top,
+        )
+        target_altitude = in_stream(params, level, target_altitude)
+        mass = in_stream(params, drawn, params.initial_mass)
         # Established at the assigned level and speed, in trim (rule 17; the
         # cruise hold is flown established in ALT CRZ [BEA447]). The offset
         # is zero on the scored tasks; Extra variants may widen it.
@@ -238,7 +292,7 @@ class Airplane2D(
         )
         air_speed = scheduled_airspeed(initial_z, params.target_cas, params.target_mach)
         # ``initial_fuel_quantity`` is a component of ``initial_mass``.
-        initial_m = params.initial_mass
+        initial_m = mass
         theta, stick, power = trim_level(air_speed, initial_z, initial_m, params)
         x_dot = air_speed + params.wind_x
         onset_key, length_key = jax.random.split(zone_key)
@@ -265,7 +319,9 @@ class Airplane2D(
             m=initial_m,
             power=power,
             stick=stick,
-            fuel=params.initial_fuel_quantity,
+            fuel=in_stream(
+                params, fuel_for(mass, params), params.initial_fuel_quantity
+            ),
             time=0,
             target_altitude=target_altitude,
             # What the moving patterns oscillate about; identical to
@@ -274,10 +330,49 @@ class Airplane2D(
             pitch_integ=stick / STICK_TRAVEL,
             zone_start=zone_start,
             zone_end=zone_start + zone_length,
+            zone_sigma=jnp.asarray(params.turbulence_sigma, jnp.float32),
+            level_change_at=jnp.zeros((), jnp.int32),
         )
 
         obs = self.get_obs(state, params)
         return obs, state
+
+    def start_event(self, state: PlaneState, key, params: PlaneParams):
+        """The stream's event hook (docs/proposals/long-strata.md, S1 and S1b): a
+        new sortie, a turbulence zone or the task's own event, by
+        ``params.event_mix``. A sortie starts established with a fresh mass and
+        level, in the weather the last one left (``WEATHER``) and on the same
+        clocks; a zone starts now with the scenario's intensity."""
+        k_kind, k_zone, k_task, k_sortie = jax.random.split(key, 4)
+        now = state.time * params.delta_t
+        start, end, sigma = start_zone(
+            state.zone_start, state.zone_end, state.zone_sigma, now, k_zone, params
+        )
+        zone = state.replace(zone_start=start, zone_end=end, zone_sigma=sigma)
+        sortie = carry(self.reset_env(k_sortie, params)[1], state, self.WEATHER)
+        task = self._task_event(state, k_task, params)
+        return pick(event_kind(k_kind, params), sortie, zone, task)
+
+    def _task_event(self, state: PlaneState, key, params: PlaneParams):
+        """The task's own event in a stream; the altitude hold has none."""
+        return state
+
+    def restart_plant(self, key, state: PlaneState, params: PlaneParams):
+        """After a crash, the sortie's replacement (long-strata R8; owner,
+        2026-11-11): established in cruise, level at the sortie's assigned level
+        and with its mass, both of which the outside world keeps
+        (``OUTSIDE_WORLD``), so two policies keep meeting the same sorties. The
+        hour of ``restart_steps`` prices the gap. ``plane/REALITY.md`` names no
+        post-trip state: no source has a trip end a flight."""
+        level = state.target_altitude
+        here = params.replace(
+            stream_mode=False,
+            target_altitude_range=(level, level),
+            initial_altitude_range=(level, level),
+            initial_altitude_offset_range=(0.0, 0.0),
+            initial_mass=state.m,
+        )
+        return canonical_dtypes(self.reset_env(key, here)[1])
 
     def get_obs(self, state: PlaneState, params: PlaneParams = None):
         """The readings (``_read``), with the commanded airspeed exact: it is
@@ -369,6 +464,34 @@ class PlaneEnergy(Airplane2D):
             rho_floor=0.0,
             # As ``plane``: the ground is the one trip, priced by us.
             failure_cost=((12192.0 - band) / band) ** 2,
+        )
+
+    def _task_event(self, state, key, params):
+        """A clearance in a stream (long-strata S1b): a new level, 1 000 or
+        2 000 ft away [RVSM's 1 000 ft separation], or a new speed 10 kt away
+        [AIM 4-4-12], as the window's clearances move. A level stays inside
+        ``initial_altitude_range`` and a speed within 10 kt of the schedule, so
+        a move that would leave them goes the other way (ours). The band then
+        closes at 500 fpm from the clearance [AIM 4-4-10]."""
+        k_kind, k_size, k_way = jax.random.split(key, 3)
+        level = jax.random.uniform(k_kind) < params.clearance_level_share
+        way = jnp.where(jax.random.bernoulli(k_way), 1.0, -1.0)
+        size = jnp.where(jax.random.bernoulli(k_size), 2_000.0, 1_000.0) * 0.3048
+        lo, hi = params.initial_altitude_range
+        up = state.target_altitude + way * size
+        target = jnp.where(
+            (up < lo) | (up > hi), state.target_altitude - way * size, up
+        )
+        knots = 10.0 * 1852.0 / 3600.0
+        faster = state.cleared_speed + way * knots
+        speed = jnp.where(
+            jnp.abs(faster) > 1.5 * knots, state.cleared_speed - way * knots, faster
+        )
+        return state.replace(
+            target_altitude=jnp.where(level, target, state.target_altitude),
+            level_change_at=jnp.where(level, state.time, state.level_change_at),
+            level_change_size=jnp.where(level, size, state.level_change_size),
+            cleared_speed=jnp.where(level, state.cleared_speed, speed),
         )
 
 

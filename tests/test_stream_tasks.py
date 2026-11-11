@@ -103,9 +103,14 @@ def test_a_wired_task_never_ends_and_both_policies_meet_one_world(name):
     if len(stream.scenarios) > 1:
         assert len(set(np.asarray(low[2]).tolist())) > 1
     for field in stream.env.OUTSIDE_WORLD:
-        np.testing.assert_array_equal(
-            np.asarray(low[4][field]), np.asarray(high[4][field]), err_msg=field
-        )
+        # A field may be an aircraft of its own (a patrol's scripted lead).
+        flat, _ = jax.tree_util.tree_flatten_with_path(low[4][field])
+        for (path, a), b in zip(flat, jax.tree_util.tree_leaves(high[4][field])):
+            np.testing.assert_array_equal(
+                np.asarray(a),
+                np.asarray(b),
+                err_msg=field + jax.tree_util.keystr(path),
+            )
     obs = np.asarray(low[5])
     assert obs.shape[1:] == tuple(stream.env.obs_shape)
     assert np.isfinite(obs).all()

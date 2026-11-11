@@ -42,6 +42,7 @@ from target_gym.plane.dynamics import (
     step_key,
     total_wind_3d,
 )
+from target_gym.plane.stream_events import in_stream
 from target_gym.plane3d.dynamics import (
     compute_acceleration_3d,
     compute_alpha_3d,
@@ -99,6 +100,13 @@ class PlaneState3D(EnvState):
     zone_end: float = 0.0
     #: The step of the heading clearance in force (Amendment 3).
     clearance_time: float = 0.0
+    #: In a stream (docs/proposals/long-strata.md, S1): the zone's intensity as
+    #: it started, m/s, so it runs to its end through a switch; and the steady
+    #: wind the aircraft is in, m/s, on its way to the scenario's after a switch
+    #: (``wind_tau``). A window reads ``turbulence_sigma`` and ``wind_x``/``wind_y``.
+    zone_sigma: float = 0.0
+    mean_wind_x: float = 0.0
+    mean_wind_y: float = 0.0
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -366,6 +374,28 @@ class PlaneParams3D(EnvParams):
     #: assigned 10 kt under, so the band's edge is the cap (ours).
     holding_cap_low: float = 230.0 * 1852.0 / 3600.0
     holding_cap_high: float = 265.0 * 1852.0 / 3600.0
+    #: The orientation a racetrack's inbound leg is drawn over, rad.
+    pattern_heading_range: Tuple[float, float] = (0.0, 2.0 * 3.14159265)
+
+    # ---- The stream (docs/proposals/long-strata.md, S1 and S1b) ----
+    #: A continuing plant (``target_gym.stream``): the burn no longer lowers the
+    #: mass, held for a sortie and drawn afresh at the next (S1b); turbulence
+    #: zones and vectors start as the stream's events, each with its own size;
+    #: the steady wind moves to a new scenario's over ``wind_tau``. Only a
+    #: scenario's ``stream_overrides`` set it; a window leaves it off.
+    stream_mode: bool = False
+    #: Each kind's share of the stream's events: a new sortie, a turbulence
+    #: zone, the task's own event (a vector) (``plane.stream_events``).
+    event_mix: Tuple[float, float, float] = (0.0, 1.0, 0.0)
+    #: A sortie's all-up mass, kg, drawn uniform at its start in a stream: the
+    #: A320's, as the 2D aircraft's (ours, 60 to 78 t, plane/PHYSICS.md).
+    sortie_mass_range: Tuple[float, float] = (60_000.0, 78_000.0)
+    #: The steady wind's time constant after a switch, s: a first-order lag, as
+    #: the other plants' regime levels move. The largest switch, 67 kt, then
+    #: starts at 2 kt a minute: 40 kt per 150 NM crossed at 450 kt, the
+    #: horizontal shear that marks moderate turbulence near a jet [AC00-30C]
+    #: (plane/REALITY.md, the stream).
+    wind_tau: float = 2010.0
 
 
 #: Units of the PlaneParams3D fields, for the generated environment pages.
@@ -393,6 +423,11 @@ PARAM_UNITS = {
     "holding_leg_high": "s",
     "holding_cap_low": "m/s",
     "holding_cap_high": "m/s",
+    "pattern_heading_range": "rad",
+    "stream_mode": "-",
+    "event_mix": "-",
+    "sortie_mass_range": "kg",
+    "wind_tau": "s",
     "gravity": "m/s^2",
     "initial_mass": "kg",
     "thrust_output_at_sea_level": "N",
@@ -1137,7 +1172,11 @@ def compute_next_state_3d(
             state.y_dot - params.wind_y - previous[1],
             state.z_dot - params.wind_z - previous[2],
         ),
-        jnp.where(zone, params.turbulence_sigma, 0.0),
+        jnp.where(
+            zone,
+            in_stream(params, state.zone_sigma, params.turbulence_sigma),
+            0.0,
+        ),
         params.turbulence_scale_length,
         params.delta_t,
         step_key(key, state.time),
@@ -1298,6 +1337,9 @@ def compute_next_state_3d(
     psi = compute_psi(x_dot, y_dot)
     # Total all-up mass: fuel is a component of ``initial_mass``.
     fuel = jnp.clip(state.fuel - burned, 0.0, params.initial_fuel_quantity)
+    # In a stream a sortie's mass is held (long-strata S1b); the economy term
+    # still charges the fuel flow.
+    fuel = in_stream(params, state.fuel, fuel)
     m = params.initial_mass - (params.initial_fuel_quantity - fuel)
 
     new_state = PlaneState3D(
@@ -1339,6 +1381,9 @@ def compute_next_state_3d(
         zone_start=state.zone_start,
         zone_end=state.zone_end,
         clearance_time=state.clearance_time,
+        zone_sigma=state.zone_sigma,
+        mean_wind_x=state.mean_wind_x,
+        mean_wind_y=state.mean_wind_y,
     )
     return new_state, metrics
 

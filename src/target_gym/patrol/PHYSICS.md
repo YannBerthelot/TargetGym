@@ -584,3 +584,25 @@ a full-state bound. `reward`, trips and the score read the true state.
 `info["measured_reward"]` is the same cost on the field readings, with any trip
 taken from the true state. A channel reading stays out of it, so on
 `patrol_range_bearing` it does not see the 15 m of range noise.
+
+## The stream (docs/proposals/long-strata.md, S1b)
+
+As a continuing plant (`target_gym.stream`) `patrol`, `patrol_range_bearing` and
+`wake_surf` fly a sequence of sorties. Sources and searches: plane/REALITY.md,
+"The stream".
+
+- **Sorties.** A Hornet sortie lasts 7.8 h on average: the RAAF's more than 2 700
+  sorties and 21 000 flying hours on Operation Okra, with tanker support [OKRA]; no
+  training sortie length was found. `wake_surf`'s A320s fly the A320 fleet's
+  1.90 h [AIRBUS-A320]. A sortie starts the pair in cruise on a fresh route and
+  station, each aircraft at a mass drawn over `sortie_mass_range` and held: for the
+  Hornet its zero-fuel mass with a quarter to all of the internal 4 926 kg aboard
+  (ours), for the A320 60 to 78 t. The air (`gust_history`, `gust_own`) and every
+  aircraft's clock carry on.
+- **The route** cycles: the lead's leg reads its clock wrapped on whole routes, so
+  the legs repeat exactly however long the plant runs.
+- **No other event.** The patrol has no turbulence zones; its gust is continuous.
+- **Restart.** `restart_plant` re-forms the follower on the lead (unchanged); in a
+  stream it keeps the sortie's mass.
+
+In a window nothing changes (PR description: bit-identical, traced and constant).

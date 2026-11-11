@@ -631,6 +631,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
         # bands (plane/PHYSICS.md). v8: the altitude band travels with the
         # 500 fpm profile instead of starting where it ends.
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("energy_suite", module="target_gym.plane.scenarios"),
         version=9,
     ),
     EnvSpec(
@@ -651,6 +653,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         },
         noise_fields=("turbulence_sigma",),
         # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("sine_suite", module="target_gym.plane.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -713,6 +717,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane/experts_tecs.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("circle_suite", module="target_gym.plane3d.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -777,6 +783,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/experts_tecs.py",
         ),
         # v4: the distance to the curve observed as the tracked output.
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("figure8_suite", module="target_gym.plane3d.scenarios"),
         version=6,
     ),
     EnvSpec(
@@ -804,6 +812,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
         version=5,
     ),
     EnvSpec(
@@ -847,6 +857,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
         version=5,
     ),
     # -- Process control ----------------------------------------------------
@@ -1258,6 +1270,10 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios(
+            "formation_suite", module="target_gym.formation.scenarios"
+        ),
         version=4,
     ),
     EnvSpec(
@@ -1282,6 +1298,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
+        # One scenario, declared to carry the stream's numbers.
+        scenarios=_scenarios("wake_surf_suite", module="target_gym.patrol.scenarios"),
         version=2,
     ),
 )
