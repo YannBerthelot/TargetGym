@@ -85,10 +85,13 @@ frame_array = rk.finish(fig)
 ```
 
 **`target_gym.render_aircraft`** is pygame, because the aircraft project a
-solid A320 mesh every frame and matplotlib is far too slow for that. It carries
-the palette, the console chrome, the mesh and its three projections (side,
-top-down, rear), and all four aircraft modules import from it rather than from
-each other. They used to reach into each other — `patrol` imported eleven
+solid model every frame and matplotlib is far too slow for that. It carries
+the palette, the console chrome, the aircraft models and their three
+projections (side, top-down, rear), and all four aircraft modules import from
+it rather than from each other. Each task is drawn as the airframe it flies,
+picked by wingspan (`model_for`): an F/A-18 Hornet for `patrol`,
+`patrol_range_bearing` and `formation`, an A320 for the rest. A new airframe is
+one more builder in `MODEL_BUILDERS`, put together from the same part helpers. They used to reach into each other — `patrol` imported eleven
 private names out of `plane3d` — so a palette change in one environment
 silently restyled another.
 

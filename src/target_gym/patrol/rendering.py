@@ -3,7 +3,9 @@ Rendering for the close-patrol / formation environments.
 
 Reuses the **Plane 3D render engine** (the projected 3D aircraft models) in a
 two-panel layout, and draws an arbitrary number of aircraft (1 lead + K
-wingmen):
+wingmen), each as the model of the airframe the params fly
+(``render_aircraft.model_for``): an F/A-18 Hornet on the patrol and the
+formation, an A320 on ``wake_surf``.
 
   - **Left — rear / chase view.**  The camera sits behind the formation and
     looks *along the lead's heading*, so we see every aircraft from behind.
@@ -36,25 +38,54 @@ _SLOT = ra.GOOD
 # exists.
 _WING_COLORS = [ra.TARGET, ra.TEAL, ra.ACCENT, (206, 147, 216)]
 
+#: Both panels fit the formation and its slots to FRAME_FILL of the panel, but
+#: never zoom in past FRAME_SPANS spans of the airframe drawn across that
+#: fraction of its width, so a converged formation holds still instead of
+#: breathing as its slot error decays. In spans because a Hornet two-ship
+#: (slots 17 to 45 m out) is a third the size of an A320 one.
+FRAME_SPANS = 4.0
+FRAME_FILL = 0.6
+#: The shortest an aircraft is drawn, nose to tail, in pixels. Close in it is
+#: drawn to the map's own scale, so the gaps between wingtips are true; far out
+#: (``wake_surf``'s 3 km trail) it is drawn at this size instead, oversize.
+GLYPH_PX = 48.0
+
 
 def _wrap(a):
     return float(np.arctan2(np.sin(a), np.cos(a)))
 
 
-def _draw_plane_rearview(surf, cx, cy, theta, phi, psi_rel, scale_px=1.0):
-    """Draw the 3D plane as seen from *behind*, along its forward (+x) axis."""
+def _draw_plane_rearview(surf, cx, cy, theta, phi, psi_rel, scale_px=1.0, model="a320"):
+    """Draw an aircraft model as seen from *behind*, along its forward axis.
+
+    The camera looks along ``+x``, so the faces furthest forward are drawn
+    first, and screen right is the aircraft's right, ``-y`` (y is left). It
+    looked along ``-x`` with ``+y`` to the right, which is the view from in
+    front: the port light showed on the right, a bank to the left drew as one
+    to the right against the panel's own lateral axis, and a Hornet showed its
+    intakes where its nozzles should be.
+    """
     R = ra.rotation_matrix(theta, phi, psi_rel)
-    camera_dir = np.array([-1, 0, 0])  # behind the aircraft, looking forward
+    camera_dir = np.array([1, 0, 0])
 
     def project(pt, s):
-        return (int(cx + pt[1] * s), int(cy - pt[2] * s))  # y=right, z=up
+        return (int(cx - pt[1] * s), int(cy - pt[2] * s))
 
-    ra.render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project)
+    ra.render_3d_plane(surf, cx, cy, R, scale_px, camera_dir, project, model)
 
 
 def _id_ring(surf, sx, sy, color, r=17):
     gfxdraw.aacircle(surf, int(sx), int(sy), r, color)
     gfxdraw.aacircle(surf, int(sx), int(sy), r - 1, color)
+
+
+def _frame(us, vs, width, height, model):
+    """Fit world points ``(us, vs)`` to a panel band: ``(px_per_m, cu, cv)``,
+    the scale and the world point at the band's centre."""
+    du = max(max(us) - min(us), 1e-6)
+    dv = max(max(vs) - min(vs), 1e-6)
+    sc = FRAME_FILL * min(width / du, height / dv, width / (FRAME_SPANS * model.span))
+    return sc, 0.5 * (min(us) + max(us)), 0.5 * (min(vs) + max(vs))
 
 
 def _slot_world(lead, back, right, up):
@@ -94,7 +125,8 @@ def _render_scene(cls, screen, params, frames, clock, lead, wingmen, slots, rewa
         cls.trails = [[] for _ in planes]
     for i, p in enumerate(planes):
         cls.trails[i].append((float(p.x), float(p.y), float(p.z)))
-    plane_px = max(1.0, min(2.2, panel_w * 0.0030))
+    model = ra.model_for(params)
+    glyph_floor = GLYPH_PX / model.length
 
     l_psi = float(lead.psi)
     cpsi, spsi = np.cos(l_psi), np.sin(l_psi)
@@ -119,19 +151,15 @@ def _render_scene(cls, screen, params, frames, clock, lead, wingmen, slots, rewa
 
     side = pygame.Surface((panel_w, panel_h))
     side.fill(ra.SKY)
-    # Frame the formation and its slots rather than a fixed 360 m window. The
-    # fixed window was sized for the widest formation the environment can ask
-    # for, so a two-ship in close trail drew as a pair of specks in an empty
-    # panel. The floor keeps it from zooming in on a converged formation until
-    # the glyphs overlap, and from breathing as the slot error decays.
+    # Frame the formation and its slots rather than a fixed window. A fixed
+    # window was sized for the widest formation the environment can ask for,
+    # so a two-ship in close trail drew as a pair of specks in an empty panel.
     slot_lat = [lateral(w[0], w[1]) for w in slot_world]
     slot_alt = [w[2] for w in slot_world]
     lats = [lateral(p[0], p[1]) for p in pos] + slot_lat
     alts = [p[2] for p in pos] + slot_alt
-    span = max(max(lats) - min(lats), max(alts) - min(alts), 300.0) * 1.6
-    sc = min(panel_w, side_h) * 0.42 / span
-    cu = 0.5 * (min(lats) + max(lats))
-    cv = 0.5 * (min(alts) + max(alts))
+    sc, cu, cv = _frame(lats, alts, panel_w, side_h, model)
+    side_px = max(sc, glyph_floor)
 
     def side_w2s(wu, wz):
         return (panel_w / 2 + (wu - cu) * sc, side_cy - (wz - cv) * sc)
@@ -160,7 +188,8 @@ def _render_scene(cls, screen, params, frames, clock, lead, wingmen, slots, rewa
             float(p.theta),
             float(p.phi),
             _wrap(float(p.psi) - l_psi),
-            scale_px=plane_px,
+            scale_px=side_px,
+            model=model,
         )
     side.blit(
         cls.font.render("behind the lead →", True, ra.SCENE_DIM), (12, side_bot - 20)
@@ -175,10 +204,8 @@ def _render_scene(cls, screen, params, frames, clock, lead, wingmen, slots, rewa
     top.fill(ra.GROUND)
     xs = list(pos[:, 0]) + [w[0] for w in slot_world]
     ys = list(pos[:, 1]) + [w[1] for w in slot_world]
-    top_span = max(max(xs) - min(xs), max(ys) - min(ys), 400.0) * 1.6
-    sc = min(panel_w, top_h) * 0.42 / top_span
-    cu = 0.5 * (min(xs) + max(xs))
-    cv = 0.5 * (min(ys) + max(ys))
+    sc, cu, cv = _frame(xs, ys, panel_w, top_h, model)
+    top_px = max(sc, glyph_floor)
 
     def top_w2s(wx, wy):
         return (panel_w / 2 + (wx - cu) * sc, top_cy - (wy - cv) * sc)
@@ -200,7 +227,14 @@ def _render_scene(cls, screen, params, frames, clock, lead, wingmen, slots, rewa
         px, py = top_w2s(float(p.x), float(p.y))
         _id_ring(top, px, py, colors[i])
         ra.draw_plane_topdown(
-            top, px, py, float(p.theta), float(p.phi), float(p.psi), scale_px=plane_px
+            top,
+            px,
+            py,
+            float(p.theta),
+            float(p.phi),
+            float(p.psi),
+            scale_px=top_px,
+            model=model,
         )
     lpx, lpy = top_w2s(float(lead.x), float(lead.y))
     top.blit(cls.font.render("Lead", True, _LEAD), (int(lpx) + 18, int(lpy) + 16))
