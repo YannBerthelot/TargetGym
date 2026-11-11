@@ -437,20 +437,20 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "ph_neutralization": {
-    "Kp": 0.138292,
-    "Ti": 95.280105,
+    "Kp": 0.354805,
+    "Ti": 300.0,
     "Tf": 0.0,
     "model": {
       "demand": {
-        "k": 19.685139,
-        "tau1": 95.280105,
-        "theta": 17.500001,
-        "band": 0.104163,
-        "step": 0.016667,
-        "bands": 18.898425,
-        "spread": 1.069436,
+        "k": 17.231106,
+        "tau1": 458.526735,
+        "theta": 37.5,
+        "band": 0.121989,
+        "step": 0.009091,
+        "bands": 14.125147,
+        "spread": 1.175083,
         "tests": 10.0,
-        "tau_c": 17.500001
+        "tau_c": 37.5
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -476,19 +476,11 @@
   },
   "hvac": {
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "kp": 0.23639991504753094,
-    "Ti": 1308.6862984169786,
     "model": {
-      "T_air": {
-        "k": 3.0755,
-        "tau1": 1308.686298,
-        "theta": 450.0,
-        "band": 0.16148,
-        "step": 0.271687,
-        "bands": 5.174462,
-        "spread": 1.123592,
-        "tests": 10.0,
-        "tau_c": 450.0
+      "curve": {
+        "T_set": 21.0,
+        "T_out_design": -10.0,
+        "T_supply_design": 27.71875
       }
     }
   }
