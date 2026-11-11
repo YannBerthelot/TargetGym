@@ -29,7 +29,6 @@ from target_gym.reactor.env import (
     tavg_dnb_limit,
 )
 
-_BG = rk.BG
 _FRAME = rk.FRAME
 _TEXT = rk.TEXT
 _DIM = rk.DIM

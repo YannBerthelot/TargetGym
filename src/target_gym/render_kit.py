@@ -137,20 +137,11 @@ def incandescence(T, T_lo: float, T_hi: float) -> tuple:
 
 
 def duty_hex(frac, c_low=BLUE, c_high=ORANGE):
-    """Saturated low-to-high ramp for process fluids and surfaces.
-
-    Preferred over :func:`thermal_hex` inside vessels: matplotlib's coolwarm
-    passes through near-white at its midpoint, which renders a mid-range
-    temperature as muddy grey and reads as "no signal" rather than "middle".
+    """Saturated low-to-high ramp for process fluids and surfaces. Not
+    matplotlib's coolwarm, which passes through near-white at its midpoint,
+    so a mid-range temperature reads as muddy grey, "no signal", not "middle".
     """
     return lerp_hex(c_low, c_high, clamp01(frac))
-
-
-def thermal_hex(T, T_lo: float, T_hi: float) -> str:
-    """Cold-to-hot ramp for fluids: blue -> white -> red."""
-    return mcolors.rgb2hex(
-        plt.cm.coolwarm(clamp01((float(T) - T_lo) / (T_hi - T_lo)))[:3]
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -300,32 +291,6 @@ def glow(ax, x, y, r, *, color=CYAN, strength=1.0, layers=7, zorder=1):
                 zorder=zorder,
             )
         )
-
-
-def gradient_bar(ax, x, y, w, h, values, cmap_fn, *, ec=FRAME, lw=1.0, zorder=2):
-    """A horizontal strip coloured cell-by-cell.
-
-    For distributed plants: the kiln's axial profile, a column's tray
-    compositions, a regenerator stack.
-    """
-    n = len(values)
-    if n == 0:
-        return
-    cw = w / n
-    for i, v in enumerate(values):
-        ax.add_patch(
-            mpatches.Rectangle(
-                (x + i * cw, y),
-                cw,
-                h,
-                fc=cmap_fn(v),
-                ec="none",
-                zorder=zorder,
-            )
-        )
-    ax.add_patch(
-        mpatches.Rectangle((x, y), w, h, fc="none", ec=ec, lw=lw, zorder=zorder + 1)
-    )
 
 
 # ---------------------------------------------------------------------------

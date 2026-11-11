@@ -123,7 +123,7 @@ def _draw_kiln(ax, state, params):
     lime = np.asarray(state.lime)
     tau_min = float(residence_time(state.rpm, params)) / 60.0
     L, R = float(params.length), 0.5 * float(params.diameter)
-    _, _, top = _TOWER
+    top = _TOWER[2]
     iso = rk.Iso(
         (_TOWER[0], L + 22.0),
         (-5.0, 5.0),
