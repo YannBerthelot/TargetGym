@@ -459,6 +459,10 @@ class PhysicalParams:
     glass_per_batch: float = 0.834  # 297 of 356 t/d, Pilon II
     T_fine_low: float = 1693.15  # K, 1420 C, Beerkens review
     T_fine_high: float = 1773.15  # K, 1500 C
+    # s: fining is a time-temperature integral (US6673730), and this is its time at the
+    # band's top. Ours: by Stokes at this plant's viscosity, a 0.5 mm bubble (radius
+    # ours) rises half the 1.2 m depth in 1.0 h at 1500 C and 1.7 h at 1420 C.
+    fining_time: float = 3600.0
     sigma_glass: float = 0.3  # N/m, Table 1 of JCIS2001
     bubble_radius: float = 8.3e-3  # m, top of the lab range in Ch16
     foam_half_life: float = 50.0  # s at 1200 C, soda-lime, Kappel Table 3
@@ -540,8 +544,17 @@ def mean_firing(p):
 
 
 def fining_done(T, p):
-    """Share of the sulfate's fining gas glass at ``T`` has released, over the band."""
+    """The band's share at ``T``: 0 under 1420 C, 1 over 1500 C (Beerkens), linear
+    between (ours). It sets how fast glass at ``T`` fines (``fining_after``)."""
     return jnp.clip((T - p.T_fine_low) / (p.T_fine_high - p.T_fine_low), 0.0, 1.0)
+
+
+def fining_after(X, T, dt, p):
+    """Share fined after ``dt`` s at ``T``, from ``X``. Fining is a time-temperature
+    integral (US6673730), not the peak: the unfined share falls at the band's rate,
+    ``fining_done(T) / fining_time``. Glass that cools keeps what it fined, since the
+    gas it released is spent; reheating fined glass (reboil) is not modelled."""
+    return 1.0 - (1.0 - X) * jnp.exp(-dt * fining_done(T, p) / p.fining_time)
 
 
 def _gas_balance(s, E_load, T_load, fuel_heat, m_gas, H_air, a, g, p):
@@ -722,8 +735,8 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     Tn = thomas(aa, bb, cc, rhs)
     q_under = under * (Tn[0] - p.T_melt_K)
 
-    # ---- Fining share: carried as the heat is, batch glass arriving with none; glass
-    # keeps what it released, and releases what its new temperature allows.
+    # ---- Fining share: carried as the heat is, batch glass arriving with none; then
+    # each cell fines for the step at its new temperature.
     X = s.fining
     carry = jnp.concatenate(
         [zero, F[:, 1:-1] * carried(X, u, dt, a.dx), out * X[:, -1:]], 1
@@ -732,7 +745,7 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     cc_x = jnp.concatenate([-Wm[1:-1], pad], 0)
     bb_x = dz_ / dt + Wm[:-1] + Wp[1:]
     rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / plan
-    Xn = jnp.maximum(thomas(aa_x, bb_x, cc_x, rhs_x), fining_done(Tn, p))
+    Xn = fining_after(thomas(aa_x, bb_x, cc_x, rhs_x), Tn, dt, p)
 
     # ---- Crown: conduction, the face linearised
     ep = p.eps_surface

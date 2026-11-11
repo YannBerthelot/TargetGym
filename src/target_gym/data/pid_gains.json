@@ -167,16 +167,16 @@
   },
   "glass_furnace": {
     "tuning_rule": "SIMC with tc = theta on the valve's step test of the settled attempt 3 plant (scripts/glass_slow_props.py step); setpoint two sigma above the pass mark, sigma the fining reading's spread under this PI on six walk seeds (scripts/glass_slow_props.py walks). Provisional until the reference ladder measures its own",
-    "Kp": 1.9796,
-    "Ki": 1.7911690191820487e-05,
+    "Kp": 1.1913,
+    "Ki": 5.967838893898407e-06,
     "Kd": 0.0,
     "u0": -0.09119999999999995,
-    "backoff": 0.0292,
+    "backoff": 0.0498,
     "model": {
-      "k": 11.003,
-      "tau_h": 41.75,
-      "theta_h": 3.833,
-      "sigma": 0.0146
+      "k": 7.878,
+      "tau_h": 55.45,
+      "theta_h": 11.817,
+      "sigma": 0.0249
     }
   },
   "distillation": {
