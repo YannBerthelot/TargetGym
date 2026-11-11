@@ -228,11 +228,14 @@ class StreamEnv(environment.Environment):
         if self._pin is not None:
             event = jnp.where(t >= state.burn_in, jnp.any(state.planned == t), event)
         if callable(self._hook):
-            # An event starts after the step that draws it.
+            # An event starts after the step that draws it, and that step returns
+            # the reading of the state the event leaves: a new sortie's aircraft
+            # shows at once, not one step late.
             started = self._hook(env_state, k_hook, p)
             env_state = jax.tree_util.tree_map(
                 lambda a, b: jnp.where(event, a, b), started, env_state
             )
+            obs = jnp.where(event, self.env.get_obs(started, p), obs)
         info = {
             **info,
             "scenario": state.scenario,

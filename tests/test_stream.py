@@ -70,8 +70,18 @@ class Toy:
     def start_event(self, s, key, params):
         return s.replace(level=jax.random.uniform(key, minval=0.5, maxval=1.0))
 
+    def get_obs(self, s, params=None):
+        return jnp.stack([s.x])
+
     def action_space(self, params=None):
         return None
+
+
+class Sortie(Toy):
+    """A toy whose event replaces the plant, as an aircraft's new sortie does."""
+
+    def start_event(self, s, key, params):
+        return s.replace(x=jax.random.uniform(key, minval=2.0, maxval=3.0))
 
 
 def hold(obs):
@@ -189,6 +199,16 @@ def test_another_seed_is_another_world():
 def test_the_observation_is_the_task_s_own():
     stream = StreamEnv(Toy(), ToyParams(), suite((0.6, 0.4), (15.0, 15.0)))
     _, _, _, env, obs = run(stream, 50)
+    np.testing.assert_array_equal(np.asarray(obs), np.asarray(env.x)[:, None])
+
+
+def test_a_step_that_starts_an_event_returns_the_reading_of_the_state_it_leaves():
+    # A gymnax step returns the observation of the state it returns. An event that
+    # replaces the plant (a new sortie) must show in that step's observation, not
+    # one step later.
+    stream = StreamEnv(Sortie(), ToyParams(), suite([1.0], None, [0.2]))
+    info, _, _, env, obs = run(stream, 200)
+    assert bool(info["event"].any())
     np.testing.assert_array_equal(np.asarray(obs), np.asarray(env.x)[:, None])
 
 
