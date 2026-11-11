@@ -6,6 +6,13 @@ draft 4, S1): a window draws the free-lime target once, a continuing plant chang
 it. No source in this folder gives how often a kiln's free-lime target is revised,
 so the rate is ours, set once without tuning and open for the owner: once a shift
 (8 h) on average, each change a fresh draw over ``target_lime_range``.
+
+A second search (2026-11-11) found how often a kiln's clinker is sampled, "every
+2 h" (Ali, Tabares, McGinley, J. Advanced Manufacturing and Processing 4(4), 2022,
+abstract, https://www.osti.gov/pages/biblio/1893173), but no source on how often
+operators or quality control revise the free-lime target or change the clinker
+type. Searched: free-lime target revisions, clinker type changes, kiln sampling
+practice. The rate stays ours; it is slower than the lab's 2 h result.
 """
 
 _SHIFT_H = 8.0

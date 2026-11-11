@@ -7,9 +7,12 @@ the registry turns into a ``target_gym.scenarios.Scenario``.
 """
 
 #: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). The extreme
-#: operating gust is a one-year event [S13]; REALITY.md ("How often each window
-#: occurs") finds no source for the rest, so every other number here is ours, set
-#: once without tuning and open for the owner:
+#: operating gust is a one-year event [S13]. REALITY.md ("How often each window
+#: occurs", second search 2026-11-11) puts a curtailment at 2 to 12 h [ST1], so the
+#: curtailment's 8 h dwell and hold are sourced; near cut-out's 8 h sits inside the
+#: 4 to 11.5 h of high-wind shutdowns [ST2], and the 6 h correlation time inside the
+#: 4.5 to 19.5 h of measured hourly autocorrelations [ST3]. Every other number here
+#: is ours, set once without tuning and open for the owner:
 #: - a normal day and a gusty day last a day; near rated and near cut-out last a
 #:   shift; none brings an event;
 #: - the extreme gust's regime lasts its 10 min window and brings one gust a visit,

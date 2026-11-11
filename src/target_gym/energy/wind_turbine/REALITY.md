@@ -297,3 +297,50 @@ Added 2026-11-08 for the frequency-weighted headline. The extreme operating
 gust is a one-year event [S13]. No source in this record gives the hours a
 year near rated, near cut-out, at a class A site or under curtailment; the
 weights are ours (PHYSICS.md).
+
+### Stream numbers, second search (2026-11-11)
+
+Every figure below was read once and confirmed on a second fetch.
+
+- **Curtailment.** MISO's manual wind curtailments numbered 1,141, 2,117,
+  2,034 and 889 in 2009 to 2012, for 8,005, 19,951, 20,365 and 10,430 hours
+  [ST1, Table 3]: 7.0 to 11.7 h a curtailment (our division; the report does
+  not say whether hours add over plants). NV Energy curtails 6 to 7 times a
+  year and "Each event lasts no longer than 2-3 hours"; Alberta's oversupply
+  curtailments come "once or twice per year, lasting a few hours" [ST1,
+  Table 7]. Family range 2 to 12 h; the stream's 8 h dwell and de-rate hold
+  are inside it.
+- **Near cut-out.** At a UK wind farm (SCADA alarms, January 2010 to August
+  2013), the average high wind speed shutdown kept turbines down about 4 h,
+  the longest about 11.5 h [ST2, sec. IV]. That is the time above cut-out,
+  not near it; the stream's 8 h is inside 4 to 11.5 h and kept.
+- **The mean wind's correlation time (`v_mean_tau`, 6 h).** HOMER's typical
+  one-hour autocorrelation of hourly wind speed is 0.80 to 0.95, from
+  measured data at 239 US TMY2 stations; 0.90 to 0.97 for uniform
+  topography, 0.70 to 0.80 in complex topography [ST3]. Read as an AR(1)
+  process, 0.80 to 0.95 is an e-folding time of 4.5 to 19.5 h (our
+  arithmetic, -1 h / ln r), and uniform topography gives 9.5 to 33 h. The
+  6 h is inside the typical range, at its short end.
+- **Above rated.** On a 25.5 m tower at Evanston, Illinois, the mean run of
+  wind above 10 m/s lasted 1.5 h with hourly samples, 3.3 min with one sample
+  a minute [ST4]. A low inland mast is not a hub-height offshore site;
+  hub-height run lengths: not found. The normal and gusty days keep their
+  day.
+- **Not found.** How long a high-turbulence (class A) regime persists, and
+  how long winds stay near rated. Searched: stability-class persistence at
+  met masts (FINO, Cabauw, Lindenberg) and the duration of unstable periods.
+
+Sources for this section:
+
+- [ST1] Bird, Cochran, Wang, "Wind and Solar Energy Curtailment: Experience
+  and Practices in the United States", NREL/TP-6A20-60983, 2014, Table 3
+  (p. 10) and Table 7. https://docs.nlr.gov/docs/fy14osti/60983.pdf (was
+  www.nrel.gov/docs/fy14osti/60983.pdf)
+- [ST2] Macdonald, Hawker, Bell, "Analysis of Wide-Area Availability of Wind
+  Generators During Storm Events", PMAPS 2014.
+  https://strathprints.strath.ac.uk/48153/4/Macdonald_etal_PMAPS2014_availability_of_wind_generators_during_storm.pdf
+- [ST3] UL Solutions, HOMER Pro manual, "One-Hour Autocorrelation Factor".
+  https://support.ul-renewables.com/homer-manual-pro/onehour_autocorrelation_factor.html
+- [ST4] Corotis, "Application of statistical techniques to wind
+  characteristics at potential wind energy-conversion sites",
+  DOE/ET/20283-2, 1980. https://www.osti.gov/servlets/purl/6577370

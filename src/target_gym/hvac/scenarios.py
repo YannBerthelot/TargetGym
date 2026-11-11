@@ -9,12 +9,16 @@ Each row holds ``target_gym.scenarios.Scenario``'s fields; the registry builds
 them, so this package imports nothing outside its fingerprint.
 """
 
-#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
-#: how long a cold snap, a sunny spell or a low-occupancy spell lasts (REALITY.md,
-#: added 2026-11-08: not found), so this number is ours, set once without tuning and
-#: open for the owner. Each regime lasts, on average, the fortnight this suite defines
-#: it as. The regimes carry no event of their own: ``events_per_h`` stays 0.
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How long each regime lasts", 2026-11-11). A cold snap lasts 5.5 days on
+#: average: western European cold spells last 5 to 6 days in KNMI's model composite
+#: [ST1]. The other regimes last, on average, the fortnight this suite defines them
+#: as, inside the week to a month weather regimes last [ST2]; that number is ours,
+#: set once without tuning and open for the owner (a sunny spell is not a block, and
+#: office closures were not found). The regimes carry no event of their own:
+#: ``events_per_h`` stays 0.
 _FORTNIGHT_H = 14 * 24.0
+_COLD_SPELL_H = 5.5 * 24.0
 
 
 def hvac_scenarios() -> tuple:
@@ -39,7 +43,7 @@ def hvac_scenarios() -> tuple:
             description="a cold fortnight, -5 C mean, near the -10 C design point",
             # fortnights a season. Ours, family range 0.5 to 2
             weight=1.0,
-            dwell_h=_FORTNIGHT_H,
+            dwell_h=_COLD_SPELL_H,
         ),
         dict(
             name="shoulder_season",

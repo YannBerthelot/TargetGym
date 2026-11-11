@@ -11,16 +11,18 @@ them, so this package imports nothing outside its fingerprint.
 """
 
 #: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). REALITY.md ("How
-#: often each window occurs") finds no source for how long each regime lasts or how
-#: often a unit runs back; [S3] has setpoints "change several times during every
-#: 24 h". So every number here is ours, set once without tuning and open for the
-#: owner:
+#: often each window occurs", second search 2026-11-11) sources one: a runback or a
+#: feed pump trip lasts 2.775 h, the median of the six ID fan and feed pump forced
+#: derates in one plant-year of four units ([ST1], 0.35 to 67 h). It brings one
+#: upset a visit and holds the unit back that long before it ramps up; with the
+#: weights below unchanged, that is 1.1 runbacks and 0.72 feed pump trips a year
+#: (sourced, 0.5 and 0.75 to 1.25 a unit-year [ST1, ST2]). [S3] has setpoints
+#: "change several times during every 24 h". The rest is ours, set once without
+#: tuning and open for the owner:
 #: - normal load following lasts a day and changes load four times in it (S3's
-#:   "several");
-#: - industrial swings and low load last a shift and bring one load change a visit;
-#: - a runback or a feed pump trip lasts the hour its weight counts it for, brings
-#:   one upset a visit, and holds the unit back that hour before it ramps up.
-_DAY_H, _SHIFT_H, _UPSET_H = 24.0, 8.0, 1.0
+#:   "several"; no count a year was found);
+#: - industrial swings and low load last a shift and bring one load change a visit.
+_DAY_H, _SHIFT_H, _UPSET_H = 24.0, 8.0, 2.775
 _LOAD_CHANGES_PER_DAY = 4.0
 #: A stream starts with neither of the window's events: its plan is flat until the
 #: stream starts a load change or an upset.
@@ -77,7 +79,7 @@ def boiler_drum_scenarios() -> tuple:
             "over two minutes' to below the three-mill minimum [S10, Figs. 5, 6]",
             description="an ID fan trip caps firing and runs the unit back from 75 to "
             "100 % load",
-            # hours a year. Ours, family range 1 to 5 runbacks a year, an hour each; no source gives the rate
+            # hours a year. Ours: 1.1 runbacks a year of 2.775 h; one plant-year shows 0.5 ID fan runbacks a unit-year (REALITY.md [ST1])
             weight=3.0,
             **_UPSET,
         ),
@@ -89,7 +91,7 @@ def boiler_drum_scenarios() -> tuple:
             "over 30 s [S11]",
             description="one of two feed pumps trips, the unit runs back, and the "
             "standby pump delivers after 30 to 60 s",
-            # hours a year. Ours, family range 1 to 3 trips a year, an hour each; no source gives the rate
+            # hours a year. Ours: 0.72 trips a year of 2.775 h; sourced 0.75 to 1.25 feed pump trips or failures a unit-year (REALITY.md [ST1, ST2])
             weight=2.0,
             **_UPSET,
         ),

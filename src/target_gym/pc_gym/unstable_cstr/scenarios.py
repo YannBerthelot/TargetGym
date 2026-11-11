@@ -6,11 +6,14 @@ shares of operating time: none is in the sources, so each is ours, inside the
 family range its PHYSICS.md states. Sources are this folder's ``REALITY.md``.
 """
 
-#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
-#: how often each window occurs or how long an upset lasts (REALITY.md, "How often
-#: each operating window occurs": not found), so every number here is ours, set once
-#: without tuning and open for the owner. A normal day lasts a day; an upset regime
-#: lasts a shift and brings one event per visit on average. A grade change and a
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: (Amendment 3, "Stream numbers, second search", 2026-11-11). A normal day lasts a
+#: day: a large process plant meets an abnormal situation almost daily [ST1]. The
+#: rest is ours, set once without tuning and open for the owner: an upset regime
+#: lasts a shift, 8 h (shifts run 8 to 12 h [ST2, ST3]), and brings one event per
+#: visit on average. A real grade holds about two weeks and its transition takes 1 to
+#: 3 h [ST4, ST5]; the 8 h hold below is kept until the owner rules on a grade change
+#: as a level switch (REALITY.md). A grade change and a
 #: throughput step hold for a shift, a warm feed until its cooler recovers (2 h), an
 #: initiator's lost efficiency until its batch is changed (a day).
 _DAY_H, _SHIFT_H = 24.0, 8.0
