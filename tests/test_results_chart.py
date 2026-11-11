@@ -40,13 +40,16 @@ def _row(name, expert, oracle, ceiling):
 
 
 def test_the_chart_shows_the_recorded_results(gen):
-    """Every registered task, with its recorded expert hold, oracle hold and
-    ceiling, as protocol_results.json has them; a task no oracle ships for
-    (``wake_surf``) has no oracle hold."""
+    """Every registered task recorded on a tracking hold, in registry order,
+    with its recorded expert hold, oracle hold and ceiling, as
+    protocol_results.json has them; a task no oracle ships for (``wake_surf``)
+    has no oracle hold. A task charged in money has no tracking hold and is
+    shown by its charter record instead (owner, 2026-11-11)."""
     data = records.load("protocol_results")
+    tracked = {n: r for n, r in data.items() if "hold_tracking" in r["pid"]}
     rows = {r["name"]: r for r in gen.chart_rows(data)}
-    assert list(rows) == list(registry.REGISTRY)
-    for name, recorded in data.items():
+    assert list(rows) == [n for n in registry.REGISTRY if n in tracked]
+    for name, recorded in tracked.items():
         assert rows[name]["expert"] == recorded["pid"]["hold_tracking"]
         assert rows[name]["oracle"] == recorded.get("mpc", {}).get("hold_tracking")
         assert rows[name]["ceiling"] == recorded["ceiling"]
