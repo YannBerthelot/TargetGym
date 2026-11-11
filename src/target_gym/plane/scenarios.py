@@ -14,14 +14,22 @@ from target_gym.scenarios import Scenario
 # (ours: normal 0.40, calm 0.35, family range 0.2 to 0.6 each). The worst
 # recorded zone and a zone over the whole window are rare (ours, 0.05 each,
 # family range 0.01 to 0.1: Figure 24 shows most zones at 0.2 g or below). The
-# mass and level corners (ours, 0.075 each, family range 0.05 to 0.2).
+# mass and level corners (ours, 0.075 each, family range 0.05 to 0.2). The
+# heavy corner stops at FL350: past it 78 t keeps under 1.3 g to the buffet
+# line, the margin the recommended maximum altitude holds (pprune, secondary).
+# Severe turbulence (ours, 1e-4: between MIL-F-8785C's 1e-5 exceedance of the
+# severe intensity and its 1e-3 of the moderate one).
 
 FT = 0.3048
 #: The light zone's sigma, 0.2 g peak to peak a minute at FL330 (derived,
 #: plane/PHYSICS.md); the worst recorded zone, 0.5 g, is 2.5 times it, the
-#: gust load being linear in the gust.
-LIGHT = 0.598
+#: gust load being linear in the gust. 1.71 m/s, MIL-F-8785C's moderate.
+LIGHT = 0.684
 WORST = 2.5 * LIGHT
+#: MIL-F-8785C's severe intensity at FL330 (Figure 7, the 1e-5 exceedance
+#: curve, as JSBSim tabulates it): 20.0 ft/s at 25 000 ft and 16.0 at 35 000,
+#: so 16.8 ft/s, 5.12 m/s, three times the recorded worst.
+SEVERE = 16.8 * FT
 
 
 def suite():
@@ -58,12 +66,19 @@ def suite():
             "heavy_high",
             {
                 "initial_mass": 78_000.0,
-                "target_altitude_range": (35_000.0 * FT, 37_000.0 * FT),
-                "initial_altitude_range": (35_000.0 * FT, 37_000.0 * FT),
+                "target_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
+                "initial_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
             },
-            source="TCDS (MTOW 78 t, maximum altitude 39 100 ft); RVSM levels",
-            description="78 t at FL350 to 370, the thinnest thrust and buffet margin",
+            source="TCDS (MTOW 78 t); recommended maximum altitude, 0.3 g to buffet",
+            description="78 t at FL340 to 350, the highest it keeps 1.3 g to buffet",
             weight=0.075,
+        ),
+        Scenario(
+            "severe_zone",
+            {"turbulence_sigma": SEVERE},
+            source="MIL-F-8785C Figure 7, severe (1e-5 exceedance) at FL330",
+            description="one zone of severe turbulence, 5.1 m/s",
+            weight=1e-4,
         ),
         Scenario(
             "light_low",

@@ -7,7 +7,7 @@ hide:
 
 <p align="center">
   <b>Reach a setpoint. Hold it forever. Against disturbances.</b><br/>
-  24 JAX environments for <i>target MDPs</i>, the control problems industry actually has.
+  25 JAX environments for <i>target MDPs</i>, the control problems industry actually has.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@ hide:
   <sub>One example task from each family, under PID control.</sub>
 </p>
 
-**24 environments**: 10 aircraft, 6 process control, 6 industrial / energy, 2 renewable energy. Every one of them is in the
+**25 environments**: 11 aircraft, 6 process control, 6 industrial / energy, 2 renewable energy. Every one of them is in the
 [gallery](environments.md) with its own page and clip, and its recorded baseline
 numbers are in [Baseline results](baseline-results.md).
 

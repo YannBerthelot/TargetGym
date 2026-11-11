@@ -58,7 +58,7 @@ def test_l1_flies_the_curvature_on_the_path():
     assert X.l1_lateral_accel(p, 0.0, 0.1, 0.0, obs, np) > 0.0
 
 
-def _on_the_figure8(tau, direction, a=10_000.0, z_mean=5_000.0, speed=160.0):
+def _on_the_figure8(tau, direction, a=37_000.0, z_mean=5_000.0, speed=200.0):
     """An observation on the scored figure-8, at its parameter ``tau``, flying
     along it (``direction`` +1 with tau, -1 against), at the bank its
     curvature needs. The pattern is the env's (PHYSICS.md): Bernoulli's

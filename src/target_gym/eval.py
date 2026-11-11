@@ -526,6 +526,9 @@ FIXED_SETTLE = {
     "unstable_cstr": 99,
     "compressor_surge": 100,
     "formation": 45,
+    # Provisional, ours: wake_surf joined 2026-11-10 with no oracle to measure
+    # against; the patrol's 84, until scripts/measure_hold.py measures it.
+    "wake_surf": 84,
 }
 
 

@@ -217,7 +217,9 @@ before reading any result from it.
 
 The four tasks rebuilt under the charter's Amendment 2 on 2026-11-08 (hvac,
 battery, boiler_drum, wind_turbine) have new plants and episodes; their tau has
-not been remeasured.
+not been remeasured. The aircraft taus predate the 2026-11-10 review, which
+changed the A320's aerodynamics, moved patrol and formation onto the F/A-18 and
+added `wake_surf`, whose tau has not been measured.
 
 | environment | N | tau (steps) | 5·tau | gamma |
 | --- | --- | --- | --- | --- |
@@ -228,7 +230,7 @@ not been remeasured.
 | plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
 | plane3d_heading | 600 | 14 | 70 | 0.99833 |
-| plane3d_circle | 300 | 14 | 70 | 0.99667 |
+| plane3d_circle | 600 | 14 | 70 | 0.99833 |
 | plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
 | plane3d_racetrack | 1200 | 14 | 70 | 0.99917 |
 | patrol | 200 | 13 | 65 | 0.99500 |
@@ -245,6 +247,7 @@ not been remeasured.
 | unstable_cstr | 1800 | 6.3 to 14.4 | 32 to 72 | 0.99944 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 | formation | 200 | 36 | 180 | 0.99500 |
+| wake_surf | 1800 | not measured | not measured | 0.99944 |
 
 Three rows are filled by hand. `unstable_cstr` has no step response to fit (it
 runs away open loop), so its tau is the unstable time constant, the time an

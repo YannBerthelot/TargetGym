@@ -534,6 +534,167 @@ scenarios' ends); rung 2's balance is `trim_action`; the zone for rule 22's
 back-off is the +-65 ft and +-10 kt bands; limits are the protected pitch demand
 the plant already applies. Until then TECS is the reference.
 
+## Amendment 4: the 2026-11-10 review
+
+An outside review of the aircraft family (a pilot's and aeronautical engineer's
+read, not of our earlier versions) found the model's longitudinal derivatives
+wrong in ways that cancelled, an engine that answered as fast at FL370 as at sea
+level, a policy free to command a negative load factor, and `plane` scoring zero
+for the reference in every scenario. The owner's decisions of 2026-11-10 and what
+changed. Tests: `tests/plane/test_plane_physics.py` (sections 5, 7 and 8),
+`tests/plane/test_autopilot_limits.py`, `tests/plane/test_plane_reality.py`.
+
+Sources opened for it, beside REALITY.md's:
+
+- [Jenkinson] Jenkinson, Simpkin and Rhodes, *Civil Jet Aircraft Design*, aircraft
+  data file, A320-200 column. <https://booksite.elsevier.com/9780340741528/appendices/data%2Da/table-1/table.htm>
+- [JSBSim] JSBSim's A320 model (`aircraft/A320/A320.xml`, inertias) and its
+  MIL-F-8785C Figure 7 table (`src/models/atmosphere/FGWinds.cpp`).
+  <https://github.com/JSBSim-Team/jsbsim>
+- [AMC 25.1329] EASA CS-25, AMC 25.1329, Flight Guidance System (online Easy Access
+  Rules), altitude capture and Appendix A4.2.
+  <https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-large-aeroplanes-cs-25>
+- [KFC 500] BendixKing KFC 500 performance specifications: altitude capture at
+  +-0.1 g. <https://www.manualsdir.com/manuals/651155/bendixking-kfc-500.html?page=43>
+- [TM 1-1510-225-10] An Army operator's manual's preselect altitude capture at
+  +-0.2 g. <https://aviationandaccessories.tpub.com/TM-1-1510-225-10/css/TM-1-1510-225-10_481.htm>
+
+**The swept wing.** The A320's wing is swept 25 deg at the quarter chord [Jenkinson],
+and its lift slope is DATCOM's for a swept wing, `2 pi A / (2 + sqrt(A^2 (beta^2 +
+tan^2 L) + 4))`, with `L` the half-chord sweep (21.9 deg, from 25 deg and a taper of
+0.24): 4.80 /rad at Mach 0 (`cl_alpha` 0.0838 /deg) and 6.39 at M 0.78. Its growth
+with Mach (`compressibility`) replaces Prandtl-Glauert's 1/beta, a 2D section's,
+which overstated the slope at M 0.78 by a fifth (8.04 /rad). `aoa_stall` moves to
+15.5 deg, where the swept slope's linear lift reaches `CL_max`.
+
+**The tail and its downwash.** The tail was the wing's own section, cambered, at the
+wing's slope, with a separate 10 m^2 all-moving "elevator" and no downwash: the
+stick-fixed static margin came out at 56 % of the MAC. Now
+(`longitudinal_airframe`, shared by the 2D and 3D aircraft and restated in
+`oracle_model.py`):
+
+- the horizontal tail is the A320's, 31 m^2, aspect ratio 5.0, 29 deg of sweep, 13.53 m
+  of tail arm from the wing's quarter chord [Jenkinson], on its own DATCOM slope and a
+  symmetric section;
+- it meets the body's incidence less the wing's downwash, lifting-line's far field
+  `2 CL / (pi A)` (`downwash`): it takes 0.32 of every change of incidence at low
+  speed, 0.43 at M 0.78;
+- the elevator turns the tail's incidence by half its deflection (`elevator_effectiveness`
+  0.5, ours: a 30 % chord flap, 0.66 by thin-aerofoil theory reduced to what flaps
+  reach), about a fixed stabiliser setting that holds the reference cruise at zero
+  elevator (`stabilizer_setting`, calibrated, 1.38 deg);
+- the wing-body's aerodynamic centre sits 0.822 m ahead of the centre of gravity: the
+  wing's quarter chord moved forward 0.152 MAC by the fuselage (Torenbeek's 1.8 b h l /
+  (a S c), the 3.95 x 4.14 m section [Jenkinson], 13 m of nose ahead of the wing root,
+  ours) and the centre of gravity at 29 % MAC (ours).
+
+The neutral point this predicts, `h_ac + eta V_H (a_t / a_w)(1 - de/da)`, is 0.41 MAC
+at M 0.78 and 0.50 at low speed: a static margin of 12 % and 21 % at a 29 % centre of
+gravity. The model's own moments give 11.3 % at FL330.
+
+**Inertia.** `I` was 9e6 kg m^2, 2.4 times a radius-of-gyration estimate, which is
+what kept the short period plausible against the overstated margin. Now the pitch
+radius of gyration is JSBSim's A320 model's, 3.78e6 kg m^2 over its 50.3 t empty mass,
+8.67 m, applied at the all-up mass (`pitch_inertia`: 5.5e6 at 73.5 t), and so the roll
+one, 5.04 m (1.9e6 at 73.5 t, against 2.5e6 before).
+
+| Bare airframe, FL330, M 0.78, 73.5 t | Before | After | Reference |
+|---|---|---|---|
+| Static margin, stick fixed | 56 % MAC | 11.3 % | transports, 5 to 25 % (ours) |
+| Airplane lift slope | 10.5 /rad | 7.03 /rad | swept wing 6.39 plus tail 0.65 |
+| Short period | 1.99 rad/s, zeta 0.30 | 0.98 rad/s, zeta 0.40 | Etkin and Reid's 747 at cruise, about 1 rad/s and 0.4 |
+| Phugoid | 82 s | 74 s | Lanchester's 106 s, less the growth of lift with Mach |
+| Cruise trim incidence, FL350 | 1.47 deg | 2.50 deg | A320 about 2 to 3 deg |
+| Elevator across the cruise envelope | -3.1 to -0.4 deg | -0.04 to +0.55 deg | trimmed by the stabiliser |
+
+**The attitude loop, retuned.** The new airframe gives 26 % more elevator power per
+unit of inertia, and the shipped gains, P at the recipe's cap, ran the 4 Hz loop near
+its edge: a 2 deg pitch step from trim climbed 177 m in a minute where the loop at
+lower gain climbs 308, and the integrators disagreed by 6 m. The procedure
+(`scripts/tune_inner_loop.py`, unchanged) was run again on the new airframe: pitch P
+1.20, D 0.10, I 0.05 in ArduPilot's units (1.528, 0.127, 0.064 ours); roll P 1.0, D
+0.1, I 0.025 (1.273, 0.127, 0.032). A 3 deg pitch step reaches 63 % in about 2 s.
+
+**The engine at altitude.** The 1.7 s lag is the certification's sea-level static
+rule [14 CFR 33.73(b)]. A gas generator's transients scale in corrected time,
+`t delta / sqrt(theta)` (the torque that spins the spools goes with the inlet
+pressure, the speed it must reach with the root of its temperature), so the lag is
+`1.7 sqrt(theta) / delta`: 4.9 s at FL290, 6.3 s at FL350 (`engine_response_rate`,
+derived). Secondary F404 figures agree: about 3 s idle to military at low level, 6 s
+at 20 000 ft and 9 s at 30 000 ft as forum posts quote NATOPS, where the rule gives
+6.1 and 9.0.
+
+**The autopilot's manoeuvre limit.** A full pitch demand from cruise pulled -0.6 g
+and +1.4 g, normal law stopping it only at -1 and 2.5 g, its structural limits. A load
+factor below zero is a Hazardous effect [EASA AMC 25.1329, A4.2], and an altitude
+capture uses "an acceptable acceleration limit with consideration for occupant
+comfort" [AMC 25.1329]. Autopilots in the record bound their captures at 0.1 to 0.2 g
+[BendixKing KFC 500; TM 1-1510-225-10]. `protected_pitch_demand` now also clips the
+demand to `ap_load_increment`, 0.2 g (ours, the top of that range), either side of
+the load the flight path needs, for every controller. Tests: a full demand stays
+inside 0.75 to 1.25 g.
+
+**What the operator pays inside the bands (rule 23).** With the bands alone the
+reference cost 0 on every scenario, the worst zone over the whole window included
+(its largest error 16.6 m against the 19.8 m band), so no policy could beat it.
+`plane` now also charges `economy`: fuel plus time by the cost index per air distance,
+`(fuel flow + CI / 60) V_assigned / TAS`, normalised so the reference cruise costs 1
+a second (`economy_cost`; CI 30 kg/min, ours, family range 6, an operator's, to 40,
+the A320 QRH's long-range cruise equivalent, both secondary). The time is spent
+whatever the speed over a fixed window, so what a controller changes is the cost of
+the distance it covers; air distance, since the wind is not the controller's. Inside
+the bands the economy is all that counts.
+
+**Scenarios.** The light zone's sigma is re-derived on the airplane's own lift slope,
+7.03 /rad at M 0.78: dn/dw = 0.0572 g per m/s, so 0.684 m/s (was 0.598); the worst zone
+is 1.71 m/s, MIL-F-8785C's moderate at FL330. A severe zone joins, MIL-F-8785C's
+severe intensity at FL330 (Figure 7, the 1e-5 exceedance curve, as JSBSim tabulates
+it), 5.12 m/s, at a share of 1e-4 (ours, between the curve's 1e-5 and the moderate
+curve's 1e-3). The heavy corner stops at FL350: at 78 t past it the margin to the
+buffet line falls under the 1.3 g the recommended maximum altitude keeps (1.23 g at
+FL370 by the model's own line).
+
+| Number | Value | Status |
+|---|---|---|
+| wing sweep, taper, MAC | 25 deg, 0.24, 4.29 m | cited: [Jenkinson] |
+| tail area, aspect ratio, sweep, arm | 31.0 m^2, 5.0, 29 deg, 13.53 m | cited: [Jenkinson] |
+| `cl_alpha`, `tail_cl_alpha` | 0.0838, 0.0702 /deg | derived: DATCOM's swept slope |
+| downwash | 2 CL / (pi A) | derived: lifting-line far field |
+| `elevator_effectiveness` | 0.5 | ours |
+| `tail_efficiency` | 0.9 | ours: the textbook 0.85 to 0.95 |
+| `moment_arm_wings` | 0.822 m | derived: Torenbeek; centre of gravity 29 % MAC and 13 m nose, ours |
+| `stabilizer_setting` | 0.0242 rad | calibrated: zero elevator at FL330, M 0.78, 73.5 t |
+| radii of gyration | 8.67 m pitch, 5.04 m roll | cited: JSBSim's A320 (secondary) |
+| engine lag | 1.7 s sqrt(theta) / delta | derived: corrected time |
+| `ap_load_increment` | 0.2 g | ours, family range 0.1 to 0.2 g [KFC 500, TM 1-1510-225-10] |
+| cost index | 30 kg/min | ours, family range 6 to 40 (secondary) |
+| `economy_scale` | 1.242 kg/s | derived: the model's reference cruise |
+| `turbulence_sigma` | 0.684 m/s | derived, above |
+| severe zone | 5.12 m/s, share 1e-4 | cited: MIL-F-8785C Figure 7; the share ours |
+| heavy corner | FL340 to 350 | derived: 1.3 g to the buffet line |
+
+**The 2D oracle.** The protection's clip binds on every capture at 0.2 g, where at
+2.5 g it rarely did, and the planner met it as a kink: `plane_sine`'s cold solve
+hit its iteration cap twice. The oracle model now smooths it as a site of its own
+(`protection`, `oracle_model.protected`, the plant's `pitch_demand_bounds`), its
+width measured by the protocol (K5) with the others on the new plant
+(`scripts/measure_oracle_widths.py`, `data/oracle_widths`).
+
+**Readings.** The commanded airspeed (channel 9) is a setpoint, ATC's assignment at
+the aircraft's height: it is now worked out on the true state, not on the altitude
+read, which moved it with the altimeter's noise against this section's "commanded
+airspeed exact" (`Airplane2D.get_obs`).
+
+**Known deviations (rule 13).** The trimmable stabiliser does not move: the attitude
+loop's integral trims on the elevator, about the stabiliser's cruise setting. The
+downwash reaches the tail at once: its lag, about a fifth of a transport's pitch
+damping, is left out. The buffet line, the drag polar and the thrust lapse are
+unchanged; the thrust at FL350, 57 kN at M 0.78, sits at the top of the CFM56-5B
+family's installed maximum climb, 5 630 to 6 420 lb a engine as a brochure is indexed
+(secondary; its table is paywalled), so the heavy member's residual climb at the
+lower end would be near the AIM's 500 fpm, which `plane_energy`'s Extra verdict
+(EXTRA.md) does not yet account for.
+
 ## 5. Known deviations
 
 **✅ D1 and D2 — resolved.** They were one defect, not two.
@@ -655,9 +816,9 @@ sites (2D, 3D and patrol) now say so.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane` | 280 | 1 | 5 min | 2 in [-1, 1] | 10 | 21 |
-| `plane_energy` | 1600 | 1 | 27 min | 2 in [-1, 1] | 10 | 21 |
-| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 10 | 21 |
+| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
+| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 24 |
+| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 24 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

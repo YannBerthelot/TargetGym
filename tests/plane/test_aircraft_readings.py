@@ -235,11 +235,15 @@ def test_rounding_only_readings_have_no_scatter(name):
 
 @every_task
 def test_setpoints_stay_exact(name):
-    true, draws = _task(name)[3], _draws(name)
+    """Each draw's setpoints equal the noise-free observation's at the same
+    update index: the draws step the clock for fresh noise, and a setpoint may
+    be scheduled in time (``plane_energy``'s clearances)."""
+    env, params, state, _ = _task(name)
+    true = _read(env, state, params.replace(sensor_noise_scale=0.0))
+    draws = _draws(name)
     for channel in EXACT[name]:
         np.testing.assert_array_equal(
-            draws[:, channel].astype(np.float32),
-            np.full(N_DRAWS, true[channel], np.float32),
+            draws[:, channel].astype(np.float32), true[:, channel].astype(np.float32)
         )
 
 
@@ -304,10 +308,17 @@ def test_the_racetrack_guidance_inherits_the_position_read():
 
 
 def test_the_figure8_distance_inherits_the_position_read():
+    """The observed distance is the one worked out from the position read. The
+    figure's coordinates reach 38 km, where a float32 step is 3.9 mm, and the
+    two computations round apart by up to a step or two: 1 cm, under a
+    twentieth of the GNSS fix's 0.27 m, which a distance not read from it would
+    miss by."""
     env, params, copies = _measured("plane3d_figure8", n=8)
     for t, m in enumerate(copies):
         distance = nearest_point_on_twisted_lemniscate(m, params)[3]
-        assert _draws("plane3d_figure8")[t][19] == pytest.approx(float(distance), 1e-5)
+        assert _draws("plane3d_figure8")[t][19] == pytest.approx(
+            float(distance), abs=0.01
+        )
 
 
 def test_the_slot_frame_turns_with_the_lead_velocities_read():
@@ -453,9 +464,10 @@ def test_elevation_agrees_with_the_altitudes_read():
 def test_the_measured_cost_is_the_cost_of_the_altitude_and_track_read():
     """The heading task's cost, worked from the observation the policy got
     (Amendment 2's bands): the altitude past +-65 ft and the airspeed past
-    +-10 kt of the assigned speed, both as read. One step after the clearance
-    the turn is still allowed, so the heading costs nothing yet."""
-    from target_gym.plane.dynamics import speed_band_excess
+    +-10 kt of the assigned speed, both as read, and the operator's economy
+    (Amendment 4) on the power, height and airspeed read. One step after the
+    clearance the turn is still allowed, so the heading costs nothing yet."""
+    from target_gym.plane.dynamics import economy_cost, speed_band_excess
 
     env, params = tg.make("plane3d_heading")
     i = env.obs_index
@@ -472,15 +484,18 @@ def test_the_measured_cost_is_the_cost_of_the_altitude_and_track_read():
         params.tracking_exponent,
     )
     speed = speed_band_excess(obs[i["z"]], obs[i["airspeed"]], params) ** 2
+    economy = economy_cost(
+        obs[i["power"]], obs[i["z"]], obs[i["airspeed"]], obs[i["target_speed"]], params
+    )
     turn_left = jnp.abs(
         jnp.arctan2(
-            jnp.sin(obs[i["psi"]] - obs[i["target_heading"]]),
-            jnp.cos(obs[i["psi"]] - obs[i["target_heading"]]),
+            jnp.sin(obs[i["heading"]] - obs[i["target_heading"]]),
+            jnp.cos(obs[i["heading"]] - obs[i["target_heading"]]),
         )
     )
     assert float(turn_left) <= float(new.heading_change) + 0.01
     assert float(info["measured_reward"]) == pytest.approx(
-        -float(altitude + speed), rel=1e-4, abs=1e-6
+        -float(altitude + speed + economy), rel=1e-4, abs=1e-6
     )
     assert float(reward) != pytest.approx(float(info["measured_reward"]), rel=1e-5)
 
@@ -533,12 +548,12 @@ def test_the_multi_agent_view_reads_at_the_params_it_is_given():
 
 
 @pytest.mark.large
-@pytest.mark.xfail(strict=True, reason="PR 9: the 20 s filter loses a 0.03 rad/s lead")
 @pytest.mark.parametrize("seed", range(100, 104))
-def test_the_range_bearing_expert_survives_its_range_noise(seed):
-    """Differenced raw, 15 m of range noise is 21 m/s of lead speed and the
-    expert trips on every training seed. This is the filter's floor, not the
-    8.5 m hold of tests/patrol/test_formation_hold.py."""
+def test_the_range_bearing_expert_survives_its_readings(seed):
+    """On its readings (azimuth, the lead's Mode S altitude; the range is seen,
+    not read, since 2026-11-10) the estimator's raw difference flies every
+    training seed without a trip. Under TCAS's 15 m of range noise, 21 m/s of
+    lead speed differenced raw, it tripped on all of them."""
     env, params = tg.make(BO)
     ctrl = registry.get(BO).make_pid_controller()
     key = jax.random.PRNGKey(seed)

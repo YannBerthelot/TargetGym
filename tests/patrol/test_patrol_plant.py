@@ -10,11 +10,14 @@ The contract is PR 7b of docs/proposals/industrial-fixes.md and PR 7's envelope
   rest is its own draw, so its gust keeps the lead's variance.
 - The rolling gust's scale is the span, far under any slot, so each wing has its
   own draw.
-- A centre distance under the span puts wingtips together, so separation trips at
-  about 40 m, over the 34.1 to 35.8 m span.
-- The route turns at up to +-0.03 rad/s, a coordinated bank of about 30 deg.
-- The lead is the 3D expert on the 290 kt, M 0.78 schedule, spawned on it.
-- Every aircraft trips on the 3D tasks' envelope: load factor, EAS, Mach, bank.
+- A centre distance under the span puts wingtips together, so separation trips
+  over the span: one Hornet length, 17.1 m, over its 11.4 m span (AFF's 56 ft).
+- The route turns at up to +-0.0303 rad/s, the parade turn's 30 deg of bank at
+  the band's middle (patrol/env.py, ``lead_turn_rate_range``).
+- The lead is the 3D expert on AFF's 250 KCAS (M 0.70 past it), spawned on it.
+- Every aircraft flies the amended plant (plane3d/PHYSICS.md, Amendment 2): the
+  load factor, bank and Mach are protected and VMO a warning, so none of them
+  trips; the ground does.
 """
 
 import jax
@@ -25,13 +28,16 @@ import pytest
 import target_gym as tg
 from target_gym.patrol.env import GUST_MEMORY, advance_air, step_lead
 from target_gym.plane.dynamics import scheduled_airspeed
+from target_gym.plane3d import hornet
 from target_gym.plane3d.env import check_is_terminal_3d
 
 KEY = jax.random.PRNGKey(0)
 KT = 1852.0 / 3600.0
 TASKS = ("patrol", "patrol_range_bearing", "formation")
 #: The hard end of the schedule's turn, from the row.
-HARD_TURN = 0.03
+HARD_TURN = 0.0303
+#: The lead's schedule: AFF's Class B 250 KCAS [AFF], M 0.70 past it.
+LEAD_CAS, LEAD_MACH = 250.0 * KT, 0.70
 
 
 def _reset(name, seed=0, **overrides):
@@ -96,19 +102,30 @@ def _at(state, lead_seat, **fields):
 @pytest.mark.parametrize(
     "fields",
     [
-        pytest.param({"load_factor": 2.6}, id="over_the_limit_load"),
-        pytest.param({"load_factor": -1.1}, id="under_the_negative_limit"),
-        pytest.param({"phi": 1.06}, id="past_60_deg_of_bank"),
-        # 260 m/s at 3000 m is 224 m/s EAS, past 350 kt's 180.
-        pytest.param({"z": 3000.0, "x_dot": 260.0, "y_dot": 0.0}, id="past_vmo"),
-        # 270 m/s at 8000 m, sound 308 m/s, is M 0.88 at 177 m/s EAS: Mach alone.
+        # Past the Hornet's +7.5 g and -3 g [NATOPS; ours].
+        pytest.param({"load_factor": 7.6}, id="over_the_limit_load"),
+        pytest.param({"load_factor": -3.1}, id="under_the_negative_limit"),
+        # 1.2 rad is 69 deg, past the 67 deg protection and the old 60 deg trip.
+        pytest.param({"phi": 1.2}, id="past_the_bank_protection"),
+        # 270 m/s at 8000 m, sound 308 m/s, is M 0.88, past the 0.85 MMO. The
+        # Hornet's VMO, 700 KEAS, lies past its MMO all through the band.
         pytest.param({"z": 8000.0, "x_dot": 270.0, "y_dot": 0.0}, id="past_mmo"),
     ],
 )
-def test_any_aircraft_past_the_envelope_trips(name, lead_seat, fields):
-    env, params, _, state = _reset(name, follower_spawn_noise=0.0)
+def test_no_aircraft_trips_past_its_protected_envelope(name, lead_seat, fields):
+    """The slot cannot be lost here (``max_slot_error`` out of reach), so only the
+    envelope could trip."""
+    env, params, _, state = _reset(name, follower_spawn_noise=0.0, max_slot_error=1e6)
+    assert not bool(env.is_terminated(_at(state, lead_seat, **fields), params))
+
+
+@pytest.mark.parametrize("name", TASKS)
+@pytest.mark.parametrize("lead_seat", [True, False], ids=["lead", "follower"])
+def test_any_aircraft_on_the_ground_trips(name, lead_seat):
+    env, params, _, state = _reset(name, follower_spawn_noise=0.0, max_slot_error=1e6)
     assert not bool(env.is_terminated(state, params))
-    assert bool(env.is_terminated(_at(state, lead_seat, **fields), params))
+    grounded = _at(state, lead_seat, z=params.min_alt - 1.0)
+    assert bool(env.is_terminated(grounded, params))
 
 
 # ─── The lead ───────────────────────────────────────────
@@ -120,7 +137,7 @@ def test_every_aircraft_spawns_on_the_schedule_inside_the_envelope(name):
     for seed in range(8):
         _, state = env.reset_env(jax.random.PRNGKey(seed), params)
         lead = state.lead
-        want = scheduled_airspeed(lead.z, 290.0 * KT, 0.78)
+        want = scheduled_airspeed(lead.z, LEAD_CAS, LEAD_MACH)
         assert float(_speed(lead)) == pytest.approx(float(want), rel=1e-4)
         assert float(_speed(_follower(state))) == pytest.approx(float(want), rel=1e-4)
         assert not bool(env.is_terminated(state, params))
@@ -146,8 +163,9 @@ def _fly_lead(params, state, steps):
 def test_the_scripted_lead_holds_its_level_on_the_schedule():
     """In still air on a straight route: the 3D heading task's 2 m of altitude, and
     the schedule within 1 m/s, at any mass, since there is no fixed trim to wear out
-    (the throttle and pitch integrators take it up)."""
-    for mass in (73_500.0, 62_000.0):
+    (the throttle and pitch integrators take it up). The Hornet at HARV's 15.1 t and
+    with 2 t of its fuel burned (ours)."""
+    for mass in (hornet.MASS, hornet.MASS - 2_000.0):
         _, params, _, state = _reset(
             "patrol",
             turbulence_sigma=0.0,
@@ -156,15 +174,16 @@ def test_the_scripted_lead_holds_its_level_on_the_schedule():
         )
         rows, end = _fly_lead(params, state, 90)
         assert not rows[:, 4].any()
-        want = scheduled_airspeed(end.z, 290.0 * KT, 0.78)
+        want = scheduled_airspeed(end.z, LEAD_CAS, LEAD_MACH)
         assert np.abs(rows[60:, 0] - float(state.lead.z)).mean() <= 2.0
         assert np.abs(rows[60:, 1] - float(want)).mean() <= 1.0
 
 
-@pytest.mark.parametrize("altitude", [3000.0, 8000.0])
+@pytest.mark.parametrize("altitude", [6096.0, 9754.0])
 def test_the_hard_turn_is_a_coordinated_30_deg_bank(altitude):
-    """A steady 0.03 rad/s at the flown speed V takes tan(bank) = V w / g: 28 deg
-    at 3000 m and 34 deg at 8000 m. Past the old lead's 25 deg bank limit."""
+    """A steady 0.0303 rad/s at the flown speed V takes tan(bank) = V w / g: on 250
+    KCAS, 28 deg at 20 000 ft (172.8 m/s) and 33 deg at 32 000 ft (209.2 m/s),
+    inside the lead's 45 deg."""
     _, params, _, state = _reset(
         "patrol",
         turbulence_sigma=0.0,
@@ -184,11 +203,11 @@ def test_the_default_route_reaches_the_hard_turn():
 
 
 def test_the_formation_lead_seat_flies_the_schedule():
-    """At the old 230 m/s the expert's lead trips on VMO at 3000 m (385 KEAS)."""
+    """The expert's lead holds the patrol lead's 250 KCAS at the AFF point."""
     env, params = tg.make("formation")
     params = params.replace(
         turbulence_sigma=0.0,
-        target_altitude_range=(3000.0, 3000.0),
+        target_altitude_range=(7620.0, 7620.0),
         lead_turn_rate_range=(0.0, 0.0),
         follower_spawn_noise=0.0,
         sensor_noise_scale=0.0,
@@ -201,7 +220,7 @@ def test_the_formation_lead_seat_flies_the_schedule():
         action, memory = act(memory, obs)
         obs, state, _, _, info = step(jax.random.PRNGKey(t), state, action, params)
         assert not bool(info["tripped"])
-    want = scheduled_airspeed(state.lead.z, 290.0 * KT, 0.78)
+    want = scheduled_airspeed(state.lead.z, LEAD_CAS, LEAD_MACH)
     assert float(_speed(state.lead)) == pytest.approx(float(want), abs=2.0)
 
 
@@ -278,18 +297,20 @@ def _air_samples(back, right, up, chains=4000, steps=60):
 def test_offset_air_decorrelates_and_keeps_its_variance():
     """Offset 150 m across and 60 m up, r = 161.6 m on L = 533.4 m, so
     rho = exp(-r / L) = 0.739 with the delayed lead gust. The OU's stationary
-    std, 1.2 / sqrt(1 - 0.8^2) = 2.0 m/s, is the follower's too: the decorrelated
-    part replaces variance, it does not add it. Over 4000 independent chains the
-    sample correlation's standard error is (1 - rho^2) / sqrt(n) = 0.0072 and the
-    std's is 2.0 / sqrt(2 n) = 0.022, and each bound is four of them."""
+    std, sigma / sqrt(1 - (1 - theta dt)^2) = 0.36 / sqrt(1 - 0.8^2) = 0.6 m/s
+    (AFF's light chop), is the follower's too: the decorrelated part replaces
+    variance, it does not add it. Over 4000 independent chains the sample
+    correlation's standard error is (1 - rho^2) / sqrt(n) = 0.0072, and over their
+    12 000 values (three independent axes each) the std's is 0.6 / sqrt(2 x
+    12 000) = 0.0039, and each bound is four of them."""
     history, follower = _air_samples(back=0.0, right=150.0, up=60.0)
     lead = np.asarray(history[:, 0, :])
     follower = np.asarray(follower)
     assert np.corrcoef(lead.ravel(), follower.ravel())[0, 1] == pytest.approx(
         np.exp(-np.hypot(150.0, 60.0) / 533.4), abs=4 * 0.0072
     )
-    assert follower.std() == pytest.approx(2.0, abs=4 * 0.022)
-    assert lead.std() == pytest.approx(2.0, abs=4 * 0.022)
+    assert follower.std() == pytest.approx(0.6, abs=4 * 0.0039)
+    assert lead.std() == pytest.approx(0.6, abs=4 * 0.0039)
 
 
 def test_the_steady_wind_has_no_gust_and_no_rolling_gust():

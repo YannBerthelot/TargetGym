@@ -229,6 +229,26 @@ def compute_next_power(
     )
 
 
+def engine_response_rate(z, rate_sea_level):
+    """The engine's first-order rate at height ``z``, 1/s.
+
+    ``rate_sea_level`` holds the certification's sea-level response (14 CFR
+    33.73(b)). A gas generator's transients scale in corrected time,
+    ``t delta / sqrt(theta)``: the torque that accelerates the spools goes with the
+    inlet pressure ``delta`` and the speed it must reach with ``sqrt(theta)`` (the
+    corrected parameters every engine map and FADEC schedule is drawn in). So the
+    same change of corrected thrust takes ``sqrt(theta) / delta`` times as long:
+    5 s at FL290, 6 s at FL350, against 1.7 s at sea level. Derived, from the
+    standard atmosphere.
+    """
+    temperature = jnp.maximum(288.15 - 0.0065 * z, 216.65)
+    theta = temperature / 288.15
+    troposphere = (jnp.minimum(temperature, 288.15) / 288.15) ** 5.2559
+    above = 0.22336 * jnp.exp(-(z - 11_000.0) / 6341.6)
+    delta = jnp.where(z <= 11_000.0, troposphere, above)
+    return rate_sea_level * delta / jnp.sqrt(theta)
+
+
 def compute_next_surface(requested, current, delta_t, rate, rate_limit):
     """A control surface after ``delta_t``: a first-order lag, solved exactly,
     toward ``requested``, moving no faster than ``rate_limit``."""
@@ -260,10 +280,10 @@ class InnerLoop:
     of ``docs/proposals/expert-protocols-aircraft.md``), and ArduPilot's airspeed
     scaler about the tuning test's EAS, 230 m/s at 5500 m."""
 
-    Kp_theta: float = 6.3662
-    Ki_theta: float = 0.2546
+    Kp_theta: float = 1.5279
+    Ki_theta: float = 0.0637
     Kd_theta: float = 0.1273
-    Kp_roll: float = 0.8913
+    Kp_roll: float = 1.2732
     Ki_roll: float = 0.0318
     Kd_roll: float = 0.1273
     scaling_speed: float = 173.5  # m/s, SCALING_SPEED
@@ -343,6 +363,25 @@ def compute_air_density_from_altitude(altitude: float) -> float:
     return rho
 
 
+def compressibility(mach, aspect_ratio, sweep_half_chord):
+    """How much a wing's lift slope has grown at ``mach``, over its value at 0.
+
+    DATCOM's subsonic lift slope of a swept wing (Helmbold's, as extended by
+    Diederich and Polhamus), ``2 pi A / (2 + sqrt(A^2 (beta^2 + tan^2 L) + 4))``
+    with ``L`` the half-chord sweep and the section's slope taken as 2 pi. The
+    ``2 pi A`` cancels in the ratio. For an unswept wing of infinite span this is
+    Prandtl-Glauert's 1/beta; sweep and a finite span hold it well below that,
+    1.33 at M 0.78 for the A320's wing against 1.60.
+    """
+    tan2 = jnp.tan(sweep_half_chord) ** 2
+    beta2 = jnp.maximum(1e-6, 1.0 - mach**2)
+
+    def inverse_slope(b2):
+        return 2.0 + jnp.sqrt(aspect_ratio**2 * (b2 + tan2) + 4.0)
+
+    return inverse_slope(1.0) / inverse_slope(beta2)
+
+
 def aero_coefficients(aoa_deg, mach, params):
     """
     Realistic lift (CL) and drag (CD) coefficients for an A320.
@@ -397,21 +436,25 @@ def aero_coefficients(aoa_deg, mach, params):
     CD = params.cd0 + params.k * CL**2
 
     # --- Mach corrections ---
-    beta = jnp.sqrt(jnp.maximum(1e-6, 1 - mach**2))
+    # The swept wing's own growth of lift slope with Mach (``compressibility``),
+    # not Prandtl-Glauert's 1/beta, which is a 2D section's and overstated the
+    # A320's slope at M 0.78 by a fifth.
+    growth = compressibility(mach, params.aspect_ratio, params.sweep_half_chord)
+    CL = CL * growth
 
-    CL = CL / beta
-
-    # Shock stall (PHYSICS.md D3). Prandtl-Glauert raises the lift *slope* with
+    # Shock stall (PHYSICS.md D3). Compressibility raises the lift *slope* with
     # Mach, which is right, but on its own it also raises the attainable PEAK
     # lift -- the opposite of what happens. Past the critical Mach number,
     # shock-induced separation makes CL_max collapse; that is lift divergence,
     # and it is why transport aircraft have an overspeed limit at all.
     #
-    # The cap is therefore the Prandtl-Glauert-scaled stall limit up to
+    # The cap is therefore the compressibility-scaled stall limit up to
     # ``M_crit``, and falls beyond it. The two branches agree at ``M_crit``, so
     # this is a no-op everywhere the model was validated (cruise sits near
     # M 0.7) and only bites in the regime the model previously got backwards.
-    beta_crit = jnp.sqrt(jnp.maximum(1e-6, 1 - params.M_crit**2))
+    growth_crit = compressibility(
+        params.M_crit, params.aspect_ratio, params.sweep_half_chord
+    )
     shock = jnp.clip(
         1.0 - params.k_shock_stall * jnp.maximum(mach - params.M_crit, 0.0),
         params.shock_stall_floor,
@@ -419,13 +462,13 @@ def aero_coefficients(aoa_deg, mach, params):
     )
     cl_cap = jnp.where(
         mach <= params.M_crit,
-        params.CL_max / beta,
-        params.CL_max / beta_crit * shock,
+        params.CL_max * growth,
+        params.CL_max * growth_crit * shock,
     )
     cl_floor = jnp.where(
         mach <= params.M_crit,
-        params.CL_min / beta,
-        params.CL_min / beta_crit * shock,
+        params.CL_min * growth,
+        params.CL_min * growth_crit * shock,
     )
     CL = jnp.clip(CL, cl_floor, cl_cap)
 
@@ -451,7 +494,7 @@ def aero_coefficients(aoa_deg, mach, params):
     # takes it away, and it is driven by |aoa| so both branches stall.
     #
     # Applied after the Mach corrections on purpose: separated flow is not a
-    # compressibility effect, and Prandtl-Glauert has no business scaling it.
+    # compressibility effect, and the Mach factor has no business scaling it.
     # Same sharpness as the lift break above: one separation process, so lift is
     # handed to the plate exactly as it is taken from the aerofoil.
     separated = 1.0 / (
@@ -479,7 +522,7 @@ def aero_coefficients(aoa_deg, mach, params):
 
 def buffet_line(mach, params):
     """The most lift the wing holds at ``mach`` before buffet (PHYSICS.md):
-    ``CL_max`` at low speed, falling linearly. Prandtl-Glauert raises the lift
+    ``CL_max`` at low speed, falling linearly. Compressibility raises the lift
     slope with Mach but not this. The wing's only, since buffet is a wing's."""
     return params.CL_max - params.buffet_slope * jnp.maximum(
         mach - params.buffet_mach, 0.0
@@ -498,35 +541,75 @@ def scheduled_airspeed(z, cas, mach, xp=jnp):
     return xp.minimum(mach_of_cas, mach) * sound
 
 
-def protected_pitch_demand(pitch_demand, gamma_air, air_speed, z, mass, params):
-    """The pitch demand normal law lets through (REALITY.md, limits).
+def pitch_demand_bounds(gamma_air, air_speed, z, mass, params, load_reference=1.0):
+    """The pitch demand the flight controls let through (REALITY.md, limits).
 
-    The A320's flight controls hold the load factor inside its limit loads
-    and keep the angle of attack under its maximum: "the airplane cannot be
-    stalled in normal law" [NTSB 1.6.3, BEA447]. Here that is one clip on the
-    demanded attitude: no more incidence than the wing needs to lift
-    ``load_factor_max`` times the weight, or to reach the buffet line, the
-    model's own stall boundary, whichever comes first; and no less than it
-    needs for ``load_factor_min``. Attitude is flight path plus incidence in
-    both the 2D and the 3D model (``compute_alpha``, ``compute_alpha_3d``).
-    The wing's linear lift curve and its Prandtl-Glauert factor invert
-    exactly; the tail's share of lift is left out (PHYSICS.md, protections).
+    Two limits, the tighter binding. Normal law holds the load factor inside the
+    limit loads and keeps the angle of attack under its maximum: "the airplane
+    cannot be stalled in normal law" [NTSB 1.6.3, BEA447]. And the autopilot
+    shapes its own manoeuvres to ``ap_load_increment`` either side of the load
+    the flight path needs, ``load_reference`` (1 level, ``1 / cos(bank)`` in a
+    turn): an altitude capture uses "an acceptable acceleration limit with
+    consideration for occupant comfort" [AMC 25.1329, altitude capture], and a load factor
+    below zero is a Hazardous effect [AMC 25.1329, A4.2]. Autopilots in the
+    record bound it at 0.1 to 0.2 g [KFC 500, TM 1-1510-225-10]; the policy, the
+    expert and the oracle all fly through the same limit.
+
+    Here that is one clip on the demanded attitude: no more incidence than the
+    wing needs for the upper load or to reach the buffet line, the model's own
+    stall boundary, and no less than it needs for the lower load. Attitude is
+    flight path plus incidence in both the 2D and the 3D model
+    (``compute_alpha``, ``compute_alpha_3d``). The wing's linear lift curve and
+    its compressibility factor invert exactly; the tail's share of lift is left
+    out (PHYSICS.md, protections).
     """
     rho = compute_air_density_from_altitude(z)
     q = 0.5 * rho * jnp.maximum(air_speed, 1.0) ** 2
     mach = air_speed / compute_speed_of_sound_from_altitude(z)
-    beta = jnp.sqrt(jnp.maximum(1e-6, 1.0 - mach**2))
+    growth = compressibility(mach, params.aspect_ratio, params.sweep_half_chord)
     per_g = mass * params.gravity / (q * params.wings_surface)
-    cl_hi = jnp.minimum(params.load_factor_max * per_g, buffet_line(mach, params))
-    cl_lo = params.load_factor_min * per_g
+    n_hi = jnp.minimum(
+        params.load_factor_max, load_reference + params.ap_load_increment
+    )
+    n_lo = jnp.maximum(
+        params.load_factor_min, load_reference - params.ap_load_increment
+    )
+    cl_hi = jnp.minimum(n_hi * per_g, buffet_line(mach, params))
+    cl_lo = n_lo * per_g
 
     def incidence(cl):
-        deg = (cl * beta - params.cl0) / params.cl_alpha
+        deg = (cl / growth - params.cl0) / params.cl_alpha
         return jnp.deg2rad(jnp.clip(deg, -params.aoa_stall, params.aoa_stall))
 
-    return jnp.clip(
-        pitch_demand, gamma_air + incidence(cl_lo), gamma_air + incidence(cl_hi)
-    )
+    return gamma_air + incidence(cl_lo), gamma_air + incidence(cl_hi)
+
+
+def economy_cost(power, z, tas, target_tas, params, xp=jnp):
+    """What the operator pays per second inside the bands, in reference-cruise
+    seconds: fuel plus time, by the cost index, per air distance flown.
+
+    The FMGS's ECON speed minimises ``C_F fuel + C_T time``, the cost index
+    being ``C_T / C_F`` in kg/min [Airbus, cost index]. Over a fixed window the
+    time is spent whatever the speed, so what a controller changes is the cost
+    of the distance it covers: ``(fuel flow + CI / 60) / TAS``, here per second
+    at the assigned speed. Air distance, not ground: the wind is not the
+    controller's. Fuel flow is the engine's at the step's end (``power``).
+    """
+    rho = compute_air_density_from_altitude(z)
+    mach = tas / compute_speed_of_sound_from_altitude(z)
+    thrust = compute_thrust_output(power, params.thrust_output_at_sea_level, mach, rho)
+    flow = params.specific_fuel_consumption * 1e-3 * thrust
+    per_second = (flow + params.cost_index / 60.0) * target_tas / xp.maximum(tas, 1.0)
+    return params.economy_weight * per_second / params.economy_scale
+
+
+def protected_pitch_demand(
+    pitch_demand, gamma_air, air_speed, z, mass, params, load_reference=1.0
+):
+    """``pitch_demand`` clipped to ``pitch_demand_bounds``: what the flight
+    controls let through."""
+    lo, hi = pitch_demand_bounds(gamma_air, air_speed, z, mass, params, load_reference)
+    return jnp.clip(pitch_demand, lo, hi)
 
 
 def calibrated_airspeed(z, tas, xp=jnp):
@@ -616,6 +699,79 @@ def compute_velocity_from_horizontal_and_vertical_speed(x_dot, z_dot):
     return compute_norm_from_coordinates(jnp.array((x_dot, z_dot)))
 
 
+def pitch_inertia(mass, params):
+    """The pitch moment of inertia, ``m k_y^2``: the radius of gyration is the
+    airframe's, so the inertia follows the mass as it does the weight."""
+    return mass * params.pitch_gyration_radius**2
+
+
+def tail_section(params):
+    """The horizontal tail as a section for ``aero_coefficients``: symmetric, on
+    its own lift slope, span and sweep, with its own stall."""
+    return params.replace(
+        cl0=0.0,
+        cl_alpha=params.tail_cl_alpha,
+        aspect_ratio=params.tail_aspect_ratio,
+        sweep_half_chord=params.tail_sweep_half_chord,
+        k=params.tail_k,
+        CL_max=params.tail_CL_max,
+        CL_min=-params.tail_CL_max,
+        aoa_stall=params.tail_aoa_stall,
+    )
+
+
+def downwash(cl_wing, params):
+    """The wing's downwash at the tail, rad: lifting-line theory's far-field
+    value, ``2 CL / (pi A)``, twice the wing's own induced angle. It takes
+    ``2 a / (pi A)`` of every change of incidence away from the tail, 0.33 at
+    low speed and 0.43 at M 0.78 on this wing. ``downwash_ratio`` scales it
+    where the far field overstates the downwash at the tail (1 on the A320)."""
+    return params.downwash_ratio * 2.0 * cl_wing / (jnp.pi * params.aspect_ratio)
+
+
+def longitudinal_airframe(alpha, speed, mach, rho, pitch_rate, stick, params):
+    """The wing-body and the horizontal tail: ``(lift, drag, pitching moment,
+    (tail drag coefficient, tail lift coefficient))``, nose-up positive.
+
+    The wing-body's force acts at its aerodynamic centre, ``moment_arm_wings``
+    ahead of the centre of gravity. The tail sits ``moment_arm_stabilizer``
+    behind it and meets the air at the body's incidence less the wing's
+    downwash, plus its fixed setting (the trimmable stabiliser at its cruise
+    trim), less the elevator's deflection times its flap effectiveness, plus
+    the incidence a pitch rate sweeps it through. Its dynamic pressure is
+    ``tail_efficiency`` of the free stream's. Lift and drag are both defined
+    against the local wind, so each surface's force normal to the body is
+    ``L cos a + D sin a``: past the stall drag exceeds lift, and the omitted
+    term would be the larger one.
+    """
+    cz_w, cx_w = aero_coefficients(jnp.rad2deg(alpha), mach, params)
+    cz_w = jnp.minimum(cz_w, buffet_line(mach, params))
+    lift_w = compute_drag(S=params.wings_surface, C=cz_w, V=speed, rho=rho)
+    drag_w = compute_drag(S=params.wings_surface, C=cx_w, V=speed, rho=rho)
+    normal_w = lift_w * jnp.cos(alpha) + drag_w * jnp.sin(alpha)
+    moment = normal_w * params.moment_arm_wings
+
+    # A nose-up rate q sweeps the tail down at q l: arctan rather than q l / V,
+    # bounded as V falls, where the moment vanishes with the dynamic pressure.
+    swept = jnp.arctan2(
+        pitch_rate * params.moment_arm_stabilizer, jnp.maximum(speed, 1e-3)
+    )
+    tail = (
+        alpha
+        - downwash(cz_w, params)
+        + params.stabilizer_setting
+        - params.elevator_effectiveness * stick
+        + swept
+    )
+    cz_t, cx_t = aero_coefficients(jnp.rad2deg(tail), mach, tail_section(params))
+    area = params.tail_efficiency * params.stabilizer_surface
+    lift_t = compute_drag(S=area, C=cz_t, V=speed, rho=rho)
+    drag_t = compute_drag(S=area, C=cx_t, V=speed, rho=rho)
+    normal_t = lift_t * jnp.cos(tail) + drag_t * jnp.sin(tail)
+    moment = moment - normal_t * params.moment_arm_stabilizer
+    return lift_w + lift_t, drag_w + drag_t, moment, (cx_t, cz_t)
+
+
 @partial(
     jax.jit, static_argnames=["clip", "min_clip_boundaries", "max_clip_boundaries"]
 )
@@ -650,10 +806,8 @@ def compute_acceleration(
     air_x = x_dot - params.wind_x
     air_z = z_dot - params.wind_z
     alpha, gamma = compute_alpha(theta, air_x, air_z)
-    # jax.debug.print(
-    #     "{x} {y} {z}", x=jnp.rad2deg(alpha), y=jnp.rad2deg(gamma), z=jnp.rad2deg(theta)
-    # )
-    # Constant mass: fuel burn is not modelled (plane/PHYSICS.md, D4).
+    # The all-up mass of this step: the caller threads what the tanks hold
+    # through ``initial_mass`` (``compute_next_state``).
     m = params.initial_mass
     rho = compute_air_density_from_altitude(z)
     M = compute_Mach_from_velocity_and_speed_of_sound(
@@ -664,89 +818,16 @@ def compute_acceleration(
     P = compute_weight(m, params.gravity)
     V = compute_norm_from_coordinates(xp.array([air_x, air_z]))
 
-    # ====================================================
-    # WINGS
-    # ====================================================
-    C_z_w, C_x_w = aero_coefficients(xp.rad2deg(alpha), M, params=params)
-    C_z_w = xp.minimum(C_z_w, buffet_line(M, params))
-    lift_wings = compute_drag(S=params.wings_surface, C=C_z_w, V=V, rho=rho)
-    drag_wings = compute_drag(S=params.wings_surface, C=C_x_w, V=V, rho=rho)
-    # Only the component normal to the body axis makes a pitching moment, and
-    # lift and drag are both defined against the local wind, so both project
-    # onto it. Using lift alone is defensible while drag is a twentieth of it
-    # (CD/CL is 0.08 at the stall) and wrong once the wing separates, where drag
-    # *exceeds* lift -- at 60 deg the omitted term is 1.8x the one kept.
-    F_wings = lift_wings * xp.cos(alpha) + drag_wings * xp.sin(alpha)
-    M_wings = F_wings * params.moment_arm_wings
-
-    # ====================================================
-    # STABILIZER
-    # ====================================================
-    # Pitch-rate damping. The tail sits ``moment_arm_stabilizer`` behind the CG,
-    # so a nose-up rate q sweeps it downwards at q*l and it meets the air at a
-    # higher incidence: arctan(q*l / V). The extra tail lift makes a nose-down
-    # moment that opposes the rotation -- the Cm_q derivative, and the only
-    # thing damping the pitch axis.
-    #
-    # Without it the pitch rate was integrated with nothing to arrest it, so a
-    # departed aircraft tumbled indefinitely: 15 full rotations under extreme
-    # actions. ``theta_dot`` was already being passed in and discarded.
-    #
-    # arctan rather than the small-angle q*l/V because it stays bounded as V
-    # falls, and at V -> 0 the moment vanishes anyway with the dynamic pressure.
-    tail_rate_deg = xp.rad2deg(
-        xp.arctan2(theta_dot * params.moment_arm_stabilizer, xp.maximum(V, 1e-3))
+    lift_total, drag_total, M_y, (C_x_e, C_z_e) = longitudinal_airframe(
+        alpha, V, M, rho, theta_dot, stick, params
     )
-    C_z_s, C_x_s = aero_coefficients(
-        xp.rad2deg(alpha) - 3.0 + tail_rate_deg, M, params=params
-    )
-    lift_stab = compute_drag(S=params.stabilizer_surface, C=C_z_s, V=V, rho=rho)
-    drag_stab = compute_drag(S=params.stabilizer_surface, C=C_x_s, V=V, rho=rho)
-    # Only the component normal to the body axis makes a pitching moment, and
-    # lift and drag are defined relative to the *local wind*, so both project
-    # onto it. Written as ``lift - drag`` this reversed sign whenever the tail's
-    # drag exceeded its lift -- at 82 deg of local incidence CL - CD = -1.01 --
-    # which turned the damping moment into a driving one exactly when the
-    # aircraft was departing and most needed damping.
-    tail_incidence = xp.deg2rad(xp.rad2deg(alpha) - 3.0 + tail_rate_deg)
-    F_stab = lift_stab * xp.cos(tail_incidence) + drag_stab * xp.sin(tail_incidence)
-    M_stabilizer = -F_stab * params.moment_arm_stabilizer
-
-    # ====================================================
-    # ELEVATOR
-    # ====================================================
-    # The elevator rides on the same tail, so it feels the same rate-induced
-    # incidence.
-    C_z_e, C_x_e = aero_coefficients(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg, M, params=params
-    )
-    lift_elev = compute_drag(S=params.elevator_surface, C=C_z_e, V=V, rho=rho)
-    drag_elev = compute_drag(S=params.elevator_surface, C=C_x_e, V=V, rho=rho)
-    # Projected with the elevator's own local incidence, not with the stick
-    # deflection, and with drag adding to the normal force rather than
-    # subtracted from it -- the same correction the stabiliser needed. The two
-    # forms agree near cruise (0.118 against 0.117) and diverge once the tail
-    # is deep in the separated regime: at 80 deg of body incidence with full
-    # stick the old form gave 0.249 where the projection gives 1.148.
-    elev_incidence = xp.deg2rad(
-        xp.rad2deg(alpha) - xp.rad2deg(stick) - 3.0 + tail_rate_deg
-    )
-    F_elev = lift_elev * xp.cos(elev_incidence) + drag_elev * xp.sin(elev_incidence)
-    M_elevator = -F_elev * params.moment_arm_stabilizer
-
-    # ====================================================
-    # TOTAL MOMENT & FORCES
-    # ====================================================
-    M_y = M_wings + M_stabilizer + M_elevator
-    drag_total = drag_wings + drag_stab + drag_elev
-    lift_total = lift_wings + lift_stab + lift_elev
 
     F_x, F_z = newton_second_law(
         thrust=thrust, lift=lift_total, drag=drag_total, P=P, gamma=gamma, theta=theta
     )
 
     metrics = (drag_total, lift_total, C_x_e, C_z_e, F_x, F_z)
-    accelerations = xp.array([F_x / m, F_z / m, M_y / params.I])
+    accelerations = xp.array([F_x / m, F_z / m, M_y / pitch_inertia(m, params)])
 
     if clip:
         assert (

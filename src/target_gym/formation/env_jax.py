@@ -187,7 +187,7 @@ class Formation(
             k,
         )
 
-        speed = lead_cruise_speed(lead_alt)
+        speed = lead_cruise_speed(lead_alt, params)
         lead = make_cruise_state(
             x=0.0,
             y=0.0,

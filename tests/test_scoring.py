@@ -691,8 +691,10 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
     [
         ("plane", [65.0 * 0.3048]),  # +-65 ft, 14 CFR 91 Appendix G
         ("plane3d_racetrack", [65.0 * 0.3048]),
-        ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
-        ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
+        # AFF's 10 ft one sigma on the Hornet [NASA/TM-2002-210729], the
+        # owner's choice of airframe (2026-11-10), patrol/PHYSICS.md
+        ("patrol", [10.0 * 0.3048]),
+        ("formation", [20.0, 10.0 * 0.3048, 10.0 * 0.3048]),  # lead, then wingmen
         ("ph_neutralization", [1.0]),  # the permit range pH 7 +-1 [P7]
     ],
 )

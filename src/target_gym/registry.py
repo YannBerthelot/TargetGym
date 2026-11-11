@@ -61,6 +61,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "plane": "Altitude hold",
     "patrol": "Patrol - wingman",
     "patrol_range_bearing": "Patrol - wingman, range and bearing",
+    "wake_surf": "Wake surfing - A320 in trail",
     "unstable_cstr": "Unstable CSTR",
 }
 
@@ -339,6 +340,12 @@ def _patrol_range_bearing():
     return PlanePatrolRangeBearing()
 
 
+def _wake_surf():
+    from target_gym.patrol.env_jax import WakeSurf
+
+    return WakeSurf()
+
+
 def _cstr():
     from target_gym.pc_gym.cstr.env_jax import CSTR
 
@@ -590,7 +597,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios("suite", module="target_gym.plane.scenarios"),
         # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
         # zone's sigma re-derived there, and a scenario suite.
-        version=5,
+        version=6,
     ),
     # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
     # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid
@@ -624,7 +631,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
         # bands (plane/PHYSICS.md). v8: the altitude band travels with the
         # 500 fpm profile instead of starting where it ends.
-        version=8,
+        version=9,
     ),
     EnvSpec(
         name="plane_sine",
@@ -644,7 +651,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         },
         noise_fields=("turbulence_sigma",),
         # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -681,7 +688,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios("heading_suite", module="target_gym.plane3d.scenarios"),
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
         # vectors every 150 s, and a scenario suite.
-        version=7,
+        version=8,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -693,13 +700,20 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=4,
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+        ),
+        version=5,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -737,7 +751,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # a scenario suite with steady winds.
         # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
         # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
-        version=8,
+        version=9,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -749,14 +763,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+        ),
         # v4: the distance to the curve observed as the tracked output.
-        version=5,
+        version=6,
     ),
     EnvSpec(
         name="patrol",
@@ -775,6 +796,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # its lead and its expert fly (experts files, so in the expert
         # fingerprint only: the lead's values are constants in patrol/env.py).
         fingerprint_sources=(
+            "plane3d/hornet.py",
             "plane/dynamics.py",
             "plane3d/dynamics.py",
             "plane3d/env.py",
@@ -782,7 +804,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=4,
+        version=5,
     ),
     EnvSpec(
         name="patrol_range_bearing",
@@ -817,6 +839,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         noise_fields=("turbulence_sigma",),
         # As patrol's.
         fingerprint_sources=(
+            "plane3d/hornet.py",
             "plane/dynamics.py",
             "plane3d/dynamics.py",
             "plane3d/env.py",
@@ -824,7 +847,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=4,
+        version=5,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -1217,6 +1240,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         # autopilot and TECS (controller files, so in the expert or oracle
         # fingerprint only).
         fingerprint_sources=(
+            "plane3d/hornet.py",
             "patrol/env.py",
             "patrol/experts.py",
             "patrol/oracle.py",
@@ -1226,7 +1250,31 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/experts.py",
             "plane/experts_tecs.py",
         ),
-        version=3,
+        version=4,
+    ),
+    EnvSpec(
+        name="wake_surf",
+        group="aircraft",
+        env_factory=_wake_surf,
+        params_cls=_LazyParams("target_gym.patrol.env", "WakeSurfParams"),
+        make_pid=_pid(
+            "make_wake_surf_pid_controller", module="target_gym.patrol.experts"
+        ),
+        make_mpc=None,
+        baselines_note=(
+            "No MPC ships yet: the patrol's twin-autopilot oracle plans the slot, "
+            "not the station's economy, and the shared solver is not wired to "
+            "this task (owner, 2026-11-10)."
+        ),
+        noise_fields=("turbulence_sigma",),
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane3d/dynamics.py",
+            "plane3d/env.py",
+            "plane3d/experts.py",
+            "plane/experts_tecs.py",
+        ),
+        version=2,
     ),
 )
 

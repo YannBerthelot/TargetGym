@@ -182,10 +182,11 @@ def test_a_rolling_gust_rolls_a_wings_level_aircraft(params):
 
     accel, _ = compute_acceleration_3d(velocities, positions, action, gusty)
 
-    # At 5500 m, rho = 0.6972: q = 18 441 Pa. L_p = C_lp b^2 q S / (2 V I_x)
-    # = -0.4 * 35.8^2 * 18 441 * 122.6 / (2 * 230 * 2.5e6) = -1.008 /s, so a
-    # gust of 0.02 rad/s on a still aircraft rolls it at +0.0202 rad/s^2.
-    np.testing.assert_allclose(accel[4], 0.0202, rtol=0.01)
+    # At 5500 m, rho = 0.6972: q = 18 441 Pa. I_x = m k_x^2 = 73 500 x 5.039^2
+    # = 1.866e6 kg m^2 (JSBSim's A320 radius of gyration). L_p = C_lp b^2 q S /
+    # (2 V I_x) = -0.4 * 35.8^2 * 18 441 * 122.6 / (2 * 230 * 1.866e6) = -1.350 /s,
+    # so a gust of 0.02 rad/s on a still aircraft rolls it at +0.0270 rad/s^2.
+    np.testing.assert_allclose(accel[4], 0.0270, rtol=0.01)
 
 
 def test_the_rolling_gust_keeps_drydens_low_frequency_level(params):
@@ -242,13 +243,47 @@ def test_scored_turbulence_reaches_the_bank():
 
 
 def test_the_3d_engine_shares_the_lag_and_the_idle():
-    # As tests/plane/test_plane_physics.py: 0.05 + 0.95 (1 - e^(-3 / 1.7)) = 0.8373.
+    # As tests/plane/test_plane_physics.py, at 3 000 m (low enough to be under
+    # VMO, which this unamended plant trips on): theta = 0.9323, delta = 0.6919,
+    # delta / sqrt(theta) = 0.7166, a 2.372 s lag, so 0.05 + 0.95 (1 -
+    # e^(-3 / 2.372)) = 0.7317.
     spec = REGISTRY["plane3d_heading"]
     env = spec.make_env()
-    params = spec.params_cls().replace(turbulence_sigma=0.0)
+    params = spec.params_cls().replace(
+        turbulence_sigma=0.0,
+        target_altitude_range=(3000.0, 3000.0),
+        initial_altitude_range=(3000.0, 3000.0),
+        initial_altitude_offset_range=(0.0, 0.0),
+    )
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     state = state.replace(power=jnp.float32(0.05))
     for _ in range(3):
         _, state, _, _, _ = env.step_env(key, state, jnp.array([1.0, 0, 0]), params)
-    assert float(state.power) == pytest.approx(0.8373, abs=2e-3)
+    assert float(state.power) == pytest.approx(0.7317, abs=2e-3)
+
+
+def test_the_3d_airframe_is_the_2d_one():
+    """PlaneParams3D does not inherit from PlaneParams, so the A320's numbers are
+    written twice; every field the two share must agree, or the 3D aircraft is
+    another aeroplane. The scored overrides (turbulence, episode, bands) are the
+    tasks', not the airframe's, and are left out by taking the class defaults."""
+    from target_gym.plane.env import PlaneParams
+    from target_gym.plane3d.env import PlaneParams3D
+
+    task_fields = {
+        "max_steps_in_episode", "target_altitude_range", "initial_altitude_range",
+        "turbulence_sigma", "max_alt", "failure_cost", "rho_floor",
+        "rho_floor_tracking", "initial_altitude_offset_range", "economy_weight",
+    }  # fmt: skip
+    two, three = PlaneParams(), PlaneParams3D()
+    shared = (
+        set(PlaneParams.__dataclass_fields__) & set(PlaneParams3D.__dataclass_fields__)
+    ) - task_fields
+    differ = {
+        name: (getattr(two, name), getattr(three, name))
+        for name in sorted(shared)
+        if isinstance(getattr(two, name), float)
+        and getattr(two, name) != getattr(three, name)
+    }
+    assert not differ, differ

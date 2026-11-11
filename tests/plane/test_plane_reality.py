@@ -164,16 +164,17 @@ def test_the_hold_is_at_a_cruise_level_in_rvsm_airspace():
 
 def test_the_light_zone_is_derived_at_the_cruise_level():
     """turbulence_sigma from the sharp-edged gust load at FL330, the middle
-    level, on the M0.78 schedule: dn/dw = rho V S a / (2 m g), with the model's
-    lift slope 0.08786 per deg [PHYSICS.md] and Prandtl-Glauert. ISA at 10 058
-    m: 222.77 K, rho 0.4097 kg/m3, a 299.2 m/s, so V = 233.4 m/s, slope 5.034
-    / sqrt(1 - 0.78^2) = 8.04 per rad, and dn/dw = 0.4097 x 233.4 x 122.6 x
-    8.04 / (2 x 73 500 x 9.81) = 0.0654 g per m/s. A minute is 60 V / L = 26.3
-    scale lengths of 533.4 m, whose expected range is 2 sqrt(2 ln 26.3) = 5.11
-    standard deviations, so 0.2 g peak to peak [BEA447 Figure 24's usual level]
-    needs 0.2 / (5.11 x 0.0654) = 0.598 m/s."""
+    level, on the M0.78 schedule: dn/dw = rho V S a / (2 m g), with a the
+    airplane's lift slope. ISA at 10 058 m: 222.77 K, rho 0.4097 kg/m3, a 299.2
+    m/s, so V = 233.4 m/s. The swept wing's slope at M 0.78 is 6.39 per rad
+    [PHYSICS.md 4]; the tail adds 0.9 x 31 / 122.6 x 4.98 x (1 - 0.429) = 0.65,
+    its slope less the wing's downwash, so a = 7.03 per rad and dn/dw = 0.4097 x
+    233.4 x 122.6 x 7.03 / (2 x 73 500 x 9.81) = 0.0572 g per m/s. A minute is
+    60 V / L = 26.3 scale lengths of 533.4 m, whose expected range is
+    2 sqrt(2 ln 26.3) = 5.11 standard deviations, so 0.2 g peak to peak
+    [BEA447 Figure 24's usual level] needs 0.2 / (5.11 x 0.0572) = 0.684 m/s."""
     _, params = tg.make("plane")
-    assert float(params.turbulence_sigma) == pytest.approx(0.598, rel=0.01)
+    assert float(params.turbulence_sigma) == pytest.approx(0.684, rel=0.01)
 
 
 def test_turbulence_comes_in_a_zone_with_calm_around_it():
@@ -196,6 +197,12 @@ def _held(params, **changes):
     return env, state.replace(**changes)
 
 
+def _band_cost(env, state, params):
+    """The bands' cost, every term but the operator's economy (rule 15)."""
+    terms = env.reward_terms(state, params)
+    return float(sum(v for k, v in terms.items() if k != "economy"))
+
+
 def test_inside_both_bands_costs_nothing():
     """Precision inside a band earns nothing [rule 15]: 15 m off the level and
     5 kt off the speed cost zero."""
@@ -203,7 +210,7 @@ def test_inside_both_bands_costs_nothing():
     env, state = _held(params)
     tas = float(jnp.hypot(state.x_dot, state.z_dot))
     off = state.replace(z=state.target_altitude + 15.0, x_dot=jnp.float32(tas + 2.0))
-    assert float(env.compute_reward(off, params)) == 0.0
+    assert _band_cost(env, off, params) == 0.0
 
 
 def test_altitude_past_the_band_costs_the_squared_excess():
@@ -211,7 +218,7 @@ def test_altitude_past_the_band_costs_the_squared_excess():
     env, params = tg.make("plane")
     env, state = _held(params)
     off = state.replace(z=state.target_altitude + 30.0)
-    assert float(-env.compute_reward(off, params)) == pytest.approx(0.2644, rel=1e-3)
+    assert _band_cost(env, off, params) == pytest.approx(0.2644, rel=1e-3)
 
 
 def test_speed_past_the_band_costs_the_squared_excess():
@@ -225,7 +232,7 @@ def test_speed_past_the_band_costs_the_squared_excess():
     level = state.replace(z=jnp.float32(0.0), target_altitude=jnp.float32(0.0))
     target = float(params.target_cas)
     fast = level.replace(x_dot=jnp.float32(target + 15.0 * KT), z_dot=0.0)
-    assert float(-env.compute_reward(fast, params)) == pytest.approx(0.25, rel=1e-2)
+    assert _band_cost(env, fast, params) == pytest.approx(0.25, rel=1e-2)
 
 
 # -- Turbulence and the reference (medium: 600 to 1 800 closed-loop steps) -----

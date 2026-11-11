@@ -31,6 +31,8 @@ KNOT = 0.514444  # m/s
 
 # A320 geometry used to derive expectations (PHYSICS.md §3).
 A320_SPAN_M = 34.1
+#: Mean aerodynamic chord, m [Jenkinson, A320-200].
+A320_MAC_M = 4.29
 OSWALD_E = 0.85
 
 # Cruise reference condition: FL350, M0.78.
@@ -364,13 +366,34 @@ def test_cl_max_is_attainable(params):
     assert cl_peak == pytest.approx(params.CL_max, rel=0.10)
 
 
-def test_lift_slope_consistent_with_aspect_ratio(params):
-    """Prandtl finite-wing lift slope: a = a0 / (1 + a0/(pi*AR*e))."""
-    aspect_ratio = A320_SPAN_M**2 / params.wings_surface
-    a0 = 2.0 * np.pi  # per radian, thin-airfoil theory
-    slope_per_rad = a0 / (1.0 + a0 / (np.pi * aspect_ratio * OSWALD_E))
-    slope_per_deg = slope_per_rad * np.pi / 180.0
-    assert params.cl_alpha == pytest.approx(slope_per_deg, rel=0.25)
+def _lift_slope_per_rad(params, mach, lo=0.0, hi=3.0):
+    """dCL/dalpha of the wing section in its linear range, per radian."""
+    aoas = np.linspace(lo, hi, 13)
+    cls = np.array([_CL(a, mach, params) for a in aoas])
+    return float(np.polyfit(aoas, cls, 1)[0]) * 180.0 / np.pi
+
+
+def test_lift_slope_is_the_swept_wings(params):
+    """The A320's wing is swept 25 deg at the quarter chord [Jenkinson], and a
+    swept wing's slope is well below an unswept one's of the same span.
+
+    DATCOM's subsonic slope, 2 pi A / (2 + sqrt(A^2 (1 + tan^2 L) + 4)), with
+    A = 34.1^2 / 122.6 = 9.48 and the half-chord sweep L = 21.9 deg (25 deg at the
+    quarter chord, taper 0.24): tan^2 L = 0.1616, A^2 (1.1616) + 4 = 108.4,
+    sqrt = 10.41, so 59.57 / 12.41 = 4.80 /rad near Mach 0. The unswept Prandtl
+    slope it replaced was 5.03.
+    """
+    assert _lift_slope_per_rad(params, mach=0.05) == pytest.approx(4.80, rel=0.02)
+
+
+def test_lift_slope_grows_with_mach_as_a_swept_wing(params):
+    """At M 0.78 the same formula has beta^2 = 0.392: A^2 (0.392 + 0.162) + 4 =
+    53.7, sqrt = 7.33, so 59.57 / 9.33 = 6.39 /rad, 1.33 times its low-speed
+    value. Prandtl-Glauert's 1/beta, a 2D section's growth, would give 1.60."""
+    ratio = _lift_slope_per_rad(params, mach=0.78) / _lift_slope_per_rad(
+        params, mach=0.05
+    )
+    assert ratio == pytest.approx(1.33, rel=0.02)
 
 
 def test_max_lift_falls_above_the_critical_mach(params):
@@ -393,7 +416,7 @@ def test_max_lift_falls_above_the_critical_mach(params):
     assert cl_beyond < 0.85 * cl_crit, "the fall should be substantial, not marginal"
 
 
-def test_prandtl_glauert_rise_is_kept_below_the_critical_mach(params):
+def test_compressible_rise_is_kept_below_the_critical_mach(params):
     """The complement: fixing D3 must not remove the effect that is real.
 
     The lift *slope* does grow with Mach in attached flow, so peak lift rises
@@ -411,24 +434,29 @@ def test_prandtl_glauert_rise_is_kept_below_the_critical_mach(params):
 
 
 def _cruise_state(params):
-    """A trimmed-ish cruise state to propagate."""
+    """A cruise state in trim (``trim_level``) at 230 m/s, to propagate."""
+    from target_gym.plane.dynamics import STICK_TRAVEL, trim_level
     from target_gym.plane.env import PlaneState
 
+    theta, stick, power = (
+        float(u) for u in trim_level(230.0, CRUISE_ALT_M, params.initial_mass, params)
+    )
     return PlaneState(
         x=0.0,
         x_dot=230.0,
         z=CRUISE_ALT_M,
         z_dot=0.0,
-        theta=np.deg2rad(4.0),
+        theta=theta,
         theta_dot=0.0,
-        alpha=np.deg2rad(4.0),
+        alpha=theta,
         gamma=0.0,
         m=params.initial_mass,
-        power=0.8,
-        stick=0.0,
+        power=power,
+        stick=stick,
         fuel=params.initial_fuel_quantity,
         time=0,
         target_altitude=CRUISE_ALT_M,
+        pitch_integ=stick / STICK_TRAVEL,
     )
 
 
@@ -442,11 +470,17 @@ def test_trajectory_is_independent_of_integrator(params, method):
     """
     from target_gym.plane.env import compute_next_state
 
+    start = _cruise_state(params)
+    # The lever that holds the trim power, and a 2 deg nose-up step in the
+    # pitch demand: a climb and its phugoid, inside the autopilot's limits.
+    lever = (float(start.power) - params.idle_power) / (1.0 - params.idle_power)
+    demand = float(start.theta) + np.deg2rad(2.0)
+
     def roll(integration_method, n=60):
-        state = _cruise_state(params)
+        state = start
         for _ in range(n):
             state, _ = compute_next_state(
-                0.8, 0.0, state, params, integration_method=integration_method
+                lever, demand, state, params, integration_method=integration_method
             )
         return float(state.z), float(state.x_dot)
 
@@ -468,14 +502,9 @@ def test_measured_lift_slope_matches_declared_cl_alpha(params):
 
     Guards the stall sigmoid against creeping back down into the linear
     range, which is precisely the D1 failure mode: the cutoff silently ate
-    the top of the lift curve.
+    the top of the lift curve. Read near Mach 0, where the slope has not grown.
     """
-    aoas = np.linspace(0.0, 6.0, 25)
-    # Undo the Prandtl-Glauert 1/beta boost so we compare like with like.
-    mach = 0.2
-    beta = np.sqrt(1.0 - mach**2)
-    cls = np.array([_CL(a, mach, params) * beta for a in aoas])
-    measured = np.polyfit(aoas, cls, 1)[0]
+    measured = _lift_slope_per_rad(params, mach=0.05, hi=6.0) * np.pi / 180.0
     assert measured == pytest.approx(params.cl_alpha, rel=0.02)
 
 
@@ -560,6 +589,98 @@ def test_aircraft_is_statically_stable_in_pitch(params):
     assert slope < 0.0, f"dM/dalpha = {slope:.3e} >= 0 -- statically unstable"
 
 
+def _trimmed(params, altitude_ft, mass=73_500.0):
+    """Level trim at the cruise schedule: (airspeed, z, theta, stick, thrust)."""
+    from target_gym.plane.dynamics import scheduled_airspeed, trim_level
+
+    z = altitude_ft * 0.3048
+    v = float(scheduled_airspeed(z, 290.0 * KNOT, 0.78))
+    theta, stick, power = (float(u) for u in trim_level(v, z, mass, params))
+    mach = v / float(compute_speed_of_sound_from_altitude(z))
+    rho = float(compute_air_density_from_altitude(z))
+    thrust = float(
+        compute_thrust_output(power, params.thrust_output_at_sea_level, mach, rho)
+    )
+    return v, z, theta, stick, thrust
+
+
+def _static_margin(params, altitude_ft):
+    """Stick-fixed static margin, in MACs: -dM/dalpha over (dL/dalpha c), from
+    the model's own moment and lift about the trim, at fixed airspeed."""
+    from target_gym.plane.dynamics import compute_acceleration, pitch_inertia
+
+    v, z, theta, stick, _ = _trimmed(params, altitude_ft)
+
+    def moment_and_lift(alpha):
+        acc, metrics = compute_acceleration(
+            jnp.array([v, 0.0, 0.0]), jnp.array([0.0, z, alpha]), (0.0, stick), params
+        )
+        return acc[2] * pitch_inertia(params.initial_mass, params), metrics[1]
+
+    d_moment, d_lift = jax.jacfwd(moment_and_lift)(theta)
+    return -float(d_moment) / (float(d_lift) * A320_MAC_M)
+
+
+@pytest.mark.parametrize("altitude_ft", [10_000.0, 33_000.0])
+def test_static_margin_is_a_transports(params, altitude_ft):
+    """With the wing's downwash at the tail the stick-fixed margin lands where a
+    transport's does. Without downwash (the model before 2026-11-10) the same
+    tail gave 56 % of the MAC at cruise.
+
+    Derived from the inputs: the neutral point is h_ac + eta V_H (a_t / a_w)
+    (1 - de/da) = 0.098 + 0.9 x 0.787 x (4.98 / 6.39) x (1 - 0.43) = 0.41 at
+    M 0.78, so 12 % ahead of a 29 % MAC centre of gravity, and 0.50 (21 %) at
+    low speed, where the downwash gradient is 0.32. The band, 5 to 25 %, is ours:
+    positive, and short of the 30 % past which the elevator's trim range runs out
+    on a transport.
+    """
+    margin = _static_margin(params, altitude_ft)
+    assert 0.05 < margin < 0.25, f"static margin {margin:.3f} MAC"
+
+
+def _longitudinal_eigenvalues(params, altitude_ft):
+    """Bare-airframe eigenvalues (stick and thrust fixed) about level trim, on
+    the states (x_dot, z_dot, q, theta)."""
+    from target_gym.plane.dynamics import compute_acceleration
+
+    v, z, theta, stick, thrust = _trimmed(params, altitude_ft)
+
+    def f(s):
+        acc, _ = compute_acceleration(
+            s[:3], jnp.stack([0.0, z, s[3]]), (thrust, stick), params
+        )
+        return jnp.stack([acc[0], acc[1], acc[2], s[2]])
+
+    jac = jax.jacfwd(f)(jnp.array([v, 0.0, 0.0, theta]))
+    return np.linalg.eigvals(np.asarray(jac)), v
+
+
+def test_bare_airframe_short_period_is_damped_and_seconds_long(params):
+    """The short period: an oscillation of a few seconds, damped by the tail.
+
+    Ours, the transport range: a natural frequency of 0.7 to 3 rad/s and a
+    damping ratio of at least 0.2. For scale, Etkin and Reid's 747 at cruise has
+    about 1 rad/s and 0.4; a smaller transport sits higher.
+    """
+    eig, _ = _longitudinal_eigenvalues(params, 33_000.0)
+    fast = max(eig, key=lambda e: abs(e))
+    omega, zeta = abs(fast), -fast.real / abs(fast)
+    assert 0.7 < omega < 3.0, f"short period {omega:.2f} rad/s"
+    assert zeta > 0.2, f"short-period damping {zeta:.2f}"
+
+
+def test_bare_airframe_phugoid_is_near_lanchesters(params):
+    """The phugoid trades speed for height at nearly constant incidence, with
+    Lanchester's period pi sqrt(2) V / g, 106 s at 233 m/s. Lanchester leaves out
+    the growth of lift with Mach and the engine's response to speed, which at
+    M 0.78 shorten it, so the band, 0.6 to 1.2 of it, is ours."""
+    eig, v = _longitudinal_eigenvalues(params, 33_000.0)
+    slow = min((e for e in eig if abs(e.imag) > 1e-6), key=lambda e: abs(e))
+    period = 2.0 * np.pi / abs(slow.imag)
+    lanchester = np.pi * np.sqrt(2.0) * v / 9.81
+    assert 0.6 * lanchester < period < 1.2 * lanchester, f"phugoid {period:.0f} s"
+
+
 def test_elevator_produces_correct_sign_of_pitch_moment(params):
     """Positive stick must pitch one way and negative stick the other."""
     up = _pitch_ang_accel(params, theta_deg=2.0, stick=0.15)
@@ -595,7 +716,9 @@ def test_stall_transition_sharpness_is_set_by_the_lift_peak(params):
 
     # CL_max must survive the blend: the peak is the attached-flow limit
     peak = max(_CL(a, 0.3, params) for a in np.arange(0.0, 25.0, 0.05))
-    attached_limit = params.CL_max / np.sqrt(1 - 0.3**2)
+    # The swept wing's slope at M 0.3 over Mach 0, DATCOM's: A^2 (0.91 + 0.1615)
+    # + 4 = 100.30, sqrt = 10.015, so 12.411 / 12.015 = 1.033.
+    attached_limit = params.CL_max * 1.033
     assert peak == pytest.approx(
         attached_limit, rel=0.02
     ), f"blend moved the lift peak: {peak:.3f} vs attached limit {attached_limit:.3f}"
@@ -862,33 +985,53 @@ def test_burning_fuel_lightens_the_aircraft():
 # maps onto idle to full, so the bottom stop is 5% and the top 100%.
 
 
-def _engine_after(action, seconds, start):
+def _engine_after(lever, seconds, start, altitude=30.0):
+    """Engine power after ``seconds`` of ``lever`` (action units) from ``start``,
+    holding the reset's pitch, at ``altitude`` m (near sea level by default,
+    where the certification rule applies)."""
     from target_gym.plane.env_jax import Airplane2D
 
     env = Airplane2D()
-    params = env.default_params.replace(turbulence_sigma=0.0)
+    params = env.default_params.replace(
+        turbulence_sigma=0.0,
+        target_altitude_range=(altitude, altitude),
+        initial_altitude_range=(altitude, altitude),
+    )
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
+    pitch = float(env.trim_action(state, params)[1])
     state = state.replace(power=jnp.float32(start))
     for _ in range(seconds):
-        _, state, _, _, _ = env.step_env(key, state, jnp.array(action), params)
+        action = jnp.array([lever, pitch])
+        _, state, _, _, _ = env.step_env(key, state, action, params)
     return float(state.power)
 
 
 def test_the_engine_follows_a_lever_step_on_its_1_7_s_lag():
-    # 0.05 + 0.95 (1 - e^(-2 / 1.7)) = 0.7071.
-    assert _engine_after([1.0, 0.0], 2, 0.05) == pytest.approx(0.7071, abs=2e-3)
+    # Near sea level (30 m: delta / sqrt(theta) = 0.997, a 1.705 s lag):
+    # 0.05 + 0.95 (1 - e^(-2 / 1.705)) = 0.7060.
+    assert _engine_after(1.0, 2, 0.05) == pytest.approx(0.706, abs=2e-3)
 
 
 def test_the_engine_goes_from_idle_to_95_percent_in_the_rules_5_s():
-    # 0.05 + 0.95 (1 - e^(-5 / 1.7)) = 0.9498: 1.7 s is the rule to two figures,
-    # 6 ms over it, inside this tolerance. 1.698 s would be exact.
-    assert _engine_after([1.0, 0.0], 5, 0.05) == pytest.approx(0.95, abs=2e-3)
+    # 0.05 + 0.95 (1 - e^(-5 / 1.705)) = 0.9494: the rule's 95 % in 5 s, a sea
+    # level static rule [14 CFR 33.73(b)], to its tolerance here.
+    assert _engine_after(1.0, 5, 0.05) == pytest.approx(0.95, abs=2e-3)
+
+
+def test_the_engine_is_slower_at_altitude_in_corrected_time():
+    """At FL350 the inlet holds delta = 0.2353 of sea-level pressure at theta =
+    0.7594 of its temperature, so the same corrected transient takes
+    sqrt(theta) / delta = 3.70 times as long: a 6.30 s lag. After 6 s a step from
+    idle has reached 0.05 + 0.95 (1 - e^(-6 / 6.30)) = 0.6338 of full power,
+    where the sea-level lag would have it at 0.9939."""
+    power = _engine_after(1.0, 6, 0.05, altitude=35_000.0 * 0.3048)
+    assert power == pytest.approx(0.634, abs=5e-3)
 
 
 def test_the_lever_at_its_stop_settles_at_idle_not_at_zero():
-    assert _engine_after([-1.0, 0.0], 40, 1.0) == pytest.approx(0.05, abs=2e-3)
+    assert _engine_after(-1.0, 40, 1.0) == pytest.approx(0.05, abs=2e-3)
 
 
 def test_the_top_of_the_lever_is_full_power():
-    assert _engine_after([1.0, 0.0], 40, 0.05) == pytest.approx(1.0, abs=2e-3)
+    assert _engine_after(1.0, 40, 0.05) == pytest.approx(1.0, abs=2e-3)

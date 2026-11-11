@@ -370,8 +370,11 @@ DECLARED_BY_THE_21 = {
         name: ("plane/dynamics.py", "plane/experts_tecs.py", "scenarios.py")
         for name in ("plane3d_heading", "plane3d_racetrack")
     },
+    # The patrol flies the Hornet since 2026-11-10 (owner), so it stamps the
+    # airframe module it imports.
     **{
         name: (
+            "plane3d/hornet.py",
             "plane/dynamics.py",
             "plane3d/dynamics.py",
             "plane3d/env.py",

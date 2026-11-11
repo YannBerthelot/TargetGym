@@ -95,6 +95,7 @@ CAPABILITIES = {
     "plane3d_figure8": ("moving_target",),
     "patrol": ("moving_target",),
     "patrol_range_bearing": ("moving_target", "partial_observability"),
+    "wake_surf": ("economic", "safety"),
     "formation": ("multi_agent", "moving_target"),
 }
 
@@ -148,15 +149,19 @@ def profile(results: dict, tags: dict | None = None) -> dict:
 def references(rows: dict | None = None, tags: dict | None = None) -> dict:
     """The expert's and the oracle's profiles from the recorded protocol rows
     (``scoring.recorded()``): the expert is the 0.5 ring wherever a task has
-    room, and the oracle sits where its recorded hold and moves put it."""
+    room, and the oracle sits where its recorded hold and moves put it. A task
+    no oracle ships for (``wake_surf``) counts for the expert only."""
     rows = scoring.recorded() if rows is None else rows
     expert, oracle = {}, {}
     for name, row in rows.items():
-        b, o = row["pid"]["hold_tracking"], row["mpc"]["hold_tracking"]
+        b = row["pid"]["hold_tracking"]
         best = scoring.best_known(row)["oracle_transient_ratio"]
         known = {"oracle_transient_ratio": best}
         expert[name] = {"score": scoring.score(b, b, row["ceiling"])}
         expert[name] |= {"transient_ratio": 1.0, **known}
+        if "mpc" not in row:
+            continue
+        o = row["mpc"]["hold_tracking"]
         oracle[name] = {"score": scoring.score(o, b, row["ceiling"])}
         oracle[name] |= {"transient_ratio": best, **known}
     return {"expert": profile(expert, tags), "oracle": profile(oracle, tags)}

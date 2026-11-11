@@ -28,6 +28,7 @@ from target_gym.plane.env import (
     compute_reward,
     compute_reward_terms,
     get_obs,
+    target_airspeed,
 )
 
 # Both panels come from target_gym.render_aircraft, the kit every aircraft
@@ -110,12 +111,18 @@ class Airplane2D(
             max_steps_in_episode=1800,
             target_altitude_range=levels,
             initial_altitude_range=levels,
-            # 0.2 g peak to peak a minute at FL330 (derived, plane/PHYSICS.md).
-            turbulence_sigma=0.598,
+            # 0.2 g peak to peak a minute at FL330 (derived, plane/PHYSICS.md),
+            # on the airplane's own lift slope, 7.03 /rad at M 0.78.
+            turbulence_sigma=0.684,
             e_floor=band,
             e_tol=band,
             speed_band_cost=True,
-            # A hold inside both bands costs nothing, so the best hold does.
+            # What the operator pays inside the bands, fuel and time by the
+            # cost index (owner, 2026-11-10; ``economy_cost``).
+            economy_weight=1.0,
+            # The bands cost nothing inside them; the economy term's best is
+            # not known until the oracle is rebuilt, so the floor stays at 0
+            # (never claimed reachable).
             rho_floor_tracking=0.0,
             rho_floor=0.0,
             # The ground is the one trip left (rule 14; REALITY.md finds no
@@ -259,8 +266,18 @@ class Airplane2D(
         obs = self.get_obs(state, params)
         return obs, state
 
-    @measured_obs
     def get_obs(self, state: PlaneState, params: PlaneParams = None):
+        """The readings (``_read``), with the commanded airspeed exact: it is
+        ATC's assignment at the aircraft's height, a setpoint, not a reading,
+        so it is worked out on the true state rather than the altitude read
+        (PHYSICS.md, readings)."""
+        params = self.default_params if params is None else params
+        obs = self._read(state, params)
+        command = target_airspeed(state, params)
+        return obs.at[self.obs_index["target_speed"]].set(command)
+
+    @measured_obs
+    def _read(self, state: PlaneState, params: PlaneParams = None):
         """
         Observation vector. When ``observe_wind`` is set, the wind components
         (wind_x, wind_z) are appended so the disturbance is fully observable.

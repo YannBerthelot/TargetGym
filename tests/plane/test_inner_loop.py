@@ -39,10 +39,13 @@ KEY = jax.random.PRNGKey(0)
 
 
 def _still_3d():
-    # The unamended 3D plant, whose bank demand reaches 45 deg: the amended
-    # tasks clip it at the protected 30 deg (tests/plane3d/test_plane3d_reality.py).
+    # The unamended 3D plant, whose bank demand reaches 45 deg (the circle with
+    # its flag off): the amended tasks clip it at the protected 30 deg
+    # (tests/plane3d/test_plane3d_reality.py).
     env = Plane3DCircle()
-    params = env.default_params.replace(turbulence_sigma=0.0, sensor_noise_scale=0.0)
+    params = env.default_params.replace(
+        turbulence_sigma=0.0, sensor_noise_scale=0.0, amended=False
+    )
     _, state = env.reset_env(KEY, params)
     state = state.replace(
         z=jnp.float32(5500.0),

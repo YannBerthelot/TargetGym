@@ -274,3 +274,24 @@ The two failures are known deviations (rule 13), on S1's own model:
   sites and no back-offs, since the plant draws nothing after the reset. Both
   the receding slot and the ceiling hold the steam under the water surface at
   or above 0.
+
+---
+
+<!-- BEGIN GENERATED FACTS -->
+
+<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
+     `make ci-docs` fails if this block does not match the code. Prose
+     about *why* these numbers are what they are belongs outside it. -->
+
+### Facts, generated from the code
+
+| environment | steps | step (s) | episode | action | obs | float state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `boiler_drum` | 1800 | 2 | 60 min | 2 in [-1, 1] | 12 | 23 |
+
+`float state` counts the scalar and array float fields the state carries,
+`time` excluded; the gap between it and `obs` is what the controller cannot
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
+
+<!-- END GENERATED FACTS -->

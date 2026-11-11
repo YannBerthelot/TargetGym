@@ -21,7 +21,7 @@ fig = plot_profile({**references(), "mine": out["profile"]})
 fig.savefig("profile.png")
 ```
 
-Leave out `tasks` to run all 24, and use 10 seeds for a result you report.
+Leave out `tasks` to run all 25, and use 10 seeds for a result you report.
 `references()` gives the expert and the oracle profiles from the recorded
 results, so they cost nothing to draw.
 
@@ -108,6 +108,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `patrol` | moving target | The slot moves with a manoeuvring lead (8, 9). |
 | `patrol_range_bearing` | moving target, partial observability | A range-and-bearing sensor (46): the lead's heading is not observed. |
 | `formation` | multi-agent, moving target | Every aircraft is flown by the policy, on one team cost. |
+| `wake_surf` | economic, safety | Fuel is priced: the follower's cost falls only where it finds the lead's upwash; a bank past 60 deg is an upset, a trip. |
 
 ## Limits
 

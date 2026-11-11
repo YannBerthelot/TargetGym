@@ -121,6 +121,25 @@ def test_the_expert_is_the_half_ring_and_the_oracle_comes_from_the_records():
         assert math.isnan(refs[who]["reach"]["y"])
 
 
+def test_a_task_with_no_oracle_counts_for_the_expert_only():
+    """Worked by hand: ``b`` holds at 10 against a ceiling of 1, so it has room
+    and its expert sits on the 0.5 ring; no oracle ships for it, so the oracle
+    has no point on ``y``, the axis only ``b`` carries, and its ``x`` comes
+    from ``a`` alone: 10 against 100 over a ceiling of 1, 0.75."""
+    rows = {
+        "a": {
+            "ceiling": 1.0,
+            "pid": {"hold_tracking": 100.0},
+            "mpc": {"hold_tracking": 10.0},
+        },
+        "b": {"ceiling": 1.0, "pid": {"hold_tracking": 10.0}},
+    }
+    refs = suite.references(rows, tags={"a": ("x",), "b": ("x", "y")})
+    assert refs["expert"]["hold"]["y"] == 0.5
+    assert math.isnan(refs["oracle"]["hold"]["y"])
+    assert refs["oracle"]["hold"]["x"] == pytest.approx(0.75)
+
+
 def test_the_chart_is_a_hold_and_a_reach_radar_with_every_profile():
     flat = dict.fromkeys(suite.AXES, 0.5)
     fig = suite.plot_profile({"expert": {"hold": flat, "reach": flat}})
