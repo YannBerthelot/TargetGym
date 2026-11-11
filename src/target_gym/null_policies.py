@@ -128,7 +128,6 @@ EXPERT_FIGURES = {
     "formation": _SLOT_FLOWN,
     "patrol": _SLOT_FLOWN,
     "patrol_range_bearing": _SLOT_FLOWN,
-    "wake_surf": NO_FIGURE,  # no public station-keeping figure for fello'fly
     "plane3d_figure8": {
         "kind": "requirement",
         "value": 926.0,
@@ -195,6 +194,10 @@ EXCEPTIONS = {
     "(accepted 2026-11-07)",
     "unstable_cstr": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so "
     "(accepted 2026-11-06)",
+    # Searched 2026-11-11: AFRL's $AVE release (C-17, 4,000 ft or more in trail,
+    # up to 10 % fuel, re-read) and the fello'fly reports give spacing and fuel,
+    # never how closely the follower held its station.
+    "wake_surf": _NO_FIGURE_FOUND,
 }
 
 

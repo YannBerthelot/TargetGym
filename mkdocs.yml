@@ -112,6 +112,7 @@ nav:
           - environments/patrol.md
           - environments/patrol_range_bearing.md
           - environments/formation.md
+          - environments/wake_surf.md
           - Multi-agent formation: multi-agent.md
       - Process control:
           - environments/cstr.md

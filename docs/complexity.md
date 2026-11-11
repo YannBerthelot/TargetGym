@@ -51,6 +51,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [Patrol - wingman](environments/patrol.md) | `patrol` | Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. | 26 | 3 | 200 steps, 3.33 min |
 | [Patrol - wingman, range and bearing](environments/patrol_range_bearing.md) | `patrol_range_bearing` | The `patrol` task flown from a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
 | [Formation](environments/formation.md) | `formation` | Fly a lead and two wingmen in a V, every aircraft controlled by the policy. | 74 | 9 | 200 steps, 3.33 min |
+| [Wake surfing - A320 in trail](environments/wake_surf.md) | `wake_surf` | Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. | 26 | 3 | 1800 steps, 30 min |
 
 ### Process Control
 

@@ -120,7 +120,8 @@ def _seeds(counts) -> str:
 
 def chart_rows(data: dict) -> list[dict]:
     """One row per registered task in ``data``, in registry order: what the
-    chart draws, as recorded."""
+    chart draws, as recorded. A task no oracle ships for has ``None`` for the
+    oracle's hold and gain."""
     from target_gym.registry import GROUPS, REGISTRY
 
     return [
@@ -128,10 +129,10 @@ def chart_rows(data: dict) -> list[dict]:
             "name": name,
             "group": GROUPS[spec.group],
             "expert": data[name]["pid"]["hold_tracking"],
-            "oracle": data[name]["mpc"]["hold_tracking"],
+            "oracle": data[name].get("mpc", {}).get("hold_tracking"),
             "ceiling": data[name]["ceiling"],
             "expert_gain": data[name]["pid"]["gain"],
-            "oracle_gain": data[name]["mpc"]["gain"],
+            "oracle_gain": data[name].get("mpc", {}).get("gain"),
         }
         for name, spec in REGISTRY.items()
         if name in data
@@ -190,28 +191,41 @@ def results_svg(rows: list[dict], dark: bool = False) -> str:
         y += head_h
         for r in group:
             cy = y + row_h / 2
-            oracle = _decades(r["oracle"], r["expert"])
+            has_oracle = r["oracle"] is not None
+            oracle = _decades(r["oracle"], r["expert"]) if has_oracle else None
             ceiling = _decades(r["ceiling"], r["expert"])
-            mark = "off-axis" if not np.isfinite(oracle) else f"{oracle:.2f}"
+            if not has_oracle:
+                mark = "none"
+            else:
+                mark = "off-axis" if not np.isfinite(oracle) else f"{oracle:.2f}"
             parts = [
-                text(left - 24, cy + 4, r["name"], 11.5, anchor="end", extra=_MONO),
-                f'<line x1="{x(0):.1f}" x2="{x(oracle):.1f}" y1="{cy}" y2="{cy}" '
-                f'stroke="{ink["conn"]}" stroke-width="2" stroke-linecap="round"/>',
+                text(left - 24, cy + 4, r["name"], 11.5, anchor="end", extra=_MONO)
             ]
-            for v in (oracle, ceiling):
+            if has_oracle:
+                parts.append(
+                    f'<line x1="{x(0):.1f}" x2="{x(oracle):.1f}" y1="{cy}" '
+                    f'y2="{cy}" stroke="{ink["conn"]}" stroke-width="2" '
+                    'stroke-linecap="round"/>'
+                )
+            for v in (oracle, ceiling) if has_oracle else (ceiling,):
                 if v < lo:
                     parts.append(text(x(lo) - 11, cy + 4, "‹", 12, "muted", "middle"))
                 if v > hi:
                     parts.append(text(x(hi) + 9, cy + 4, "›", 12, "muted", "middle"))
-            parts += [
+            parts.append(
                 f'<rect x="{x(ceiling) - 1:.1f}" y="{cy - 7}" width="2" '
-                f'height="14" rx="1" fill="{ink["tick"]}"/>',
-                f'<rect x="{x(oracle) - 5:.1f}" y="{cy - 5}" width="10" '
-                f'height="10" rx="1.5" fill="{ink["oracle"]}" '
-                f'stroke="{ink["bg"]}" stroke-width="2"/>',
+                f'height="14" rx="1" fill="{ink["tick"]}"/>'
+            )
+            if has_oracle:
+                parts.append(
+                    f'<rect x="{x(oracle) - 5:.1f}" y="{cy - 5}" width="10" '
+                    f'height="10" rx="1.5" fill="{ink["oracle"]}" '
+                    f'stroke="{ink["bg"]}" stroke-width="2"/>'
+                )
+            parts.append(
                 f'<circle cx="{x(0):.1f}" cy="{cy}" r="5.5" '
-                f'fill="{ink["expert"]}" stroke="{ink["bg"]}" stroke-width="2"/>',
-            ]
+                f'fill="{ink["expert"]}" stroke="{ink["bg"]}" stroke-width="2"/>'
+            )
             body.append(
                 f'<g data-task="{r["name"]}" data-oracle="{mark}" '
                 f'data-ceiling="{ceiling:.2f}">' + "".join(parts) + "</g>"
