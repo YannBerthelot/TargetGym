@@ -81,15 +81,12 @@ def test_a_change_in_any_output_counts_from_the_target_at_reset():
 # ``time`` from i to i + 1, so level k becomes active at entry k block - 1.
 #   plane_energy (v4): target_steps = 8 treads over 1600 steps, 200 steps each
 #     (``plane.env.commanded_altitude``); the eighth starts on the last step.
-#   wind_turbine: N_TARGET_BLOCKS = 4 blocks of target_block_steps 100.
-#   glass_furnace: N_SETPOINTS = 5 slots over 1600 steps, 320 each.
 _TRIPS_ON_A_MOVE = pytest.mark.xfail(
     strict=True,
     reason="PR 9: the expert trips on step 1199 of seed 101, and a move on the step "
     "of a restart cannot be told from it",
 )
 SCHEDULES = [pytest.param("plane_energy", 200, 8, marks=_TRIPS_ON_A_MOVE)]
-SCHEDULES += [("wind_turbine", 100, 3), ("glass_furnace", 320, 4)]
 
 
 def test_a_restart_is_not_a_target_change():
@@ -136,13 +133,19 @@ def test_a_run_that_restarts_on_every_step_has_no_move():
 
 def test_a_tripping_run_is_held_over_the_schedule():
     """Through ``run_policy``: a policy that trips over and over on the energy
-    ladder keeps the 8 treads of the schedule and no others, and its steps after
-    a restart stay in its hold."""
+    clearances keeps the schedule's 300 s clearances and no others, and its
+    steps after a restart stay in its hold."""
     spec = REGISTRY["plane_energy"]
     params = spec.make_test_params()
-    ep = E.run_episode(spec, params, baseline_policy(spec, "pid", params), seed=100)
-    assert ep.failed.sum() > 8  # this expert trips until PR 9, which is the case
-    assert set(np.flatnonzero(ep.target_change)) <= set(200 * np.arange(1, 9) - 1)
+
+    # Full nose-down at idle dives into the ground, the 2D aircraft's one trip
+    # since Amendment 2 (its expert no longer trips), and restarts, over and over.
+    def dive(obs):
+        return np.array([-1.0, -1.0], np.float32)
+
+    ep = E.run_episode(spec, params, dive, seed=100)
+    assert ep.failed.sum() > 8
+    assert set(np.flatnonzero(ep.target_change)) <= set(300 * np.arange(1, 6) - 1)
 
 
 @pytest.mark.large

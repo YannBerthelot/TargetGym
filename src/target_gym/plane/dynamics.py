@@ -84,6 +84,28 @@ def advance_gust(
     return jnp.where(impulse_prob > 0.0, impulse, ou)
 
 
+def advance_dryden_gust(gust, air_speed, std, scale_length, dt, key):
+    """Advance a turbulence gust one step along the flight path.
+
+    A first-order Gauss-Markov gust, the Dryden form of the longitudinal
+    component, whose correlation distance is the scale length: the gust
+    decorrelates as ``exp(-V dt / L)`` over the ``V dt`` metres flown in the
+    step, and its stationary standard deviation is ``std`` exactly. MIL-F-8785C
+    sets L = 1 750 ft above 2 000 ft [MADDEN]. ``std = 0`` lets the gust decay
+    to calm, which is how a turbulence zone ends. ``key is None`` freezes it.
+    """
+    if key is None:
+        return gust
+    phi = jnp.exp(-jnp.maximum(air_speed, 1.0) * dt / scale_length)
+    noise = jax.random.normal(key, jnp.shape(gust))
+    return phi * gust + std * jnp.sqrt(1.0 - phi**2) * noise
+
+
+def in_zone(time, zone_start, zone_end):
+    """Whether the step at ``time`` (s) is inside the episode's turbulence zone."""
+    return (time >= zone_start) & (time < zone_end)
+
+
 def step_key(key, time):
     """Per-step PRNG key derived from the episode key *and* the step index.
 
@@ -476,6 +498,80 @@ def scheduled_airspeed(z, cas, mach, xp=jnp):
     return xp.minimum(mach_of_cas, mach) * sound
 
 
+def protected_pitch_demand(pitch_demand, gamma_air, air_speed, z, mass, params):
+    """The pitch demand normal law lets through (REALITY.md, limits).
+
+    The A320's flight controls hold the load factor inside its limit loads
+    and keep the angle of attack under its maximum: "the airplane cannot be
+    stalled in normal law" [NTSB 1.6.3, BEA447]. Here that is one clip on the
+    demanded attitude: no more incidence than the wing needs to lift
+    ``load_factor_max`` times the weight, or to reach the buffet line, the
+    model's own stall boundary, whichever comes first; and no less than it
+    needs for ``load_factor_min``. Attitude is flight path plus incidence in
+    both the 2D and the 3D model (``compute_alpha``, ``compute_alpha_3d``).
+    The wing's linear lift curve and its Prandtl-Glauert factor invert
+    exactly; the tail's share of lift is left out (PHYSICS.md, protections).
+    """
+    rho = compute_air_density_from_altitude(z)
+    q = 0.5 * rho * jnp.maximum(air_speed, 1.0) ** 2
+    mach = air_speed / compute_speed_of_sound_from_altitude(z)
+    beta = jnp.sqrt(jnp.maximum(1e-6, 1.0 - mach**2))
+    per_g = mass * params.gravity / (q * params.wings_surface)
+    cl_hi = jnp.minimum(params.load_factor_max * per_g, buffet_line(mach, params))
+    cl_lo = params.load_factor_min * per_g
+
+    def incidence(cl):
+        deg = (cl * beta - params.cl0) / params.cl_alpha
+        return jnp.deg2rad(jnp.clip(deg, -params.aoa_stall, params.aoa_stall))
+
+    return jnp.clip(
+        pitch_demand, gamma_air + incidence(cl_lo), gamma_air + incidence(cl_hi)
+    )
+
+
+def calibrated_airspeed(z, tas, xp=jnp):
+    """The CAS of true airspeed ``tas`` at ``z``, by the standard atmosphere and
+    the compressible pitot relation (the inverse of ``scheduled_airspeed``)."""
+    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    pressure = 101325.0 * (temperature / 288.15) ** 5.2559
+    mach = tas / xp.sqrt(1.4 * 287.0 * temperature)
+    impact = pressure * ((1.0 + 0.2 * mach**2) ** 3.5 - 1.0)
+    return 340.29 * xp.sqrt(5.0 * ((impact / 101325.0 + 1.0) ** (2.0 / 7.0) - 1.0))
+
+
+def speed_band_excess(z, tas, params, xp=jnp, cas=None):
+    """How far the airspeed sits past the assigned speed's band, in band widths.
+
+    Pilots complying with a speed adjustment "are expected to maintain a speed
+    within plus or minus 10 knots or 0.02 Mach number of the specified speed"
+    [AIM 4-4-12]. The schedule assigns CAS below its crossover and Mach above
+    it, so the band is read in the unit the schedule assigns at ``z``.
+    ``cas`` is the assigned CAS, ``params.target_cas`` by default.
+    """
+    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    sound = xp.sqrt(1.4 * 287.0 * temperature)
+    cas = params.target_cas if cas is None else cas
+    target = scheduled_airspeed(z, cas, params.target_mach, xp)
+    on_mach = target / sound >= params.target_mach - 1e-6
+    cas_excess = (
+        xp.abs(calibrated_airspeed(z, tas, xp) - cas) - params.speed_band
+    ) / params.speed_band
+    mach_excess = (
+        xp.abs(tas / sound - params.target_mach) - params.mach_band
+    ) / params.mach_band
+    return xp.maximum(xp.where(on_mach, mach_excess, cas_excess), 0.0)
+
+
+def overspeed(air_speed, z, params):
+    """Whether the aircraft is past VMO or MMO: the TCDS's "VMO/MMO warning".
+    A warning, reported in ``info``, never a trip [TCDS item 10]."""
+    rho = compute_air_density_from_altitude(z)
+    eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
+    return (eas > params.vmo_eas) | (
+        air_speed / compute_speed_of_sound_from_altitude(z) > params.mmo
+    )
+
+
 def outside_envelope(load_factor, air_speed, z, params):
     """Whether a flight condition is past the limit load factors, VMO or MMO."""
     rho = compute_air_density_from_altitude(z)
@@ -681,6 +777,41 @@ def trim_stick(speed, z, theta, params):
     at_zero, at_probe = moment(0.0), moment(probe)
     stick = probe * at_zero / (at_zero - at_probe)
     return jnp.clip(stick, -STICK_TRAVEL, STICK_TRAVEL)
+
+
+def trim_level(air_speed, z, mass, params, iterations: int = 12):
+    """``(pitch, stick, power)`` that hold level flight at ``air_speed`` and
+    ``z``: no net force and no pitching moment, solved by Newton's method on the
+    model's own accelerations (12 iterations, under rule 7's 100). Wings level,
+    in still mean air, at the given all-up mass."""
+    level = params.replace(initial_mass=mass, wind_x=0.0, wind_z=0.0)
+    rho = compute_air_density_from_altitude(z)
+    mach = air_speed / compute_speed_of_sound_from_altitude(z)
+
+    def residual(u):
+        theta, stick, power = u
+        thrust = compute_thrust_output(
+            power=power,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            rho=rho,
+            M=mach,
+        )
+        acc, _ = compute_acceleration(
+            jnp.array([air_speed, 0.0, 0.0]),
+            jnp.array([0.0, z, theta]),
+            (thrust, stick),
+            level,
+        )
+        # The moment in m/s^2 at the tail, so the three rows share a scale.
+        return acc * jnp.array([1.0, 1.0, params.moment_arm_stabilizer])
+
+    def newton(u, _):
+        step = jnp.linalg.solve(jax.jacfwd(residual)(u), residual(u))
+        return u - step, None
+
+    guess = jnp.array([0.03, -0.05, 0.4])
+    u, _ = jax.lax.scan(newton, guess, None, length=iterations)
+    return u[0], u[1], u[2]
 
 
 def clamp_altitude(z, z_dot):

@@ -316,9 +316,9 @@ def test_nothing_is_shipped_for_a_task_this_library_does_not_register():
 
 
 def test_the_default_is_the_registered_task():
-    """plane and plane_energy share one environment; only their registered
+    """plane and plane_sine share one environment; only their registered
     parameters (``make_test_params``) make them two tasks, and the runner
-    runs those by default."""
+    runs those by default. (plane_energy now shares plane's band and length.)"""
     seen = {}
 
     class Reads(Hold):
@@ -327,10 +327,10 @@ def test_the_default_is_the_registered_task():
             return super().reset(key, obs, task)
 
     B.run_policy_on_benchmark(
-        Reads(), tasks=["plane", "plane_energy"], n_episodes=1, n_steps=1, verbose=False
+        Reads(), tasks=["plane", "plane_sine"], n_episodes=1, n_steps=1, verbose=False
     )
-    assert seen["plane"] != seen["plane_energy"]
-    for name in ("plane", "plane_energy"):
+    assert seen["plane"] != seen["plane_sine"]
+    for name in ("plane", "plane_sine"):
         params = REGISTRY[name].make_test_params()
         assert seen[name] == (float(params.e_floor), int(params.max_steps_in_episode))
 

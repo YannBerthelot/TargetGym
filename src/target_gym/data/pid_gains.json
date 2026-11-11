@@ -130,58 +130,53 @@
     "note": "The rod program is published (HRTD 8.1 and 5.0), and every constant is in RodControlParams. Nothing is tuned, and this entry holds no gain. It exists because a noise level's file must name every task it serves."
   },
   "four_tank": {
-    "Kp_1": 31.350462,
-    "Ti_1": 119.98385,
-    "Kp_2": 23.996064,
-    "Ti_2": 102.069122,
-    "D11": -0.300043,
-    "D12": 1.067265,
-    "D21": 1.067265,
-    "D22": -0.239264,
+    "Kp_1": 13.720225,
+    "Ti_1": 79.172471,
+    "Kp_2": 13.573081,
+    "Ti_2": 118.04905,
+    "D11": -1.000175,
+    "D12": 1.615875,
+    "D21": 1.615875,
+    "D22": -0.995004,
     "model": {
       "h1": {
-        "k": 0.0368,
-        "tau1": 119.98385,
-        "theta": 52.0,
-        "band": 0.00347,
-        "step": 0.093596,
-        "bands": 4.963443,
-        "spread": 1.282999,
+        "k": 0.050178,
+        "tau1": 79.172471,
+        "theta": 57.5,
+        "band": 0.003523,
+        "step": 0.070616,
+        "bands": 5.02906,
+        "spread": 1.011022,
         "tests": 10.0,
-        "tau_c": 52.0
+        "tau_c": 57.5
       },
       "h2": {
-        "k": 0.044308,
-        "tau1": 102.069122,
-        "theta": 48.0,
-        "band": 0.003435,
-        "step": 0.077274,
-        "bands": 4.984356,
-        "spread": 1.388398,
+        "k": 0.053032,
+        "tau1": 118.04905,
+        "theta": 82.0,
+        "band": 0.003575,
+        "step": 0.067683,
+        "bands": 5.020418,
+        "spread": 1.006385,
         "tests": 10.0,
-        "tau_c": 48.0
+        "tau_c": 82.0
       },
-      "rga": -0.0673
+      "rga": -0.6159
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "glass_furnace": {
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "Kp": 0.2973263678258992,
-    "Ki": 0.00010900560104732946,
+    "tuning_rule": "SIMC with tc = theta on the valve's step test of the settled attempt 3 plant (scripts/glass_slow_props.py step); setpoint two sigma above the pass mark, sigma the fining reading's spread under this PI on six walk seeds (scripts/glass_slow_props.py walks). Provisional until the reference ladder measures its own",
+    "Kp": 1.9796,
+    "Ki": 1.7911690191820487e-05,
     "Kd": 0.0,
-    "Tf": 82.23748934141194,
+    "u0": -0.09119999999999995,
+    "backoff": 0.0292,
     "model": {
-      "k": 0.004932214484413031,
-      "tau1": 55.593722,
-      "theta": 185.03435101817686,
-      "band": 3.366995,
-      "step": 1.001096,
-      "bands": 1.759773,
-      "spread": 2.457697,
-      "tests": 10.0,
-      "tau_c": 496.8718193280657,
-      "tau2": 55.59372215353034
+      "k": 11.003,
+      "tau_h": 41.75,
+      "theta_h": 3.833,
+      "sigma": 0.0146
     }
   },
   "distillation": {
@@ -304,37 +299,18 @@
     }
   },
   "cstr": {
-    "Kp": -24.43382,
-    "Ti": 1.530129,
-    "Kp_T": 0.317351,
-    "Ti_T": 0.648004,
-    "Tf_C": 0.148077,
-    "Tf_T": 0.0648,
+    "Kp": 0.096823,
+    "Ti": 18.38,
+    "Tf": 0.0,
     "model": {
       "T": {
-        "k": 5.379108,
-        "tau1": 0.648004,
-        "theta": 0.125,
-        "band": 0.246998,
-        "step": 0.224039,
-        "bands": 4.879105,
-        "spread": 1.248476,
-        "tests": 10.0,
-        "tau_c": 0.1898
-      },
-      "C_a": {
-        "k": -0.008105,
-        "tau1": 1.10577,
-        "theta": 1.125,
-        "band": 0.00311,
-        "step": 1.878459,
-        "bands": 4.896019,
-        "spread": 1.181722,
-        "tests": 10.0,
-        "tau_c": 6.453591
+        "k": -10.69,
+        "tau1": 18.38,
+        "theta": 8.88,
+        "tau_c": 8.88
       }
     },
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+    "tuning_rule": "SIMC (Skogestad and Grimholt 2012), tau_c = theta, on one bump test of the cooling water (+0.2 raw) from the design steady state, noise and events off (cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
   },
   "plane_cascaded": {
     "Kp_alt": 0.12,
@@ -385,35 +361,18 @@
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
-    "Kp_T": 2.206154,
-    "Kd_T": 0.478,
-    "Kc_Ca": 26.576068,
-    "Ti_Ca": 0.34482,
-    "Tf_Ca": 0.03337,
-    "sp_rate": 9.686836,
-    "sp_below": 4.72585,
-    "sp_above": 4.72585,
-    "sp_line_margin": 2.068244,
-    "Tc_bias": 300.882172,
+    "Kp": -0.028326,
+    "Ti": 35.1,
+    "Td": 0.0,
+    "Tf": 0.0,
     "model": {
-      "C_a": {
-        "k": -0.01946,
-        "tau1": 0.233696,
-        "theta": 0.3,
-        "band": 0.011864,
-        "step": -2.098814,
-        "bands": 3.442598,
-        "spread": 1.466375,
-        "tests": 10.0,
-        "tau_c": 0.33337
-      },
-      "pole": {
-        "rate": 2.4224279711911776,
-        "on C_a": 2.5672246091719226,
-        "on T": 4.166543090292996
+      "T": {
+        "k_slope": 4.028,
+        "theta": 4.39,
+        "tau_c": 4.39
       }
     },
-    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
+    "tuning_rule": "SIMC for an integrating process (Skogestad 2003), tau_c = theta, on one bump test of the initiator (+0.02 raw) from the 513 K steady state, noise and events off: the unstable mode's 175 s is slow against the test (unstable_cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
   },
   "compressor_surge": {
     "kp_speed": 0.028934,

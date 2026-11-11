@@ -40,17 +40,21 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
-#: A clock 5 steps before a switch, so the ten stages below cross a target's ramp.
-START_CLOCK = {"unstable_cstr": 195}
+#: Exactness is the rewrites', so a disturbance the planner holds over its plan
+#: by design is held still here: the autoclave's feed wander (its v5 has no
+#: block clock, which this test used to start 5 steps before a switch).
+QUIET = {"unstable_cstr": {"feed_T_wander": 0.0}}
 C2 = (
     "hvac",
     "boiler_drum",
     "wind_turbine",
-    "glass_furnace",
     "cement_kiln",
     "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
-AIRCRAFT = ("plane", "plane_sine", "plane_energy")
+# ``plane`` and ``plane_energy`` score bands since Amendment 2, and their
+# oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
+# plant on the old cost.
+AIRCRAFT = ("plane_sine",)
 ON_SOLVER = FIVE + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
@@ -92,14 +96,12 @@ def test_the_exact_rewrites_replay_on_the_env(name, load):
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
     a rewrite is not exact. The compressor's sites run exact (width 0). With
     a ``load`` in force at the solve, the plan and the env both hold it."""
-    env, params, oracle = _oracle(name)
+    env, params, oracle = _oracle(name, **QUIET.get(name, {}))
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
         if load is not None:
             state = state.replace(load=jnp.array(load, state.load.dtype))
         st, m = float64(state), oracle.model
-        if name in START_CLOCK:
-            st = st.replace(block_clock=jnp.asarray(START_CLOCK[name], jnp.int64))
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
         moves = jnp.clip(hold + wave, -1.0, 1.0)
@@ -314,15 +316,16 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 @pytest.mark.parametrize(
     "name, budget",
     [(name, 0.25) for name in FIVE + AIRCRAFT]
-    + [(name, 0.25) for name in ("boiler_drum", "glass_furnace", "cement_kiln")]
+    + [(name, 0.25) for name in ("boiler_drum", "cement_kiln")]
     + [
-        # p = 1, in dollars: half the 1 kW or 1.7 kW resolution, for one step of
-        # delta_t s at the imbalance price in $/MWh.
-        ("wind_turbine", 850.0e-6 * 100.0 * 0.25 / 3600.0),
+        # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
+        # step at 60 $/MWh.
+        ("wind_turbine", 850.0e-6 * 0.25 / 3600.0 * 60.0),
         # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
         ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
-        # 0.03 EUR/(K^2 h) for 0.25 h at (0.1 K / 2)^2.
-        ("hvac", 0.03 * 0.25 * 0.05**2),
+        # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
+        # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
+        ("hvac", 9.54 * 0.25 * 0.05),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -337,9 +340,8 @@ PRICED = {
     "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
-    "boiler_drum": 3,  # level, pressure, fuel
+    "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
-    "glass_furnace": 2,  # crown temperature, gas
     "cement_kiln": 2,  # free lime, fuel
     "reactor": 2,  # Tavg past its dead band, the offset past its band (its clock)
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed

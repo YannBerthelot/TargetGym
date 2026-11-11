@@ -69,7 +69,14 @@ from target_gym import eval as E
 from target_gym import records
 from target_gym.eval import fixed_settle
 
-__all__ = ["CONSUMPTION", "SPEC_BAND", "TRACKED_TERMS", "ceiling", "compare"]
+__all__ = [
+    "CONSUMPTION",
+    "JOB_SCORED",
+    "SPEC_BAND",
+    "TRACKED_TERMS",
+    "ceiling",
+    "compare",
+]
 __all__ += ["fixed_settle", "headroom", "best_known", "recorded", "s_max", "score"]
 __all__ += ["score_policy", "seed_scores", "settle_band", "spec_band"]
 __all__ += ["gap_closed", "headline"]
@@ -83,16 +90,34 @@ _PATH = ("position_precision_floor", "e_floor_path", 1)
 _SLOT = ("slot_precision_floor", "e_floor_slot", 1)
 _ONE = (("precision_floor", "e_floor", 1),)
 
+#: Tasks scored on the operator's job (charter B5): keeping inside the plant's
+#: limits at the source's economic cost, with no tracked setpoint. They have no
+#: tracking ceiling or settle band (``ceiling`` and ``settle_band`` are NaN),
+#: and they are in neither ``TRACKED_TERMS`` nor ``CONSUMPTION``. Their headline
+#: is ``headline``; room comes from an oracle.
+JOB_SCORED = frozenset(
+    {
+        "battery",
+        "boiler_drum",
+        "compressor_surge",
+        "distillation",
+        "hvac",
+        "ph_neutralization",
+        "wind_turbine",
+    }
+)
+
 #: Per environment, the terms its reward tracks: ``(resolution field, e_floor
 #: field, count)`` on its params. ``count`` is ``"wingmen"`` for a term charged
-#: once per wingman. hvac prices comfort directly and has no ``e_floor``.
+#: once per wingman. hvac prices comfort directly and has no ``e_floor``;
+#: glass_furnace prices lost glass directly and has none either.
 TRACKED_TERMS = {
     "plane": _ONE,
     "plane_energy": _ONE,
     "plane_sine": _ONE,
     "plane3d_heading": (_ALTITUDE, _HEADING),
     "plane3d_circle": (_ALTITUDE, _PATH),
-    "plane3d_racetrack": (_ALTITUDE, _PATH),
+    "plane3d_racetrack": (_ALTITUDE, _PATH, _HEADING),
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
     "patrol_range_bearing": (_SLOT, _HEADING),
@@ -106,18 +131,11 @@ TRACKED_TERMS = {
     "cstr": _ONE,
     "unstable_cstr": _ONE,
     "four_tank": (("precision_floor", "e_floor", 2),),
-    "distillation": (
-        ("precision_floor", "e_floor_top", 1),
-        ("precision_floor", "e_floor_bottom", 1),
-    ),
-    "ph_neutralization": _ONE,
-    "glass_furnace": _ONE,
     "cement_kiln": _ONE,
     "boiler_drum": (
         ("level_precision_floor", "e_floor_level", 1),
         ("pressure_precision_floor", "e_floor_pressure", 1),
     ),
-    "compressor_surge": _ONE,
     "reactor": _ONE,
     "battery": _ONE,
     "wind_turbine": _ONE,
@@ -135,14 +153,10 @@ def _recycle_power(state, params, tripped):
 
 #: Per environment, what its reward's ``running_cost`` charges, as ``fn(state,
 #: params, tripped)``, so ``consumption_ratio`` reads the quantity itself. The
-#: other running terms are not consumption.
+#: other running terms are not consumption. glass_furnace's running term is its
+#: fuel bill, so the ratio reads that term itself.
 CONSUMPTION = {
-    "glass_furnace": lambda state, params, tripped: state.fuel_flow,
     "cement_kiln": lambda state, params, tripped: state.fuel,
-    "boiler_drum": lambda state, params, tripped: state.Q_fuel,
-    "distillation": lambda state, params, tripped: state.V,
-    "ph_neutralization": lambda state, params, tripped: state.q3,
-    "compressor_surge": _recycle_power,
 }
 
 _RVSM = 65.0 * 0.3048  # m
@@ -168,15 +182,11 @@ SPEC_BAND = {
     "patrol_range_bearing": ((8.5,), _SLOT_BAND),
     "formation": ((20.0, 8.5, 8.5), _ALTITUDE_BAND + "; " + _SLOT_BAND),
     "ph_neutralization": (
-        (0.5,),
-        "a pH 6 to 9 permit, from the lowest target of 6.5, "
-        "ph_neutralization/PHYSICS.md",
+        (1.0,),
+        "the permit range pH 7 +-1, the example spec of Faanes and Skogestad "
+        "2000 (ph_neutralization/REALITY.md [P7])",
     ),
-    "glass_furnace": (
-        (10.0,),
-        "secondary: a float furnace's melting section, 1550 C +-10 C, a vendor's "
-        "blog naming no original; the crown has no figure of its own",
-    ),
+    "glass_furnace": None,  # a zone, fining and canal, that the reward prices
     "reactor": (
         (1.5 / 1.8,),
         "ours: the rod controller's +-1.5 F dead band, as reactor/PHYSICS.md cites "
@@ -211,8 +221,6 @@ def _currency_per_floor(name: str, p, step_seconds: float) -> float:
             p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0
         ) / 3600.0
         return per_unit_s * step_seconds * p.e_floor
-    if name in ("battery", "wind_turbine"):
-        return p.imbalance_price / 1.0e6 * step_seconds / 3600.0 * p.e_floor
     return 1.0
 
 
@@ -221,9 +229,15 @@ def _per_step(name: str, params, env, at_resolution: bool) -> float:
     resolution (or one floor) beyond its tolerance."""
     from target_gym.registry import REGISTRY, control_step_seconds
 
+    if name in JOB_SCORED:
+        return float("nan")
     spec = REGISTRY[name]
     p = params if params is not None else spec.make_test_params()
     env = env if env is not None else spec.make_env()
+    if name == "glass_furnace":
+        # Any shortfall under the pass mark loses the step's whole pull to cullet.
+        seconds = control_step_seconds(env, p)
+        return float(p.lost_glass_price * p.pull * seconds / 1000.0)
     exponent = float(p.tracking_exponent)
     if name == "hvac":
         hours = p.delta_t / 3600.0
@@ -249,7 +263,7 @@ def settle_band(name: str, params=None, env=None) -> float:
     """The tracking cost per step a move has settled within: every tracked
     error at its floor beyond its tolerance, 1 per term, in the plant's
     currency where the reward prices tracking. hvac has no floor, so its band
-    is its ceiling."""
+    is its ceiling, and glass_furnace's, whose reward is a step, too."""
     return _per_step(name, params, env, at_resolution=False)
 
 

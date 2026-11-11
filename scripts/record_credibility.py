@@ -50,7 +50,7 @@ EVIDENCE = ROOT / "evidence" / "oracle_horizons"
 #: yet, and ``unstable_cstr``'s goes through the expert's inner loop.
 PAIRS = {
     "first_order": ((0, "u", "x"),),
-    "cstr": ((0, "coolant", "C_a"),),
+    "cstr": ((0, "water", "T"),),
     "ph_neutralization": ((0, "base", "pH"),),
     "glass_furnace": ((0, "fuel", "T_crown"),),
     "reactor": ((0, "rod", "T_avg"),),

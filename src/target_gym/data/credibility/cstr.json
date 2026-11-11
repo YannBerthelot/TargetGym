@@ -1,36 +1,28 @@
 {
-  "cpu": "Apple M4 Pro",
+  "cpu": "AMD EPYC 9454 48-Core Processor",
   "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06)",
   "expert_figure": {
     "status": "no sourced figure"
   },
-  "expert_fingerprint": "ec83ad57a4d9d8b8",
-  "generated": "2026-11-06T12:56:36+00:00",
-  "null_wins": [
-    "I-only",
-    "constant 0.5",
-    "table"
-  ],
+  "expert_fingerprint": "9559c98a915b1327",
+  "generated": "2026-11-09T12:58:04+00:00",
+  "null_wins": [],
   "nulls": {
-    "I-only": {
-      "ratio": 1.1127231681455885,
-      "win_rate": 0.7
-    },
     "constant 0.0": {
-      "ratio": 0.17503856608704904,
+      "ratio": 1.0340908506283346e-05,
       "win_rate": 0.0
     },
     "constant 0.5": {
-      "ratio": 1.2979197617969298,
-      "win_rate": 0.7
+      "ratio": 0.0009542718598247344,
+      "win_rate": 0.0
     },
     "constant 1.0": {
-      "ratio": 0.07245350089385333,
+      "ratio": 0.003950107809692803,
       "win_rate": 0.0
     },
     "table": {
-      "ratio": 1.591757566155036,
-      "win_rate": 1.0
+      "ratio": 0.0701703121997261,
+      "win_rate": 0.0
     }
   }
 }

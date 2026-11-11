@@ -1,5 +1,5 @@
 {
-  "fingerprint": "494f9a3e1e3c882a",
-  "note": "Branch stamp on feat/sensor-noise, redone at the 0.8.0 re-record: the batch of PR 8, the process experts and the patrol wake.",
-  "stamped": "2026-11-06T13:55:17+00:00"
+  "fingerprint": "d22d7f27adc30920",
+  "note": "re-stamped in place: plane3d gained Amendment 3 code this task does not run (the protected bank behind PlaneParams3D.amended, off here; the heading clearance hook, the identity off the heading task) and a state field it never sets (clearance_time, 0); behaviour unchanged",
+  "stamped": "2026-11-08T16:41:39+00:00"
 }

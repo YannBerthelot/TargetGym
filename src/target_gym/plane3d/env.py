@@ -22,6 +22,7 @@ from target_gym.plane.dynamics import (
     STICK_RESPONSE_RATE,
     STICK_TRAVEL,
     InnerLoop,
+    advance_dryden_gust,
     advance_gust,
     airspeed_scaler,
     attitude_axis,
@@ -31,7 +32,11 @@ from target_gym.plane.dynamics import (
     compute_next_surface,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    in_zone,
     outside_envelope,
+    protected_pitch_demand,
+    scheduled_airspeed,
+    speed_band_excess,
     step_key,
     total_wind_3d,
 )
@@ -82,6 +87,16 @@ class PlaneState3D(EnvState):
     roll_integ: float = 0.0
     # The step's load factor furthest from 1 g, which the limits read.
     load_factor: float = 1.0
+    # Amendment 2 (``params.amended``; plane3d/PHYSICS.md): the racetrack's
+    # half leg, m; the heading clearance's size, rad; the normal load factor
+    # an accelerometer reads at the end of the step; the turbulence zone, s.
+    target_half_leg: float = 0.0
+    heading_change: float = 0.0
+    n_z: float = 1.0
+    zone_start: float = 0.0
+    zone_end: float = 0.0
+    #: The step of the heading clearance in force (Amendment 3).
+    clearance_time: float = 0.0
 
     actuator_held: jax.Array = actuator_field(3)
 
@@ -295,9 +310,67 @@ class PlaneParams3D(EnvParams):
 
     delta_t: float = 1.0
 
+    # ---- Amendment 2 (plane3d/PHYSICS.md), on the heading and racetrack tasks
+    #: Protected limits, ground-only trips, a Dryden gust in one zone with
+    #: ``turbulence_sigma`` its stationary std, an established start and the
+    #: job's bands. Off, the earlier plant (the Extra tasks, patrol, formation).
+    amended: bool = False
+    #: The speed schedule, as the 2D aircraft's (unsourced, plane/PHYSICS.md).
+    target_cas: float = 290.0 * 1852.0 / 3600.0
+    target_mach: float = 0.78
+    #: +-10 kt or +-0.02 M of the assigned speed [AIM 4-4-12; ACS IR.III.B.S4].
+    speed_band: float = 10.0 * 1852.0 / 3600.0
+    mach_band: float = 0.02
+    #: Tolerances past which heading and path cost (``e_tol_altitude`` above).
+    e_tol_heading: float = 0.0
+    e_tol_path: float = 0.0
+    #: The turbulence zone, s: onset (ours) and length, 3 to 30 min [BEA447].
+    zone_onset_range: Tuple[float, float] = (0.0, 600.0)
+    zone_duration_range: Tuple[float, float] = (180.0, 1800.0)
+    #: 0: the cruise schedule; 1: the holding speed below the cap [IFH ch. 10].
+    assigned_speed_mode: int = 0
+    #: Holding turns: 3 deg/s or 30 deg of bank, whichever is less [IFH ch. 10].
+    holding_rate: float = 3.0 * 3.14159265 / 180.0
+    holding_bank: float = 30.0 * 3.14159265 / 180.0
+    #: Heading select is vectoring (rule 17, Amendment 3): a new heading every
+    #: this many seconds, drawn over ``target_heading_range`` (ours: vectors come
+    #: one after another; no source gives their spacing). 0: one clearance.
+    heading_clearance_period: float = 0.0
+    #: The protected bank: the demand stops here, for agent and reference alike
+    #: (rule 14, Amendment 3). Ours, family range 25 to 30 deg [IFH ch. 10's 30
+    #: deg holding bank; ICAO Doc 8168 and the A320 HDG mode's 25, unconfirmed].
+    protected_bank: float = 30.0 * 3.14159265 / 180.0
+    #: Inbound leg 1 min at or below 14 000 ft, 1.5 min above [IFH ch. 10].
+    holding_split_altitude: float = 14_000.0 * 0.3048
+    holding_leg_low: float = 60.0
+    holding_leg_high: float = 90.0
+    #: Holding speed caps, 230 KIAS to 14 000 ft and 265 above [IFH ch. 10];
+    #: assigned 10 kt under, so the band's edge is the cap (ours).
+    holding_cap_low: float = 230.0 * 1852.0 / 3600.0
+    holding_cap_high: float = 265.0 * 1852.0 / 3600.0
+
 
 #: Units of the PlaneParams3D fields, for the generated environment pages.
 PARAM_UNITS = {
+    "amended": "-",
+    "target_cas": "m/s",
+    "target_mach": "-",
+    "speed_band": "m/s",
+    "mach_band": "-",
+    "e_tol_heading": "rad",
+    "e_tol_path": "m",
+    "zone_onset_range": "s",
+    "zone_duration_range": "s",
+    "assigned_speed_mode": "-",
+    "holding_rate": "rad/s",
+    "holding_bank": "rad",
+    "protected_bank": "rad",
+    "heading_clearance_period": "s",
+    "holding_split_altitude": "m",
+    "holding_leg_low": "s",
+    "holding_leg_high": "s",
+    "holding_cap_low": "m/s",
+    "holding_cap_high": "m/s",
     "gravity": "m/s^2",
     "initial_mass": "kg",
     "thrust_output_at_sea_level": "N",
@@ -397,14 +470,57 @@ def check_is_terminal_3d(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     air_speed = compute_velocity_3d(
         state.x_dot - wind_x, state.y_dot - wind_y, state.z_dot - wind_z
     )
-    terminated = (
-        (state.z <= params.min_alt)
-        | (state.z >= params.max_alt)
+    envelope = (
+        (state.z >= params.max_alt)
         | (jnp.abs(state.phi) > params.bank_limit)
         | outside_envelope(state.load_factor, air_speed, state.z, params)
     )
+    # Amended: load factor, AoA and bank are protected and VMO is a warning
+    # (rule 14; plane/REALITY.md, limits); the ground is the one trip.
+    terminated = (state.z <= params.min_alt) | (
+        envelope & jnp.logical_not(params.amended)
+    )
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
+
+
+def airspeed_3d(state, params, xp=jnp):
+    """True airspeed against the wind and gust, what air data reads."""
+    wind_x, wind_y, wind_z = total_wind_3d(
+        state.z, state.gust_x, state.gust_y, state.gust_z, params
+    )
+    return compute_velocity_3d(
+        state.x_dot - wind_x, state.y_dot - wind_y, state.z_dot - wind_z
+    )
+
+
+def assigned_cas_3d(target_altitude, params, xp=jnp):
+    """The CAS assigned: the cruise schedule's, or on a hold 10 kt under the
+    holding cap for the level [IFH ch. 10]."""
+    low = target_altitude <= params.holding_split_altitude
+    cap = xp.where(low, params.holding_cap_low, params.holding_cap_high)
+    hold = cap - params.speed_band
+    return xp.where(params.assigned_speed_mode == 1, hold, params.target_cas)
+
+
+def assigned_tas_3d(z, target_altitude, params, xp=jnp):
+    """The true airspeed of the assigned speed at height ``z``."""
+    cas = assigned_cas_3d(target_altitude, params, xp)
+    return scheduled_airspeed(z, cas, params.target_mach, xp)
+
+
+def holding_turn_rate(speed, params, xp=jnp):
+    """A holding turn's rate at ``speed``: 3 deg/s or 30 deg of bank, whichever
+    is less [IFH ch. 10]."""
+    banked = params.gravity * xp.tan(params.holding_bank) / xp.maximum(speed, 1.0)
+    return xp.minimum(params.holding_rate, banked)
+
+
+def speed_cost_3d(state, params, xp=jnp):
+    """The assigned speed's band cost (``plane.dynamics.speed_band_excess``)."""
+    cas = assigned_cas_3d(state.target_altitude, params, xp)
+    excess = speed_band_excess(state.z, airspeed_3d(state, params, xp), params, xp, cas)
+    return xp.where(params.amended, excess**2, 0.0)
 
 
 def wrap_angle(angle):
@@ -489,6 +605,16 @@ def distance_to_circle(state: PlaneState3D):
     return dist_to_center - state.target_radius
 
 
+def _half_leg(state):
+    """The pattern's half leg: the hold's own (Amendment 2), or the earlier
+    ``_RACETRACK_LEG`` radii."""
+    return jnp.where(
+        state.target_half_leg > 0.0,
+        state.target_half_leg,
+        state.target_radius * _RACETRACK_LEG,
+    )
+
+
 def distance_to_racetrack(state: PlaneState3D):
     """Distance from the aircraft to a racetrack holding pattern.
 
@@ -504,7 +630,7 @@ def distance_to_racetrack(state: PlaneState3D):
     quantised its own reward.
     """
     r = state.target_radius
-    half_leg = r * _RACETRACK_LEG
+    half_leg = _half_leg(state)
 
     # Into pattern frame: origin at the centre, x along the straight legs.
     c, s_ = jnp.cos(state.target_heading), jnp.sin(state.target_heading)
@@ -537,7 +663,7 @@ def racetrack_guidance(state: PlaneState3D):
     feedforward.
     """
     r = state.target_radius
-    half_leg = r * _RACETRACK_LEG
+    half_leg = _half_leg(state)
     c, s_ = jnp.cos(state.target_heading), jnp.sin(state.target_heading)
     dx = state.x - state.target_x
     dy = state.y - state.target_y
@@ -757,8 +883,19 @@ def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     )
 
 
-def get_obs_heading(state: PlaneState3D, xp=jnp):
-    """Observation for heading task (15 values)."""
+def air_data_3d(state, params, xp=jnp):
+    """What the autopilot reads besides the state (rule 16): the assigned
+    speed as a true airspeed, the airspeed and the normal load factor."""
+    return [
+        assigned_tas_3d(state.z, state.target_altitude, params, xp),
+        airspeed_3d(state, params, xp),
+        state.n_z,
+    ]
+
+
+def get_obs_heading(state: PlaneState3D, xp=jnp, params=None):
+    """Observation for heading task (15 values, 18 with the air data)."""
+    extra = [] if params is None else air_data_3d(state, params, xp)
     return xp.stack(
         [
             state.x_dot,
@@ -776,17 +913,24 @@ def get_obs_heading(state: PlaneState3D, xp=jnp):
             state.power,
             state.stick,
             state.aileron,
+            *extra,
         ]
     )
 
 
-def get_obs_racetrack(state: PlaneState3D, xp=jnp):
-    """Observation for the holding pattern (21 values).
+def get_obs_racetrack(state: PlaneState3D, xp=jnp, params=None):
+    """Observation for the holding pattern (21 values; 25 with the half leg,
+    which the hold's timing sets, and the air data).
 
     The circle's observation plus ``target_heading``, which orients the pattern
     and without which the straight legs are unobservable -- the aircraft would
     have to infer which way the hold lies from its own history.
     """
+    extra = (
+        []
+        if params is None
+        else [state.target_half_leg, *air_data_3d(state, params, xp)]
+    )
     return xp.stack(
         [
             state.x_dot,
@@ -815,6 +959,7 @@ def get_obs_racetrack(state: PlaneState3D, xp=jnp):
             # because a policy that had to rediscover the pattern's shape from
             # position alone would be solving a different problem.
             *racetrack_guidance(state),
+            *extra,
         ]
     )
 
@@ -919,15 +1064,36 @@ def compute_next_state_3d(
     ``key=None`` freezes the gust (constant wind).
     """
     dt = params.delta_t / inner_steps
+    # Amended: bank is a protected limit (rule 14), the demand clipped to it.
+    protected = jnp.clip(bank_demand, -params.protected_bank, params.protected_bank)
+    bank_demand = jnp.where(params.amended, protected, bank_demand)
 
     # Total wind = steady mean + altitude shear + OU turbulence gust.
-    gust = advance_gust(
-        jnp.array([state.gust_x, state.gust_y, state.gust_z]),
+    previous = jnp.array([state.gust_x, state.gust_y, state.gust_z])
+    kicked = advance_gust(
+        previous,
         params.turbulence_theta,
         params.turbulence_sigma,
         params.delta_t,
         step_key(key, state.time),
     )
+    # Amended: a Dryden gust in the episode's zone, calm outside it
+    # (plane/PHYSICS.md, turbulence), with ``turbulence_sigma`` its std.
+    zone = in_zone(state.time * params.delta_t, state.zone_start, state.zone_end)
+    dryden = advance_dryden_gust(
+        previous,
+        compute_velocity_3d(
+            state.x_dot - params.wind_x - previous[0],
+            state.y_dot - params.wind_y - previous[1],
+            state.z_dot - params.wind_z - previous[2],
+        ),
+        jnp.where(zone, params.turbulence_sigma, 0.0),
+        params.turbulence_scale_length,
+        params.delta_t,
+        step_key(key, state.time),
+    )
+    gust = jnp.where(params.amended, dryden, kicked)
+    calm = params.amended & jnp.logical_not(zone)
     total_wind_x, total_wind_y, total_wind_z = total_wind_3d(
         state.z, gust[0], gust[1], gust[2], params
     )
@@ -940,7 +1106,8 @@ def compute_next_state_3d(
             state.y_dot - total_wind_y,
             state.z_dot - total_wind_z,
         )
-        gust_roll_rate = gust_roll_rate + rolling_gust(roll_key, speed, params)
+        rolled = rolling_gust(roll_key, speed, params)
+        gust_roll_rate = gust_roll_rate + jnp.where(calm, 0.0, rolled)
     # All-up mass for this step: fuel is a component of ``initial_mass``, so
     # burning it subtracts. Threaded through ``eff_params`` because the
     # dynamics read ``params.initial_mass``.
@@ -967,11 +1134,22 @@ def compute_next_state_3d(
         rho = compute_air_density_from_altitude(z)
         eas = air_speed * jnp.sqrt(rho / params.air_density_at_sea_level)
         scaler = airspeed_scaler(eas, gains)
+        # Amended: normal law's protection of load factor and AoA (rule 14).
+        air_up = z_dot - total_wind_z
+        protected = protected_pitch_demand(
+            pitch_demand,
+            jnp.arcsin(jnp.clip(air_up / jnp.maximum(air_speed, 1.0), -1.0, 1.0)),
+            air_speed,
+            z,
+            mass_now,
+            params,
+        )
+        demand = jnp.where(params.amended, protected, pitch_demand)
         stick_output, pitch_integ = attitude_axis(
             gains.Kp_theta,
             gains.Ki_theta,
             gains.Kd_theta,
-            pitch_demand - theta,
+            demand - theta,
             theta_dot,
             pitch_integ,
             scaler,
@@ -1102,6 +1280,12 @@ def compute_next_state_3d(
         pitch_integ=pitch_integ,
         roll_integ=roll_integ,
         load_factor=load_factor,
+        target_half_leg=state.target_half_leg,
+        heading_change=state.heading_change,
+        n_z=metrics[1][-1] / (mass_now * params.gravity),
+        zone_start=state.zone_start,
+        zone_end=state.zone_end,
+        clearance_time=state.clearance_time,
     )
     return new_state, metrics
 
@@ -1128,14 +1312,31 @@ def compute_reward_terms_heading(
     state: PlaneState3D, params: PlaneParams3D, xp=jnp, tripped=None
 ):
     """The reward's additive cost terms, each >= 0 (``target_gym.reward``)."""
+    # Amended: the heading band, +-10 deg [ACS], about a heading that turns
+    # toward the target at a holding turn's rate from the clearance [IFH ch.
+    # 10], so the band travels with that turn; ahead of it costs nothing. Unamended, the allowance
+    # is ``e_tol_heading`` (0) and this is plain tracking.
+    error = xp.abs(wrap_angle(state.psi - state.target_heading))
+    rate = holding_turn_rate(
+        assigned_tas_3d(state.target_altitude, state.target_altitude, params, xp),
+        params,
+        xp,
+    )
+    since = (state.time - state.clearance_time) * params.delta_t
+    left = state.heading_change - rate * since
+    allowance = params.e_tol_heading + xp.maximum(left, 0.0)
+    behind = xp.maximum(error - allowance, 0.0) + params.e_tol_heading
     heading = R.tracking_cost(
-        wrap_angle(state.psi - state.target_heading),
+        behind,
         params.e_floor_heading,
-        0.0,
+        params.e_tol_heading,
         params.tracking_exponent,
         xp,
     )
-    terms = {"tracking": altitude_cost(state, params, xp) + heading}
+    terms = {
+        "tracking": altitude_cost(state, params, xp) + heading,
+        "running": speed_cost_3d(state, params, xp),
+    }
     return _downtime(terms, state, params, xp, tripped)
 
 
@@ -1145,11 +1346,26 @@ def compute_reward_terms_racetrack(
     path = R.tracking_cost(
         distance_to_racetrack(state),
         params.e_floor_path,
-        0.0,
+        params.e_tol_path,
         params.tracking_exponent,
         xp,
     )
-    terms = {"tracking": altitude_cost(state, params, xp) + path}
+    # Amended: headings +-10 deg of the pattern's [ACS IR.III.B.S4], which
+    # also tells right turns from left [IFH ch. 10].
+    _, tangent, _ = racetrack_guidance(state)
+    heading = R.tracking_cost(
+        wrap_angle(state.psi - tangent),
+        params.e_floor_heading,
+        params.e_tol_heading,
+        params.tracking_exponent,
+        xp,
+    )
+    terms = {
+        "tracking": altitude_cost(state, params, xp)
+        + path
+        + xp.where(params.amended, heading, 0.0),
+        "running": speed_cost_3d(state, params, xp),
+    }
     return _downtime(terms, state, params, xp, tripped)
 
 

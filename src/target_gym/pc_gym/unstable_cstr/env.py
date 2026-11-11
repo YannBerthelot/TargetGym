@@ -1,26 +1,27 @@
-"""Unstable CSTR: cstr's reactor held on its open-loop unstable middle branch.
+"""
+LDPE autoclave: an adiabatic high-pressure reactor held at its unstable steady
+state by initiator flow (charter Amendment 3).
 
-See ``PHYSICS.md`` in this directory for provenance, the parameter table and
-the validation targets.
+See ``PHYSICS.md`` in this directory for the sources, the limits and the
+score, and ``REALITY.md`` for the plant record they come from.
 
-The two balances and the ten physical parameter values are the shipped
-``cstr``'s, imported from ``target_gym.pc_gym.cstr.env`` and never retyped, so
-an edit there moves this task too (its spec declares that file in
-``fingerprint_sources``). This module adds a first-order jacket lag between
-the coolant command and the jacket temperature the balances see, a valve with
-its own lag and slew limit in front of that (``actuator_lag``, ``actuator_rate``),
-a drifting feed temperature, a stratified schedule of six concentration targets
-on the middle branch, where every target is a saddle, reached by a ramp, and a
-high-temperature trip.
+The family [L1; L2; L3]: ethylene is polymerised by free radicals at 1250 to
+1950 bar and 170 to 300 C in a stirred autoclave. The walls remove little
+heat, so the reactor is essentially adiabatic and the cold monomer feed is its
+cooling; the temperature is held by the initiator fed into it, and "the
+industrial reactor normally operates at an unstable steady state", where the
+temperature either climbs or falls until polymerisation stops [L1].
 
-State (three ODEs, one stochastic disturbance, the schedule)
-------------------------------------------------------------
-``C_a``            reactant concentration (mol/L), measured
-``T``              reactor temperature (K), measured
-``T_j``            jacket temperature (K), measured; lags the command by ``tau_j``
-``Ti_dev``         feed-temperature drift (K), an Ornstein-Uhlenbeck process, hidden
-``target_levels``  the six levels of the episode; only the live one is observed
-``block_clock``    steps since the schedule started, hidden
+Model, one perfectly mixed zone (Marini and Georgakis's perfectly mixed
+autoclave [L4]), with the quasi-steady radical balance::
+
+    dI/dt = (I_f - I) / tau - k_d(T) I
+    dM/dt = (M_f - M) / tau - k_p(T) M lambda_0
+    dT/dt = (T_f - T) / tau + (-dH_p) k_p(T) M lambda_0 / (rho c_p)
+    lambda_0 = sqrt(2 f k_d(T) I / k_t(T))
+    k = k0 exp(-(E + V_A P) / (R T))
+
+The operator's move is the initiator's concentration in the feed.
 """
 
 from typing import Tuple
@@ -30,332 +31,302 @@ import jax.numpy as jnp
 from flax import struct
 from jax.tree_util import Partial as partial
 
-import target_gym.pc_gym.cstr.env as cstr_env
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
-from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
-#: Blocks per episode: the first level and five switches.
-N_BLOCKS = 6
-
-# The shipped cstr's defaults, read once. Every inherited value below is
-# written ``_CSTR.<field>``.
-_CSTR = cstr_env.CSTRParams()
-
-# The step, in minutes (3 s). ``delta_t`` and ``restart_steps`` both use it.
-_DT = 0.05
+GAS_R = 8.314  # J/(mol K)
 
 
 @struct.dataclass
 class UnstableCSTRParams(EnvParams):
-    # ---- Reactor: cstr's ten values (read) ----
-    q: float = _CSTR.q  # L/min
-    V: float = _CSTR.V  # L
-    rho: float = _CSTR.rho  # g/L
-    C: float = _CSTR.C  # J/(g K); deviation D1
-    deltaHr: float = _CSTR.deltaHr  # J/mol
-    EA_over_R: float = _CSTR.EA_over_R  # K
-    k0: float = _CSTR.k0  # 1/min
-    UA: float = _CSTR.UA  # J/(min K)
-    Ti: float = _CSTR.Ti  # K, feed temperature before the drift
-    Caf: float = _CSTR.Caf  # mol/L
-    # Composition analyser resolution (read, cstr's). Version 1 only.
-    precision_floor: float = _CSTR.precision_floor  # mol/L
-    #: ``delta_t`` is in minutes, as in cstr; seconds per unit.
-    time_unit_seconds: float = 60.0
+    # ---- Vessel and feed (the RSU autoclave [L3, Tables 3, 4]) ----
+    V: float = 0.498  # m3 [L3: 498 L]
+    feed_mass: float = 8.0  # kg/s [L3]
+    rho: float = 499.0  # kg/m3, the mixture [L3]
+    #: Ethylene's molar mass, kg/kmol: the feed's monomer concentration is
+    #: rho / 28.05.
+    mw: float = 28.05
+    #: The cold monomer feed, 353 K [L1, p. 3].
+    T_feed: float = 353.0  # K
+    #: Its slow wander around that, every day: amplitude and period ours (no
+    #: figure found), a fifth of the feed_temperature upset's 5 K, over 10 min.
+    feed_T_wander: float = 1.0  # K
+    feed_T_wander_period: float = 600.0  # s
+    #: Pressure, 1600 atm [L1, p. 3], inside the family's 1250 to 1950 bar [L2].
+    P: float = 1600.0 * 101325.0  # Pa
 
-    # ---- Jacket and interlocks ----
-    # Lower bound read from PC-gym's CSTR action space; the upper bound is
-    # ours, and spans both folds with at least 4.6 K headroom at |Ti_dev| 6 K
-    # (derived).
-    T_c_min: float = 290.0  # K
-    T_c_max: float = 310.0  # K
-    #: Jacket time constant. Synthetic: the longest lag the cascade survives,
-    #: not a hardware figure (PHYSICS.md, section 6).
-    tau_j: float = 0.1  # min (6 s)
-    #: The coolant valve: a 2 s lag and 8 % of its span per second, 4.8 per
-    #: minute (PHYSICS.md, section 3).
-    actuator_lag: float = 2.0 / 60.0  # min
-    actuator_rate: float = 0.08 * 60.0  # fraction of the span per min
-    #: High-high interlock (ours), 4.49 K above the extinction fold and
-    #: 12.17 K above the hottest target (derived).
-    T_trip: float = 365.0  # K
-    #: Validity guard (ours). Unreachable; it trips the non-physical proposals
-    #: of the off-envelope sweep in conformance check 5.
-    T_valid_min: float = 250.0  # K
+    # ---- Kinetics (Ham et al.'s autoclave set, as pooled in [L2, Table 4]) ----
+    kp0: float = 1.0e6  # m3/(kmol s)
+    Ep: float = 27.1e3  # J/mol
+    Vp: float = -23.1e-6  # m3/mol (the table's -23.1, cm3/mol)
+    kt0: float = 6.0e8  # m3/(kmol s): combination and disproportionation, 3e8 each
+    Et: float = 16.5e3  # J/mol
+    #: The initiator, peroxide "X" of [L2, Table 3] (supplier data): a half-life
+    #: of 0.7 s at 513 K, inside the family's 0.02 to 1 s [L2, p. 21].
+    kd0: float = 4.20e15  # 1/s
+    Ed: float = 153.5e3  # J/mol
+    #: Initiator efficiency. Ours, family: the radicals that start chains.
+    f_eff: float = 0.5
+    #: Ethylene's heat of polymerisation, textbook (about 3.3 MJ/kg).
+    dH: float = -93.6e6  # J/kmol
+    #: The supercritical mixture's heat capacity. Ours, family: about 2.5
+    #: kJ/(kg K) at these conditions.
+    cp: float = 2500.0  # J/(kg K)
 
-    # ---- Feed-temperature drift (ours) ----
-    Ti_sigma: float = 2.0  # K, stationary standard deviation
-    Ti_tau: float = 10.0  # min, correlation time
-    # Clip on the initial draw only, in standard deviations: with it every
-    # reset is recoverable (PHYSICS.md, task design). The running drift is
-    # not clipped.
-    Ti_dev_reset_clip: float = 3.0
+    # ---- The move: initiator in the feed ----
+    #: kmol/m3. Ours: 0 to twice what the setpoint needs (about 4.3e-4 at
+    #: 513 K, a mass fraction near the 1.2e-4 the RSU study feeds [L3]).
+    I_f_min: float = 0.0
+    I_f_max: float = 1.0e-3
 
-    # ---- Schedule and reset (ours) ----
-    # The middle branch, 5.89 K from the ignition fold and 7.68 K from the
-    # extinction fold (derived).
-    target_CA_range: Tuple[float, float] = (0.45, 0.65)  # mol/L
-    # A fixed multiset, permuted per episode, so every episode has the same
-    # total squared move, 0.035 (mol/L)^2 (derived).
-    switch_sizes: Tuple[float, ...] = (0.05, 0.05, 0.10, 0.10, 0.10)  # mol/L
-    # 10 min, provisional: 3 x the settle after the worst switch of the
-    # cascade on DEFAULT_GAINS (derived, scripts/unstable_cstr_numbers.py
-    # --section settle).
-    block_steps: int = 200
-    # The largest switch takes three residence times, when a mixed tank has
-    # gone 95 % of the way to a new steady state (ours, set before any result).
-    target_ramp: float = 0.10 / 3.0  # mol/L per min
-    initial_CA_offset: float = 0.01  # mol/L, reset box half-width
-    initial_T_offset: float = 1.5  # K, reset box half-width
-    delta_t: float = _DT  # min (3 s)
-    max_steps_in_episode: int = 1200  # N_BLOCKS * block_steps, 60 min
+    # ---- Setpoint and trip ----
+    #: A zone temperature of the Politeno reactor, 513 K [L1, p. 3].
+    T_setpoint: float = 513.0  # K
+    #: High temperature: past the family's operating range, 300 C [L2], ethylene
+    #: decomposition runs away [L3], and the autoclave's protection vents it.
+    #: The trip. Ours at the range's top: 573 K.
+    T_trip: float = 573.0  # K
+    #: Low temperature: polymerisation stops [L1] and the reactor is lost to the
+    #: cold feed. Not a trip in the sources; it costs production (the score).
 
-    # ---- Reward (docs/reward-shaping.md; version 2) ----
-    reward_version: int = 2
-    # The analyser's scatter, as on cstr. scripts/measure_hold.py records the
-    # MPC's hold from minute 6 of each block to the switch, less the steps in
-    # which it already moves toward the next level (target_gym.eval finds
-    # them), and e_floor is raised only if that hold is coarser. The v2
-    # ranking and the PID tuning do not depend on it: every cost term scales by
-    # 1/e_floor^2.
-    e_floor: float = 5e-4  # mol/L
-    e_tol: float = 0.0  # no product specification supplied (provisional)
+    # ---- Episode (rules 17 and 20) ----
+    #: Seconds. 30 min at 1 s, about 60 residence times (ours).
+    delta_t: float = 1.0
+    max_steps_in_episode: int = 1800
+    #: Each scenario's one event, at a second drawn in this window (ours).
+    event_window: Tuple[float, float] = (120.0, 900.0)
+    #: Scenario events, 0 when off (scenarios.py):
+    setpoint_step: float = 0.0  # K, a grade change [L1: zones at 513 to 537 K]
+    feed_T_step: float = 0.0  # K, the feed's temperature moves
+    efficiency_drop: float = 0.0  # fraction of f lost (impurities), ours
+    feed_flow_step: float = 0.0  # fraction of the feed flow, ours
+
+    # ---- Score (charter rule 15) ----
+    # The job is the temperature held at its setpoint, within a short time
+    # [L1, p. 3]: the polymer's grade rides on it. Quadratic on 1 K (ours, a
+    # zone thermocouple's useful resolution), plus the trip, priced as the lost
+    # production of a vent and restart (ours: 2 h; no restart time found).
+    reward_version: int = 3
+    e_floor: float = 1.0  # K
+    e_tol: float = 0.0
     tracking_exponent: float = 2.0
-    #: The largest |target - C_a| an untripped state reaches (derived, closed
-    #: form): max(Caf - 0.45, 0.65 - C_a at 365 K on the steady-state curve)
-    #: = max(0.55, 0.386). The v1 envelope and the base of ``failure_cost``.
-    CA_error_max: float = 0.55  # mol/L
-    failure_cost: float = 2.0 * (0.55 / 5e-4) ** 2  # twice the largest tracking cost
-    #: Restart time priced into a trip (``reward.trip_cost``): cstr's
-    #: provisional 1 h restart (240 steps of 15 s) at 3 s steps.
-    restart_steps: int = round(_CSTR.restart_steps * _CSTR.delta_t / _DT)
-    #: The oracle's best hold, (e_hold_min / e_floor) ** 2. The MPC holds C_a to
-    #: 2.23e-6 mol/L (measured, the lowest per-seed hold scripts/measure_hold.py
-    #: recorded; 6.29e-6 for the CasADi oracle before v3), under the analyser's
-    #: scatter, so e_floor stays at the scatter and the reference is that
-    #: finer hold in floor-widths, squared. PR 9 re-measures the hold.
-    #: A decimal, not ``(2.23e-6 / 5e-4) ** 2``: ``**`` rounds differently on macOS
-    #: and Linux, and the version stamp hashes the value.
-    rho_floor_tracking: float = 1.98916e-05
-    rho_floor: float = 1.98916e-05  # no running cost: rho_floor_tracking
-    #: False: the plant is disturbed (docs/reward-shaping.md).
-    floor_is_documented_minimum: bool = False
+    # Above any untripped step: twice the cost of a reactor 220 K off (cold
+    # feed against the setpoint's 513 K).
+    failure_cost: float = 2.0 * (220.0 / 1.0) ** 2
+    restart_steps: int = 7200
+    rho_floor_tracking: float = 0.0
+    rho_floor: float = 0.0
+    floor_is_documented_minimum: bool = True
+    #: Version 1 only.
+    precision_floor: float = 1.0  # K
 
 
 #: Units of the UnstableCSTRParams fields, for the generated environment pages.
 PARAM_UNITS = {
-    "q": "L/min",
-    "V": "L",
-    "rho": "g/L",
-    "C": "J/(g*K)",
-    "deltaHr": "J/mol",
-    "EA_over_R": "K",
-    "k0": "1/min",
-    "UA": "J/(min*K)",
-    "Ti": "K",
-    "Caf": "mol/L",
-    "precision_floor": "mol/L",
-    "time_unit_seconds": "s",
-    "T_c_min": "K",
-    "T_c_max": "K",
-    "tau_j": "min",
+    "V": "m^3",
+    "feed_mass": "kg/s",
+    "rho": "kg/m^3",
+    "mw": "kg/kmol",
+    "T_feed": "K",
+    "feed_T_wander": "K",
+    "feed_T_wander_period": "s",
+    "P": "Pa",
+    "kp0": "m^3/(kmol*s)",
+    "Ep": "J/mol",
+    "Vp": "m^3/mol",
+    "kt0": "m^3/(kmol*s)",
+    "Et": "J/mol",
+    "kd0": "1/s",
+    "Ed": "J/mol",
+    "f_eff": "-",
+    "dH": "J/kmol",
+    "cp": "J/(kg*K)",
+    "I_f_min": "kmol/m^3",
+    "I_f_max": "kmol/m^3",
+    "T_setpoint": "K",
     "T_trip": "K",
-    "T_valid_min": "K",
-    "Ti_sigma": "K",
-    "Ti_tau": "min",
-    "Ti_dev_reset_clip": "-",
-    "block_steps": "steps",
-    "target_ramp": "mol/L per min",
-    "initial_CA_offset": "mol/L",
-    "initial_T_offset": "K",
-    "delta_t": "min",
-    "e_floor": "mol/L",
+    "delta_t": "s",
+    "event_window": "s",
+    "setpoint_step": "K",
+    "feed_T_step": "K",
+    "efficiency_drop": "-",
+    "feed_flow_step": "-",
     "reward_version": "-",
-    "e_tol": "mol/L",
+    "e_floor": "K",
+    "e_tol": "K",
     "tracking_exponent": "-",
     "failure_cost": "reward",
     "restart_steps": "steps",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
-    "CA_error_max": "mol/L",
+    "precision_floor": "K",
 }
 
 
 @struct.dataclass
 class UnstableCSTRState(EnvState):
-    C_a: float
-    T: float
-    #: Jacket temperature: the lagged coolant the balances see.
-    T_j: float
-    #: Feed-temperature drift, added to ``Ti``. Hidden.
-    Ti_dev: float
-    #: The episode's six levels. Only the live one is observed.
-    target_levels: jnp.ndarray
-    #: Steps since the schedule started. Hidden. ``reset_env`` sets it to 0, so
-    #: a trip's fresh draw restarts the schedule while ``time`` runs on.
-    block_clock: int
+    I: float  # kmol/m3, initiator in the reactor, HIDDEN
+    M: float  # kmol/m3, ethylene, HIDDEN
+    T: float  # K, read by its thermocouple
+    target_T: float  # K, the setpoint
+    I_f: float  # kmol/m3, the initiator feed as it ran last step
+    #: The scenario's event second (a never time for none).
+    event_at: float = struct.field(default=1.0e9, kw_only=True)
+    #: The feed's wander's phase at the episode's start (rad).
+    feed_phase: float = struct.field(default=0.0, kw_only=True)
 
     actuator_held: jax.Array = actuator_field(1)
 
 
-def steady_temperature(level, params: UnstableCSTRParams, xp=jnp):
-    """T*(L), the reactor temperature at which ``C_a = L`` is steady.
-
-    From the concentration balance alone, (q/V)(Caf - L) = k(T) L, so it does
-    not depend on the feed temperature or its drift.
-    """
-    qV = params.q / params.V
-    return params.EA_over_R / (
-        xp.log(params.k0) - xp.log(qV * (params.Caf - level) / level)
-    )
+def feed_temperature(phase, params: UnstableCSTRParams, second):
+    """The monomer feed's temperature at ``second`` with no event: its 353 K
+    plus the wander from ``phase``."""
+    p = params
+    turn = jnp.where(p.feed_T_wander_period > 0.0, second / p.feed_T_wander_period, 0.0)
+    return p.T_feed + p.feed_T_wander * jnp.sin(phase + 2.0 * jnp.pi * turn)
 
 
-def steady_coolant(level, Ti_dev, params: UnstableCSTRParams, xp=jnp):
-    """Tc*(L, dTi), the jacket temperature that makes (L, T*(L)) an equilibrium.
-
-    Tc* = T* + ((q/V)(T* - Ti - dTi) - A (q/V)(Caf - L)) / beta, with
-    A = -deltaHr / (rho C) and beta = UA / (rho C V).
-    """
-    qV = params.q / params.V
-    A = -params.deltaHr / (params.rho * params.C)
-    beta = params.UA / (params.rho * params.C * params.V)
-    T = steady_temperature(level, params, xp)
-    return T + (qV * (T - params.Ti - Ti_dev) - A * qV * (params.Caf - level)) / beta
+def rate_constant(k0, E, T, params: UnstableCSTRParams, V_act=0.0):
+    """``k0 exp(-(E + V_act P) / (R T))``, as [L2, eq. 18] at Tref infinite."""
+    return k0 * jnp.exp(-(E + V_act * params.P) / (GAS_R * T))
 
 
-def scheduled_level(levels, clock, params: UnstableCSTRParams, xp=jnp):
-    """The target at step ``clock`` of the schedule ``levels``: it leaves the
-    last level on the step that enters a block, and moves at ``target_ramp``
-    until it reaches the block's own.
-
-    The clamp holds the last level past block six. ``clock`` is traced under
-    ``jit``, so the clamp uses ``xp.minimum``.
-    """
-    block = xp.minimum(clock // params.block_steps, N_BLOCKS - 1)
-    steps = clock - block * params.block_steps + 1
-    moved = params.target_ramp * params.delta_t * steps
-    last = levels[xp.maximum(block - 1, 0)]
-    return last + xp.clip(levels[block] - last, -moved, moved)
+def polymerisation_rate(I, M, T, params: UnstableCSTRParams, f=None):
+    """``k_p M lambda_0``, kmol/(m3 s), with the radicals at quasi-steady state."""
+    p = params
+    f = p.f_eff if f is None else f
+    kd = rate_constant(p.kd0, p.Ed, T, p)
+    kp = rate_constant(p.kp0, p.Ep, T, p, p.Vp)
+    kt = rate_constant(p.kt0, p.Et, T, p)
+    lam = jnp.sqrt(2.0 * f * kd * jnp.maximum(I, 0.0) / kt)
+    return kp * M * lam
 
 
-def live_target(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """The target the state is scored against and observes."""
-    return scheduled_level(state.target_levels, state.block_clock, params, xp)
+def residence(params: UnstableCSTRParams, flow_scale=1.0):
+    """tau = rho V / feed mass flow, s."""
+    return params.rho * params.V / (params.feed_mass * flow_scale)
 
 
-def draw_schedule(key, params: UnstableCSTRParams) -> jnp.ndarray:
-    """The six levels of one episode, shape ``(N_BLOCKS,)``.
-
-    The first is uniform in the band. Each switch takes the next size from a
-    permutation of ``switch_sizes`` and a fair-coin sign, flipped when the
-    move would leave the band. With sizes at most half the band one sign is
-    always legal, so the sizes are exactly the multiset, in a random order.
-    """
-    start_key, order_key, sign_key = jax.random.split(key, 3)
-    lo, hi = params.target_CA_range
-    first = jax.random.uniform(start_key, minval=lo, maxval=hi)
-    sizes = jax.random.permutation(order_key, jnp.asarray(params.switch_sizes))
-    signs = jnp.where(jax.random.bernoulli(sign_key, 0.5, sizes.shape), 1.0, -1.0)
-
-    def switch(level, size_and_sign):
-        move = size_and_sign[0] * size_and_sign[1]
-        leaves = (level + move < lo) | (level + move > hi)
-        new = jnp.clip(level + jnp.where(leaves, -move, move), lo, hi)
-        return new, new
-
-    _, later = jax.lax.scan(switch, first, jnp.stack([sizes, signs], axis=1))
-    return jnp.concatenate([first[None], later])
+def compute_velocity(position, action, params: UnstableCSTRParams, extra=None):
+    """d/dt of ``[I, M, T]``; ``action`` is the initiator in the feed (kmol/m3),
+    ``extra`` the feed's ``(T_f, f, flow scale)`` now."""
+    p = params
+    T_f, f, scale = (p.T_feed, p.f_eff, 1.0) if extra is None else extra
+    I, M, T = position[0], position[1], position[2]
+    tau = residence(p, scale)
+    M_f = p.rho / p.mw
+    kd = rate_constant(p.kd0, p.Ed, T, p)
+    rp = polymerisation_rate(I, M, T, p, f)
+    dI = (action - I) / tau - kd * I
+    dM = (M_f - M) / tau - rp
+    dT = (T_f - T) / tau + (-p.dH) * rp / (p.rho * p.cp)
+    return jnp.array([dI, dM, dT]), None
 
 
-def compute_velocity(position, action, Ti_dev, params: UnstableCSTRParams):
-    """dC_a/dt, dT/dt and dT_j/dt.
-
-    The two balances are cstr's own, with the jacket temperature ``T_j`` in the
-    coolant slot and the drifted feed ``Ti + Ti_dev``. The jacket follows the
-    command ``action`` through a first-order lag.
-    """
-    T_j = position[2]
-    balances = cstr_env.compute_velocity(
-        position[:2], T_j, params.replace(Ti=params.Ti + Ti_dev)
-    )[0]
+def events(state: UnstableCSTRState, params: UnstableCSTRParams, second):
+    """The scenario's event at ``second``: ``(setpoint, T_f, f, flow scale)``."""
+    p = params
+    on = second >= state.event_at
     return (
-        jnp.array([balances[0], balances[1], (action - T_j) / params.tau_j]),
-        None,
+        p.T_setpoint + jnp.where(on, p.setpoint_step, 0.0),
+        feed_temperature(state.feed_phase, p, second)
+        + jnp.where(on, p.feed_T_step, 0.0),
+        p.f_eff * (1.0 - jnp.where(on, p.efficiency_drop, 0.0)),
+        1.0 + jnp.where(on, p.feed_flow_step, 0.0),
     )
+
+
+def advance(x, I_f, params: UnstableCSTRParams, extra, integration_method: str):
+    """``(I, M, T)`` one step on from ``x`` at the initiator feed ``I_f``
+    (kmol/m3) and the feed's ``extra = (T_f, f, flow scale)``, held over the
+    step. The plant's step, and the oracle's model of it.
+
+    Each substep moves the initiator exactly, ``dI/dt = I_f / tau - (1 / tau +
+    k_d) I`` being linear at the substep's temperature, then the monomer and
+    temperature by RK4 at that initiator: initiator decomposition grows stiff
+    near the trip (k_d about 40 /s at 573 K), where plain RK4 at a 0.25 s
+    substep diverges.
+    """
+    p = params
+    n = int(integration_method.split("_")[1]) if "_" in integration_method else 1
+    h = p.delta_t / n
+    tau = residence(p, extra[2])
+
+    def substep(carry, _):
+        I, M, T = carry
+        a = 1.0 / tau + rate_constant(p.kd0, p.Ed, T, p)
+        I_eq = I_f / (tau * a)
+        I = I_eq + (I - I_eq) * jnp.exp(-a * h)
+
+        def mt(y):
+            v, _ = compute_velocity(jnp.array([I, y[0], y[1]]), I_f, p, extra=extra)
+            return v[1:]
+
+        y = jnp.array([M, T])
+        k1 = mt(y)
+        k2 = mt(y + 0.5 * h * k1)
+        k3 = mt(y + 0.5 * h * k2)
+        k4 = mt(y + h * k3)
+        y = y + h / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
+        return (I, y[0], y[1]), None
+
+    (I, M, T), _ = jax.lax.scan(substep, (x[0], x[1], x[2]), None, length=n)
+    return jnp.stack([I, M, T])
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
-    T_c_raw: float,
+    raw: float,
     state: UnstableCSTRState,
     params: UnstableCSTRParams,
-    key: jax.Array,
-    integration_method: str = "rk4_1",
+    integration_method: str = "rk4_4",
 ):
-    """One step: the command, the three ODEs, the drift, then the clocks.
-
-    T_c_raw : coolant command, raw in [-1, 1] (clipped); 0 gives 300 K.
-    """
-    T_c = convert_raw_action_to_range(
-        T_c_raw, min_action=params.T_c_min, max_action=params.T_c_max
-    )
-    # The jacket lag is the third state inside the same RK4 step. The drift is
-    # held at its start-of-step value, the value the MPC reads.
-    _compute_velocity = partial(
-        compute_velocity, action=T_c, Ti_dev=state.Ti_dev, params=params
-    )
-    new_positions, _ = integrate_dynamics(
-        positions=jnp.array([state.C_a, state.T, state.T_j]),
-        delta_t=params.delta_t,
-        compute_velocity=_compute_velocity,
-        method=integration_method,
-    )
-
-    # Exact Ornstein-Uhlenbeck update. The innovation is drawn from a key
-    # folded with the pre-increment ``time``, as glass_furnace and battery do,
-    # so a caller passing a constant key still gets a zero-mean process.
-    a = jnp.exp(-params.delta_t / params.Ti_tau)
-    xi = jax.random.normal(jax.random.fold_in(key, state.time))
-    new_Ti_dev = a * state.Ti_dev + params.Ti_sigma * jnp.sqrt(1.0 - a**2) * xi
-
-    # The live target is derived from ``block_clock``, so advancing it is the
-    # whole schedule update.
+    """``raw`` in [-1, 1] maps to the initiator feed in [I_f_min, I_f_max],
+    held over the step (``advance``)."""
+    p = params
+    second = state.time * p.delta_t
+    I_f = convert_raw_action_to_range(raw, min_action=p.I_f_min, max_action=p.I_f_max)
+    _, T_f, f, scale = events(state, p, second)
+    x = jnp.stack([state.I, state.M, state.T])
+    I, M, T = advance(x, I_f, p, (T_f, f, scale), integration_method)
+    target, *_ = events(state, p, second + p.delta_t)
     return (
-        state.replace(
-            C_a=new_positions[0],
-            T=new_positions[1],
-            T_j=new_positions[2],
-            Ti_dev=new_Ti_dev,
-            block_clock=state.block_clock + 1,
-            time=state.time + 1,
-        ),
+        state.replace(I=I, M=M, T=T, I_f=I_f, target_T=target, time=state.time + 1),
         None,
     )
 
 
-# Deliberately not jitted (the shipped envs' reason). Decorated with
-# ``@partial(jax.jit, static_argnames=["params"])``, it would key the
-# compilation cache on the params object, so a fresh ``Params(...)``, which
-# every sweep, tuner and MPC builds, would be a cache miss and a full recompile,
-# measured at ~1600x the cost of a cached call. Callers that want it fused
-# already jit ``step_env``, which traces this inline.
+def steady_state(T, params: UnstableCSTRParams):
+    """The steady state at ``T`` with the feed as nominal: ``(I, M, I_f)``,
+    closed form. The energy balance fixes the conversion, the monomer balance
+    the rate, the radical balance the initiator, its balance the feed."""
+    p = params
+    tau = residence(p)
+    M_f = p.rho / p.mw
+    rp = p.rho * p.cp * (T - p.T_feed) / (tau * (-p.dH))
+    M = M_f - rp * tau
+    kd = rate_constant(p.kd0, p.Ed, T, p)
+    kp = rate_constant(p.kp0, p.Ep, T, p, p.Vp)
+    kt = rate_constant(p.kt0, p.Et, T, p)
+    lam = rp / (kp * M)
+    I = kt * lam**2 / (2.0 * p.f_eff * kd)
+    return I, M, I * (1.0 + kd * tau)
+
+
+# Deliberately not jitted (see the other process tasks).
 def get_obs(state: UnstableCSTRState, params: UnstableCSTRParams):
-    """``[C_a, T, T_j, live target]``. The drift, the later levels and the
-    block clock are hidden."""
-    return jnp.array([state.C_a, state.T, state.T_j, live_target(state, params)])
+    """``[T, I_f_pct, T_setpoint]``: the zone's temperature [L1, p. 3: the
+    controllers read measured segment temperatures], the initiator pump's own
+    rate, and the setpoint. Conversion and the initiator in the reactor are
+    hidden: no on-line measurement of them is in the sources."""
+    pct = 100.0 * (state.I_f - params.I_f_min) / (params.I_f_max - params.I_f_min)
+    return jnp.array([state.T, pct, state.target_T])
 
 
 def check_is_terminal(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    # One-sided: the extinguished branch (T about 310 to 330 K) is charged as
-    # tracking error and is always recoverable. The lower bound and the sign of
-    # C_a are a validity guard no reachable state meets. A NaN fails every
-    # comparison, so a non-finite proposal trips.
-    inside = (
-        (state.T < params.T_trip) & (state.T > params.T_valid_min) & (state.C_a >= 0.0)
-    )
-    terminated = xp.logical_not(inside)
+    """The high-temperature trip: decomposition's protection [L2; L3]."""
+    terminated = jnp.logical_or(state.T >= params.T_trip, ~jnp.isfinite(state.T))
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -363,7 +334,8 @@ def check_is_terminal(state: UnstableCSTRState, params: UnstableCSTRParams, xp=j
 def compute_reward_terms(
     state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp, tripped=None
 ):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``).
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``): the
+    temperature held at its setpoint [L1], and the trip.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
@@ -372,7 +344,7 @@ def compute_reward_terms(
         tripped, _ = check_is_terminal(state, params, xp)
     terms = {
         "tracking": R.tracking_cost(
-            live_target(state, params, xp) - state.C_a,
+            state.target_T - state.T,
             params.e_floor,
             params.e_tol,
             params.tracking_exponent,
@@ -383,22 +355,10 @@ def compute_reward_terms(
 
 
 def compute_reward_v1(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):
-    """Version 1 (ours): log-scaled tracking, 1 at zero error and 0 at
-    ``CA_error_max``, and ``-restart_steps`` on a tripped step.
-
-    With 0 on the tripped step, a policy that trips and restarts warm scored
-    above every safe one (PHYSICS.md, version-1 reward). Charging the downtime
-    at version 1's best per-step score, as version 2 prices it, restores the
-    order. Version 1 is therefore not bounded in [0, 1] on this task.
-    """
-    terminated, _ = check_is_terminal(state, params, xp)
-    tracking = log_scaled_reward(
-        xp.abs(live_target(state, params, xp) - state.C_a),
-        params.precision_floor,
-        params.CA_error_max,
-        xp,
+    """Version 1's log-scaled tracking, kept for reproduction."""
+    return log_scaled_reward(
+        xp.abs(state.target_T - state.T), params.precision_floor, 220.0, xp
     )
-    return xp.where(terminated, -1.0 * params.restart_steps, tracking)
 
 
 def compute_reward(state: UnstableCSTRState, params: UnstableCSTRParams, xp=jnp):

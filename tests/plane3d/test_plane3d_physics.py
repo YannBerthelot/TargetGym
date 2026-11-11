@@ -219,7 +219,11 @@ def test_scored_turbulence_reaches_the_bank():
     0.2 to 2 deg, and the aileron answers it, Kp_roll times that of its travel."""
     spec = REGISTRY["plane3d_heading"]
     env = spec.make_env()
-    params = spec.make_test_params().replace(max_steps_in_episode=200)
+    # The zone over the whole run, at the 2 m/s stationary gust the derivation
+    # above was made for (the scored zone's 0.55 m/s is smaller, Amendment 2).
+    params = spec.make_test_params().replace(
+        max_steps_in_episode=200, zone_onset_range=(0.0, 0.0), turbulence_sigma=2.0
+    )
 
     def attitude(seed):
         key = jax.random.PRNGKey(seed)

@@ -97,16 +97,24 @@ def test_the_i_gain_is_simcs_with_the_lag_counted_as_delay():
 
 
 def test_an_invalid_bump_test_tunes_no_loop():
-    """All 10 of ``glass_furnace``'s crown fits are invalid, ``cstr``'s are all
+    """All 10 of ``glass_furnace``'s crown fits are invalid, ``reactor``'s are
     valid."""
     assert i_gains("glass_furnace", 1, 1, 30.0) is None
-    assert i_gains("cstr", 1, 1, 0.25)[0, 0] != 0.0
+    assert i_gains("reactor", 1, 1, 30.0)[0, 0] != 0.0
 
 
 def test_the_reactors_i_only_null_reads_tavg_on_its_control_step():
     """k 22.7 K per raw, lag 35 s and delay 1 s at 30 s a step: 1 / (2 x 22.7 x
     (35 + 1) / 30) = 0.018 raw per K per step."""
     assert i_gains("reactor", 1, 1, 30.0)[0, 0] == pytest.approx(0.018, rel=0.1)
+
+
+def test_cstr_has_no_i_only_null_without_a_valid_bump_test():
+    """cstr-v6 tracks T on the cooling water, and the horizon protocol's bump
+    tests of that pair are all invalid (evidence/oracle_horizons/cstr.json), so
+    no loop is tuned and the null set has no I-only policy."""
+    assert i_gains("cstr", 1, 1, 0.25) is None
+    assert "I-only" not in [n.name for n in null_policies("cstr")]
 
 
 def test_a_task_with_no_bump_test_has_no_i_only_null():

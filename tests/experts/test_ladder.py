@@ -15,6 +15,8 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   from, and an infinite zone has no centre.
 - ``cv_sigma``: the sample standard deviation of the controlled variable, pooled over
   seeds after the burn-in.
+- ``null_verdict`` (J2): a null policy wins a seed by costing strictly less than the
+  reference; a task fails when any null wins more than half the seeds.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
   trip. A tie goes to the lower rung, the simpler controller.
 - ``ladder_controller``: position-form PI around a bias. The integral holds while
@@ -37,6 +39,7 @@ from target_gym.experts.ladder import (
     decoupler,
     ladder_controller,
     most_sensitive,
+    null_verdict,
     pi_gains,
     zone_setpoint,
 )
@@ -151,6 +154,18 @@ def test_cv_sigma_pools_seeds_after_the_burn_in():
     # sum to 4, over n - 1 = 3, so sigma = sqrt(4 / 3).
     traces = [[100.0, 1.0, 3.0], [100.0, 1.0, 3.0]]
     assert cv_sigma(traces, burn_in=1) == pytest.approx((4 / 3) ** 0.5)
+
+
+def test_a_null_wins_a_seed_only_by_costing_strictly_less():
+    # Reference 1 on four seeds: a tie wins nothing, and 0.5, 0.5, 2, 2 wins two.
+    verdict = null_verdict([1.0] * 4, {"tie": [1.0] * 4, "half": [0.5, 0.5, 2.0, 2.0]})
+    assert verdict["wins"] == {"tie": 0, "half": 2}
+
+
+def test_a_task_fails_j2_when_a_null_wins_more_than_half_the_seeds():
+    # Two wins of four is half, not more: it passes. Three of four fails.
+    assert not null_verdict([1.0] * 4, {"a": [0.5, 0.5, 2.0, 2.0]})["fails"]
+    assert null_verdict([1.0] * 4, {"b": [0.5, 0.5, 0.5, 2.0]})["fails"]
 
 
 def test_best_rung_is_the_cheapest_that_trips_no_seed():

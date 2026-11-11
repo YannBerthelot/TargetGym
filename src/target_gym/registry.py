@@ -167,6 +167,10 @@ class EnvSpec:
         Zero-argument callable returning the task's scenario suite
         (``target_gym.scenarios``), kept in the task's own package so the
         fingerprints cover it. ``None`` is one ``normal`` scenario.
+    extra:
+        The reason a task is in Extra (charter rule 5): kept in the
+        repository and listed with this reason, never scored. ``None`` is a
+        benchmark candidate (``benchmark_specs``).
     fingerprint_sources:
         Source files outside the task's own package that its physics imports,
         relative to ``src/target_gym`` (e.g. ``"pc_gym/cstr/env.py"``). Both
@@ -208,6 +212,7 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
+    extra: str | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
 
@@ -370,10 +375,25 @@ def _glass_furnace():
     return GlassFurnace()
 
 
+def _glass_furnace_scenarios():
+    from target_gym.glass_furnace.physical_scenarios import suite
+
+    return suite()
+
+
 def _reactor():
     from target_gym.reactor.env_jax import Reactor
 
     return Reactor()
+
+
+def _battery_scenarios():
+    # The package lists its suite as plain rows, so it imports nothing outside
+    # its fingerprint; the rows become Scenarios here.
+    from target_gym.energy.battery.scenarios import battery_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in battery_scenarios())
 
 
 def _battery():
@@ -394,10 +414,24 @@ def _cement_kiln():
     return CementKiln()
 
 
+def _boiler_drum_scenarios():
+    from target_gym.boiler_drum.scenarios import boiler_drum_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in boiler_drum_scenarios())
+
+
 def _boiler_drum():
     from target_gym.boiler_drum.env_jax import BoilerDrum
 
     return BoilerDrum()
+
+
+def _hvac_scenarios():
+    from target_gym.hvac.scenarios import hvac_scenarios
+    from target_gym.scenarios import Scenario
+
+    return tuple(Scenario(**row) for row in hvac_scenarios())
 
 
 def _hvac():
@@ -464,20 +498,6 @@ class _LazyParams:
 # -- PID factories ----------------------------------------------------------
 
 
-def _scenarios(module: str) -> Callable[[], tuple]:
-    """A task's scenario suite, ``suite()`` in its own package (imported lazily),
-    as ``Scenario`` keyword arguments, so the package imports nothing outside it."""
-
-    def suite():
-        from importlib import import_module
-
-        from target_gym.scenarios import Scenario
-
-        return tuple(Scenario(**kw) for kw in import_module(module).suite())
-
-    return suite
-
-
 def _pid(factory_name: str, module: str) -> Callable[[], Any]:
     # Every task's PID lives in its own package's ``experts`` module, as a
     # factory returning a pure ``Controller``: experts/pid.py holds only the
@@ -511,6 +531,24 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     return make
 
 
+def _scenarios(factory_name: str, module: str) -> Callable[[], tuple]:
+    """A task's scenario suite, imported when asked for: ``module.factory_name()``
+    returns ``Scenario`` records or plain dicts of their fields. The suite lives in
+    the task's own package, so its fingerprint covers it."""
+
+    def suite():
+        from importlib import import_module
+
+        from target_gym.scenarios import Scenario
+
+        return tuple(
+            s if isinstance(s, Scenario) else Scenario(**s)
+            for s in getattr(import_module(module), factory_name)()
+        )
+
+    return suite
+
+
 def _shared_oracle(name: str) -> tuple[str, ...]:
     """The data an oracle on the shared solver reads: its horizon summary
     and its smoothing widths (``EnvSpec.oracle_data``)."""
@@ -529,32 +567,64 @@ _SPECS: tuple[EnvSpec, ...] = (
         env_factory=_plane,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped "
+            "model plans the earlier quadratic cost, so plane's room is not "
+            "measured (charter rule 9)."
+        ),
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: Amendment 2, the job (plane/PHYSICS.md): protected limits, air
+        # data read, established start, a turbulence zone, band costs.
+        fingerprint_sources=("scenarios.py",),
+        scenarios=_scenarios("suite", module="target_gym.plane.scenarios"),
+        # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
+        # zone's sigma re-derived there, and a scenario suite.
+        version=5,
     ),
-    # Two moving-setpoint variants of the same aircraft: same plant, same
-    # controllers, a different commanded altitude. Steps expose the transient
-    # response repeatedly, and the sinusoid the closed loop's bandwidth.
+    # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
+    # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid
+    # (plane_sine, Extra: no real duty, plane/EXTRA.md).
     EnvSpec(
         name="plane_energy",
         group="aircraft",
         env_factory=_plane_energy,
         params_cls=_LazyParams("target_gym.plane.env", "PlaneParams"),
         make_pid=_pid("make_plane_pid_controller", module="target_gym.plane.experts"),
-        make_mpc=_mpc("make_plane_mpc", module="target_gym.plane.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 "
+            "score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): "
+            "the shipped model plans the earlier cost, so plane_energy's room "
+            "is not measured (charter rule 9)."
+        ),
         # Gains are the altitude-hold task's, deliberately not re-tuned here,
         # so the PID stays an honest reference for whether the trade pays.
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_energy"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=5,
+        # v6: the 2D plant's Amendment 2 changes (plane/PHYSICS.md).
+        # v7: Amendment 2's job: ATC clearances, scored on the AIM and RVSM
+        # bands (plane/PHYSICS.md). v8: the altitude band travels with the
+        # 500 fpm profile instead of starting where it ends.
+        version=8,
     ),
     EnvSpec(
         name="plane_sine",
@@ -566,9 +636,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         tuned_gains_key="plane",
         oracle_data=_shared_oracle("plane_sine"),
         disturbance_fields=("gust_x", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step (the scored
+        # episode puts its zone anywhere, plane/PHYSICS.md).
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
-        version=3,
+        # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
+        version=4,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -578,16 +654,34 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_heading_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         tuned_gains_key="plane3d_heading",
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
+        scenarios=_scenarios("heading_suite", module="target_gym.plane3d.scenarios"),
+        # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
+        # vectors every 150 s, and a scenario suite.
+        version=7,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -615,15 +709,35 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_plane3d_racetrack_pid_controller", module="target_gym.plane3d.experts"
         ),
-        make_mpc=_mpc("make_plane3d_mpc", module="target_gym.plane3d.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
+            "score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "earlier cost, so the room is not measured (charter rule 9)."
+        ),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
-        disturbance_overrides={"turbulence_sigma": 3.0},
+        # Stressed: heavier gusts, in a zone from the first step.
+        disturbance_overrides={
+            "turbulence_sigma": 3.0,
+            "zone_onset_range": (0.0, 0.0),
+        },
         noise_fields=("turbulence_sigma",),
         # The 2D aircraft's dynamics, which the 3D model extends, and the
         # TECS its experts fly (an experts file, so in the baseline
         # fingerprint only).
-        fingerprint_sources=("plane/dynamics.py", "plane/experts_tecs.py"),
-        version=5,
+        fingerprint_sources=(
+            "plane/dynamics.py",
+            "plane/experts_tecs.py",
+            "scenarios.py",
+        ),
+        # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
+        # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
+        scenarios=_scenarios("racetrack_suite", module="target_gym.plane3d.scenarios"),
+        # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank and
+        # a scenario suite with steady winds.
+        # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
+        # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
+        version=8,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -722,15 +836,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
         make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
-        # 150 steps, over twice the 67 steps the SIMC cascade takes to come
-        # within twice the level it holds. At 100 the scored hold was the last
-        # third.
         tuned_gains_key="cstr",
         oracle_data=_shared_oracle("cstr"),
-        # The feed loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
-        version=4,
+        # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
+        # jacket in code, cooling water as the move, a high-temperature
+        # interlock, temperature as the job, scenarios.
+        # v6: cooling water enters at 29.9 C and runs to 136 g/s, so the design
+        # point takes S1's 120 g/s [S1, p. 6, Fig. 2]; catalyst_loss is S1's
+        # 40 % as a 90 min decay, not a step [S1, p. 6]; the feed follows the
+        # room through the day across S1's 23.1 to 24.9 C [S1, Tables 3, 4].
+        version=6,
+        scenarios=_scenarios(
+            "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
+        ),
     ),
     EnvSpec(
         name="first_order",
@@ -762,17 +880,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_four_tank_mpc", module="target_gym.pc_gym.four_tank.oracle"
         ),
-        # 1200 steps, twice the 570 s the decoupled SIMC expert takes to bring
-        # both levels within the 1 mm transmitter resolution: the plant is
-        # non-minimum phase (gamma1 + gamma2 = 0.4), which caps any feedback
-        # loop near a 64 s time constant. At 500 steps it was still settling.
         tuned_gains_key="four_tank",
         oracle_data=_shared_oracle("four_tank"),
-        # The tank loads, frozen at the true one for the oracle, as any
-        # process noise is: no plan sees a later arrival.
-        noise_fields=("load_scale",),
+        extra=(
+            "a lab rig with no industrial job: Johansson's teaching process "
+            "tracks levels to 1 mm, and no plant family stands behind its "
+            "flow-split zero (charter Amendment 3)"
+        ),
         # 4: the levels are read through instruments (PHYSICS.md, Readings).
-        version=4,
+        # 5 (charter Amendment 2): the Lund rig's P+ constants, no trip, an
+        # overflowing rim, and an episode of setpoint steps from the operating
+        # point with an extra upper outlet and a cup. 6: failure_cost 0, as
+        # for every plant with no trip (charter B5).
+        version=6,
     ),
     EnvSpec(
         name="ph_neutralization",
@@ -786,14 +906,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_ph_mpc", module="target_gym.pc_gym.ph_neutralization.oracle"
         ),
-        # 300 steps = 25 min ~ 17 residence times, enough for the buffer
-        # disturbance to move the operating point.
         tuned_gains_key="ph_neutralization",
         disturbance_fields=("q2",),
         # The buffer flow's OU innovation, zeroed for the oracle, which rolls
         # the simulator and would otherwise plan on one seed's draws.
         noise_fields=("q2_noise_std",),
-        version=3,
+        # v4 (charter Amendment 2): the permit zone with its 60 min timed
+        # limit, diversion below pH 5, acid strength upsets, a 2 h episode from
+        # established operation, and a job score in reagent litres. v5
+        # (Amendment 3): two 10 min stages with a valve each, a finite
+        # diversion basin pumped back, influent flow swings, scenarios.
+        version=5,
+        scenarios=_scenarios(
+            "ph_neutralization_scenarios",
+            module="target_gym.pc_gym.ph_neutralization.scenarios",
+        ),
     ),
     EnvSpec(
         name="distillation",
@@ -814,35 +941,58 @@ _SPECS: tuple[EnvSpec, ...] = (
         # step (80 states, 16 substeps for stability).
         tuned_gains_key="distillation",
         # v3 observes the stage-15 temperature, the thermocouple the base
-        # layer's temperature loop holds.
-        version=4,
-        disturbance_fields=("zF",),
-        # The feed composition's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
-        noise_fields=("zF_noise_std",),
+        # layer's temperature loop holds. v5 (charter Amendment 2): product
+        # zones instead of trips, feed-rate and composition steps [D1, Fig.
+        # 18], the feed flow observed, and a job score in kmol of boilup.
+        # The feed steps are drawn at reset, so no step key moves them: no
+        # ``disturbance_fields``. v6 (charter Amendment 3): D2's realistic
+        # drums, specs at the family's give-away margin, scenario suite. v7:
+        # failure_cost 0, as for every plant with no trip (charter B5).
+        # v8: light key lost to the bottoms is priced at 100 kmol of boilup a
+        # kmol, Column A's distillate over bottoms price and energy [D8].
+        version=8,
+        scenarios=_scenarios(
+            "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
+        ),
     ),
     # -- Industrial / energy ------------------------------------------------
     EnvSpec(
         name="glass_furnace",
         group="industrial",
         env_factory=_glass_furnace,
-        params_cls=_LazyParams("target_gym.glass_furnace.env", "GlassFurnaceParams"),
+        params_cls=_LazyParams(
+            "target_gym.glass_furnace.env_jax", "GlassFurnaceParams"
+        ),
         make_pid=_pid(
             "make_glass_furnace_pid_controller",
             module="target_gym.glass_furnace.experts",
         ),
-        # 13.3 h at dt=30 s, 12.1 tau
+        # Attempt 3 (2026-11-08) replaced the plant. Its oracle plans the reward on
+        # the env's own step with the episode's foresight (glass_furnace/oracle.py).
         make_mpc=_mpc(
             "make_glass_furnace_mpc", module="target_gym.glass_furnace.oracle"
         ),
+        baselines_note=(
+            "The plant was rebuilt (attempt 3: a float melter in two dimensions, "
+            "scored in money on fuel and lost glass). The PID is the reference "
+            "ladder's first rung, a PI on the cold-end fining reading two sigma "
+            "above its pass mark. The oracle plans the valve on the env's own step "
+            "and reward, with the episode's walks foreseen when given its seed, by "
+            "SLSQP, which does not converge on this plant's ratchet: its plans "
+            "bound the ceiling from above (glass_furnace/oracle.py)."
+        ),
+        expert_degraded=(
+            "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance "
+            "test's two seeds, against 242,995 for the best constant valve (raw 0.0, "
+            "0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward "
+            "prices as a step, so it loses glass where a wide constant margin does "
+            "not: full back-off is what this reward pays for (PHYSICS.md, cold "
+            "review item 4). A finding for the reference ladder; not tuned."
+        ),
         tuned_gains_key="glass_furnace",
-        disturbance_fields=("m_pull_disturbance", "lhv_deviation"),
-        # The AR(1) innovations of the pull and the gas, zeroed for the oracle,
-        # which rolls the simulator and so plans their conditional means from
-        # the state.
-        oracle_data=_shared_oracle("glass_furnace"),
-        noise_fields=("m_pull_noise_std", "lhv_noise_std"),
-        version=3,
+        disturbance_fields=("walk",),
+        scenarios=_glass_furnace_scenarios,
+        version=4,
     ),
     EnvSpec(
         name="reactor",
@@ -857,7 +1007,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         oracle_data=_shared_oracle("reactor"),
         version=9,
         noise_fields=("demand_sigma",),
-        scenarios=_scenarios("target_gym.reactor.scenarios"),
+        scenarios=_scenarios("suite", module="target_gym.reactor.scenarios"),
     ),
     EnvSpec(
         name="hvac",
@@ -866,14 +1016,21 @@ _SPECS: tuple[EnvSpec, ...] = (
         params_cls=_LazyParams("target_gym.hvac.env", "HVACParams"),
         make_pid=_pid("make_hvac_pid_controller", module="target_gym.hvac.experts"),
         make_mpc=_mpc("make_hvac_mpc", module="target_gym.hvac.oracle"),
-        # 720 steps at dt = 900 s is 7.5 days, so fifteen setback recoveries
-        # and as many solar cycles, which is what distinguishes controllers
-        # here.
+        # v4 (charter Amendments 1 and 2): a TABS concrete slab between the
+        # supply water and the room ([9]'s first-order model), supply water
+        # as the action, the 21 to 26 C band at all hours with no setback,
+        # two-week episodes from established operation, a score in euros of
+        # heat and kelvin-hours of discomfort (hvac/PHYSICS.md).
         tuned_gains_key="hvac",
         oracle_data=_shared_oracle("hvac"),
         disturbance_fields=("weather_dev",),
         noise_fields=("T_out_noise_std",),
-        version=3,
+        # v5 (Amendment 3): supply capped at 49 C [14], a brine heat pump whose
+        # COP falls with supply temperature, a three-period tariff, comfort
+        # priced as lost office work, a day-ahead forecast in the observation,
+        # and a scenario suite.
+        scenarios=_hvac_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="cement_kiln",
@@ -904,15 +1061,19 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_boiler_drum_pid_controller", module="target_gym.boiler_drum.experts"
         ),
         make_mpc=_mpc("make_boiler_drum_mpc", module="target_gym.boiler_drum.oracle"),
-        # 400 steps = 800 s at dt = 2 s, about 20 times the ~35 s swell peak,
-        # so a controller has to survive many inverse-response transients.
+        # v4 (charter Amendments 1 and 2): Astrom and Bell's published model,
+        # the sourced timed level trips, a load plan ramping at 1 to 2 %/min
+        # over an hour, and a score in tonnes of steam off the plan
+        # (boiler_drum/PHYSICS.md).
         tuned_gains_key="boiler_drum",
-        disturbance_fields=("q_steam",),
-        # The steam demand's OU innovation. Declared so the planner plans on the
-        # mean (``plan_params``) rather than on one fixed noise path.
+        # The load plan is drawn at reset and read by the agent: no hidden
+        # disturbance moves with the step's key.
         oracle_data=_shared_oracle("boiler_drum"),
-        noise_fields=("q_steam_noise_std",),
-        version=3,
+        # v5 (Amendment 3): scenarios with an ID fan runback and a feed pump
+        # trip, ramps over the family's 1 to 6 %/min, a score in GBP at the
+        # imbalance price past the steam meter's resolution.
+        scenarios=_boiler_drum_scenarios,
+        version=5,
     ),
     EnvSpec(
         name="wind_turbine",
@@ -928,12 +1089,19 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_wind_turbine_mpc", module="target_gym.energy.wind_turbine.oracle"
         ),
-        # 400 steps = 100 s ~ 7 rotor time constants.
+        # v5 (charter Amendment 3): the tower's fore-aft mode on the rotor's
+        # thrust, the overspeed feather as the one trip, 10 min windows of
+        # above-rated operation in six scenarios, and a score in dollars: lost
+        # production against the available power, tower fatigue and pitch wear
+        # at their shares of the turbine's cost (energy/wind_turbine/PHYSICS.md).
         tuned_gains_key="wind_turbine",
         oracle_data=_shared_oracle("wind_turbine"),
-        noise_fields=("turbulence_std",),
+        noise_fields=("turbulence_iref",),
         disturbance_fields=("v_wind",),
-        version=3,
+        scenarios=_scenarios(
+            "wind_turbine_scenarios", module="target_gym.energy.wind_turbine.scenarios"
+        ),
+        version=5,
     ),
     EnvSpec(
         name="battery",
@@ -944,12 +1112,18 @@ _SPECS: tuple[EnvSpec, ...] = (
             "make_battery_pid_controller", module="target_gym.energy.battery.experts"
         ),
         make_mpc=_mpc("make_battery_mpc", module="target_gym.energy.battery.oracle"),
-        # 2880 steps = 4 h, about three times the 75 min it takes to traverse
-        # the usable state-of-charge range at full power.
+        # v4 (charter Amendments 1 and 2): an LFP Megapack whose BMS reports a
+        # drifting state of charge, selling Dynamic Regulation for one 4 h EFA
+        # block, steered by its baseline past gate closure, and scored in MW h
+        # of availability lost (energy/battery/PHYSICS.md).
         tuned_gains_key="battery",
-        noise_fields=("dispatch_noise_std",),
-        disturbance_fields=("target_power",),
-        version=3,
+        # The regulation signal's innovation, and the BMS error drawn at reset.
+        noise_fields=("signal_std", "soc_error_std"),
+        disturbance_fields=("regulation",),
+        # v5 (Amendment 3): the named property is the 60 to 90 min gate-closure
+        # delay; energy priced at the GB wholesale price; six scenarios.
+        scenarios=_battery_scenarios,
+        version=5,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
@@ -969,18 +1143,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_unstable_cstr_mpc", module="target_gym.pc_gym.unstable_cstr.oracle"
         ),
-        # v3: the oracle's best hold, rho_floor_tracking and rho_floor, re-measured
-        # for the JAX oracle (2.23e-6 mol/L against the CasADi one's 6.29e-6).
-        version=4,
-        # 1200 steps = 60 min at 3 s: six 10-minute blocks, with no
-        # effectiveness_overrides.
+        # v5 (charter Amendment 3): an LDPE-like adiabatic autoclave at its
+        # documented unstable steady state, initiator flow as the move, a
+        # high-temperature trip, temperature as the job, scenarios.
+        # v6: the cold monomer feed wanders 1 K around its 353 K over 10 min
+        # (size and period ours), so the normal day moves the unstable point.
+        version=6,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
-        disturbance_fields=("Ti_dev",),
-        noise_fields=("Ti_sigma",),
-        # The balances and the ten parameter values are imported from cstr, so an
-        # edit there moves this task's stamp and baseline too.
-        fingerprint_sources=("pc_gym/cstr/env.py",),
+        scenarios=_scenarios(
+            "unstable_cstr_scenarios",
+            module="target_gym.pc_gym.unstable_cstr.scenarios",
+        ),
     ),
     EnvSpec(
         name="compressor_surge",
@@ -1005,8 +1179,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("demand_dev",),
         noise_fields=("demand_sigma",),
         # No fingerprint_sources: the package imports only itself and the
-        # shared plumbing.
-        version=3,
+        # shared plumbing. v4 (charter Amendment 3): the counted-surge trip,
+        # the valve's positioner lag, a constant header setpoint, a recycle
+        # energy score inside a header zone, scenarios.
+        version=4,
+        scenarios=_scenarios(
+            "compressor_surge_scenarios", module="target_gym.compressor_surge.scenarios"
+        ),
     ),
     EnvSpec(
         name="formation",
@@ -1057,6 +1236,11 @@ REGISTRY: dict[str, EnvSpec] = {spec.name: spec for spec in _SPECS}
 def all_specs() -> Iterator[EnvSpec]:
     """Iterate over every registered environment spec."""
     return iter(_SPECS)
+
+
+def benchmark_specs() -> Iterator[EnvSpec]:
+    """The benchmark candidates: every spec not in Extra (charter rule 5)."""
+    return (spec for spec in _SPECS if spec.extra is None)
 
 
 def specs_in_group(group: str) -> Iterator[EnvSpec]:

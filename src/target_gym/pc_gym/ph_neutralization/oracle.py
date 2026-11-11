@@ -40,15 +40,19 @@ def _planner_pH_jvp(primals, tangents):
 
 
 def ph_stage(env, state, action, params):
-    """``NewtonMPC``'s stage: the env's step, and its reward in floor units
-    with the pH recomputed by ``planner_pH``, so the cost has its slope."""
+    """``NewtonMPC``'s stage: the env's step and its job cost (reagent,
+    excursion, diversion), on the pH ``planner_pH`` gives.
+
+    Only the reagent term has a slope: the excursion and diversion terms are
+    steps in pH, so a gradient planner cannot see the permit edge. This oracle
+    has not been rebuilt for the job score (charter rule 15) and is not to be
+    run until it is; rule 9 reports its room as "not measured" meanwhile.
+    """
+    from target_gym.pc_gym.ph_neutralization.env import compute_reward_terms
+
     _, new, _, _, _ = env.step_env(jax.random.PRNGKey(0), state, action, params)
-    p = params
-    pH = planner_pH(new.Wa, new.Wb, p)
-    cost = R.tracking_cost(
-        new.target_pH - pH, p.e_floor, p.e_tol, p.tracking_exponent
-    ) + R.running_cost(new.q3, p.c_hold, p.running_weight)
-    return new, cost / p.rho_floor_tracking
+    planned = new.replace(pH=planner_pH(new.Wa, new.Wb, params))
+    return new, -R.total(compute_reward_terms(planned, params))
 
 
 def make_ph_mpc(env, params, horizon: int = 20, n_iter: int = 10):
@@ -63,4 +67,27 @@ def make_ph_mpc(env, params, horizon: int = 20, n_iter: int = 10):
     hold error (0.0146 pH against 0.0022 on the protocol seeds); what remains
     is the OU innovation itself, which no causal controller can predict.
     """
-    return NewtonMPC(env, params, horizon=horizon, n_iter=n_iter, stage_fn=ph_stage)
+    return NewtonMPC(
+        env, params, action_dim=2, horizon=horizon, n_iter=n_iter, stage_fn=ph_stage
+    )
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the reagent; ``excursion``, ``diversion`` and the trip are the margins.
+CEILING_TERMS = ("reagent",)
+
+#: The permit margins' unit, pH (a probe's 0.01).
+PH_UNIT = 0.01
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): the discharge inside the
+    permit, where neither ``excursion`` nor ``diversion`` charges (the sewer
+    floor is below the permit), on the pH ``planner_pH`` gives with its slope,
+    in hundredths of a pH, backed off a tenth of one; the price is a step
+    outside the permit."""
+    import jax.numpy as jnp
+
+    pH = planner_pH(state.Wa, state.Wb, p)
+    m = jnp.stack([pH - p.permit_low, p.permit_high - pH]) / PH_UNIT - 0.1
+    return m, p.excursion_price * p.delta_t

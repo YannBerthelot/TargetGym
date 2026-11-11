@@ -215,39 +215,47 @@ step response (time to 63.2% of the total change, the quantity relay tuning
 assumes). Where it does not, that is a property of the environment worth knowing
 before reading any result from it.
 
+The four tasks rebuilt under the charter's Amendment 2 on 2026-11-08 (hvac,
+battery, boiler_drum, wind_turbine) have new plants and episodes; their tau has
+not been remeasured.
+
 | environment | N | tau (steps) | 5·tau | gamma |
 | --- | --- | --- | --- | --- |
-| cstr | 150 | 5 | 25 | 0.99333 |
+| cstr | 960 | 5 | 25 | 0.99896 |
 | first_order | 150 | 10 | 50 | 0.99333 |
-| hvac | 720 | 62 | 310 | 0.99861 |
-| plane | 280 | 23 | 115 | 0.99643 |
-| plane_energy | 1600 | 23 | 115 | 0.99938 |
+| hvac | 1344 | not remeasured | not remeasured | 0.99926 |
+| plane | 1800 | 23 | 115 | 0.99944 |
+| plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
-| plane3d_heading | 300 | 14 | 70 | 0.99667 |
+| plane3d_heading | 600 | 14 | 70 | 0.99833 |
 | plane3d_circle | 300 | 14 | 70 | 0.99667 |
 | plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
-| plane3d_racetrack | 650 | 14 | 70 | 0.99846 |
+| plane3d_racetrack | 1200 | 14 | 70 | 0.99917 |
 | patrol | 200 | 13 | 65 | 0.99500 |
 | patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
 | distillation | 400 | 8 | 40 | 0.99750 |
-| glass_furnace | 1600 | 132 | 660 | 0.99938 |
+| glass_furnace | 5040 | 1368 | 6838 | 0.99980 |
 | cement_kiln | 700 | 58 | 290 | 0.99857 |
-| battery | 2880 | 1 | 5 | 0.99965 |
-| boiler_drum | 400 | 3 | 15 | 0.99750 |
-| wind_turbine | 400 | 1 | 5 | 0.99750 |
-| four_tank | 1200 | 38 | 190 | 0.99917 |
-| ph_neutralization | 300 | 14 | 70 | 0.99667 |
+| battery | 14400 | not remeasured | not remeasured | 0.99993 |
+| boiler_drum | 1800 | not remeasured | not remeasured | 0.99944 |
+| wind_turbine | 2400 | not remeasured | not remeasured | 0.99958 |
+| four_tank | 3300 | 38 | 190 | 0.99970 |
+| ph_neutralization | 1440 | 14 | 70 | 0.99931 |
 | reactor | 2880 | 1 | 5 | 0.99965 |
-| unstable_cstr | 1200 | 6.3 to 14.4 | 32 to 72 | 0.99917 |
+| unstable_cstr | 1800 | 6.3 to 14.4 | 32 to 72 | 0.99944 |
 | compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
 | formation | 200 | 36 | 180 | 0.99500 |
 
-Two rows are filled by hand. `unstable_cstr` has no step response to fit (it
+Three rows are filled by hand. `unstable_cstr` has no step response to fit (it
 runs away open loop), so its tau is the unstable time constant, the time an
 uncontrolled error takes to grow e-fold over its five targets
 (`scripts/unstable_cstr_numbers.py --section targets`). `compressor_surge`'s
 is the slowest header-pressure response to its actuator steps
-(`scripts/compressor_surge_numbers.py --section steady`).
+(`scripts/compressor_surge_numbers.py --section steady`). `glass_furnace`'s is the
+fining share's 63 % time on a 1 % valve step from the settled state, 41.8 h of lag
+plus 3.8 h of dead time (`scripts/glass_slow_props.py step`). Seven days cover 3.7
+tau, not 5: the glass leaving the tank keeps answering a move for longer than an
+episode.
 
 ### How long an episode has to be
 

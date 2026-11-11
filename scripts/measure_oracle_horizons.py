@@ -115,9 +115,30 @@ def write(name: str, row: dict) -> None:
         c.split(":")[-1]: v["class"] for c, v in row["classes"].items()
     }
     summary["evidence"] = evidence.relative_to(EVIDENCE.parent).as_posix()
+    if not row["compliant"]:
+        summary.update(kept_horizon(records.load_row("oracle_horizons", name)))
     records.write("oracle_horizons", name, summary, compact=True)
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(json.dumps(row, indent=2, sort_keys=True) + "\n")
+
+
+#: What a non-compliant task keeps of its last compliant summary.
+KEPT = ("T_c_steps", "N", "M", "ramp", "P", "T_c_set_by", "P_set_by", "ramp_set_by")
+
+
+def kept_horizon(previous: dict | None) -> dict:
+    """A task that falls non-compliant keeps its current oracle (N3). Where that
+    oracle plans on a horizon, the summary keeps the last one and names the
+    measurement it came from; a task that never had one keeps none."""
+    if not previous or "T_c_steps" not in previous:
+        return {}
+    source = previous.get("horizon_kept_from") or {
+        k: previous[k] for k in ("generated", "protocol", "cpu") if k in previous
+    }
+    return {
+        **{k: previous[k] for k in KEPT if k in previous},
+        "horizon_kept_from": source,
+    }
 
 
 def _s(field, lo=None, hi=None):
@@ -246,7 +267,7 @@ def _racetrack_distance(s, p):
 # multi-input tasks, the MV the shipped expert holds each CV with (H18).
 TASKS = {
     "first_order": ({"u": 0.1}, {"x": _s("x", "x_min", "x_max")}, {}),
-    "cstr": ({"coolant": 0.1}, {"C_a": _s("C_a")}, {}),
+    "cstr": ({"water": 0.1}, {"T": _s("T", None, "T_trip")}, {}),
     "four_tank": ({"pump1": 0.1, "pump2": 0.1}, _H, {"h1": "pump1", "h2": "pump2"}),
     # +0.1 mL/s on the 10 to 22 mL/s base flow.
     "ph_neutralization": ({"base": 2 * 0.1 / 12.0}, {"pH": _s("pH")}, {}),

@@ -73,7 +73,7 @@ def test_no_level_and_level_one_are_the_shipped_gains(task):
     [
         ("first_order", "Kp", "Kp"),  # read through gain()
         ("boiler_drum", "Kp_pressure", "Kp_pressure"),  # load_gains().get(task)
-        ("unstable_cstr", "Kp_T", "Kp_T"),  # the task's own load_gains()
+        ("unstable_cstr", "Kp", "Kp"),  # read through gain() (version 5)
     ],
 )
 def test_a_stored_level_gives_that_levels_gains(store, task, field, key):

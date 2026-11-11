@@ -351,12 +351,13 @@ def tune_cstr_pid(
     loss_fn = make_siso_pid_loss_fn(
         env,
         params,
-        state_index=0,  # Ca
-        setpoint_index=2,  # target_Ca
+        state_index=0,  # T, the reactor temperature (version 5)
+        setpoint_index=3,  # its setpoint
         reset_fn=lambda key, p, target: env.reset_env(key, p)[1].replace(
-            target_CA=target
+            target_T=target
         ),
-        target_range=tuple(params.target_CA_range),
+        # The setpoints within PARSEX's 2 C move [S1, Fig. 2].
+        target_range=(params.T_setpoint - 2.0, params.T_setpoint + 2.0),
         n_targets=16,
         n_steps=int(params.max_steps_in_episode),
     )
@@ -364,9 +365,10 @@ def tune_cstr_pid(
         print("Tuning CSTR PID...")
     Kp, Ki, Kd = tune_pid_gains(
         loss_fn,
-        init_Kp=-100.0,
-        init_Ki=-20.0,
-        init_Kd=-0.5,
+        # More water for a hotter reactor: the error sp - T is negative.
+        init_Kp=-0.1,
+        init_Ki=-0.005,
+        init_Kd=0.0,
         n_grad_steps=n_grad_steps,
         lr=lr,
         l2_reg=1e-8,
@@ -423,6 +425,7 @@ def tune_four_tank_pid(
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Tune FourTank MIMO PID gains via gradient descent."""
     from target_gym import FourTank, FourTankParams
+    from target_gym.pc_gym.four_tank.env import setpoint_ranges
 
     env = FourTank()
     params = FourTankParams()
@@ -434,10 +437,7 @@ def tune_four_tank_pid(
             target_h1=t1, target_h2=t2
         ),
         obs_indices=((0, 4), (1, 5)),  # (h1, target_h1), (h2, target_h2)
-        target_ranges=(
-            tuple(params.target_h1_range),
-            tuple(params.target_h2_range),
-        ),
+        target_ranges=setpoint_ranges(params),
         n_targets=6,  # 6×6 = 36 pairs
         n_steps=int(params.max_steps_in_episode),
     )

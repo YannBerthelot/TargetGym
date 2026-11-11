@@ -82,6 +82,8 @@ class LinearisedPIParams:
     q3_min: float
     q3_max: float
     curve: TitrationCurve
+    #: The trim valve's top (mL/s), on stage 2.
+    trim_max: float = 2.2
 
 
 @struct.dataclass
@@ -89,10 +91,18 @@ class LinearisedPIState:
     integral: float
     demand: float
     started: float
+    #: The stage-2 trim loop's integral, mL s/s.
+    trim_integral: float = 0.0
 
 
 def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
-    """One update on ``obs = [pH, q3_pct, target_pH]``.
+    """One update on ``obs = [pH, q3_pct, target_pH, excursion_min, pH_s1,
+    trim_pct, q1, basin_pct]``: the stage-1 valve from the stage-1 probe, and
+    the stage-2 trim from the discharge probe.
+
+    Stage 1 is the loop below; stage 2 trims what stage 1 leaves, with the same
+    gains on the discharge's reagent demand and no bias, so it rests shut when
+    stage 1 holds the set point.
 
     The error is in reagent demand, the target's minus the measured pH's, so
     the loop gain is about 1 across the titration curve instead of varying
@@ -101,7 +111,7 @@ def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
     it at the first.
     """
     demand_sp = reagent_demand(obs[2], params.curve, xp)
-    read = xp.clip(reagent_demand(obs[0], params.curve, xp), 0.0, 2 * params.q3_max)
+    read = xp.clip(reagent_demand(obs[4], params.curve, xp), 0.0, 2 * params.q3_max)
     demand = xp.where(
         state.started > 0, state.demand + params.alpha * (read - state.demand), read
     )
@@ -110,10 +120,19 @@ def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
     q3 = demand_sp + params.Kp * (e + integral / params.Ti)
     u = 2.0 * (q3 - params.q3_min) / (params.q3_max - params.q3_min) - 1.0
     u_clipped = xp.clip(u, -1.0, 1.0)
-    return xp.array([u_clipped]), LinearisedPIState(
+
+    # Stage 2: the discharge's shortfall in reagent demand, trimmed in.
+    read_2 = xp.clip(reagent_demand(obs[0], params.curve, xp), 0.0, 2 * params.q3_max)
+    e_2 = demand_sp - read_2
+    trim_integral = state.trim_integral + e_2 * params.dt
+    trim = params.Kp * (e_2 + trim_integral / params.Ti)
+    v = 2.0 * trim / params.trim_max - 1.0
+    v_clipped = xp.clip(v, -1.0, 1.0)
+    return xp.stack([u_clipped, v_clipped]), LinearisedPIState(
         integral=xp.where(u == u_clipped, integral, state.integral),
         demand=demand,
         started=xp.ones_like(demand),
+        trim_integral=xp.where(v == v_clipped, trim_integral, state.trim_integral),
     )
 
 
@@ -136,8 +155,9 @@ def ph_linearised_pi(Kp: float, Ti: float, params=None, Tf: float = 0.0):
             q3_min=float(p.q3_min),
             q3_max=float(p.q3_max),
             curve=TitrationCurve.of(p),
+            trim_max=float(p.q3_trim_max),
         ),
-        LinearisedPIState(integral=0.0, demand=0.0, started=0.0),
+        LinearisedPIState(integral=0.0, demand=0.0, started=0.0, trim_integral=0.0),
         linearised_pi_step,
     )
 

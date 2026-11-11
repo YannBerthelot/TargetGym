@@ -15,13 +15,13 @@ section 5.4, and decision S10), run by
   reach smoothed by softplus at the K5 widths (T5,
   ``data/oracle_widths/compressor_surge.json``); the consumers' deviation
   on its noise-free mean path, a^t times its measured value;
-- objective: the header pressure's tracking term as (e / e_floor)^2, exact
-  since e_tol = 0 and p = 2, the running cost, linear in the recycle power, and
-  max(|dx| - travel_free, 0) through epigraph rows on every visited state (T2);
-- limit: the env's trip variable, the soft minimum of Phi over the step, at
-  least the episode's surge line on every visited state, which the oracle reads
-  as it reads the rest of the true state, elastic at the trip cost per unit
-  (T3), backed off by the planner's error on it (K11, in the widths file);
+- objective (version 3, charter Amendment 3): the recycle energy in kJ, and
+  the header zone as a smooth hinge, the zone price per second past the band
+  (T2);
+- limit: the soft minimum of Phi over the step at least the surge line on
+  every visited state, elastic at the trip cost per unit (T3): the oracle
+  never surges, which bounds the counted-surge trip from the safe side. Not
+  re-run since the rebuild;
 - dropped guard: the characteristic's switch to its tangent past
   ``phi_join`` (T4, K9); every plan's substep Phi is checked against it.
 
@@ -36,13 +36,14 @@ from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
     compute_velocity,
+    live_target,
     recycle_flow,
     scheduled_setpoint,
     suction_density,
 )
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
-from target_gym.oracles.shooting import Hinge, Limit
+from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
 
@@ -112,21 +113,18 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
 
 
 def compressor_model(env, p) -> TaskModel:
-    assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
 
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _, offset, lead = d["task"]
-        target = scheduled_setpoint(setpoints, lead, (clock + t + 1) * p.delta_t, p)
+        setpoints, _, clock, _ = d["task"]
+        target = scheduled_setpoint(setpoints, 0.0, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
-        cost = ((target - dp) / KPA / p.e_floor) ** 2
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
-        cost = cost + p.running_weight * power / p.c_hold
-        y = jnp.stack([
-            (x1[4] - x[4]) / p.travel_free,
-            phi_min - 2.0 * p.W * offset,
-        ])  # fmt: skip
+        cost = p.energy_price * power * p.delta_t / 1000.0
+        past = jax.nn.softplus((jnp.abs(target - dp) - p.header_band) / KPA)
+        cost = cost + p.zone_price * p.delta_t * past
+        y = jnp.stack([phi_min - 2.0 * p.W])
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
     return TaskModel(
@@ -134,14 +132,10 @@ def compressor_model(env, p) -> TaskModel:
         state_x=lambda s: jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]),
         data=lambda s: (
             s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
-            s.surge_offset, s.setpoint_lead,
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
         resolution=(float(p.precision_floor),),
-        hinges=(
-            Hinge(weight=float(p.travel_weight), absolute=True, tol=1.0),
-        ),
         limits=(Limit(lo=2.0 * p.W, price=float(trip_cost(p))),),
         move_rows=lambda x, u, steps: reach(p, x, u, steps),
         move_scale=lambda steps: reach_scale(p, steps),
@@ -151,3 +145,24 @@ def compressor_model(env, p) -> TaskModel:
 def make_compressor_surge_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``compressor_model``."""
     return Oracle(env, params, "compressor_surge", compressor_model)
+
+
+#: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
+#: the recycle energy; ``zone``, ``surge`` and the trip are the margins.
+CEILING_TERMS = ("energy",)
+
+#: The ceiling's margins' units: 0.1 kPa of header pressure, 0.01 of Phi.
+ZONE_UNIT, PHI_UNIT = 0.1 * KPA, 0.01
+
+
+def ceiling_margins(state, p):
+    """The ceiling's margins (``pc_gym.foresight``): the header inside its zone,
+    where ``zone`` charges nothing (``|target - dp| <= header_band``), in tenths
+    of a kPa, backed off a tenth of one; and the flow forward on every substep,
+    where no surge is counted (a surge is a reversal), as the step's soft
+    minimum of Phi, which is below every substep's, in hundredths, backed off
+    one. The price is a step outside the zone."""
+    e = live_target(state, p) - state.dp
+    zone = jnp.stack([p.header_band - e, p.header_band + e]) / ZONE_UNIT - 0.1
+    surge = state.phi_min / PHI_UNIT - 1.0
+    return jnp.concatenate([zone, surge[None]]), p.zone_price * p.delta_t

@@ -1,0 +1,5 @@
+{
+  "fingerprint": "5c9b8bb384f88c50",
+  "note": "behaviour-preserving: 22251c6 moved the substep loop of compute_next_state into env.advance so the oracle can call it; 4 seeds x 300 steps of random actions on the scored params are bitwise identical before and after, and the expert's recorded returns did not move",
+  "stamped": "2026-11-09T20:53:08+00:00"
+}

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "1e1a47e50b042e02",
-  "note": "Branch stamp for PR 8: running_cost goes linear on the 6 consumption tasks, and cstr, unstable_cstr, distillation and wind_turbine move their floors. All stamps redone at the re-record.",
-  "stamped": "2026-11-06T11:50:31+00:00"
+  "fingerprint": "ca0536dabe38a6e2",
+  "note": "re-stamped in place: plane3d/env_jax.py changed only the racetrack's default params, which this task does not read; behaviour unchanged",
+  "stamped": "2026-11-08T18:08:48+00:00"
 }

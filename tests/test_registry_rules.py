@@ -238,6 +238,10 @@ _SHARED_MODULES = {
     # Unhashed on purpose too: it films an episode, which cannot change what
     # the episode scores.
     "target_gym.video",
+    # Unhashed on purpose: a package imports only its Scenario record to
+    # declare its suite, and the suite's values live in the package, which its
+    # fingerprint covers. Running a suite is evaluation, like target_gym.eval.
+    "target_gym.scenarios",
 }
 # And, in experts*.py and oracle*.py only, the shared controller code.
 _CONTROLLER_MODULES = {
@@ -357,12 +361,14 @@ def test_imports_stay_inside_the_fingerprint():
 DECLARED_BY_THE_21 = {
     **{
         name: ("plane/dynamics.py", "plane/experts_tecs.py")
-        for name in (
-            "plane3d_heading",
-            "plane3d_circle",
-            "plane3d_racetrack",
-            "plane3d_figure8",
-        )
+        for name in ("plane3d_circle", "plane3d_figure8")
+    },
+    # Amendment 3: a task's scenario suite is part of what it means, so the
+    # tasks that declare one stamp the shared scenario container with it.
+    "plane": ("scenarios.py",),
+    **{
+        name: ("plane/dynamics.py", "plane/experts_tecs.py", "scenarios.py")
+        for name in ("plane3d_heading", "plane3d_racetrack")
     },
     **{
         name: (

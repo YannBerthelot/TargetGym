@@ -3,15 +3,18 @@
 The schematic is a rotor seen head-on: blades turn at rotor speed and feather
 visibly with pitch, and the inflow arrows thicken with wind. Above rated, the
 job is to spill whatever the generator cannot absorb, so pitch and wind are the
-two things the picture puts side by side.
+two things the picture puts side by side. Beside the rotor, a side elevation
+shows the tower's fore-aft sway, exaggerated, since the thrust that swings it
+is the task's named property; above, the gust and curtailment timing and the
+safety system's feather.
 """
 
 import numpy as np
 
 from target_gym import render_kit as rk
-from target_gym.energy.wind_turbine.env import compute_reward
+from target_gym.energy.wind_turbine.env import EOG_SECONDS, compute_reward
 
-HISTORY_KEYS = ("t", "power", "target", "omega", "pitch", "wind", "reward")
+HISTORY_KEYS = ("t", "power", "target", "omega", "pitch", "wind", "x", "reward")
 
 
 # NREL 5 MW blade planform, normalised as (r/R, chord/R). The reference blade
@@ -31,27 +34,118 @@ _PLANFORM = (
 )
 
 
-def _draw_turbine(ax, state, params):
+def _events(state, params):
+    """The episode's gust and curtailment, each with its timing now."""
+    now = float(state.time) * params.delta_t
+    out = []
+    t0 = float(state.gust_t0)
+    if t0 >= 0.0:
+        if now < t0:
+            out.append((f"GUST in {t0 - now:.0f} s", rk.AMBER))
+        elif now <= t0 + EOG_SECONDS:
+            out.append(("EXTREME GUST", rk.RED))
+        else:
+            out.append(("gust passed", rk.DIM))
+    t1 = float(state.derate_t0)
+    if t1 >= 0.0:
+        to = f"to {params.derate_to:.0%}"
+        if now < t1:
+            out.append((f"CURTAIL {to} in {t1 - now:.0f} s", rk.AMBER))
+        else:
+            out.append((f"CURTAILED {to}", rk.ORANGE))
+    if float(state.feathered) > 0.5:
+        out.append(("SAFETY FEATHER: TRIP", rk.RED))
+    return out
+
+
+def _x_scale(history):
+    """Tower-top sway that fills the side view, m: the largest seen."""
+    return max([abs(x) for x in history["x"]] + [0.2])
+
+
+def _draw_side(ax, state, params, x_scale):
+    """Side elevation of the tower, its top displaced by ``x_tower``."""
+    bx, top, ground = 0.14, 0.62, 0.045
+    x = float(state.x_tower)
+    dx = 0.06 * x / x_scale  # exaggerated: the largest sway is 0.06
+    ys = np.linspace(ground, top, 12)
+    shape = ((ys - ground) / (top - ground)) ** 2  # first-mode-like bend
+    ax.plot(
+        bx + dx * shape,
+        ys,
+        color=rk.lerp_hex(rk.FRAME, rk.DIM, 0.6),
+        lw=3.5,
+        solid_capstyle="round",
+        zorder=2,
+    )
+    ax.plot([bx, bx], [ground, top], color=rk.FRAME, lw=1, ls=":", zorder=1)
+    hx = bx + dx
+    ax.add_patch(
+        rk.patches.Rectangle(
+            (hx - 0.012, top - 0.012),
+            0.05,
+            0.026,
+            fc=rk.PANEL,
+            ec=rk.DIM,
+            lw=1.0,
+            zorder=3,
+        )
+    )
+    ax.plot(
+        [hx - 0.014, hx - 0.014],
+        [top - 0.20, top + 0.20],
+        color=rk.TEXT,
+        lw=2.2,
+        zorder=4,
+    )
+    col = rk.AMBER if abs(x) > 0.66 * x_scale else rk.TEXT
+    rk.flow_arrow(
+        ax,
+        bx,
+        top + 0.24,
+        bx + np.sign(x) * 0.05 + 1e-6,
+        top + 0.24,
+        color=col,
+        lw=1.4,
+        mutation=9,
+    )
+    rk.label(
+        ax, bx, top + 0.315, f"TOWER TOP {x:+.2f} m", color=col, size=7, weight="bold"
+    )
+    rk.label(
+        ax,
+        bx,
+        top + 0.27,
+        "side view, sway ×" f"{0.06 / x_scale * 100:.0f}",
+        color=rk.DIM,
+        size=5.5,
+    )
+
+
+def _draw_turbine(ax, state, params, x_scale=0.2):
     omega_rpm = float(state.omega) * 60.0 / (2.0 * np.pi)
     pitch = float(state.pitch)
     v = float(state.v_wind)
-    cx, cy, R = 0.56, 0.55, 0.30
+    cx, cy, R = 0.64, 0.55, 0.30
 
     # Inflow.
-    v_frac = rk.clamp01((v - params.v_min) / (params.v_max - params.v_min))
+    v_frac = rk.clamp01(v / (1.2 * params.v_cut_out))
     for i, yy in enumerate(np.linspace(cy - R * 0.8, cy + R * 0.8, 5)):
         rk.flow_arrow(
             ax,
-            0.02,
+            0.0,
             yy,
-            0.20,
+            0.08,
             yy,
             color=rk.CYAN,
             lw=0.8 + 2.6 * v_frac,
             alpha=0.30 + 0.5 * v_frac,
             mutation=8 + 8 * v_frac,
         )
-    rk.label(ax, 0.11, cy + R * 0.95, f"WIND  {v:.1f} m/s", color=rk.CYAN, size=8)
+    rk.label(ax, 0.05, cy - R * 0.95, f"WIND\n{v:.1f} m/s", color=rk.CYAN, size=7.5)
+    _draw_side(ax, state, params, x_scale)
+    for i, (text, c) in enumerate(_events(state, params)):
+        rk.label(ax, 0.64, 0.95 - 0.04 * i, text, color=c, size=7.5, weight="bold")
 
     # Ground, so the tower stands on something rather than stopping in mid-air.
     ax.axhspan(0.0, 0.045, color=rk.PANEL, zorder=0)
@@ -139,7 +233,7 @@ def _draw_turbine(ax, state, params):
         size=7,
         rotation=90,
     )
-    rk.caption(ax, "above rated: pitch spills what the generator cannot absorb")
+    rk.caption(ax, "above rated: pitch spills power while thrust sways the tower")
 
 
 def render_wind_turbine(state, params, step, history):
@@ -155,9 +249,16 @@ def render_wind_turbine(state, params, step, history):
     history["wind"].append(float(state.v_wind))
     history["reward"].append(float(compute_reward(state, params)))
 
+    history["x"].append(float(state.x_tower))
+
     err = abs(power_MW - float(state.target_power) / 1e6)
-    status = rk.NOMINAL if err < 0.25 else (rk.WATCH if err < 0.75 else rk.ALARM)
+    if float(state.feathered) > 0.5:
+        status, status_text = rk.ALARM, "TRIPPED: FEATHERED"
+    else:
+        status = rk.NOMINAL if err < 0.25 else (rk.WATCH if err < 0.75 else rk.ALARM)
+        status_text = None
     rated_rpm = params.omega_rated_rpm
+    x_scale = _x_scale(history)
 
     gauges = [
         rk.Gauge(
@@ -168,10 +269,12 @@ def render_wind_turbine(state, params, step, history):
             target_frac=float(state.target_power) / params.P_rated,
         ),
         rk.Gauge(
-            "TARGET",
-            f"{float(state.target_power) / 1e6:.2f} MW",
-            float(state.target_power) / params.P_rated,
-            rk.DIM,
+            "TOWER x",
+            f"{float(state.x_tower):+.3f} m",
+            float(state.x_tower) / x_scale,
+            rk.ORANGE,
+            bipolar=True,
+            neg_color=rk.ORANGE,
         ),
         rk.Gauge(
             "ROTOR",
@@ -197,36 +300,44 @@ def render_wind_turbine(state, params, step, history):
         rk.Gauge(
             "WIND",
             f"{float(state.v_wind):.1f} m/s",
-            (float(state.v_wind) - params.v_min) / (params.v_max - params.v_min),
+            float(state.v_wind) / (1.2 * params.v_cut_out),
             rk.TEAL,
             hidden=True,
         ),
-        rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:+.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
-        ),
+        rk.cost_gauge(history["reward"], params, "MWh"),
     ]
 
-    strip = rk.Strip(
-        history["t"],
-        [
-            rk.Series(history["power"], "power", rk.CYAN, fill_to=history["target"]),
-            rk.Series(history["target"], "target", "white", ls="--", lw=1.0, alpha=0.6),
-        ],
-        ylabel="power  [MW]",
-        xlabel="seconds",
-    )
+    strips = [
+        rk.Strip(
+            history["t"],
+            [
+                rk.Series(
+                    history["power"], "power", rk.CYAN, fill_to=history["target"]
+                ),
+                rk.Series(
+                    history["target"], "rating", "white", ls="--", lw=1.0, alpha=0.6
+                ),
+            ],
+            ylabel="power  [MW]",
+        ),
+        rk.Strip(
+            history["t"],
+            [rk.Series(history["x"], "tower top", rk.ORANGE, lw=1.2)],
+            ylabel="sway  [m]",
+            xlabel="seconds",
+            lines=[(0.0, rk.DIM, "")],
+        ),
+    ]
     fig = rk.frame(
         title="WIND  TURBINE  —  NREL  5 MW",
         step=step,
         elapsed_s=step * params.delta_t,
-        schematic=lambda ax: _draw_turbine(ax, state, params),
+        schematic=lambda ax: _draw_turbine(ax, state, params, x_scale),
         schematic_title="ROTOR",
         gauges=gauges,
-        strips=[strip],
+        strips=strips,
         status=status,
+        status_text=status_text,
         subtitle="region 3 regulation  ·  turbulent inflow is unmeasured",
     )
     return rk.finish(fig), history

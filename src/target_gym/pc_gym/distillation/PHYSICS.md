@@ -1,13 +1,17 @@
-# Binary distillation — physics model, provenance and validation
+# Binary distillation: physics model, sources, limits and deviations
 
-Reference process: **Skogestad's "Column A"** — a 40-tray binary distillation
-column with a total condenser, the standard benchmark for ill-conditioned
-multivariable control.
+The plant is Skogestad's Column A [D1, D2], a 40-tray binary column with a
+total condenser, the standard model of an ill-conditioned high-purity column.
+Its real counterpart with plant data is an industrial propylene/propane
+splitter [D4]. `REALITY.md` here is the record, with sources [D1] to [D6];
+`COLD_REVIEW.md` lists how the earlier task differed. This page follows
+charter Amendments 1 and 2 (`docs/proposals/task-charter.md`).
 
-Contract for `target_gym.pc_gym.distillation`. Method:
-`docs/PHYSICS_METHODOLOGY.md`.
-
-Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviation
+**Named property: feed steps and late analysers on an ill-conditioned column.**
+A 20 % feed-rate step is the large upset of [D1, Fig. 18]; the products are
+read by analysers 5 to 10 min late [D5]; reflux and boilup push both products
+almost the same way (RGA 35.94 [D1, eq. 31]). All three are in the model
+(rule 18) and tested.
 
 ---
 
@@ -26,7 +30,8 @@ condenser: M dx_N/dt = V y_{N-1} − (L + D) x_N
 ```
 
 Constant molar overflow with a saturated-liquid feed, so steady liquid below the
-feed is `L + F` while vapour is constant throughout. The feed adds to stage 21's
+feed is `L + F` while vapour is constant throughout. The feed rate `F` and its
+composition `zF` are the plant's state: each steps once an episode (section 6). The feed adds to stage 21's
 balances. `D = V − L` and `B = L_2 − V` follow from the two level loops, taken as
 perfect, so bottoms follows the liquid that reaches the reboiler.
 
@@ -63,7 +68,7 @@ volatility assumption degrades.
 | RGA(1,1) at nominal | 35.94 (eq. 31) | **35.94** | ✅ |
 | Condition number of the gain matrix | no published figure for this model | **145.5** | ✅ |
 | `dyD/dL + dxB/dL` | 1.960 from the mass balance | **1.960** | ✅ |
-| Dominant time constant | 194 min (tutorial, section 4) | **194.0 min** | ✅ |
+| Dominant time constant | 194 min, the linearised slowest mode (tutorial, sections 4.3 and 4.4) | **193.9 min** | ✅ |
 | Reflux change reaching the reboiler | 39 × 0.063 = 2.46 min (section 4.1) | step response of 39 lags, figure 4's shape | ✅ |
 | RGA(1,1) magnitude at high frequency | approaches 1 above 0.41 rad/min (section 4.7.3) | **1.30** at 0.41, **0.57** at 1, **1.00** at 10 rad/min | ✅ |
 
@@ -83,41 +88,223 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 
 ---
 
-## 3. Parameter table
+## 3. Numbers: cited or ours
 
-| Symbol | Value | Unit | Source | |
-|---|---|---|---|---|
-| trays / stages | 40 / 41 | – | Column A | ✅ |
-| feed stage | 21 | – | Column A | ✅ |
-| `alpha` | 1.5 | – | Relative volatility, Column A | ✅ |
-| `F`, `zF_nominal`, `qF` | 1.0, 0.5, 1.0 | kmol/min, –, – | Saturated liquid feed | ✅ |
-| `M_tray`, `M_drum` | 0.5, 0.5 | kmol | Stage holdup | ✅ |
-| `tau_L` | 0.063 | min | Per tray, tutorial table and `colamod.m`'s `taul` | ✅ |
-| nominal `L`, `V` | 2.706, 3.206 | kmol/min | Operating point A | ✅ |
-| `L_min/max`, `V_min/max` | 2.20–3.40, 2.70–3.90 | kmol/min | Ours, to hold the target box (below) | ⚠️ |
-| `zF_noise_std` | 0.03 | – | TUNED — feed disturbance amplitude | ⚠️ |
-| `delta_t` | 1.0 | min | 400 steps ≈ 2 dominant time constants | ✅ |
+| Symbol | Value | Unit | Cited or ours |
+|---|---|---|---|
+| stages, feed stage | 41, 21 | - | cited [D2] |
+| `alpha` | 1.5 | - | cited [D2] |
+| `F`, `zF_nominal`, `qF` | 1.0, 0.5, 1.0 | kmol/min, -, - | cited [D2] |
+| `M_tray` | 0.5 | kmol | cited [D2] |
+| `M_reboiler`, `M_condenser` | 10, 32.1 | kmol | cited: D2's holdups "for more realistic studies"; Column A's analysis uses 0.5 [D1, D2] |
+| `tau_L` | 0.063 | min | cited [D1, p. 13; D2] |
+| `L_nominal` | 2.706 | kmol/min | cited [D2] |
+| `feed_step` | 0.2 | - | cited: F 1 to 1.2 [D1, Fig. 18] |
+| `zF_step` | 0.1 | - | cited: zF 0.5 to 0.6 [D1, Fig. 18] |
+| `step_window` | 30, 300 | min | ours: each step once, with room after it for the 40 min recovery of [D1, Fig. 18] |
+| `L_min`, `L_max` | 1.85, 3.11 | kmol/min | ours: hold both specs after any sourced feed step, plus 5 % |
+| `V_min`, `V_max` | 2.18, 3.83 | kmol/min | ours: as `L`; flooding [D6] has no figure |
+| `D_min`, `D_max` | 0.1, 0.9 | kmol/min | ours: keeps the balance physical at the box's corners (deviation D5) |
+| `yD_spec`, `xB_spec` | 0.9857, 0.0143 | - | ours, family: each impurity's spec is Column A's design impurity, 0.01 [D2], over 0.7, as a column is designed 3 sigma inside its spec, 700 against 1,000 ppm [D7] |
+| `delta_t` | 1 | min | cited: the splitter's MPC samples at 1 min [D4, p. 5] |
+| `max_steps_in_episode` | 400 | steps | ours: about two dominant time constants |
+| analyser cycle, dead time | 5, 5 | min | cited range: 3 to 30 min in total [D5] |
+| `boilup_price` | 1 | kmol | ours: the unit of the score |
+| `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec product is run through again, at the nominal V/F |
+| `recovery_price` | 100 | kmol/kmol | cited: (pD - pB) / pV on Column A, distillate 2 and bottoms 1 $/mol, boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965] |
+| `failure_cost` | 0 | kmol | no trip, so a trip costs nothing (charter B5) |
+| `restart_steps` | 1 | steps | never charged |
+| `e_floor_top`, `e_floor_bottom` | 4e-4 | - | the analysers' scatter (section Readings), for the time-in-band KPI only |
 
-**The flow limits are ours, for the owner to accept.** The reference gives no
-limits, and these come from the target box, not from a column design. At the
-nominal feed (0.995, 0.005) needs L 3.353 and V 3.853, and (0.98, 0.02) needs
-L 2.286 and V 2.786. At feeds two sigma either side the extremes are L 2.27 and
-3.36, V 2.73 and 3.90.
-
-| limits | nominal feed | over the reset feed | at feed 0.41 |
-| --- | --- | --- | --- |
-| 2.30–3.10, 2.80–3.60, before | 2.1% unreachable | 3.0% | 12.7% |
-| maximums raised only | 0.3% | 1.0% | 10.9% |
-| 2.20–3.40, 2.70–3.90 | 0% | 0% | 0.1% |
-
-So raising the maximums alone leaves the low corner out, and both ends move. Trimming
-the box instead would change what the task asks for, and would not help a drifting
-feed. The price is an action span 1.5 times wider, so a raw action moves the flows
-further, and `D` clips over more of the action box, 44% against 25% (D1 below).
-V 3.9 is 1.22 times nominal; a column built to run at about 80% of flood has about
-that much room, which is our reading and not a sourced figure.
+Count: 12 cited, 11 ours.
 
 ---
+
+## 4. Limits (rule 14)
+
+| Limit | Kind | Model | Source |
+|---|---|---|---|
+| Distillate below yD 0.9857 | Zone | Off-spec distillate is charged its reprocessing | spec [D2]; zone [D4, p. 5, Table 1] |
+| Bottoms above xB 0.0143 | Zone | As above, for bottoms | spec [D2]; zone [D4, p. 5, Table 1] |
+| Flooding | Not modelled | Kind not found [D6]; `V_max` stands in, ours | [D6] |
+| Reflux and boilup | Hardware | The flow box, clipped | ours (section 3) |
+
+The earlier composition trips at yD 0.90 and xB 0.10, with a 4 h restart, had
+no source and are gone. The task never trips.
+
+---
+
+## 5. Observation (rule 16)
+
+`[yD, xB, L_pct, V_pct, spec_yD, spec_xB, T_15, F]`: the two product analysers
+[D4, Fig. 1; D5], the stage-15 tray temperature [D5], the operator's own flows,
+the specs, and the feed flow from its meter (FC 1 [D4, p. 5]). The feed
+composition and the interior profile are hidden: no feed analyser was found.
+
+---
+
+## 6. Episode (rule 17)
+
+The column starts at rest at its design point [D2]: the converged profile at L
+2.706 and V 3.206, both products on spec with the family's give-away margin
+[D7]. Each scenario (below) then runs:
+
+- **The feed rate steps by 20 %** [D1, Fig. 18], once, up or down, at a
+  minute drawn in 30 to 300. The plant meters it.
+- **The feed composition steps by 0.1** [D1, Fig. 18], once, up or down, at
+  another minute drawn in 30 to 300. Hidden.
+
+The earlier Ornstein-Uhlenbeck drift of the feed composition, whose size was
+tuned, is gone: the sources show steps. Nothing else moves.
+
+---
+
+## 7. Score (rule 15)
+
+The job, from REALITY.md: keep both product impurities inside their zones, at
+the least reflux and boilup, without flooding [D4, p. 5; D6]. Per minute, in
+kmol of boilup:
+
+```
+reward     = -(boilup + off_spec + light_lost)
+boilup     = V dt
+off_spec   = 3.206 (D [yD < 0.9857] + B [xB > 0.0143]) dt
+light_lost = 100 B xB dt
+```
+
+Light key leaving in the bottoms is sold at the bottoms' price instead of the
+distillate's: on Column A distillate sells at 2 $/mol, bottoms at 1 and boilup
+costs about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965], so each kmol
+costs (2 - 1) / 0.01 = 100 kmol of boilup. With energy this cheap the
+bottoms pay to be over-purified, as D8 finds for Column A (its region with the
+bottoms' spec inactive); the distillate's purity earns nothing past its spec.
+
+---
+
+## 8. Scenarios (rule 20)
+
+`scenarios.py` in this folder, on `EnvSpec.scenarios`:
+
+| Scenario | Overrides | Source |
+|---|---|---|
+| `normal` | no feed step | [D4, p. 5]: the zones held at least boilup |
+| `feed_rate_step` | feed rate 20 %, up or down | [D1, Fig. 18] |
+| `feed_composition_step` | zF 0.1, up or down | [D1, Fig. 18] |
+| `both_steps` | both, at independent times | [D1, Fig. 18] |
+
+Timing (30 to 300 min) and sign are drawn by the seed. A boilup upset from steam
+pressure [D1, Fig. 12] and an analyser failure [D1, 6.5] are documented, but
+their sizes are not, so they have no scenario yet.
+
+---
+
+## 9. Behaviour tests
+
+`tests/pc_gym/distillation/test_distillation_reality.py` and, for tests 5 and 7,
+`test_distillation_hydraulics.py`. D1's figures are for Column A with 0.5 kmol
+drums and no flow box, so tests 1 and 5 to 10 run that configuration
+(`column_a()` in the test). Tests 2 to 4 run the shipped column, with
+realistic drums, against family ranges: each source span pooled over Column A
+[D1] and the real splitter [D3, D4], widened by the audit's 25 %.
+
+| Test | Range and source | Result |
+|---|---|---|
+| 1. Nominal products | yD 0.989 to 0.991, xB 0.009 to 0.011 [D2] | pass |
+| 2. Reflux step | end values within 25 % of D1's; decay time 89 to 243 min, from 118.5 min [D4, G2; D3] to 194 min [D1] | pass |
+| 3. Boilup step | opposite sign; ratio to the reflux step 0.75 to 1.25 on each, "almost the same" [D1] and eq. 31's 0.98 and 1.01 | **fail: 1.50 on xD** |
+| 4. Internal flows | both purer; gain 48 to 125 times smaller on each [D1; eq. 31: 64, 80]; 63 % time under a quarter of the external step's (ours) | gains pass; **speed fails: 97 against 211 min, 0.46** |
+| 5. Reflux reaches the reboiler after 39 lags | [D1, Fig. 4] | pass |
+| 6. Slowest modes 193.9, 12.0, 3.5 min | [D1, 4.4], Column A | pass |
+| 7. Gains eq. 31, RGA 35.94 | [D1, eq. 31] | pass |
+| 8. 20 % feed step under D1's PI | [D1, Fig. 18, eq. 82], Column A | pass |
+| 9. zF step smaller than the feed step | [D1, Fig. 18] | pass |
+| 10. Analyser 3 to 30 min late | [D5] | pass |
+| Starts on spec | rule 17 | pass |
+| Specs at the family give-away | [D7] | pass |
+| Product limits are zones | [D4, Table 1] | pass |
+| Inside spec, less boilup scores better | [D4, p. 5] | pass |
+
+**Finding, test 3.** At D1's own 0.0027 kmol/min step the column is already
+nonlinear: the boilup step's steady effect on xD is 1.50 times the reflux
+step's, where eq. 31's linear gains give 0.98. D1's Fig. 5 draws the same
+asymmetry (1.42 at 500 min); its "almost the same" is the linear statement. The
+model is D1's own, so this is the source's prose against its own figure, not
+missing physics. Not moved.
+
+**Finding, test 4.** With D2's drums the internal-flow response is slower: the
+32.1 kmol condenser adds about 10 min of lag on yD. It is still about twice as
+fast as the external step, but not under a quarter. D1 gives no figure with
+liquid flow dynamics, and the quarter is ours, fixed before the run. Not moved.
+
+With realistic drums the slowest modes are 219.5, 32.2 and 11.3 min (derived).
+
+---
+
+## 10. Known deviations (rule 13)
+
+**D1. Tray temperature ignores pressure.** Real tray temperature moves with
+column pressure and needs a correction, and inferential control at alpha 1.5 is
+doubtful [D3]. Here T_15 is an exact function of composition. Effect: the
+temperature loop is easier than on a real column.
+
+**D2. No pressure, level or DP readings.** Pressure and levels are held
+perfectly, and DP, the flooding warning [D6], is not modelled. Effect: no
+flooding to watch.
+
+**D3. Column A's analysis has small drums.** The task ships D2's realistic 10
+and 32.1 kmol; D1's published dynamics are checked on 0.5 kmol (section 9).
+
+**D4. No move limits.** The real splitter's MPC moves reflux at most 0.13 t/h
+per minute [D4, Table 2]. That is a controller's setting on another column,
+not a plant limit, so it is not imposed. Effect: large coordinated moves are
+possible.
+
+**D5. Distillate clip.** Where `D` clips at the box's corners the balance does
+not close; ours.
+
+**D6. Column A is a model.** Its dead time from reflux to bottoms is 2.5 min;
+the real splitter's is 111 min [D4, G2]. The task is Column A.
+
+---
+
+## 11. What the reference ladder row needs
+
+- Zones: yD at least `yD_spec` (0.9857), cheap side low (less purity, less
+  boilup); xB at most `xB_spec` (0.0143), cheap side high. The reference sits
+  2 sigma inside each cheap edge (`ladder.zone_setpoint`, rule 22).
+- Scenarios: the four of section 8, from `EnvSpec.scenarios`.
+- Bump tests at the design point with `feed_step` and `zF_step` at 0.
+- PI by SIMC on the analysers (5 min sample, 5 min dead time), then
+  feedforward from the measured feed flow (obs 7) through the overall balance
+  (D = zF F / yD), then the stage-15 temperature cascade, then the static
+  decoupler. Scored on section 7's cost.
+
+## 12. Oracle needs
+
+The oracle (`oracle.py`, GradientMPC on the env's reward) reads the true state
+and plans on the reward, which now prices zones and boilup. It must see each
+scenario's step schedule, which is in the state. Not run.
+
+---
+
+## 13. Cold review of the restated ranges
+
+A reviewer with no context read REALITY.md, D1's text and the three tests,
+without their results, on 2026-11-08. Verdicts and what changed:
+
+- Test 2, faithful with a fix: the lower end used the natural period of D4's
+  G2 (100 min), not its decay time, 2 / 0.01688 = 118.5 min, which matches
+  D4's 118.6 min term and D3's 2 h. Now 89 to 243 min.
+- Test 3, faithful with a fix: Fig. 5's 1.42 and 0.73 are transients at
+  500 min, not the steady ratio the test measures. Now 0.75 to 1.25, anchored
+  on "almost the same" and eq. 31.
+- Test 4, not faithful as written: 30 to 300 was not the stated 25 % rule
+  (eq. 31 gives 64 and 80, so 48 to 125), only xD was checked, and the speed
+  threshold is authored. Now both products, 48 to 125, the threshold labelled
+  ours, and the 63 % time read on the full trace.
+
+The fixes come from the reviewer's reading of the sources and were applied
+before the tests were run again; tests 3 and 4 then fail (section 9).
 
 ## 4. Numerics
 
@@ -152,163 +339,13 @@ way to buy it back.
 
 ---
 
-## 5. Task design
 
-### Task: `distillation`
+### Scenario weights (charter J4)
 
-Hold both product purities of a 40-tray binary distillation column (Skogestad's
-Column A) with reflux and boilup. The two purities move together far more
-easily than apart, which makes the plant ill-conditioned. Only the two products
-are analysed, plus one tray temperature: the tray compositions that hold the
-column's memory, and the drifting feed composition, are hidden. The reward
-scores both purities.
-
-| obs | meaning |
-|---|---|
-| 0 | `yD`, light-component mole fraction in the distillate (top product) |
-| 1 | `xB`, light-component mole fraction in the bottoms |
-| 2 | reflux flow, fraction of its range (0 to 1) |
-| 3 | boilup, fraction of its range (0 to 1) |
-| 4 | target `yD` |
-| 5 | target `xB` |
-| 6 | `T_15`, stage 15's temperature (K) |
-
-**Observation.** A real column has analysers on the two product streams and
-thermocouples on a few trays, not an assay of all 40. **39 of the 41 stage
-compositions are hidden**, and that interior profile is the column's memory.
-The one tray temperature, `T_15`, is stage 15's on column A's linear
-boiling-point curve, T = 341.9 x + 355.4 (1 - x) K (Skogestad, distillation
-mailing list, 19 May 1999): the stage the maximum gain rule picks in the bottom
-section (220 K per kmol/min of boilup at the nominal point, derived), and the
-location Skogestad recommends for column A ("Distillation control: dos and
-don'ts", section 6.3). It was added in v3 for the expert's temperature loop.
-Feed composition is hidden too and drifts as an OU process.
-
-**Reward** charges each purity's tracking term, so holding one specification
-does not excuse losing the other.
-
-**Reset** starts from the converged nominal profile, computed once at import
-from the same dynamics rather than hard-coded. With a ~194 min dominant time
-constant an arbitrary initial profile would spend the whole episode relaxing.
-The tray flows start at the sampled reflux, so a reset has no hydraulic transient.
-
----
-
-## 6. Baselines
-
-| controller | return | yD error | xB error |
-|---|---|---|---|
-| MPC (gradient, horizon 15) | **190.0** | **4e−5** | **1.4e−4** |
-| PID (LV pairing) | 172.8 | 9.6e−4 | 4.0e−4 |
-| constant flows | 37.7 | 7.1e−2 | 6.5e−3 |
-
-The MPC's ~20× tighter top-composition tracking is the expected payoff on an
-ill-conditioned plant: it makes *coordinated* reflux/boilup moves, which is
-precisely what two independent diagonal loops cannot do when the useful
-direction is a small difference between two large, nearly-cancelling effects.
-
-The PID in the table is the version-2 expert, two diagonal composition loops
-grid-searched on the scored reward. Section 8 has the base layer that
-replaced it.
-
-**The MPC plans on the mean feed, with a decaying step.** Until the oracle
-audit (2026-10-01) the feed-composition noise was not declared in the spec's
-`noise_fields`, so the plan followed one fixed noise path, the plant's own on
-protocol seed 0. Declared, the plan follows the mean, and that alone made the
-oracle 15% worse: the fixed normalised step cannot place reflux and boilup
-closer than about `lr` to the optimum, and that was the whole hold error. A
-step decaying from 0.08 to 0.004 over 80 iterations scores 0.0125 on the
-protocol seeds, against 0.297 before (zero trips). What is left is seed 0's
-running cost (about 0.037 per step on that seed, 0.0122 in the three-seed
-mean); the tracking left is far below the analyser's
-resolution. (The table above predates the version-2 reward and this change.)
-
----
-
-## 7. Known deviations
-
-**D1: liquid hydraulics, closed.** Each of the 39 trays carries its own flow
-state, the reference's `L_i = L0_i + (M_i − M0) / tau_L` with `tau_L = 0.063 min`
-and `lambda = 0` (tutorial eq. 47, `colamod.m`). That is 0.063 min per tray, not
-the minute per tray this entry used to say, and 2.46 min to the reboiler.
-
-A single lag on `L` was the simpler choice, and it cannot work. It delays the top
-as much as the bottom, and that only multiplies a column of the transfer matrix,
-which leaves the RGA unchanged at every frequency. It would stay at 3.2 to 3.7
-above 0.1 rad/min. What decouples the two ends is that liquid reaches the bottom
-later than the top, so the delay has to be spread down the column. The cascade is
-the reference's own model, and adds no new stiffness (section 4).
-
-With it the RGA magnitude falls from 3.4 to 3.7 to 1.30 at 0.41 rad/min, and stays
-between 0.52 and 1.30 up to 10 rad/min. It is still 3.10 at 0.1 and 2.39 at 0.2
-rad/min, so the review's 0.7 to 1.4 above 0.1 rad/min did not reproduce, on this
-model or with the reference's level loops. The tutorial's figure, about 1 above
-1/θ_L = 0.41 rad/min, does. The steady state is unchanged.
-
-`D` stays clipped to `D_min` and `D_max`, which breaks the balance where it binds.
-At `L_max` and `V_min` the column settles on a profile that is not monotone, and it
-trips long before that.
-
-**D2 — analyser dead time, closed.** Product analysers report a sample one
-5-minute cycle old, held until the next (section Readings). On a plant this
-ill-conditioned that changes what is achievable: at 5 minutes the expert's gains,
-tuned without it, lose the column, so its tuning is redone under the expert
-protocols.
-
-**⚠️ D3 — constant molar flows.** Standard for this benchmark, but it means
-energy balance effects (varying latent heats, subcooling) cannot appear.
-
----
-
-## 8. Expert
-
-On columns an MPC over the temperature loops is the norm; under it runs the
-base layer this expert copies, the LV-configuration with a temperature loop
-using boilup ("Distillation control: dos and don'ts", sections 6.3 to 6.5,
-which calls it widely used in industry). Boilup holds the stage-15
-temperature, reflux holds the distillate and the temperature setpoint holds
-the bottoms (`make_distillation_pid_controller`, `base_layer_step`). It starts
-bumplessly from the observed flows and temperature. The observation-only MPC
-that practice adds on top is PR 2 of the experts refactor.
-
-The tests hold a steady feed, on training seeds 100 to 109, by
-`scripts/tune_process_experts.py --envs distillation`, section 9 of
-`docs/proposals/expert-protocols-process.md`. Nobody leaves a column in manual, so a
-P loop of 0.16 kmol/min per K on the tray holds it (ours).
-
-- **Pairing.** RGA(1,1) from the steady gains in float64: 35.9 for yD and xB on L and
-  V, and 0.83 for yD and xB on L and the tray's setpoint with the tray closed, the
-  pairing the expert runs. The tray alone with V keeps 43 at steady state, so the
-  tray loop has to be tight and the composition loops slower.
-- **Temperature loop.** Integrating, k' = 1.15 K/min per kmol/min, no lag beyond the 1
-  min sample, theta = 0.5 min. The filter reaches its cap, Tf_T = 0.4 min, and Kp_T =
-  0.360 kmol/min per K, Ti_T = 9.7 min.
-- **Setpoint ramp.** 0.70 K/min, the steepest the tray loop follows on boilup's room
-  from the published point, so a composition move never steps it.
-- **Distillate loop**, yD on reflux, tray closed, on the chromatograph. A step of
-  0.25 kmol/min moves 1.5 bands. k = 0.0144, tau1 = 1.4 min, theta = 10.5 min, so
-  Kp_D = 16.1, Ti_D = 4.9 min.
-- **Bottoms loop**, xB on the tray's setpoint. A step of 1.05 K moves 2.6 bands. k =
-  -0.00624 per K, tau1 = 0.87 min, theta = 7.5 min, so Kp_B = -36.0 K, Ti_B = 3.4 min.
-- **Gate.** Each analyser loop acts on an update whose reading has moved past its band
-  (0.0024) from the one it held, or sits past it from the target, then waits 2
-  updates, 10 min. That is N8. The loops are slower than the tray, so the cascade is
-  no longer inverted.
-- **Held-out check** (seeds 200 to 209, 400 steps). It holds 7,636 per step (worst
-  seed 24,880) against a ceiling of 2, with 170 trips on 3 of the 10 seeds. The best
-  null is a constant, ratio 0.04, 2 of 10 wins.
-- **Episode.** 400 steps, doubled from 200 on 2026-11-06, since the hold at 200 was
-  2.81 times a doubled run's. The ratio at 400 is 0.57 on training seeds and 0.65
-  held out, so the rule passes, but only because the longer run does worse: 298 trips
-  on 5 seeds at 800 steps. At 200 steps it held 3,942 with no trips, so these gains
-  lose the column past step 200. That is a finding, not a settled loop.
-- **Scatter.** The recipe reproduces exactly at a fixed test length, which is why that
-  length is now the recipe's, 200 steps (section 9, R7). A new noise path moves it a
-  lot: over test lengths of 195 to 500 steps, `Kp_T` runs 0.12 to 0.36.
-- **Levels.** 8,466 with 43 trips on 7 seeds at level 0.5, and 4,725 with none at
-  level 2.
-
----
+`normal` 0.7, `feed_rate_step` 0.1, `feed_composition_step` 0.1, `both_steps` 0.1: shares of operating time for the headline. No source says how often each
+window occurs (`REALITY.md`), so each is ours, the normal day in the family
+range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
+draws them.
 
 <!-- BEGIN GENERATED FACTS -->
 
@@ -320,7 +357,7 @@ P loop of 0.16 kmol/min per K on the tray holds it (ours).
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 7 | 107 |
+| `distillation` | 400 | 60 | 6.7 h | 2 in [-1, 1] | 8 | 110 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -329,42 +366,11 @@ which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
 
-## Reward (version 2)
-
-`compute_reward = -(tracking + running + failure)`, one tracking term per product, see docs/reward-shaping.md.
-
-| parameter | value | source |
-| --- | --- | --- |
-| `e_floor_top`, `e_floor_bottom` | 4e-4, 4e-4 mole fraction, the analyser's scatter (the MPC holds 7.6e-7 / 5.2e-7) | the lowest per-seed long-run mean \|error\| the shipped MPC held on each product under the shipped feed-composition disturbance (`scripts/measure_hold.py`, 1200 hold steps after a 582-step burn-in, 3 seeds; PID down to 5.7e-5 and 1.3e-4; before the oracle audit it held 1.35e-5 / 3.3e-5). Per-seed minima; upper bounds Below the instrument resolution the plant's own table cites, so the resolution sets the scale: a hold the instrument cannot see is not a floor. |
-| `e_tol` | 0 | **provisional.** The purity specifications a column is run against come from the sales contract. |
-| `tracking_exponent` | 2 | quadratic |
-| `c_hold` | 3.282 kmol/min | boilup while holding, PID (MPC 3.292) (`scripts/measure_hold.py`) |
-| `running_weight` | 1 | sweep 0.5 / 1 / 2 |
-| `failure_cost` | 2.26e5 | twice the reachable two-product excursion's cost, 2 x 2 x (0.095 / 4e-4)^2: a 0.98 top target to the 0.90 trip, a 0.02 bottom target to the 0.10 trip, per trip step |
-| `restart_steps` | 240 (4 h) | restart time priced into a trip, `restart_steps x failure_cost` (column shutdown and re-establishment of the profile; provisional); where a plant engineer would get it: the plant's restart procedure |
-
-`rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
-hold cost the reference controller demonstrated, in the reward's units, which
-is 1 per term where the floor is that hold and less where the floor is clamped
-at the instrument resolution -- and `rho_floor` the same with consumption
-charged in full; `floor_is_documented_minimum` records whether `e_floor` is a
-measured/certified floor or a resolution used as a scale, and where it is a
-resolution on a deterministic plant both references are 0, since exact hold is
-achievable there and the resolution only sets the unit;
-`failure_cost` is the per-step cost of a tripped plant, above the largest tracking
-cost the envelope can produce, and `restart_steps` the time a restart would take,
-so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
-ends the window (`base.failure_kernel`): the step that leaves the envelope is
-charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` stays
-false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
-capped log-scaled reward of the previous version (`precision_floor` and the
-old weights are read only by it).
-
 ## Readings
 
 The observation reports the two products and the tray temperature through their
-instruments, and the setpoints and the column's own reflux and boilup exactly
+instruments, and the product specs, the feed flow and the column's own reflux and boilup
+exactly
 (`docs/proposals/measurement-noise.md`). `sensor_noise_scale = 0` gives the
 noise-free task. The 38 stages with no instrument stay exact, and `get_obs` does
 not show them.
@@ -404,9 +410,9 @@ score read the true state. `info["measured_reward"]` is the same cost on the
 readings, with any trip taken from the true state, and a learner can train on
 it.
 
-A plant resting exactly on target pays 2 per step in measured reward,
-`2 (4e-4 / 4e-4)^2`. `e_floor_top`, `e_floor_bottom` and `precision_floor` are the
-analyser's scatter, so the ceiling is what this analyser can verify.
+The feed meter (FC 1 [D4, p. 5]) reads exactly: its accuracy was not found.
+`e_floor_top` and `e_floor_bottom` are the analysers' scatter, read only by the
+benchmark's time-in-band KPI.
 
 ## Written exception to check 2
 

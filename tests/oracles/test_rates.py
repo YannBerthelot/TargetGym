@@ -14,9 +14,7 @@ actuator's rate as a fraction of its limit. With ``rate = RateLimit.of(env, p)``
   moves lose nothing;
 - a plant with a dead band or stiction has no such move, and raises.
 
-Expected travel by hand from the task's figures. glass_furnace: 1/1800 of the
-span per s over 30 s, span 2 in raw units, is 1/30 a step, with no lag.
-boiler_drum, 2 s steps: fuel 0.007 of span/s is 0.028, its 20 s lag closes
+Expected travel by hand from the task's figures. boiler_drum, 2 s steps: fuel 0.007 of span/s is 0.028, its 20 s lag closes
 1 - exp(-0.1) = 0.0951626 of a gap; feedwater 0.05 is 0.2, its 1 s lag closes
 1 - exp(-2) = 0.8646647.
 """
@@ -33,7 +31,6 @@ from target_gym.oracles.rates import RateLimit
 from target_gym.registry import REGISTRY
 
 FIGURES = {
-    "glass_furnace": ([1.0 / 30.0], [1.0]),
     "boiler_drum": ([0.028, 0.2], [0.0951626, 0.8646647]),
 }
 
@@ -152,7 +149,7 @@ def test_every_path_the_actuator_can_take_in_a_step_is_a_rate_plan(name):
 
 
 def test_a_plant_with_a_dead_band_has_no_rate_plan():
-    spec = REGISTRY["glass_furnace"]
+    spec = REGISTRY["boiler_drum"]
     params = spec.make_test_params().replace(actuator_dead_band=0.01)
     with pytest.raises(ValueError, match="dead band"):
         RateLimit.of(spec.make_env(), params)

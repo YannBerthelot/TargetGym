@@ -1,21 +1,15 @@
-from target_gym.glass_furnace.env import (
+from target_gym.glass_furnace.env_jax import (
+    GlassFurnace,
     GlassFurnaceParams,
     GlassFurnaceState,
-    check_is_terminal,
-    compute_next_state,
     compute_reward,
-    compute_velocity,
-    get_obs,
+    compute_reward_terms,
 )
-from target_gym.glass_furnace.env_jax import GlassFurnace
 
 __all__ = [
     "GlassFurnace",
     "GlassFurnaceParams",
     "GlassFurnaceState",
-    "compute_velocity",
-    "compute_next_state",
     "compute_reward",
-    "check_is_terminal",
-    "get_obs",
+    "compute_reward_terms",
 ]

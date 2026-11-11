@@ -38,7 +38,7 @@ class DistillationColumn(
 ):
     """Binary distillation column, Skogestad's "Column A".
 
-    Observation (7,): [yD, xB, L_pct, V_pct, target_yD, target_xB, T_15]
+    Observation (8,): [yD, xB, L_pct, V_pct, spec_yD, spec_xB, T_15, F]
     Action      (2,): [L_raw, V_raw] in [-1, 1] -> reflux and boilup
     """
 
@@ -62,7 +62,7 @@ class DistillationColumn(
     )
 
     def __init__(self, integration_method: str = "rk4_16"):
-        self.obs_shape = (7,)
+        self.obs_shape = (8,)
         self.integration_method = integration_method
 
     @property
@@ -125,54 +125,26 @@ class DistillationColumn(
         if params is None:
             params = self.default_params
 
-        key, l_key, top_key, bot_key, feed_key = jax.random.split(key, 5)
+        keys = jax.random.split(key, 4)
 
-        L = jax.random.uniform(
-            l_key,
-            minval=params.initial_L_range[0],
-            maxval=params.initial_L_range[1],
-        )
-        V = L + 0.5  # nominal distillate D = 0.5 = F/2
-        zF = jnp.clip(
-            params.zF_nominal + params.zF_noise_std * jax.random.normal(feed_key),
-            params.zF_min,
-            params.zF_max,
-        )
-        target_yD = jax.random.uniform(
-            top_key,
-            minval=params.target_yD_range[0],
-            maxval=params.target_yD_range[1],
-        )
-        target_xB = jax.random.uniform(
-            bot_key,
-            minval=params.target_xB_range[0],
-            maxval=params.target_xB_range[1],
-        )
-
-        # Start from the converged nominal profile rather than an arbitrary
-        # ramp: a running column is at steady state, and with a ~194 min
-        # dominant time constant an arbitrary start would spend the whole
-        # episode relaxing instead of being controlled.
-        #
-        # It is the steady state for the *nominal* reflux, 2.706, not for the L
-        # sampled just above, so the derivative at t = 0 is not quite zero. That
-        # is deliberate: converging a profile per episode would cost 4000
-        # integration steps at reset, and on a plant with RGA around 36 a two
-        # percent reflux offset is a meaningful and cheap initial-condition
-        # spread. It does mean the column starts near, rather than at, its own
-        # steady state. The trays do start at the sampled reflux: their flows
-        # settle in minutes, so they carry no spread worth having.
-        x = _NOMINAL_PROFILE
-
+        # Established operation (charter rule 17): the column at rest at its
+        # design point [D2], the converged profile at the nominal flows, with
+        # the products on their specs. The feed's two steps come later.
+        lo, hi = params.step_window
         state = DistillationState(
             time=0,
-            x=x,
-            liquid=steady_liquid(L, params),
-            zF=zF,
-            L=L,
-            V=V,
-            target_yD=target_yD,
-            target_xB=target_xB,
+            x=_NOMINAL_PROFILE,
+            liquid=steady_liquid(params.L_nominal, params),
+            zF=jnp.asarray(params.zF_nominal),
+            L=jnp.asarray(params.L_nominal),
+            V=jnp.asarray(params.L_nominal + 0.5 * params.F),
+            target_yD=jnp.asarray(params.yD_spec),
+            target_xB=jnp.asarray(params.xB_spec),
+            F=jnp.asarray(params.F),
+            feed_step_at=jax.random.randint(keys[0], (), lo, hi),
+            feed_sign=jnp.where(jax.random.bernoulli(keys[1]), 1.0, -1.0),
+            zF_step_at=jax.random.randint(keys[2], (), lo, hi),
+            zF_sign=jnp.where(jax.random.bernoulli(keys[3]), 1.0, -1.0),
         )
         return self.get_obs(state), state
 
@@ -205,7 +177,7 @@ def _compute_nominal_profile() -> jnp.ndarray:
     Computed once at import (a few thousand steps of the same dynamics) rather
     than hard-coded, so it stays consistent if the column parameters change.
     """
-    params = DistillationParams().replace(zF_noise_std=0.0)
+    params = DistillationParams()
     raw = jnp.array(
         [
             2.0 * (2.706 - params.L_min) / (params.L_max - params.L_min) - 1.0,

@@ -13,6 +13,7 @@ loop in the plant flies the surfaces to the demands; a policy does not touch the
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from gymnax.environments import environment, spaces
 
 from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
@@ -25,7 +26,9 @@ from target_gym.plane.dynamics import (
     POSITION,
     STICK_TRAVEL,
     instruments,
+    overspeed,
     total_wind_3d,
+    trim_level,
     trim_stick,
 )
 from target_gym.plane3d.dynamics import read_angles_3d
@@ -33,6 +36,9 @@ from target_gym.plane3d.env import (
     _RACETRACK_LEG,
     PlaneParams3D,
     PlaneState3D,
+    airspeed_3d,
+    assigned_cas_3d,
+    assigned_tas_3d,
     check_is_terminal_3d,
     compute_next_state_3d,
     compute_reward_circle,
@@ -47,6 +53,8 @@ from target_gym.plane3d.env import (
     get_obs_figure8,
     get_obs_heading,
     get_obs_racetrack,
+    holding_turn_rate,
+    wrap_angle,
 )
 from target_gym.plane3d.rendering import _render
 from target_gym.utils import compute_norm_from_coordinates
@@ -139,10 +147,19 @@ class _Airplane3DBase(
         # A crash is part of the kernel: the step is charged the trip cost and
         # the flight restarts at once, or is lost (``terminated``) with
         # ``params.continuing = False`` (``base.finish_step``).
+        # The VMO/MMO warning [TCDS item 10], reported, never a trip when
+        # amended.
+        warning = overspeed(airspeed_3d(new_state, params), new_state.z, params)
+        new_state = self._next_clearance(key, new_state, params)
         new_state, reward, terminated, info = finish_step(
-            self, key, state, new_state, params, metrics=metrics
+            self, key, state, new_state, params, metrics=metrics, overspeed=warning
         )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
+
+    def _next_clearance(self, key, state, params):
+        """The state after ATC's clearance for this step, if any (the heading
+        task's vectors); the other tasks have none."""
+        return state
 
     def is_terminated(self, state: PlaneState3D, params: PlaneParams3D) -> jax.Array:
         """Natural termination only; the time limit is gymnax's ``is_truncated``."""
@@ -217,6 +234,61 @@ class _Airplane3DBase(
         )
         return key, base_kwargs
 
+    def assigned_cas(self, state, params=None):
+        """The CAS assigned to ``state`` (``plane3d.env.assigned_cas_3d``)."""
+        params = self.default_params if params is None else params
+        return assigned_cas_3d(state.target_altitude, params)
+
+    def trim_action(self, state, params=None):
+        """The action that holds ``state``'s throttle and pitch, wings level."""
+        params = self.default_params if params is None else params
+        lever = (state.power - params.idle_power) / (1.0 - params.idle_power)
+        return jnp.stack(
+            [2.0 * lever - 1.0, state.theta / PITCH_DEMAND_MAX, jnp.zeros(())]
+        )
+
+    def _established(self, key, base_kwargs, params, heading):
+        """``base_kwargs`` established (Amendment 2, rule 17): at the assigned
+        level and speed, wings level on ``heading``, in trim, with the episode's
+        turbulence zone drawn [BEA447 Figure 24]."""
+        z = base_kwargs["target_altitude"]
+        speed = assigned_tas_3d(z, z, params)
+        theta, stick, power = trim_level(speed, z, params.initial_mass, params)
+        onset_key, length_key = jax.random.split(key)
+        start = jax.random.uniform(
+            onset_key,
+            minval=params.zone_onset_range[0],
+            maxval=params.zone_onset_range[1],
+        )
+        length = jax.random.uniform(
+            length_key,
+            minval=params.zone_duration_range[0],
+            maxval=params.zone_duration_range[1],
+        )
+        x_dot = speed * jnp.cos(heading) + params.wind_x
+        y_dot = speed * jnp.sin(heading) + params.wind_y
+        return dict(
+            base_kwargs,
+            z=z,
+            x_dot=x_dot,
+            y_dot=y_dot,
+            z_dot=0.0,
+            theta=theta,
+            theta_dot=0.0,
+            phi=0.0,
+            phi_dot=0.0,
+            # The track, worked out from the velocities as the step does.
+            psi=jnp.arctan2(y_dot, x_dot),
+            alpha=theta,
+            gamma=0.0,
+            power=power,
+            stick=stick,
+            aileron=0.0,
+            pitch_integ=stick / STICK_TRAVEL,
+            zone_start=start,
+            zone_end=start + length,
+        )
+
     def render(self, screen, state: PlaneState3D, params: PlaneParams3D, frames, clock):
         frames, screen, clock = self.render_plane(screen, state, params, frames, clock)
         return frames, screen, clock
@@ -240,6 +312,9 @@ class _Airplane3DBase(
         )
 
 
+#: Folded into a step's key for its heading clearance, apart from its gusts.
+_CLEARANCE = 0x48444E47
+
 # ─── Heading task ──────────────────────────────────────
 
 
@@ -257,34 +332,75 @@ class Plane3DHeading(_Airplane3DBase):
     obs_value_index: int = 2  # z (altitude)
     tracked_names: tuple = ("altitude (m)",)
     obs_target_index: int = 10  # target_altitude
+    obs_index = {
+        n: i
+        for i, n in enumerate(
+            (
+                "x_dot", "y_dot", "z", "z_dot", "theta", "theta_dot", "phi",
+                "phi_dot", "gamma", "psi", "target_altitude", "target_heading",
+                "power", "stick", "aileron", "target_speed", "airspeed",
+                "load_factor",
+            )
+        )
+    }  # fmt: skip
     task_type: str = "heading"
     registry_name: str = "plane3d_heading"
     readings: tuple = instruments(LONGITUDINAL + LATERAL)
 
     @property
     def default_params(self) -> PlaneParams3D:
-        # The scored configuration. The floors are set here, not as
-        # PlaneParams3D class defaults, because PatrolParams inherits those
-        # and patrol's records must not move with this task's floor.
-        #
-        # The 1 m altimeter resolution; the heading floor is the class
-        # default, the 0.0087 rad AHRS resolution. The oracle holds below
-        # both, and rho is its lowest per-seed holds over the 300-step episode
-        # (0.5867 m, 1.36e-5 rad; `scripts/measure_hold.py`) in floor units.
-        # 300 steps: at 200 the PID's hold was still twice what it holds on
-        # a longer flight (tests/test_episode_length.py).
-        rho = (0.5867 / 1.0) ** 2 + (1.36e-5 / 0.0087) ** 2
+        # The scored configuration (Amendment 2, plane3d/PHYSICS.md): heading
+        # select from established cruise, 600 s (ours: the longest turn, 180
+        # deg at a holding turn's rate, takes under 110 s, then a held heading
+        # through the turbulence zone, which starts anywhere in the episode).
+        band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
+        ten = float(np.deg2rad(10.0))  # +-10 deg [ACS]
         return PlaneParams3D(
-            max_steps_in_episode=300,
-            e_floor_altitude=1.0,
-            rho_floor_tracking=rho,
-            rho_floor=rho,
-            failure_cost=2.0 * (12192.0 / 1.0) ** 2,
+            max_steps_in_episode=600,
+            heading_clearance_period=150.0,
+            amended=True,
+            turbulence_sigma=0.55,
+            zone_onset_range=(0.0, 600.0),
+            initial_altitude_offset_range=(0.0, 0.0),
+            e_floor_altitude=band,
+            e_tol_altitude=band,
+            e_floor_heading=ten,
+            e_tol_heading=ten,
+            rho_floor_tracking=0.0,
+            rho_floor=0.0,
+            # As the 2D aircraft: the ground is the one trip, priced by us.
+            failure_cost=((12192.0 - band) / band) ** 2,
         )
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
-        self.obs_shape = (18,) if observe_wind else (15,)
+        # 18 with the air data (Amendment 2, rule 16); 21 with the wind sensor.
+        self.obs_shape = (21,) if observe_wind else (18,)
+
+    def _next_clearance(self, key, state, params):
+        """Every ``heading_clearance_period`` s a new heading over
+        ``target_heading_range``; its size is the turn from the heading flown."""
+        period = jnp.maximum(params.heading_clearance_period / params.delta_t, 1.0)
+        due = (
+            (params.heading_clearance_period > 0.0)
+            & (state.time > 0)
+            & (state.time < params.max_steps_in_episode)
+            & (jnp.mod(state.time, period) == 0)
+        )
+        heading = jax.random.uniform(
+            jax.random.fold_in(key, _CLEARANCE),
+            minval=params.target_heading_range[0],
+            maxval=params.target_heading_range[1],
+        )
+        return state.replace(
+            target_heading=jnp.where(due, heading, state.target_heading),
+            heading_change=jnp.where(
+                due,
+                jnp.abs(wrap_angle(heading - state.psi)),
+                state.heading_change,
+            ),
+            clearance_time=jnp.where(due, state.time, state.clearance_time),
+        )
 
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
@@ -293,7 +409,7 @@ class Plane3DHeading(_Airplane3DBase):
         return compute_reward_terms_heading(state, params, tripped=tripped)
 
     def _observe(self, state, params):
-        return get_obs_heading(state, xp=jnp)
+        return get_obs_heading(state, xp=jnp, params=params)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -307,13 +423,21 @@ class Plane3DHeading(_Airplane3DBase):
             minval=params.target_heading_range[0],
             maxval=params.target_heading_range[1],
         )
-
+        # Amended: established on heading 0, cleared onto the target at once;
+        # the capture is the job here (plane/REALITY.md, missions).
+        key, zone_key = jax.random.split(key)
+        established = self._established(zone_key, base_kwargs, params, 0.0)
+        base_kwargs = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(params.amended, a, b), established,
+            dict(base_kwargs, zone_start=0.0, zone_end=0.0),
+        )  # fmt: skip
         state = PlaneState3D(
             **base_kwargs,
             target_heading=target_heading,
             target_x=0.0,
             target_y=0.0,
             target_radius=0.0,
+            heading_change=jnp.abs(wrap_angle(target_heading - base_kwargs["psi"])),
         )
         return self.get_obs(state, params), state
 
@@ -356,32 +480,54 @@ class Plane3DRacetrack(_Airplane3DBase):
     # different task than the one being scored.
     task_type: str = "racetrack"
     registry_name: str = "plane3d_racetrack"
+    obs_index = {
+        n: i
+        for i, n in enumerate(
+            (
+                "x_dot", "y_dot", "z", "z_dot", "theta", "theta_dot", "phi",
+                "phi_dot", "gamma", "psi", "target_altitude", "rel_x", "rel_y",
+                "target_radius", "target_heading", "power", "stick", "aileron",
+                "cross_track", "tangent_heading", "curvature", "target_half_leg",
+                "target_speed", "airspeed", "load_factor",
+            )
+        )
+    }  # fmt: skip
 
     @property
     def default_params(self) -> PlaneParams3D:
-        # The scored configuration. A lap is two legs plus two half-circles:
-        # 2 * (2 * 2r) + 2 * pi * r, about 8.3 r of path. At an 8.4 km radius
-        # and 230 m/s that is ~300 s, so 650 steps is the three laps the
-        # episode-length criterion asks of a periodic task.
-        #
-        # The 1 m altimeter and 3 m GPS resolutions. The oracle holds below
-        # both, and rho is its lowest per-seed holds (0.6803 m, 0.4660 m;
-        # `scripts/measure_hold.py`) in floor units.
-        rho = (0.6803 / 1.0) ** 2 + (0.4660 / 3.0) ** 2
+        # The scored configuration (Amendment 2, plane3d/PHYSICS.md): the
+        # holding pattern from established on its inbound leg, 1 200 s (ours:
+        # three laps of the slowest pattern, 2 x 90 s legs and two 96 s turns,
+        # with the turbulence zone anywhere in it).
+        # +-100 ft, the holding tolerance [ACS IR.III.B.S4]: the holds are at
+        # FL100 to FL260, below RVSM airspace (owner, 2026-11-08).
+        band = 100.0 * 0.3048
+        ten = float(np.deg2rad(10.0))  # +-10 deg [ACS IR.III.B.S4]
+        track = 0.75 * 1852.0  # 3/4 of the +-1 NM terminal CDI [ACS, AIM]
         return PlaneParams3D(
-            max_steps_in_episode=650,
-            e_floor_altitude=1.0,
-            e_floor_path=3.0,
-            rho_floor_tracking=rho,
-            rho_floor=rho,
-            failure_cost=2.0 * (12192.0 / 1.0) ** 2,
+            max_steps_in_episode=1200,
+            amended=True,
+            turbulence_sigma=0.55,
+            zone_onset_range=(0.0, 1200.0),
+            initial_altitude_offset_range=(0.0, 0.0),
+            assigned_speed_mode=1,
+            e_floor_altitude=band,
+            e_tol_altitude=band,
+            e_floor_heading=ten,
+            e_tol_heading=ten,
+            e_floor_path=track,
+            e_tol_path=track,
+            rho_floor_tracking=0.0,
+            rho_floor=0.0,
+            failure_cost=((12192.0 - band) / band) ** 2,
         )
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         # 21: the circle's 18 plus target_heading and the two guidance values
-        # the pattern's geometry determines exactly. 23 with the wind sensor.
-        self.obs_shape = (23,) if observe_wind else (21,)
+        # the pattern's geometry determines exactly; 25 with the half leg and
+        # the air data (Amendment 2); 28 with the wind sensor.
+        self.obs_shape = (28,) if observe_wind else (25,)
 
     def compute_reward(self, state, params):
         return compute_reward_racetrack(state, params)
@@ -390,7 +536,7 @@ class Plane3DRacetrack(_Airplane3DBase):
         return compute_reward_terms_racetrack(state, params, tripped=tripped)
 
     def _observe(self, state, params):
-        return get_obs_racetrack(state, xp=jnp)
+        return get_obs_racetrack(state, xp=jnp, params=params)
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -404,9 +550,23 @@ class Plane3DRacetrack(_Airplane3DBase):
             minval=params.target_radius_range[0],
             maxval=params.target_radius_range[1],
         )
+        # Amended: the hold's own geometry [IFH ch. 10]. Turns at its rate at
+        # the assigned speed set the radius; the inbound leg's minute (1.5
+        # above 14 000 ft) at that speed sets the leg, in still air.
+        z = base_kwargs["target_altitude"]
+        speed = assigned_tas_3d(z, z, params)
+        hold_radius = speed / holding_turn_rate(speed, params)
+        leg_time = jnp.where(
+            z <= params.holding_split_altitude,
+            params.holding_leg_low,
+            params.holding_leg_high,
+        )
+        target_radius = jnp.where(params.amended, hold_radius, target_radius)
+        half_leg = jnp.where(
+            params.amended, 0.5 * speed * leg_time, target_radius * _RACETRACK_LEG
+        )
         # Orientation of the pattern, and where along the near leg to start.
         pattern_heading = jax.random.uniform(heading_key, minval=0.0, maxval=2 * jnp.pi)
-        half_leg = target_radius * _RACETRACK_LEG
         along = jax.random.uniform(along_key, minval=-half_leg, maxval=half_leg)
 
         # Start on the leg at +radius abeam, heading along the pattern.
@@ -427,12 +587,23 @@ class Plane3DRacetrack(_Airplane3DBase):
             y_dot=y_dot,
             psi=jnp.arctan2(y_dot, x_dot),
         )
+        # Amended: established on the leg at the hold's level and speed.
+        key, zone_key = jax.random.split(key)
+        established = self._established(
+            zone_key, base_kwargs, params, jnp.arctan2(s_, c)
+        )
+        established.update(x=start_x, y=start_y)
+        base_kwargs = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(params.amended, a, b), established,
+            dict(base_kwargs, zone_start=0.0, zone_end=0.0),
+        )  # fmt: skip
         state = PlaneState3D(
             **base_kwargs,
             target_x=0.0,
             target_y=0.0,
             target_radius=target_radius,
             target_heading=pattern_heading,
+            target_half_leg=jnp.where(params.amended, half_leg, 0.0),
         )
         return self.get_obs(state, params), state
 

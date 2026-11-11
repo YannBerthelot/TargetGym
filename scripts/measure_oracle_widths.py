@@ -31,10 +31,7 @@ import numpy as np
 
 from target_gym import records
 from target_gym.benchmark import episode_keys
-from target_gym.boiler_drum.env import STEAM_OU_THETA
 from target_gym.cement_kiln.env import FEED_OU_THETA
-from target_gym.energy.wind_turbine.env import WIND_OU_THETA
-from target_gym.glass_furnace.env import M_PULL_AR_RHO
 from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.rates import RateLimit
@@ -48,7 +45,7 @@ PROTOCOL = "docs/proposals/oracle-smoothing-protocol.md, K4 to K6, K10 and K11"
 #: K11's risk of any trip from unforeseen noise over the ten recorded seeds.
 RISK, RECORDED_SEEDS = 0.01, 10
 #: Tasks whose moves are rates (``oracles.rates``).
-BY_RATE = ("boiler_drum", "glass_furnace")
+BY_RATE = ("boiler_drum",)
 AIRCRAFT_2D = ("plane", "plane_energy", "plane_sine")
 #: The tasks whose reward prices a heading, a min over turn directions (S4).
 TURNS = ()
@@ -91,11 +88,6 @@ GUARDS = {
         "actuator_clips": "energy/wind_turbine/env.py:383, :384; a lag toward an "
         "in-range command stays in range",
         "betz": "energy/wind_turbine/env.py:288, Cp's ceiling, never reached",
-    },
-    "glass_furnace": {
-        "flame": "glass_furnace/env.py:557, the flame's clip",
-        "batch_heat": "glass_furnace/env.py:628, heat to the batch max(., 0)",
-        "stored_blanket": "glass_furnace/env.py:850, max(m_batch, 0)",
     },
     "reactor": {
         "rod_range": "reactor/env.py:569, the rods' range clip; the demand is in "
@@ -306,44 +298,6 @@ def wind_sites(points) -> tuple[dict, list]:
     return out, [float(b) for b in limit_backoff(speed, widths, pts, 1)]
 
 
-def glass_sites(points) -> tuple[dict, list]:
-    """The blanket's guards on what the right-hand side and the flame read
-    (env.py:578, :597, :802): the delta enters every evaluation of a step at
-    once, against the crown; and the back-off of the three bands."""
-    from target_gym.glass_furnace.oracle import glass_model, glass_step
-
-    spec = REGISTRY["glass_furnace"]
-    env, p = spec.make_env(), float64(spec.make_test_params())
-    model = glass_model(env, p)
-    rate = RateLimit.of(env, p)
-    pts = _plan_moves("glass_furnace", points)
-
-    def run(probe, delta):
-        state, u = probe
-        return glass_step(
-            env, p, rate, model.state_x(state), u, 0, model.data(state), 0.0, delta
-        )[0]
-
-    @jax.jit
-    def site(probe, delta):
-        return run(probe, delta[0])[:1]
-
-    scale = float(p.m_batch_full)
-    width = kink_width(site, scale, pts, [p.precision_floor])
-    out = {
-        "blanket": {
-            "site": "glass_furnace/env.py:578, :597, :802", "scale": scale,
-            "width": width, "evaluations": 1,
-        }
-    }  # fmt: skip
-
-    @jax.jit
-    def bands(probe, deltas):
-        return run(probe, deltas.sum())[:3]
-
-    return out, [float(b) for b in limit_backoff(bands, [width or 0.0], pts, 1)]
-
-
 def reactor_sites(points) -> tuple[dict, list]:
     """The rods' rate limit (env.py:568), once per sub-step, against Tavg; and the
     back-off of the limits on every sub-step's state."""
@@ -541,13 +495,20 @@ def kiln_sites(_points) -> tuple[dict, list]:
     }, []  # fmt: skip
 
 
+def _stale_wind(p):
+    """Stale since wind_turbine v5 (no WIND_OU_THETA nor turbulence_std: the
+    turbulence is IEC's sigma on a Kaimal time scale), and the receding
+    model's data carries no wind path to perturb. Left for the wind
+    re-measure; the record is not regenerated from here."""
+    raise NotImplementedError("wind_turbine v5's K11 noise term")
+
+
 SITES = {
     **{n: functools.partial(aircraft_sites, n) for n in AIRCRAFT},
     "reactor": reactor_sites,
     "battery": battery_sites,
     "cement_kiln": kiln_sites,
     "compressor_surge": compressor_sites,
-    "glass_furnace": glass_sites,
     "wind_turbine": wind_sites,
 }
 #: Each task's count of smoothed sites, which its planner's ``widths`` hold.
@@ -556,7 +517,6 @@ N_SITES = {
     "battery": 1,
     "cement_kiln": 1,
     "compressor_surge": 2,
-    "glass_furnace": 1,
     "wind_turbine": 5,
 }
 #: A noisy task's planner model, and its deviation's (decay per step, std).
@@ -573,17 +533,9 @@ NOISY = {
         "target_gym.pc_gym.unstable_cstr.oracle:unstable_cstr_model",
         lambda p: (np.exp(-p.delta_t / p.Ti_tau), p.Ti_sigma),
     ),
-    "boiler_drum": (
-        "target_gym.boiler_drum.oracle:boiler_model",
-        lambda p: (1.0 - STEAM_OU_THETA * p.delta_t, p.q_steam_noise_std),
-    ),
     "wind_turbine": (
         "target_gym.energy.wind_turbine.oracle:wind_model",
-        lambda p: (1.0 - WIND_OU_THETA * p.delta_t, p.turbulence_std),
-    ),
-    "glass_furnace": (
-        "target_gym.glass_furnace.oracle:glass_model",
-        lambda p: (M_PULL_AR_RHO, p.m_pull_noise_std),
+        _stale_wind,
     ),
     "cement_kiln": (
         "target_gym.cement_kiln.oracle:kiln_model",
@@ -612,6 +564,8 @@ def noise_terms(name: str, points) -> list:
     spec = REGISTRY[name]
     env, p = spec.make_env(), float64(spec.make_test_params())
     model = build(env, p)
+    if not model.limits:  # nothing to back off (hvac prices its band)
+        return []
     a, sigma = decay(p)
     std = float(sigma) * float(np.sqrt(1.0 - a**2))
     n_sites = N_SITES.get(name, 0)

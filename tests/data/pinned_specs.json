@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 3,
+    "version": 5,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -18,23 +18,38 @@
       "target_gym.plane.experts",
       "make_plane_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane.oracle",
-      "make_plane_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 280
+      "max_steps_in_episode": 1800,
+      "e_floor": 19.812,
+      "e_tol": 19.812,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "target_altitude_range": [
+        8839.2,
+        11277.6
+      ],
+      "initial_altitude_range": [
+        8839.2,
+        11277.6
+      ],
+      "turbulence_sigma": 0.598,
+      "speed_band_cost": true
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -46,7 +61,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 5,
+    "version": 8,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -62,32 +77,34 @@
       "target_gym.plane.experts",
       "make_plane_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane.oracle",
-      "make_plane_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 1600,
-      "e_floor": 1.2,
-      "c_hold": 5.23,
-      "failure_cost": 206451200.0,
-      "rho_floor_tracking": 0.9625245069444446,
-      "rho_floor": 0.9625245069444446,
-      "speed_weight": 0.5,
-      "target_pattern": 1,
-      "target_amplitude": 900.0,
-      "target_steps": 8
+      "max_steps_in_episode": 1800,
+      "e_floor": 19.812,
+      "e_tol": 19.812,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "target_altitude_range": [
+        3400.0,
+        7300.0
+      ],
+      "target_pattern": 5,
+      "speed_band_cost": true
     },
     "tuned_gains_key": "plane",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): the shipped model plans the earlier cost, so plane_energy's room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -99,7 +116,7 @@
   {
     "name": "plane_sine",
     "group": "aircraft",
-    "version": 3,
+    "version": 4,
     "display_name": "Altitude - sinusoid",
     "params_cls": [
       "target_gym.plane.env",
@@ -138,7 +155,11 @@
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -150,7 +171,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 5,
+    "version": 7,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -166,28 +187,38 @@
       "target_gym.plane3d.experts",
       "make_plane3d_heading_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane3d.oracle",
-      "make_plane3d_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 300,
-      "e_floor_altitude": 1.0,
-      "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.34421933365173735,
-      "rho_floor": 0.34421933365173735
+      "max_steps_in_episode": 600,
+      "e_floor_altitude": 19.812,
+      "e_tol_altitude": 19.812,
+      "e_floor_heading": 0.17453292519943295,
+      "failure_cost": 377468.4556213017,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "initial_altitude_offset_range": [
+        0.0,
+        0.0
+      ],
+      "turbulence_sigma": 0.55,
+      "amended": true,
+      "e_tol_heading": 0.17453292519943295,
+      "heading_clearance_period": 150.0
     },
     "tuned_gains_key": "plane3d_heading",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -248,7 +279,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 5,
+    "version": 8,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -264,28 +295,44 @@
       "target_gym.plane3d.experts",
       "make_plane3d_racetrack_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.plane3d.oracle",
-      "make_plane3d_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {
-      "max_steps_in_episode": 650,
-      "e_floor_altitude": 1.0,
-      "failure_cost": 297289728.0,
-      "rho_floor_tracking": 0.48693653444444446,
-      "rho_floor": 0.48693653444444446
+      "max_steps_in_episode": 1200,
+      "e_floor_altitude": 30.48,
+      "e_tol_altitude": 30.48,
+      "e_floor_heading": 0.17453292519943295,
+      "e_floor_path": 1389.0,
+      "failure_cost": 159201.0,
+      "rho_floor_tracking": 0.0,
+      "rho_floor": 0.0,
+      "initial_altitude_offset_range": [
+        0.0,
+        0.0
+      ],
+      "turbulence_sigma": 0.55,
+      "amended": true,
+      "e_tol_heading": 0.17453292519943295,
+      "e_tol_path": 1389.0,
+      "zone_onset_range": [
+        0.0,
+        1200.0
+      ],
+      "assigned_speed_mode": 1
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
       "gust_z"
     ],
     "disturbance_overrides": {
-      "turbulence_sigma": 3.0
+      "turbulence_sigma": 3.0,
+      "zone_onset_range": [
+        0.0,
+        0.0
+      ]
     },
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -427,7 +474,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 4,
+    "version": 6,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -457,9 +504,7 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "load_scale"
-    ]
+    "noise_fields": []
   },
   {
     "name": "first_order",
@@ -499,7 +544,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 4,
+    "version": 6,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",
@@ -529,14 +574,12 @@
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "load_scale"
-    ]
+    "noise_fields": []
   },
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 3,
+    "version": 5,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",
@@ -575,7 +618,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 4,
+    "version": 8,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",
@@ -600,24 +643,20 @@
     "tuned_gains_key": "distillation",
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [
-      "zF"
-    ],
+    "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "zF_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 3,
+    "version": 4,
     "display_name": "Glass Furnace",
     "params_cls": [
-      "target_gym.glass_furnace.env",
+      "target_gym.glass_furnace.env_jax",
       "GlassFurnaceParams"
     ],
     "env_factory": "_glass_furnace",
@@ -638,19 +677,15 @@
     "scored_overrides": {},
     "tuned_gains_key": "glass_furnace",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The oracle plans the valve on the env's own step and reward, with the episode's walks foreseen when given its seed, by SLSQP, which does not converge on this plant's ratchet: its plans bound the ceiling from above (glass_furnace/oracle.py).",
     "disturbance_fields": [
-      "m_pull_disturbance",
-      "lhv_deviation"
+      "walk"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
-    "expert_degraded": null,
+    "expert_degraded": "The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance test's two seeds, against 242,995 for the best constant valve (raw 0.0, 0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward prices as a step, so it loses glass where a wide constant margin does not: full back-off is what this reward pays for (PHYSICS.md, cold review item 4). A finding for the reference ladder; not tuned.",
     "mpc_degraded": null,
-    "noise_fields": [
-      "m_pull_noise_std",
-      "lhv_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "reactor",
@@ -692,7 +727,7 @@
   {
     "name": "hvac",
     "group": "industrial",
-    "version": 3,
+    "version": 5,
     "display_name": "Building HVAC",
     "params_cls": [
       "target_gym.hvac.env",
@@ -770,7 +805,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 3,
+    "version": 5,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",
@@ -795,21 +830,17 @@
     "tuned_gains_key": "boiler_drum",
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [
-      "q_steam"
-    ],
+    "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
-    "noise_fields": [
-      "q_steam_noise_std"
-    ]
+    "noise_fields": []
   },
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 3,
+    "version": 5,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",
@@ -842,13 +873,13 @@
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "turbulence_std"
+      "turbulence_iref"
     ]
   },
   {
     "name": "battery",
     "group": "energy",
-    "version": 3,
+    "version": 5,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",
@@ -874,14 +905,15 @@
     "gains_keys": [],
     "baselines_note": null,
     "disturbance_fields": [
-      "target_power"
+      "regulation"
     ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
     "mpc_degraded": null,
     "noise_fields": [
-      "dispatch_noise_std"
+      "signal_std",
+      "soc_error_std"
     ]
   }
 ]

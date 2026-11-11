@@ -1,0 +1,2522 @@
+{
+ "task": "hvac",
+ "protocol": "charter J3: the score's own reward planned with the true model, the true state and the episode's future, replayed on the env in float32 on seeds 100 to 109 at sensor noise 1; room = the kept reference's mean cost per step over the oracle's replayed one, on the same seeds",
+ "solver": "shared shooting IPM, one plan over the 1344-step episode, block 1, the slab heat's edge smoothed through K7 rungs 1, 0.1, 0.01 K (cap 500; the six seeds a rung capped re-solved through 1, 0.3, 0.1, 0.03, 0.01 K, cap 1500)",
+ "reference": "cascade",
+ "J_reference": 0.007452345246547205,
+ "J_ceiling": 0.005190448210229723,
+ "room_J": 1.435780677256266,
+ "scenarios": {
+  "normal": {
+   "weight": 0.46153846153846156,
+   "reference_mean": 0.008853270219842203,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0063324765627086445,
+   "ceiling_per_seed": [
+    0.006737196711973021,
+    0.004397128975099241,
+    0.007472209254393377,
+    0.005898254205627988,
+    0.00642700856336714,
+    0.005091777408565468,
+    0.007804154401085162,
+    0.006055956061962726,
+    0.00601212668398838,
+    0.007428953361023936
+   ],
+   "planned_mean": 0.006332176998706628,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.008853270219842203,
+   "room": 1.3980739023936186,
+   "terms_mean": {
+    "comfort": 3.4151545341116967e-07,
+    "electricity": 0.006332135047259294,
+    "failure": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 7.695953275326577e-09,
+    "max_iterations": 278,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.995811556960488e-09,
+    "max_planned_limit_excess": -1.0
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.006737196711973021,
+     "planned_cost_per_step": 0.006737226091614458,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.006737196711973021,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.544353103033764e-09,
+       "iterations": 29,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829881593518e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 0.0008782929752238879,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 1.576678284566635e-11
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9118814836271933e-11,
+       "iterations": 2,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807333173169e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.004397128975099241,
+     "planned_cost_per_step": 0.004397159427437501,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.004397128975099241,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.88316537743871e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829952477157e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 1.190092875687084e-09,
+       "iterations": 71,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 3.999200696395458e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883033e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.007472209254393377,
+     "planned_cost_per_step": 0.007472222050396806,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.007472209254393377,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 1.0763231674064301e-09,
+       "iterations": 26,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829849352349e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 7.672923646869323e-09,
+       "iterations": 17,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.980255443183338e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882603e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.005898254205627988,
+     "planned_cost_per_step": 0.005898265971801301,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.005898254205627988,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 3.841379755091186e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618830259034592e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 4.912764070670442e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9754072085773687e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883015e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.00642700856336714,
+     "planned_cost_per_step": 0.006427031087206024,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.00642700856336714,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.570773692028412e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829834663323e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.8441847316226215e-09,
+       "iterations": 104,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.6917149253350632e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127884057e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.005091777408565468,
+     "planned_cost_per_step": 0.00509070778195087,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 1.160949477166252e-06,
+      "electricity": 0.005090616460317203,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 5.959481178544439e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.6188298371065e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 0.06665544355104427,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 3.4549815593662806e-07
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.695953275326577e-09,
+       "iterations": 177,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.007804154401085162,
+     "planned_cost_per_step": 0.0078041603751016,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.007804154401085162,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.209130337925864e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829835794559e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.87002211341074e-09,
+       "iterations": 232,
+       "capped": false,
+       "failed": false,
+       "violation": 9.891277051365234e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.7294235123010883e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995811556960488e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.006055956061962726,
+     "planned_cost_per_step": 0.006055988287221169,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.006055956061962726,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.101338188311187e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829845395075e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.048491073417527e-09,
+       "iterations": 28,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.981332446236706e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882659e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.00601212668398838,
+     "planned_cost_per_step": 0.006010908392392375,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 1.323414677823989e-06,
+      "electricity": 0.006010803268466026,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.021831592157146e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829837702891e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 16.81757154102136,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 6.660176714827205e-05
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.515784658173078e-09,
+       "iterations": 278,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.007428953361023936,
+     "planned_cost_per_step": 0.007428100521944163,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 9.307903791214553e-07,
+      "electricity": 0.007428022570301047,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.76657894757295e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829881752538e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 0.028579217642678876,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 1.8456045292001365e-06
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 4.6614512225845845e-09,
+       "iterations": 250,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    }
+   ]
+  },
+  "cold_snap": {
+   "weight": 0.07692307692307693,
+   "reference_mean": 0.020133661691310426,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.01638975788405982,
+   "ceiling_per_seed": [
+    0.016777917807866333,
+    0.01398175375271378,
+    0.017850225033596092,
+    0.015875290976379932,
+    0.016534202336472282,
+    0.01484209202321619,
+    0.018291207012485496,
+    0.01603592582735776,
+    0.015984428982760403,
+    0.01772453508774994
+   ],
+   "planned_mean": 0.0163897754978225,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.020133661691310426,
+   "room": 1.2284294761237329,
+   "terms_mean": {
+    "comfort": 2.0308153888696066e-09,
+    "electricity": 0.016389755853166814,
+    "failure": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 7.65624522648401e-09,
+    "max_iterations": 394,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.995807240984404e-09,
+    "max_planned_limit_excess": -1.0
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.016777917807866333,
+     "planned_cost_per_step": 0.016777934554432328,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.016777917807866333,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.552562299807225e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683417414e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.435734482594838e-09,
+       "iterations": 78,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 3.264192941883109e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883139e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.01398175375271378,
+     "planned_cost_per_step": 0.013981771158778208,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 3.3846923147826776e-09,
+      "electricity": 0.013981750368354065,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.913687552794298e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882991334495e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 7.922860604028879e-09,
+       "iterations": 107,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.401298183942047e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 7.586168770142148e-09,
+       "iterations": 75,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.6017258387428616e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.017850225033596092,
+     "planned_cost_per_step": 0.01785026252566412,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.017850225033596092,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.545507870464384e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683417371e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.8326328841173405e-09,
+       "iterations": 135,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.65624522648401e-09,
+       "iterations": 48,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829817093643e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.015875290976379932,
+     "planned_cost_per_step": 0.015875307066524656,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.015875290976379932,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.5530658744883343e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683419156e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 7.346428581017147e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 4.269412847494073e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882614e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.016534202336472282,
+     "planned_cost_per_step": 0.016534180571073354,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 1.353876925913071e-08,
+      "electricity": 0.016534188799033428,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.624625592651437e-09,
+       "iterations": 21,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829843527854e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 4.5743811023485535e-08,
+       "iterations": 66,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 6.516263841090703e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882798e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.01484209202321619,
+     "planned_cost_per_step": 0.01484210437016485,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.01484209202321619,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.571105562865704e-09,
+       "iterations": 22,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683420445e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 7.284299150608001e-09,
+       "iterations": 49,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 6.103167065787173e-09,
+       "iterations": 371,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829807489002e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.018291207012485496,
+     "planned_cost_per_step": 0.01829124352964671,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.018291207012485496,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.5533310419594354e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683417224e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 0.005487719233397597,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 1.1088567650713291e-06
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 5.525248255081932e-09,
+       "iterations": 394,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.01603592582735776,
+     "planned_cost_per_step": 0.01603594642449487,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.01603592582735776,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.741982469850425e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829875093524e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.842664458308853e-09,
+       "iterations": 108,
+       "capped": false,
+       "failed": false,
+       "violation": 9.948002111273625e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9817734459944926e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807240984404e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.015984428982760403,
+     "planned_cost_per_step": 0.015984457243314844,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.015984428982760403,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.777884436851824e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882989183209e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.2019442487142903e-09,
+       "iterations": 42,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 2.0062836642024803e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.99580712788261e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.01772453508774994,
+     "planned_cost_per_step": 0.017724547534131076,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 3.3846923147826776e-09,
+      "electricity": 0.017724531700618433,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.5503199514436265e-09,
+       "iterations": 21,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683419957e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 4.281102329090627e-09,
+       "iterations": 22,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 6.90387878292692e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883099e-09
+      }
+     ]
+    }
+   ]
+  },
+  "shoulder_season": {
+   "weight": 0.3076923076923077,
+   "reference_mean": 0.002556546977309013,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0010971239354543763,
+   "ceiling_per_seed": [
+    0.0009831418137764558,
+    0.00036190414669233305,
+    0.0017407377968841804,
+    0.0008033221647132276,
+    0.0011109425580571042,
+    0.0004463128193276047,
+    0.0020325949739171414,
+    0.000812586850120819,
+    0.0007838663389390733,
+    0.0018958298921158228
+   ],
+   "planned_mean": 0.0010968536216651626,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.002556546977309013,
+   "room": 2.3302262348785723,
+   "terms_mean": {
+    "comfort": 3.9160890775660625e-07,
+    "electricity": 0.001096732326628907,
+    "failure": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 7.258653343115987e-09,
+    "max_iterations": 421,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.996972897932061e-09,
+    "max_planned_limit_excess": -1.0
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.0009831418137764558,
+     "planned_cost_per_step": 0.0009831461035985972,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0009831418137764558,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.011985453657007e-09,
+       "iterations": 32,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829825403971e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.3033409220863615e-09,
+       "iterations": 443,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 3.5836277595725217e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.996972897932061e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.00036190414669233305,
+     "planned_cost_per_step": 0.0003619041772392656,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.00036190414669233305,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.5290474073468727e-09,
+       "iterations": 39,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683431867e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 8.675788173246645e-11,
+       "iterations": 10,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.796961737390297e-09,
+       "iterations": 26,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 8.38243150944879e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.651747436570432e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.0017407377968841804,
+     "planned_cost_per_step": 0.0017380372886779173,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 3.5776198447343804e-06,
+      "electricity": 0.0017371601778623223,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.873933007658293e-09,
+       "iterations": 28,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829907584982e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.740182569877347e-05,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 6.565833062882564e-08
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.258653343115987e-09,
+       "iterations": 421,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.0008033221647132276,
+     "planned_cost_per_step": 0.000803327868101022,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0008033221647132276,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 6.06100201905231e-09,
+       "iterations": 33,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829821335697e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 9.196138773440339e-09,
+       "iterations": 81,
+       "capped": false,
+       "failed": false,
+       "violation": 9.983613938120794e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.034674161552655e-09,
+       "iterations": 510,
+       "capped": false,
+       "failed": false,
+       "violation": 9.987359604754704e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 8.47285267503714e-09,
+       "iterations": 139,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.978379869055476e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.0011109425580571042,
+     "planned_cost_per_step": 0.0011108911080102268,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 3.384692328316825e-07,
+      "electricity": 0.0011106040888242724,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.410847357352282e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829841875865e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 1.4532605494483083e-09,
+       "iterations": 33,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.200583962590761e-09,
+       "iterations": 621,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 4.383761792663432e-09,
+       "iterations": 361,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 4.129281141009959e-09,
+       "iterations": 141,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.0004463128193276047,
+     "planned_cost_per_step": 0.0004463128956696838,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0004463128193276047,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 1.0955882858601715e-09,
+       "iterations": 28,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829816469444e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.7121312210508686e-09,
+       "iterations": 29,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.7217872894661156e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.0020325949739171414,
+     "planned_cost_per_step": 0.002032609787485181,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0020325949739171414,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.063408321598725e-09,
+       "iterations": 29,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829819500525e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.674938398334495e-09,
+       "iterations": 165,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.2190672342782613e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.996002408112645e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.000812586850120819,
+     "planned_cost_per_step": 0.0008125891658431047,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.000812586850120819,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.273564741119225e-09,
+       "iterations": 32,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829825704234e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 1.0485557668340344e-09,
+       "iterations": 53,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 2.1197538883033326e-09,
+       "iterations": 441,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 4.887269387043832e-09,
+       "iterations": 165,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.8261836481033269e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.0007838663389390733,
+     "planned_cost_per_step": 0.000783866760607298,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0007838663389390733,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 4.785674635635503e-09,
+       "iterations": 28,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829832240508e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.260229852787561e-09,
+       "iterations": 263,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.940053386472943e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.996462952834912e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.0018958298921158228,
+     "planned_cost_per_step": 0.0018958510614193276,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0018958298921158228,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.00219928351347e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829841637321e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.592809232017215e-09,
+       "iterations": 99,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 3.4940276812980893e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995878474349768e-09
+      }
+     ]
+    }
+   ]
+  },
+  "sunny_spell": {
+   "weight": 0.11538461538461539,
+   "reference_mean": 0.005098851334960097,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.0029883651716859556,
+   "ceiling_per_seed": [
+    0.0034479624722426445,
+    0.0013629806249116968,
+    0.003951197204947849,
+    0.002551917159940959,
+    0.003011212247136947,
+    0.0018486146209830796,
+    0.004261536658690763,
+    0.0027267988478429503,
+    0.002642591454891393,
+    0.004078840425271275
+   ],
+   "planned_mean": 0.0029881010692074444,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.005098851334960097,
+   "room": 1.7062343595991856,
+   "terms_mean": {
+    "comfort": 5.273350611882203e-07,
+    "electricity": 0.002987837836608763,
+    "failure": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 8.570034619436596e-09,
+    "max_iterations": 352,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.997889940222517e-09,
+    "max_planned_limit_excess": -1.0
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.0034479624722426445,
+     "planned_cost_per_step": 0.003447603445735988,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 9.815607584295366e-07,
+      "electricity": 0.003446980911484215,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.819889394364876e-09,
+       "iterations": 33,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829817157477e-09
+      },
+      {
+       "widths": [
+        0.3
+       ],
+       "error": 7.822913121489072e-09,
+       "iterations": 322,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.672161947458712e-09,
+       "iterations": 22,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.03
+       ],
+       "error": 4.661769384417231e-09,
+       "iterations": 781,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 8.571019410988111e-10,
+       "iterations": 206,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.0013629806249116968,
+     "planned_cost_per_step": 0.0013629938426628814,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0013629806249116968,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 4.841996541730056e-09,
+       "iterations": 36,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829815570031e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 2.365716344579391e-09,
+       "iterations": 212,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 5.466205340066196e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127885313e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.003951197204947849,
+     "planned_cost_per_step": 0.003951207261945097,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.003951197204947849,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.032638587673034e-09,
+       "iterations": 29,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829836635037e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 7.515818500946031e-09,
+       "iterations": 128,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.6082464180494414e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882877e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.002551917159940959,
+     "planned_cost_per_step": 0.0025519326031658864,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.002551917159940959,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 8.252187771383776e-09,
+       "iterations": 32,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829970288404e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.759146226969587e-09,
+       "iterations": 292,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 9.263696489139773e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.996407094522104e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.003011212247136947,
+     "planned_cost_per_step": 0.0030112186986446902,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.003011212247136947,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.975597752950892e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829860966074e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.057217291226131e-09,
+       "iterations": 214,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 9.159297110226983e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995815148865403e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.0018486146209830796,
+     "planned_cost_per_step": 0.0018486245353124052,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0018486146209830796,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.769044299140904e-09,
+       "iterations": 30,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882981670393e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.7224085949091255e-09,
+       "iterations": 429,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.039338792181744e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.997156982256937e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.004261536658690763,
+     "planned_cost_per_step": 0.00425988611864673,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 2.254205060328981e-06,
+      "electricity": 0.004259282452663758,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.22952418888709e-09,
+       "iterations": 31,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829832062874e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.04034956263939e-10,
+       "iterations": 219,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.067972719659802e-09,
+       "iterations": 238,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829807490174e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.0027267988478429503,
+     "planned_cost_per_step": 0.0027268238104441907,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.0027267988478429503,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.769494673040297e-09,
+       "iterations": 32,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882982109878e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.908928101490685e-09,
+       "iterations": 103,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 5.488322332586501e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.997889940222517e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.002642591454891393,
+     "planned_cost_per_step": 0.002641856104307377,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 2.0375847931236854e-06,
+      "electricity": 0.002640553870904904,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.83282336224683e-09,
+       "iterations": 30,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829820027141e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 9.629371127173026e-09,
+       "iterations": 422,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 8.570034619436596e-09,
+       "iterations": 352,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.004078840425271275,
+     "planned_cost_per_step": 0.0040788642712092016,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.004078840425271275,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 5.1482046717940195e-09,
+       "iterations": 28,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829919752202e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.725371257245044e-09,
+       "iterations": 75,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 3.7605589034387153e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.996092606049622e-09
+      }
+     ]
+    }
+   ]
+  },
+  "low_gains": {
+   "weight": 0.038461538461538464,
+   "reference_mean": 0.011505480566147665,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_mean": 0.00844033194665653,
+   "ceiling_per_seed": [
+    0.00877520293752674,
+    0.006395094138237515,
+    0.009666744513586829,
+    0.008039377036593146,
+    0.008556259898926197,
+    0.007127068667614367,
+    0.010015457121231261,
+    0.008155264698351468,
+    0.00809908443140254,
+    0.009573766023095232
+   ],
+   "planned_mean": 0.008440347359485975,
+   "replay_trips": 0,
+   "reference_mean_same_seeds": 0.011505480566147665,
+   "room": 1.3631549847639977,
+   "terms_mean": {
+    "comfort": 2.369284620347874e-09,
+    "electricity": 0.008440329577188961,
+    "failure": 0.0
+   },
+   "solver": {
+    "max_kkt_error": 7.252111190672412e-09,
+    "max_iterations": 1,
+    "capped": 0,
+    "failed": 0,
+    "max_violation": 9.995812720957523e-09,
+    "max_planned_limit_excess": -1.0
+   },
+   "per_seed": [
+    {
+     "seed": 100,
+     "replay_cost_per_step": 0.00877520293752674,
+     "planned_cost_per_step": 0.008775227048379604,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.00877520293752674,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.604478507260325e-09,
+       "iterations": 26,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829856386406e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.147728416818288e-09,
+       "iterations": 39,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.6883415203571217e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883624e-09
+      }
+     ]
+    },
+    {
+     "seed": 101,
+     "replay_cost_per_step": 0.006395094138237515,
+     "planned_cost_per_step": 0.006395120317482124,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.006395094138237515,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 4.61689860209305e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829952108155e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 5.042553284962109e-09,
+       "iterations": 24,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9669812050880005e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882603e-09
+      }
+     ]
+    },
+    {
+     "seed": 102,
+     "replay_cost_per_step": 0.009666744513586829,
+     "planned_cost_per_step": 0.009666759536761896,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.009666744513586829,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.509710456756776e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 8.94930668342462e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 8.115144097027951e-09,
+       "iterations": 17,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9798181018866987e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 103,
+     "replay_cost_per_step": 0.008039377036593146,
+     "planned_cost_per_step": 0.008039391066066024,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.008039377036593146,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 1.8036981672524826e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829839315202e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 0.0009878177505870502,
+       "iterations": 500,
+       "capped": true,
+       "failed": false,
+       "violation": 9.957992927486633e-11
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.5828147216654436e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.994251898791113e-09
+      }
+     ]
+    },
+    {
+     "seed": 104,
+     "replay_cost_per_step": 0.008556259898926197,
+     "planned_cost_per_step": 0.008556268163679766,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.008556259898926197,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 5.5137286704249084e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618830134853557e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 2.590917589884686e-09,
+       "iterations": 78,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.586092125778222e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882753e-09
+      }
+     ]
+    },
+    {
+     "seed": 105,
+     "replay_cost_per_step": 0.007127068667614367,
+     "planned_cost_per_step": 0.00712705013532564,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 2.369284620347874e-08,
+      "electricity": 0.007127044972938685,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 3.783614689752407e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.6188298679768e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 3.066034034835722e-09,
+       "iterations": 47,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 7.252111190672412e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882998e-09
+      }
+     ]
+    },
+    {
+     "seed": 106,
+     "replay_cost_per_step": 0.010015457121231261,
+     "planned_cost_per_step": 0.010015475909946428,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.010015457121231261,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 2.5135386504535766e-09,
+       "iterations": 25,
+       "capped": false,
+       "failed": false,
+       "violation": 8.949306683424414e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 1.2036410435019255e-08,
+       "iterations": 41,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.9660438212384814e-11,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882601e-09
+      }
+     ]
+    },
+    {
+     "seed": 107,
+     "replay_cost_per_step": 0.008155264698351468,
+     "planned_cost_per_step": 0.008155276241012463,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.008155264698351468,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.53532609785127e-09,
+       "iterations": 27,
+       "capped": false,
+       "failed": false,
+       "violation": 9.618829885680142e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 2.7237956005835274e-09,
+       "iterations": 30,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.011482195018877e-10,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127885241e-09
+      }
+     ]
+    },
+    {
+     "seed": 108,
+     "replay_cost_per_step": 0.00809908443140254,
+     "planned_cost_per_step": 0.00809912200862591,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.00809908443140254,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.796196041309395e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882984120752e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 6.7414611549468564e-09,
+       "iterations": 79,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.240081458301726e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995812720957523e-09
+      }
+     ]
+    },
+    {
+     "seed": 109,
+     "replay_cost_per_step": 0.009573766023095232,
+     "planned_cost_per_step": 0.009573783167579916,
+     "replay_trips": 0,
+     "replay_terms_per_step": {
+      "comfort": 0.0,
+      "electricity": 0.009573766023095232,
+      "failure": 0.0
+     },
+     "certificates": [
+      {
+       "widths": [
+        1.0
+       ],
+       "error": 7.222492437229482e-09,
+       "iterations": 23,
+       "capped": false,
+       "failed": false,
+       "violation": 9.61882991146284e-09
+      },
+      {
+       "widths": [
+        0.1
+       ],
+       "error": 4.008740924519099e-09,
+       "iterations": 207,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127882598e-09
+      },
+      {
+       "widths": [
+        0.01
+       ],
+       "error": 1.7623936733309543e-09,
+       "iterations": 1,
+       "capped": false,
+       "failed": false,
+       "violation": 9.995807127883183e-09
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "generated": "2026-11-08, AMD EPYC 9454 (bob)"
+}

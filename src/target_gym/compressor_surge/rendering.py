@@ -4,7 +4,8 @@ The schematic is the compressor map at the current speed: the pressure-rise
 characteristic against the flow coefficient, the surge line at its peak, the
 anti-surge controller's control line to the right of it, the throttle curves
 the plenum sees, and the operating point. The gauges and strips put the header
-pressure beside its setpoint and the surge margin beside the trip.
+pressure beside its setpoint and zone, the surge margin beside the control
+line, and the surge counter beside its trip count.
 """
 
 import numpy as np
@@ -13,15 +14,29 @@ from target_gym import render_kit as rk
 from target_gym.compressor_surge.env import (
     KPA,
     characteristic,
+    compute_reward,
     consumer_flow,
     demand_opening,
     live_target,
     recycle_flow,
     suction_density,
+    surge_count,
     surge_flow_per_speed,
 )
 
-HISTORY_KEYS = ("t", "dp", "p_ref", "margin", "N", "x", "m_c", "m_d")
+HISTORY_KEYS = (
+    "t",
+    "dp",
+    "p_ref",
+    "lo",
+    "hi",
+    "margin",
+    "N",
+    "x",
+    "m_c",
+    "m_d",
+    "reward",
+)
 
 # Map extent in (Phi, Psi), and where it sits in the schematic's unit square.
 _PHI_LO, _PHI_HI = -0.05, 0.85
@@ -113,6 +128,19 @@ def _draw_map(ax, state, params, opening, control_line):
     )
     rk.glow(ax, float(u_op), float(v_op), 0.03, color=rk.ORANGE, strength=1.2)
     ax.plot([u_op], [v_op], "o", color=rk.ORANGE, ms=7, zorder=6)
+    n = int(surge_count(state, params, np))
+    trip_n = params.surge_trip_count
+    c = rk.DIM if n == 0 else (rk.AMBER if n < trip_n - 1 else rk.RED)
+    rk.label(
+        ax,
+        _X0 + 0.02,
+        _Y1 - 0.02,
+        f"SURGES {n} / {trip_n} in {params.surge_window:.0f} s",
+        color=c,
+        size=8,
+        weight="bold",
+        ha="left",
+    )
     rk.caption(
         ax,
         f"speed {100 * N:.1f} %  ·  dotted: consumer throttle (green), with recycle (purple)",
@@ -138,22 +166,29 @@ def render_compressor_surge(state, params, step, history):
     m_d = float(consumer_flow(float(state.dp), opening, params, np))
     margin = m_c / (float(surge_flow_per_speed(params)) * N) - 1.0
     err = abs(dp - target)
+    band = params.header_band / KPA
+    surges = int(surge_count(state, params, np))
 
     history["t"].append(step * params.delta_t)
     history["dp"].append(dp)
     history["p_ref"].append(target)
+    history["lo"].append(target - band)
+    history["hi"].append(target + band)
+    history["reward"].append(float(compute_reward(state, params)))
     history["margin"].append(100.0 * margin)
     history["N"].append(100.0 * N)
     history["x"].append(100.0 * x)
     history["m_c"].append(m_c)
     history["m_d"].append(m_d)
 
-    # WATCH inside the control line or a kPa off, ALARM near the line.
-    status = (
-        rk.ALARM
-        if margin <= 0.5 * control_line or err >= 3.0
-        else (rk.WATCH if margin < control_line or err >= 1.0 else rk.NOMINAL)
-    )
+    # ALARM one surge short of the trip or deep inside the control line;
+    # WATCH outside the header zone, inside the control line, or after a surge.
+    if surges >= params.surge_trip_count - 1 or margin <= 0.5 * control_line:
+        status = rk.ALARM
+    elif surges > 0 or margin < control_line or err > band:
+        status = rk.WATCH
+    else:
+        status = rk.NOMINAL
 
     dp_span = _DP_HI - _DP_LO
     speed_span = params.N_max - params.N_min
@@ -194,6 +229,14 @@ def render_compressor_surge(state, params, step, history):
             neg_color=rk.PINK,
             hidden=True,
         ),
+        rk.Gauge(
+            "SURGE COUNT",
+            f"{surges} / {params.surge_trip_count}",
+            surges / params.surge_trip_count,
+            rk.RED,
+            limit_frac=1.0,
+        ),
+        rk.cost_gauge(history["reward"], params, "kJ"),
     ]
 
     strips = [
@@ -201,6 +244,8 @@ def render_compressor_surge(state, params, step, history):
             history["t"],
             [
                 rk.Series(history["dp"], "header", rk.CYAN, fill_to=history["p_ref"]),
+                rk.Series(history["lo"], "zone", rk.GREEN, ls=":", lw=0.9),
+                rk.Series(history["hi"], "_zone_hi", rk.GREEN, ls=":", lw=0.9),
                 rk.Series(
                     history["p_ref"], "setpoint", "white", ls="--", lw=1.0, alpha=0.6
                 ),
@@ -227,7 +272,8 @@ def render_compressor_surge(state, params, step, history):
         gauges=gauges,
         strips=strips,
         status=status,
-        subtitle="speed and recycle are the inputs  ·  the plant trips at the surge line",
+        subtitle="speed and recycle are the inputs  ·  trips on "
+        f"{params.surge_trip_count} surges in {params.surge_window:.0f} s",
     )
     return rk.finish(fig), history
 

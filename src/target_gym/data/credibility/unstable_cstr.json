@@ -1,5 +1,5 @@
 {
-  "cpu": "Apple M4 Pro",
+  "cpu": "AMD EPYC 9454 48-Core Processor",
   "exception": "check 2: tau_j of 6 s is synthetic, and PHYSICS.md says so (accepted 2026-11-06)",
   "expert_figure": {
     "kind": "measured",
@@ -10,29 +10,25 @@
     "value": 3.0,
     "what": "+2 and -3 C deviations under PID at the unstable region of a laboratory CSTR, sodium thiosulfate and hydrogen peroxide; a rig, not a plant"
   },
-  "expert_fingerprint": "a97736478d92504d",
-  "generated": "2026-11-06T13:37:48+00:00",
-  "null_wins": [
-    "constant 0.0",
-    "constant 0.5",
-    "table"
-  ],
+  "expert_fingerprint": "fa3365489df15d16",
+  "generated": "2026-11-09T17:15:18+00:00",
+  "null_wins": [],
   "nulls": {
     "constant 0.0": {
-      "ratio": 147.05359666845635,
-      "win_rate": 1.0
+      "ratio": 1.4127512838012737e-06,
+      "win_rate": 0.0
     },
     "constant 0.5": {
-      "ratio": 60.95087732182972,
-      "win_rate": 1.0
+      "ratio": 6.491127962793415e-09,
+      "win_rate": 0.0
     },
     "constant 1.0": {
-      "ratio": 0.3387980096770976,
+      "ratio": 9.484328526546566e-10,
       "win_rate": 0.0
     },
     "table": {
-      "ratio": 18.818007654751458,
-      "win_rate": 1.0
+      "ratio": 9.748517286714968e-07,
+      "win_rate": 0.0
     }
   }
 }

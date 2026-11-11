@@ -22,7 +22,7 @@ import pytest
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
 
-STILL = BoilerDrumParams(q_steam_noise_std=0.0, sensor_noise_scale=0.0)
+STILL = BoilerDrumParams(sensor_noise_scale=0.0)
 ENV = BoilerDrum()
 RESET, STEP = jax.jit(ENV.reset_env), jax.jit(ENV.step_env)
 
@@ -86,11 +86,13 @@ def test_holding_the_readings_leaves_a_reset_plant_alone(seed):
 
 
 def test_steam_flow_is_proportional_to_pressure_at_a_fixed_valve():
-    """At 90 bar the valve set for 93.35 kg/s at 85 bar passes 98.84 kg/s."""
+    """At 90 bar a valve set for q kg/s at 85 bar passes q * 90 / 85 (98.84
+    kg/s for 93.35). The reset's valve is on its load plan's first load."""
     obs, state = _reset()
     high = _roll(state.replace(pressure=jnp.float32(90.0)), _held(obs), 1)
-    assert float(high.q_steam / high.pressure) == pytest.approx(93.35 / 85.0, rel=1e-5)
-    assert float(high.q_steam) == pytest.approx(98.84, rel=2e-3)
+    q = float(high.q_demand)
+    assert float(high.q_steam / high.pressure) == pytest.approx(q / 85.0, rel=1e-5)
+    assert float(high.q_steam) == pytest.approx(q * 90.0 / 85.0, rel=2e-3)
 
 
 @pytest.mark.parametrize("offset", [-5.0, 5.0])
@@ -101,6 +103,9 @@ def test_pressure_regulates_itself_at_fixed_fuel_and_valve(offset):
     at ``u2`` 0.7, so a real unit is back by 3/4 of the offset. The model's
     storage differs, so this asks only for half."""
     obs, state = _reset()
-    start = state.replace(pressure=state.pressure + offset)
+    # A fixed valve: the load plan holds still.
+    start = state.replace(
+        pressure=state.pressure + offset, ramp_rate=0.0 * state.ramp_rate
+    )
     last = _roll(start, _held(obs), 300)
     assert abs(float(last.pressure) - STILL.p_nominal) < 0.5 * abs(offset)

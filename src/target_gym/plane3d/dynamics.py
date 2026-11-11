@@ -39,7 +39,13 @@ def rolling_gust(key, speed, params):
     """
     dt, theta = params.delta_t, params.turbulence_theta
     retained = (1.0 - theta * dt) ** 2
-    sigma_w2 = params.turbulence_sigma**2 * dt / (1.0 - retained)
+    # ``turbulence_sigma`` is the OU innovation, or on the amended tasks the
+    # Dryden gust's stationary std itself (plane3d/PHYSICS.md).
+    sigma_w2 = jnp.where(
+        getattr(params, "amended", False),
+        params.turbulence_sigma**2,
+        params.turbulence_sigma**2 * dt / (1.0 - retained),
+    )
     span = params.wingspan
     length = params.turbulence_scale_length
     level = sigma_w2 / (speed * length)

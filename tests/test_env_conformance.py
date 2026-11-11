@@ -390,7 +390,11 @@ def _terminal_disturbances(spec, seeds, split_key, steps):
         )
         return [getattr(state, f) for f in spec.disturbance_fields]
 
-    return [[float(v) for v in terminal(jax.random.PRNGKey(seed))] for seed in seeds]
+    # An array field (glass_furnace's walks) counts each component.
+    return [
+        [float(x) for v in terminal(jax.random.PRNGKey(seed)) for x in np.ravel(v)]
+        for seed in seeds
+    ]
 
 
 def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
@@ -453,7 +457,8 @@ def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
             _, s, _, terminated, _ = _step(sub, s, action, params)
             if bool(terminated):
                 break
-        finals.append(tuple(float(getattr(s, f)) for f in spec.disturbance_fields))
+        fields = spec.disturbance_fields
+        finals.append(tuple(float(x) for f in fields for x in np.ravel(getattr(s, f))))
     assert len(set(finals)) > 1, "PRNG key had no effect on the disturbance"
 
 
@@ -930,8 +935,7 @@ def test_no_new_write_only_state_fields():
 # Check 4. Tuple unpacks that discard a component. The two dynamics discard
 # position coordinates the equations of motion genuinely do not depend on. The
 # two oracles' steps discard the target from their task data: no plant depends
-# on its target, and the cost reads it from ``task[0]`` itself, with the wind's
-# clock from ``task[1]``, which only times the target. The reactor's
+# on its target, and the cost reads it from ``task[0]`` itself. The reactor's
 # reactivity reads four of its slow states; ``_slow_rates`` takes all six.
 KNOWN_DISCARDED_UNPACKS = {
     ("plane/dynamics.py", "_, z, theta = positions"),
@@ -939,8 +943,7 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane/oracle.py", "_, z, theta = positions"),
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
-    ("energy/wind_turbine/oracle.py", "_, _, v_mean, deviation = task"),
-    ("glass_furnace/oracle.py", "_, start, lhv, disturbance = task"),
+    ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now, gust_t0, _ = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }
 
@@ -1169,7 +1172,7 @@ KNOWN_SEAMS = {
     "plane3d_figure8": "shock-stall model near 308 m/s, unreachable",
     "battery": "state-of-charge-dependent power limit binding near soc 0.115",
     "reactor": "fuel-temperature feedback near 718 K",
-    "glass_furnace": "m_batch = maximum(.., 0) -- the batch blanket running out",
+    "glass_furnace": "advance_blanket: mass floored at 0 -- the blanket running out",
 }
 SEAM_LIMIT = 0.5
 

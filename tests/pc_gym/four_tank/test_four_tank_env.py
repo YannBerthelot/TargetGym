@@ -7,7 +7,6 @@ from target_gym.pc_gym.four_tank.env import (
     FourTankState,
     check_is_terminal,
     compute_next_state,
-    compute_reward,
     compute_velocity,
 )
 
@@ -167,48 +166,12 @@ def test_not_terminal_in_bounds(params, state):
     assert not trunc
 
 
-def test_terminal_when_tank_overflows(params, state):
-    term, _ = check_is_terminal(state.replace(h1=params.h_max + 0.1), params)
-    assert term
-
-
-def test_terminal_when_tank_underflows(params, state):
-    term, _ = check_is_terminal(state.replace(h3=params.h_min - 0.01), params)
-    assert term
-
-
-def test_reward_is_1_at_target(params):
-    state = FourTankState(
-        time=0,
-        h1=0.7,
-        h2=0.7,
-        h3=0.3,
-        h4=0.3,
-        target_h1=0.7,
-        target_h2=0.7,
-        v1=5.0,
-        v2=5.0,
-    )
-    assert compute_reward(state, params) == pytest.approx(1.0)
-
-
-def test_reward_decreases_with_error(params):
-    """Errors are compared inside the tracking band.
-
-    Both offsets used to be tenths of a metre, which the band-scaled reward
-    now clips to zero -- indistinguishable, and on a plant whose setpoints
-    live between 0.11 and 0.19 m they were never realistic errors anyway.
-    """
-    common = dict(
-        time=0, h3=0.3, h4=0.12, target_h1=0.15, target_h2=0.20, v1=5.0, v2=7.0
-    )
-    r_close = compute_reward(
-        FourTankState(h1=0.15 - 0.005, h2=0.20 - 0.005, **common), params
-    )
-    r_far = compute_reward(
-        FourTankState(h1=0.15 - 0.030, h2=0.20 - 0.030, **common), params
-    )
-    assert r_close > r_far > 0.0
+def test_a_full_or_empty_tank_does_not_trip(params, state):
+    """No overflow trip or interlock was found on the rig, and an empty tank
+    is its physical floor (REALITY.md, Limits [S2, p. 121; S4, p. 15])."""
+    for h in (0.0, params.h_max):
+        term, _ = check_is_terminal(state.replace(h1=h, h3=h), params)
+        assert not term
 
 
 # ---------------------------------------------------------------------------
@@ -233,65 +196,6 @@ def _steady_levels(v1, v2, p):
     return h1, h2
 
 
-def test_every_target_is_individually_reachable():
-    """No sampled setpoint may lie above what saturated pumps can hold."""
-    p = FourTankParams(reward_version=1)
-    h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
-    assert p.target_h1_range[1] < h1_max, (
-        f"target h1 up to {p.target_h1_range[1]} exceeds the maximum "
-        f"sustainable level {h1_max:.3f}"
-    )
-    assert p.target_h2_range[1] < h2_max, (
-        f"target h2 up to {p.target_h2_range[1]} exceeds the maximum "
-        f"sustainable level {h2_max:.3f}"
-    )
-
-
-def test_every_target_pair_is_jointly_reachable():
-    """The pumps are cross-coupled, so h1 and h2 must be attainable *together*.
-
-    Targets are sampled independently, so individual reachability is not
-    enough -- the whole box has to lie inside the image of the steady-state
-    map over the admissible voltages.
-    """
-    p = FourTankParams(reward_version=1)
-    V = _np.linspace(max(p.v_min, 1e-3), p.v_max, 220)
-    reach = _np.array([_steady_levels(a, b, p) for a in V for b in V])
-    for t1 in _np.linspace(*p.target_h1_range, 6):
-        for t2 in _np.linspace(*p.target_h2_range, 6):
-            d = _np.min((reach[:, 0] - t1) ** 2 + (reach[:, 1] - t2) ** 2)
-            assert (
-                _np.sqrt(d) < 0.006
-            ), f"target pair ({t1:.3f}, {t2:.3f}) is not jointly reachable"
-
-
-def test_targets_leave_voltage_headroom():
-    """Holding the top of the range must not need a saturated pump."""
-    p = FourTankParams(reward_version=1)
-    need = None
-    for v in _np.linspace(max(p.v_min, 1e-3), p.v_max, 400):
-        if _steady_levels(v, v, p)[0] >= p.target_h1_range[1]:
-            need = v
-            break
-    assert need is not None
-    assert need < 0.9 * p.v_max, f"top target needs {need:.2f} V of {p.v_max}"
-
-
-def test_initial_levels_start_inside_the_operating_envelope():
-    """An episode must not begin above a level the plant can never hold."""
-    p = FourTankParams(reward_version=1)
-    h1_max, h2_max = _steady_levels(p.v_max, p.v_max, p)
-    assert p.initial_h1_range[1] <= h1_max
-    assert p.initial_h2_range[1] <= h2_max
-    for rng in (
-        p.initial_h1_range,
-        p.initial_h2_range,
-        p.initial_h3_range,
-        p.initial_h4_range,
-    ):
-        assert rng[0] > p.h_min, "an episode may not start already tripped"
-
-
 def test_relative_gain_array_demands_the_cross_pairing():
     """gamma1 + gamma2 < 1 puts the plant in the non-minimum-phase regime.
 
@@ -305,16 +209,8 @@ def test_relative_gain_array_demands_the_cross_pairing():
     lam = p.gamma1 * p.gamma2 / (p.gamma1 + p.gamma2 - 1.0)
     assert lam < 0.0
 
-    # The same conclusion from the measured gain matrix: the off-diagonal
-    # terms dominate.
-    v0, eps = 7.0, 1e-4
-    G = _np.zeros((2, 2))
-    for j, (d1, d2) in enumerate(((eps, 0.0), (0.0, eps))):
-        plus = _np.array(_steady_levels(v0 + d1, v0 + d2, p))
-        minus = _np.array(_steady_levels(v0 - d1, v0 - d2, p))
-        G[:, j] = (plus - minus) / (2 * eps)
-    assert abs(G[1, 0]) > 2 * abs(G[0, 0]), "v1 should move h2 far more than h1"
-    assert abs(G[0, 1]) > 2 * abs(G[1, 1]), "v2 should move h1 far more than h2"
+    # The size of the cross gains against the rigs' is in
+    # test_four_tank_reality.py.
 
 
 def _voltages_for(t1, t2, p, load=(0.0, 0.0)):
@@ -332,90 +228,3 @@ def _voltages_for(t1, t2, p, load=(0.0, 0.0)):
         ]
     )
     return _np.linalg.solve(A, b)
-
-
-def test_upper_tanks_keep_margin_above_the_low_level_trip():
-    """The subtler reachability constraint, and the one that actually bit.
-
-    A high h1 with a low h2 is held by a *low* v1 and a high v2 -- and v1 is
-    what feeds tank 4. With a wider target box the steady h4 at that corner sat
-    only 16 mm above the trip, so a transient dip ended the episode and one
-    seed in twenty failed regardless of gains. Every corner must leave real
-    margin.
-    """
-    p = FourTankParams(reward_version=1)
-    worst = _np.inf
-    for t1 in _np.linspace(*p.target_h1_range, 6):
-        for t2 in _np.linspace(*p.target_h2_range, 6):
-            v1, v2 = _voltages_for(t1, t2, p)
-            assert 0.0 <= v1 <= p.v_max and 0.0 <= v2 <= p.v_max
-            h4 = ((1 - p.gamma1) * p.k1 * v1 / p.a4) ** 2 / (2 * p.g)
-            h3 = ((1 - p.gamma2) * p.k2 * v2 / p.a3) ** 2 / (2 * p.g)
-            assert h3 < p.h_max, "upper tank 3 would overflow"
-            worst = min(worst, h4)
-    assert worst - p.h_min >= 0.030, (
-        f"worst-case steady h4 is {worst:.3f} m, only "
-        f"{worst - p.h_min:.3f} m above the {p.h_min} m trip"
-    )
-
-
-def test_every_load_leaves_each_target_held_and_the_upper_tanks_clear_of_the_trip():
-    """The same 30 mm with a load drawing on the pumps: at a corner of the box,
-    a load that needs less of pump 1 takes level out of tank 4."""
-    p = FourTankParams()
-    d = p.load_flow
-    worst = _np.inf
-    for t1 in p.target_h1_range:
-        for t2 in p.target_h2_range:
-            for load in ((-d, -d), (-d, d), (d, -d), (d, d)):
-                v1, v2 = _voltages_for(t1, t2, p, load)
-                assert p.v_min <= min(v1, v2) and max(v1, v2) <= p.v_max
-                h4 = ((1 - p.gamma1) * p.k1 * v1 / p.a4) ** 2 / (2 * p.g)
-                h3 = ((1 - p.gamma2) * p.k2 * v2 / p.a3) ** 2 / (2 * p.g)
-                worst = min(worst, h3, h4)
-    assert worst - p.h_min >= 0.030
-
-
-def test_a_load_is_a_flow_into_its_own_lower_tank():
-    """It adds ``load / A`` to that tank's balance and nothing to the others."""
-    p = FourTankParams()
-    h = jnp.array([0.15, 0.2, 0.3, 0.2])
-    u = jnp.array([6.0, 6.0])
-    quiet = compute_velocity(h, u, p)[0]
-    loaded = compute_velocity(h, u, p, load=jnp.array([2e-4, -1e-4]))[0]
-    expected = jnp.array([2e-4 / p.A1, -1e-4 / p.A2, 0.0, 0.0])
-    _np.testing.assert_allclose(loaded - quiet, expected, rtol=1e-3, atol=1e-9)
-
-
-def test_tracking_band_is_scaled_to_the_operating_range():
-    """The reward must discriminate over the levels this plant actually reaches.
-
-    It was previously scaled by the whole tank span (h_max - h_min = 1.45 m),
-    about three times the reachable range, so a half-metre miss still scored
-    0.43 and a saturated controller looked much like a working one.
-    """
-    p = FourTankParams(reward_version=1)
-    span = p.target_h1_range[1] - p.target_h1_range[0]
-    assert p.tracking_band < p.h_max - p.h_min
-    assert p.tracking_band <= span, "band is wider than the whole setpoint range"
-
-
-def test_reward_falls_to_zero_outside_the_band():
-    """Clipped, so a larger error can never score better than a smaller one."""
-    p = FourTankParams(reward_version=1)
-    base = dict(time=0, h3=0.3, h4=0.12, target_h1=0.15, target_h2=0.20, v1=5.0, v2=7.0)
-    prev = None
-    for err in (0.0, 0.01, 0.03, 0.05, 0.20, 1.0):
-        st = FourTankState(h1=0.15 + err, h2=0.20 + err, **base)
-        r = float(compute_reward(st, p))
-        assert 0.0 <= r <= 1.0
-        if prev is not None:
-            assert r <= prev + 1e-9, "reward must never increase with error"
-        prev = r
-    # Log-scaled rather than clipped, so a large error scores small but not
-    # exactly zero -- it still carries a gradient home, which a clipped band did
-    # not. Zero arrives only at the full level envelope.
-    assert prev < 0.25
-    span = p.h_max - p.h_min
-    far = FourTankState(h1=0.15 + span, h2=0.20 + span, **base)
-    assert float(compute_reward(far, p)) == pytest.approx(0.0, abs=1e-6)

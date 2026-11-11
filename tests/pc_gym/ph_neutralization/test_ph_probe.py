@@ -18,22 +18,25 @@ from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
 
 def test_a_step_in_the_tanks_ph_reaches_the_probe_late_and_lagged():
     env = PHNeutralization()
-    params = env.default_params.replace(q2_noise_std=0.0, sensor_noise_scale=0.0)
+    params = env.default_params.replace(
+        q2_noise_std=0.0, sensor_noise_scale=0.0, acid_upset_size=0.0, flow_swing=0.0
+    )
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
     before = float(state.pH)
 
-    # The tank jumps to the steady state of a new base flow, and that flow holds it.
+    # Both tanks jump to the steady state of a new base flow, and that flow
+    # holds them (the trim valve shut).
     q3 = float(state.q3) + 1.0
     Wa, Wb = steady_state_invariants(q3, state.q2, params)
     after = float(solve_pH(Wa, Wb, params))
     assert abs(after - before) > 0.2
-    state = state.replace(Wa=Wa, Wb=Wb)
+    state = state.replace(Wa=Wa, Wb=Wb, Wa_s1=Wa, Wb_s1=Wb)
     raw = 2.0 * (q3 - params.q3_min) / (params.q3_max - params.q3_min) - 1.0
 
     read = []
     for _ in range(5):
-        obs, state, *_ = env.step_env(key, state, jnp.array([raw]), params)
+        obs, state, *_ = env.step_env(key, state, jnp.array([raw, -1.0]), params)
         read.append((float(obs[0]) - before) / (after - before))
 
     # 1e-3 of the step: the bisection and float32 resolve pH to about 1e-5.

@@ -20,16 +20,19 @@ from target_gym.pc_gym.cstr.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    feed_temperature,
     get_obs,
+    steady_state,
 )
 from target_gym.pc_gym.cstr.rendering import _render
 from target_gym.video import SavesVideo
 
 
 class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRParams]):
-    """Exothermic CSTR holding concentration through unmeasured feed loads.
+    """Jacketed exothermic CSTR holding its temperature with cooling water.
 
-    Action (1,): [coolant temperature], raw in [-1, 1] -> [T_c_min, T_c_max]
+    Observation (4,): [T, T_j, F_w_pct, T_setpoint]
+    Action      (1,): cooling water, raw in [-1, 1] -> [Fw_min, Fw_max]
     """
 
     registry_name: str = "cstr"
@@ -38,20 +41,21 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     screen_width = 600
     screen_height = 400
 
-    # obs = [C_a, T, target_CA]
-    obs_value_index: int = 0  # C_a (concentration)
-    tracked_names: tuple = ("C_a (mol/L)",)
-    obs_target_index: int = 2  # target_CA
+    # obs = [T, T_j, F_w_pct, T_setpoint]
+    obs_value_index: int = 0  # T
+    tracked_names: tuple = ("T (K)",)
+    obs_target_index: int = 3  # the setpoint
 
-    # Process photometer on a 1 min sample loop, and Pt100 RTD (PHYSICS.md
-    # section on readings). ``dead_time`` is in ``delta_t``'s minutes.
+    # Readings, in ``delta_t``'s minutes (PHYSICS.md, Readings): the reactor's
+    # Pt100 in a thin-walled thermowell, 63 % in about 13 s [S10, Fig. 2]; the
+    # jacket outlet, about 2 min late [S6].
     readings: tuple = (
-        FieldReading("C_a", sigma=5e-4, dead_time=1.0),
-        FieldReading("T", sigma=0.04),
+        FieldReading("T", sigma=0.04, lag=13.0 / 60.0),
+        FieldReading("T_j", sigma=0.04, dead_time=2.0),
     )
 
     def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (3,)
+        self.obs_shape = (4,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -123,30 +127,35 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         if params is None:
             params = self.default_params
 
-        key, target_key, C_a_key = jax.random.split(key, 3)
+        feed_key, event_key = jax.random.split(key)
 
-        initial_C_a = jax.random.uniform(
-            C_a_key,
-            minval=params.initial_CA_range[0],
-            maxval=params.initial_CA_range[1],
-        )
-
-        initial_target_C_a = jax.random.uniform(
-            target_key,
-            minval=params.target_CA_range[0],
-            maxval=params.target_CA_range[1],
-        )
-
+        # Established operation (charter rule 17): the reactor on the steady
+        # state that holds its setpoint for the feed it meets today, the
+        # cooling water where that needs it.
+        phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
+        T_feed = feed_temperature(phase, params, 0.0)
+        T = jnp.asarray(params.T_setpoint)
+        C_a, T_j, F_w = steady_state(T, T_feed, params)
+        lo, hi = params.event_window
         state = CSTRState(
             time=0,
-            C_a=initial_C_a,
-            T=params.initial_T,
-            target_CA=initial_target_C_a,
-            T_c=0.0,
+            C_a=C_a,
+            T=T,
+            target_T=T,
+            F_w=jnp.clip(F_w, params.Fw_min, params.Fw_max),
+            T_j=T_j,
+            T_feed=T_feed,
+            feed_phase=phase,
+            event_at=jax.random.uniform(event_key, minval=lo, maxval=hi),
         )
 
         obs = self.get_obs(state)
         return obs, state
+
+    def initial_action(self, state, params):
+        """The raw action that holds the reset's cooling water."""
+        span = params.Fw_max - params.Fw_min
+        return jnp.reshape(2.0 * (state.F_w - params.Fw_min) / span - 1.0, (1,))
 
     def action_space(self, params: CSTRParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""

@@ -172,9 +172,13 @@ def test_without_recorded_moves_the_best_known_is_unknown():
     assert math.isnan(best["oracle_settling_ratio"])
 
 
-# The ceiling of every environment. hvac prices comfort without
-# ``reward.tracking_cost`` and has its own test below.
-_VIA_TRACKING_COST = sorted(n for n in REGISTRY if n != "hvac")
+# The ceiling of every environment. hvac prices comfort, and glass_furnace lost glass,
+# without ``reward.tracking_cost``; each has its own test below. Tasks scored on
+# the operator's job (charter B5) track no setpoint.
+_PRICED_DIRECTLY = ("hvac", "glass_furnace")
+_VIA_TRACKING_COST = sorted(
+    n for n in REGISTRY if n not in _PRICED_DIRECTLY and n not in scoring.JOB_SCORED
+)
 
 
 def _control_step_tracking(env, state, params) -> float:
@@ -191,13 +195,6 @@ def test_a_reactor_step_sums_its_sub_steps_at_the_ceilings_price():
     K x 30 / 3600 h = $0.0958."""
     params = REGISTRY["reactor"].make_test_params()
     assert scoring.ceiling("reactor", params) == pytest.approx(0.09583, rel=1e-3)
-
-
-def test_the_wind_ceiling_is_the_class_01s_meter_at_rated_power():
-    """A class 0.1S meter at 5 MW resolves 1.7 kW, and tracking is linear at
-    $100/MWh over 0.25 s: 1700 W x 100 / 1e6 x 0.25 / 3600 = $1.18e-5."""
-    params = REGISTRY["wind_turbine"].make_test_params()
-    assert scoring.ceiling("wind_turbine", params) == pytest.approx(1.18e-5, rel=2e-3)
 
 
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
@@ -223,21 +220,21 @@ def test_the_ceiling_is_the_rewards_tracking_cost_at_one_resolution(name, monkey
     assert tracking == pytest.approx(scoring.ceiling(name, params), rel=1e-5)
 
 
-def test_the_building_ceiling_is_the_comfort_price_of_one_resolution():
-    from target_gym.hvac.env import is_occupied
-
-    spec = REGISTRY["hvac"]
+def test_a_furnace_step_one_resolution_short_loses_its_glass():
+    """Hand-worked, independent of ``scoring``: 5.79 kg/s for one 120 s step is
+    0.6948 t, at 600 EUR/t 416.88 EUR. Short of the pass mark by the reading's
+    scatter, the reward charges all of it, and that is the ceiling and the band."""
+    spec = REGISTRY["glass_furnace"]
     env, params = spec.make_env(), spec.make_test_params()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    occupied = next(
-        t for t in np.arange(0.0, 7 * 86400.0, 900.0) if bool(is_occupied(t, params))
-    )
-    state = state.replace(
-        time=occupied,
-        T_air=state.target_T + params.comfort_tolerance + params.precision_floor,
-    )
+    short = state.plant.fining * 0.0 + params.fining_pass - params.e_floor
+    state = state.replace(plant=state.plant.replace(fining=short), pull=params.pull)
     tracking = float(env.reward_terms(state, params)["tracking"])
-    assert tracking == pytest.approx(scoring.ceiling("hvac", params), rel=1e-5)
+    assert tracking == pytest.approx(416.88, rel=1e-4)
+    assert scoring.ceiling("glass_furnace", params) == pytest.approx(416.88, rel=1e-4)
+    assert scoring.settle_band("glass_furnace", params) == pytest.approx(
+        416.88, rel=1e-4
+    )
 
 
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
@@ -258,22 +255,14 @@ def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeyp
     assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
 
 
-def test_the_building_settles_within_its_ceiling():
-    """hvac has no floor: its band is the comfort tolerance plus one
-    resolution, which is its ceiling."""
-    params = REGISTRY["hvac"].make_test_params()
-    assert scoring.settle_band("hvac", params) == scoring.ceiling("hvac", params)
-
-
 @pytest.mark.parametrize(
     "name, floor, reading",
     [
-        ("cstr", "e_floor", "C_a"),
-        ("unstable_cstr", "e_floor", "C_a"),
+        ("cstr", "e_floor", "T"),
+        ("unstable_cstr", "e_floor", "T"),
         ("distillation", "e_floor_top", "x"),
         ("distillation", "e_floor_bottom", "x"),
         ("boiler_drum", "e_floor_pressure", "pressure"),
-        ("glass_furnace", "e_floor", "T_crown_meas"),
         ("wind_turbine", "e_floor", "power"),
     ],
 )
@@ -690,7 +679,7 @@ def test_the_consumption_is_the_quantity_the_reward_charges(name):
 def test_every_task_states_a_band_per_tracked_output_or_none(name):
     spec = REGISTRY[name]
     band = scoring.spec_band(name)
-    if name == "hvac":  # one-sided at night, and the reward prices it
+    if name in _PRICED_DIRECTLY:  # one-sided, and the reward prices it
         assert band is None
         return
     assert band.shape == (len(spec.make_env().tracked_names),)
@@ -704,8 +693,7 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
         ("plane3d_racetrack", [65.0 * 0.3048]),
         ("patrol", [8.5]),  # the slot's 8.5 m, patrol/PHYSICS.md
         ("formation", [20.0, 8.5, 8.5]),  # the lead, then each wingman
-        ("ph_neutralization", [0.5]),  # pH 6 to 9, from a target as low as 6.5
-        ("glass_furnace", [10.0]),  # +-10 C, a vendor's melting-section figure
+        ("ph_neutralization", [1.0]),  # the permit range pH 7 +-1 [P7]
     ],
 )
 def test_a_published_tolerance_is_the_band(name, band):
@@ -728,7 +716,6 @@ def test_a_task_with_no_published_tolerance_gets_ten_floors(name, band):
 def test_a_tolerance_says_how_far_it_was_sourced():
     """A secondary source says so, and a figure no second pass could re-open is
     labelled ours: the rods' +-1.5 F, 1.5 / 1.8 K."""
-    assert scoring.SPEC_BAND["glass_furnace"][1].startswith("secondary")
     assert scoring.SPEC_BAND["reactor"][1].startswith("ours")
     np.testing.assert_allclose(scoring.spec_band("reactor"), [1.5 / 1.8])
 

@@ -13,18 +13,15 @@ import pytest
 
 from target_gym.hvac.env import (
     HVACParams,
-    HVACState,
-    check_is_terminal,
     compute_next_state,
-    compute_reward,
     hour_of_day,
     internal_gain,
     is_occupied,
     outdoor_temperature,
-    scheduled_setpoint,
     solar_gain,
     solve_air_and_surface,
     split_gains,
+    steady_state,
     total_heat_loss_coefficient,
     zone_conductances,
 )
@@ -38,9 +35,7 @@ HEATER_MARGIN_RANGE = (1.3, 2.0)
 
 @pytest.fixture(scope="module")
 def params():
-    # Version-1 reward: the reward tests in this file describe the capped
-    # log shape; version 2 is covered by tests/test_reward_contract.py.
-    return HVACParams(reward_version=1)
+    return HVACParams()
 
 
 def _steady_free_float(params, hours, T_out_fixed, T_start=20.0):
@@ -58,7 +53,7 @@ def _steady_free_float(params, hours, T_out_fixed, T_start=20.0):
     )
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, p)
-    state = state.replace(T_mass=T_start, weather_dev=0.0)
+    state = state.replace(T_mass=T_start, T_core=T_start, weather_dev=0.0)
     _jstep = jax.jit(env.step_env)
     for _ in range(steps):
         _, state, _, terminated, _ = _jstep(key, state, jnp.array([-1.0]), p)
@@ -92,7 +87,7 @@ def test_envelope_series_split_is_consistent(params):
 def test_air_sits_between_outdoor_and_mass_when_heating_is_off(params):
     """With no heat input the air must lie between the two things driving it."""
     T_air, T_surface = solve_air_and_surface(
-        T_mass=20.0, T_out=0.0, Q_heat=0.0, phi_st=0.0, phi_ia=0.0, params=params
+        T_mass=20.0, T_core=20.0, T_out=0.0, phi_st=0.0, phi_ia=0.0, params=params
     )
     assert 0.0 < T_air < 20.0
     assert 0.0 < T_surface < 20.0
@@ -101,17 +96,17 @@ def test_air_sits_between_outdoor_and_mass_when_heating_is_off(params):
 
 
 def test_heating_raises_air_temperature(params):
-    """Monotonicity: more heat, warmer air."""
+    """Monotonicity: a warmer slab core, warmer air."""
     temps = [
-        solve_air_and_surface(20.0, 0.0, q, 0.0, 0.0, params)[0]
-        for q in (0.0, 2000.0, 5000.0)
+        solve_air_and_surface(20.0, core, 0.0, 0.0, 0.0, params)[0]
+        for core in (20.0, 25.0, 30.0)
     ]
     assert temps[0] < temps[1] < temps[2]
 
 
 def test_colder_outdoors_lowers_air_temperature(params):
     temps = [
-        solve_air_and_surface(20.0, t, 2000.0, 0.0, 0.0, params)[0]
+        solve_air_and_surface(20.0, 25.0, t, 0.0, 0.0, params)[0]
         for t in (-10.0, 0.0, 10.0)
     ]
     assert temps[0] < temps[1] < temps[2]
@@ -151,8 +146,8 @@ def test_mass_node_is_driven_toward_its_surroundings(params):
 
     def dT_mass(T_mass, p):
         v, _ = compute_velocity(
-            jnp.array([T_mass, 0.0]),
-            action=0.0,
+            jnp.array([T_mass, 20.0]),
+            action=params.T_supply_min,
             time=40,
             weather_dev=0.0,
             params=p,
@@ -164,21 +159,6 @@ def test_mass_node_is_driven_toward_its_surroundings(params):
     assert dT_mass(30.0, cold_outdoors) < 0.0
     # And the drive is monotone in the gradient.
     assert dT_mass(-20.0, cold_outdoors) > dT_mass(0.0, cold_outdoors)
-
-
-def test_emitter_lags_the_command(params):
-    """The heating system cannot deliver a step change in output."""
-    from target_gym.hvac.env import compute_velocity
-
-    v, _ = compute_velocity(
-        jnp.array([20.0, 0.0]),
-        action=params.Q_heat_max,
-        time=40,
-        weather_dev=0.0,
-        params=params,
-    )
-    expected = params.Q_heat_max / params.emitter_tau
-    assert float(v[1]) == pytest.approx(expected, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -193,16 +173,12 @@ def test_hour_of_day_wraps_over_a_day(params):
     assert float(hour_of_day(steps_per_day, params)) == pytest.approx(0.0)
 
 
-def test_occupancy_and_setpoint_follow_the_schedule(params):
+def test_occupancy_follows_the_schedule(params):
     steps_per_hour = int(3600 / params.delta_t)
     night = 3 * steps_per_hour
     midday = 13 * steps_per_hour
     assert not bool(is_occupied(night, params))
     assert bool(is_occupied(midday, params))
-    assert float(scheduled_setpoint(night, 21.0, params)) == pytest.approx(
-        params.setpoint_setback
-    )
-    assert float(scheduled_setpoint(midday, 21.0, params)) == pytest.approx(21.0)
 
 
 def test_internal_gain_is_higher_when_occupied(params):
@@ -252,25 +228,11 @@ def test_design_heat_load_matches_a_well_insulated_building(params):
     ), f"{load_per_m2:.1f} W/m2"
 
 
-def test_heater_is_sized_against_the_design_load(params):
-    """Plant sizing convention: 1.3-2x the design load."""
-    H = total_heat_loss_coefficient(params)
-    design_load = H * (20.0 - (-10.0))
-    margin = params.Q_heat_max / design_load
-    assert HEATER_MARGIN_RANGE[0] < margin < HEATER_MARGIN_RANGE[1], f"{margin:.2f}x"
-
-
 def test_heating_capacity_holds_setpoint_on_a_design_day(params):
-    """The heater must actually be able to hold 20 C at -10 C outdoors."""
-    T_air, _ = solve_air_and_surface(
-        T_mass=20.0,
-        T_out=-10.0,
-        Q_heat=params.Q_heat_max,
-        phi_st=0.0,
-        phi_ia=0.0,
-        params=params,
-    )
-    assert T_air > 20.0
+    """The slab must be able to hold 20 C at -10 C outdoors within the
+    valve's range."""
+    *_, T_supply = steady_state(params, -10.0, 20.0)
+    assert params.T_supply_min < float(T_supply) < params.T_supply_max
 
 
 def test_free_float_drifts_slowly_overnight(params):
@@ -280,16 +242,13 @@ def test_free_float_drifts_slowly_overnight(params):
     assert 1.0 < drop < 8.0, f"dropped {drop:.1f} K in 8 h"
 
 
-def test_free_float_converges_toward_outdoor_temperature(params):
-    """Left alone for many time constants, the zone must approach outdoors.
-
-    Termination bounds are relaxed for this test: an unheated building really
-    does drop below the 5 C freeze limit, and stopping there would measure the
-    limit rather than the convergence.
-    """
-    relaxed = params.replace(T_air_min=-50.0, T_air_max=100.0)
-    state = _steady_free_float(relaxed, hours=400.0, T_out_fixed=0.0, T_start=20.0)
-    assert abs(float(state.T_mass) - 0.0) < 2.0
+def test_free_float_falls_toward_outdoors_until_frost_protection_holds(params):
+    """Left alone at 0 C outdoors for 800 h, far past the 200 h time constant,
+    the zone falls from 20 C toward outdoors until the plant's frost protection
+    takes over below 4.4 C [1]: it ends cold, below the comfort band, and not
+    far under the frost threshold."""
+    state = _steady_free_float(params, hours=800.0, T_out_fixed=0.0, T_start=20.0)
+    assert params.frost_on - 1.0 < float(state.T_air) < params.band_low - 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +259,8 @@ def test_free_float_converges_toward_outdoor_temperature(params):
 def test_observation_hides_the_thermal_mass(params):
     """The mass governs the response and must not be observable.
 
-    obs = [T_air, T_out, heat_pct, solar_norm, sin_h, cos_h, target_T].
+    obs = [T_air, T_out, T_out_24h, T_core, T_return, T_supply, sin_h, cos_h,
+    band_centre].
     """
     env = BuildingHVAC()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
@@ -315,102 +275,6 @@ def test_observation_hides_the_thermal_mass(params):
 def test_action_maps_to_the_heating_range(params):
     env = BuildingHVAC()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    for raw, expected in ((-1.0, 0.0), (1.0, params.Q_heat_max)):
+    for raw, expected in ((-1.0, params.T_supply_min), (1.0, params.T_supply_max)):
         new_state, _ = compute_next_state(raw, state, params, jax.random.PRNGKey(0))
-        assert float(new_state.Q_command) == pytest.approx(expected, abs=1e-3)
-
-
-def test_reward_peaks_on_setpoint_with_no_heating(params):
-    env = BuildingHVAC()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    on = state.replace(T_air=21.0, target_T=21.0, Q_emitter=0.0)
-    off = state.replace(T_air=25.0, target_T=21.0, Q_emitter=0.0)
-    assert float(compute_reward(on, params)) == pytest.approx(1.0, abs=1e-5)
-    assert float(compute_reward(on, params)) > float(compute_reward(off, params))
-
-
-def test_reward_is_clipped_below_at_zero_comfort(params):
-    """The comfort term must saturate, not turn back upward.
-
-    Without the clip the quadratic rises again past 2*comfort_band, so a large
-    error would score like a small one -- the bug that made the first MPC stop
-    heating entirely.
-    """
-    env = BuildingHVAC()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    errors = [0.0, 1.0, 2.0, 4.0, 8.0, 12.0]
-    rewards = [
-        float(
-            compute_reward(
-                state.replace(T_air=21.0 + e, target_T=21.0, Q_emitter=0.0), params
-            )
-        )
-        for e in errors
-    ]
-    assert all(a >= b - 1e-9 for a, b in zip(rewards, rewards[1:])), rewards
-    # Log-scaled, so 12 K out still scores something and still points home; the
-    # old clipped band was exactly zero there, leaving a controller that far off
-    # with no gradient at all. Zero arrives at the temperature envelope.
-    assert 0.0 < rewards[-1] < 0.3
-    envelope = float(
-        compute_reward(
-            state.replace(
-                T_air=params.T_air_max, target_T=params.T_air_min, Q_emitter=0.0
-            ),
-            params,
-        )
-    )
-    assert envelope == pytest.approx(0.0, abs=1e-6)
-
-
-def test_energy_use_reduces_reward(params):
-    """Energy is priced into the reward only when ``energy_weight`` says so.
-
-    It is zero for the 0.6 line, so the reward scores comfort alone and the two
-    are equal. The term stays wired, so raising the weight restores the trade;
-    see the roadmap item on framing running cost. Asserting both ways keeps the
-    wiring covered either way.
-    """
-    env = BuildingHVAC()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    cold = state.replace(T_air=21.0, target_T=21.0, Q_emitter=0.0)
-    hot = cold.replace(Q_emitter=params.Q_heat_max)
-    if float(params.energy_weight) == 0.0:
-        assert float(compute_reward(cold, params)) == pytest.approx(
-            float(compute_reward(hot, params))
-        )
-    else:
-        assert float(compute_reward(cold, params)) > float(compute_reward(hot, params))
-
-    priced = params.replace(energy_weight=0.15)
-    assert float(compute_reward(cold, priced)) > float(compute_reward(hot, priced))
-
-
-def test_terminates_when_the_zone_freezes_or_overheats(params):
-    env = BuildingHVAC()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    assert bool(
-        check_is_terminal(state.replace(T_air=params.T_air_min - 1.0), params)[0]
-    )
-    assert bool(
-        check_is_terminal(state.replace(T_air=params.T_air_max + 1.0), params)[0]
-    )
-    assert not bool(check_is_terminal(state.replace(T_air=21.0), params)[0])
-
-
-def test_reset_starts_thermally_settled(params):
-    """Mass and air must start consistent, not several K apart.
-
-    A building whose mass disagreed with its air at t=0 would spend the first
-    day of every episode relaxing -- an artefact, not a control problem.
-    """
-    env = BuildingHVAC()
-    for seed in range(5):
-        _, state = env.reset_env(jax.random.PRNGKey(seed), params)
-        assert isinstance(state, HVACState)
-        assert abs(float(state.T_air) - float(state.T_mass)) < 6.0
-        assert (
-            params.initial_T_range[0]
-            <= float(state.T_mass)
-            <= params.initial_T_range[1]
-        )
+        assert float(new_state.T_supply) == pytest.approx(expected, abs=1e-3)

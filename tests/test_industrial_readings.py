@@ -45,22 +45,22 @@ from target_gym.registry import REGISTRY
 #: Channel to sigma in the observation's units, by hand from the table. Channels
 #: not listed stay exact, apart from the held ones in ``HELD``.
 SCATTER = {
-    "glass_furnace": {0: 0.36, 1: 0.32, 2: 100.0 * 3e-4 / 0.698},  # fuel_max
+    # Crown, two floors and the canal at 0.36 K; the fining share read at the cold
+    # end, 0.005. The batch line is sampled, not noised.
+    "glass_furnace": {0: 0.36, 1: 0.36, 2: 0.36, 3: 0.36, 4: 0.005},
     # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
     "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0), 6: 2.7e-4},
-    "hvac": {
-        0: 0.023,
-        1: 0.023,
-        2: 100.0 * 27.0 / 7200.0,  # Q_heat_max
-        3: 1.0 / 175.0,  # 1 W/m2 of solar_peak
-    },
+    # Room, outdoor, slab core and return water; the 24 h mean (channel 2) is
+    # computed from the true outdoor history, and the supply is the valve's.
+    "hvac": {0: 0.023, 1: 0.023, 3: 0.023, 4: 0.023},
     "boiler_drum": {0: 5e-4, 1: 0.022, 2: 0.047},
     "cement_kiln": {1: 1.6, 2: 0.33, 3: 1.2, 4: 0.13},
     "wind_turbine": {
         0: 5.2e-4 * 60.0 / (2.0 * math.pi),  # rad/s to rpm
         1: 0.2,
-        2: 100.0 * 90.0 / 47_400.0,  # torque_max
+        2: 100.0 * 90.0 / 47_402.91,  # torque_max
         3: 1e-3,  # 1 kW in MW
+        6: 0.36,  # the nacelle anemometer, m/s
     },
     "battery": {0: 4.7e-5, 1: 5.5e-5, 2: 0.03, 3: 3.3e-4},
 }
@@ -75,6 +75,8 @@ HELD = {"cement_kiln": {0: (100.0 * 1.8e-4, 120)}}
 STEPS = {
     ("hvac", 0): 0.1,
     ("hvac", 1): 0.1,
+    ("hvac", 3): 0.1,
+    ("hvac", 4): 0.1,
     ("cement_kiln", 0): 0.01,  # 1e-4 mass fraction, in percent
     ("cement_kiln", 1): 0.1,
     ("cement_kiln", 3): 0.1,
@@ -83,14 +85,21 @@ STEPS = {
 
 #: A state outside each task's envelope.
 OUTSIDE = {
-    "glass_furnace": lambda s: s.replace(T_crown=jnp.float32(2000.0)),
     "reactor": lambda s: s.replace(n=jnp.float32(2.0)),
-    "hvac": lambda s: s.replace(T_air=jnp.float32(50.0)),
-    "boiler_drum": lambda s: s.replace(level=jnp.float32(1.0)),
+    # Past the high trip for 12 s, more than its 10 s delay (boiler_drum/env.py).
+    "boiler_drum": lambda s: s.replace(
+        level=jnp.float32(1.0), time_high=jnp.float32(12.0)
+    ),
     "cement_kiln": lambda s: s.replace(T_solid=s.T_solid + 1000.0),
-    "wind_turbine": lambda s: s.replace(omega=3.0 * s.omega),
-    "battery": lambda s: s.replace(soc=jnp.float32(1.5)),
+    # Past the overspeed level the safety system has feathered: the trip
+    # (wind_turbine/env.py, ``feathered``).
+    "wind_turbine": lambda s: s.replace(
+        omega=3.0 * s.omega, feathered=jnp.float32(1.0)
+    ),
 }
+#: Tasks with no trip at all (charter rule 14): battery's limits are priced or
+#: protected (energy/battery/PHYSICS.md, Limits).
+NO_TRIP = ("battery",)
 
 DRAWS = 2000
 
@@ -212,9 +221,7 @@ def test_free_lime_scatters_at_its_figure_across_samples():
 
 @pytest.mark.parametrize("name", TASKS)
 def test_noise_never_reaches_the_plant_or_the_reward(name):
-    """The whole state stays equal, whatever the noise scale. That covers
-    ``glass_furnace``: a reading written back would enter ``T_crown_meas``, the
-    lag's own state, and every later reading with it."""
+    """The whole state stays equal, whatever the noise scale."""
     env, params, start = _setup(name, unrounded=False)
     key = jax.random.PRNGKey(1)
     action = _action(env, params)
@@ -234,10 +241,14 @@ def test_noise_never_reaches_the_plant_or_the_reward(name):
         jax.tree_util.tree_map(np.testing.assert_array_equal, a, b)
 
 
-@pytest.mark.parametrize("name", TASKS)
+@pytest.mark.parametrize(
+    "name", [t for t in TASKS if t in OUTSIDE]
+)  # glass_furnace has no trip
 def test_the_measured_trip_is_the_one_it_is_given(name):
     """A measured copy can sit outside the envelope when the plant is not, and
     the other way round, so the check must not run on it."""
+    if name in NO_TRIP:
+        pytest.skip(f"{name}: no limit trips (charter rule 14)")
     env, params, state = _setup(name)
     outside = OUTSIDE[name](state)
     assert bool(env.is_terminated(outside, params))
@@ -266,23 +277,6 @@ def _floor(env, params, state, times):
     return float(jnp.mean(jax.jit(jax.vmap(at))(times)))
 
 
-def test_glass_furnace_measured_reward_has_the_proposals_floor():
-    """``(0.36 / 1)^2`` per step, on a chi-squared of one degree of freedom:
-    sd ``sqrt(2) * 0.1296`` per draw, on top of the fuel's ``w * c / c_hold``,
-    whose meter scatters by 0.05 % of it."""
-    env, params, state = _setup("glass_furnace")
-    resting = state.replace(
-        T_crown=state.target_T_crown,
-        T_crown_meas=state.target_T_crown,
-        fuel_flow=jnp.float32(params.fuel_min),
-    )
-    floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    running = params.running_weight * params.fuel_min / params.c_hold
-    assert floor == pytest.approx(
-        0.1296 + running, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS)
-    )
-
-
 def test_cement_kiln_measured_reward_has_the_proposals_floor():
     """``(1.8e-4 / 5e-4)^2`` per step. One draw per sample, so the steps are an
     hour apart. Zero fuel costs nothing."""
@@ -295,40 +289,21 @@ def test_cement_kiln_measured_reward_has_the_proposals_floor():
     assert floor == pytest.approx(0.1296, abs=4 * 1.414 * 0.1296 / math.sqrt(DRAWS))
 
 
-def test_boiler_drum_measured_reward_has_the_proposals_floor():
-    """Pressure ``(0.022 / 0.05)^2 = 0.1936``, the table's 0.19, plus level
-    ``(5e-4 / 2.67e-3)^2 = 0.0351``. Zero firing costs nothing."""
+def test_boiler_drum_measured_reward_has_the_steam_meters_floor():
+    """On plan, the measured cost is the steam meter's scatter past its own
+    resolution, priced as generation. For X ~ N(0, s), s = 0.047 kg/s, the
+    charged excess max(|X| - s, 0) has mean 2 s (phi(1) - (1 - Phi(1))) =
+    0.16662 s and sd 0.3506 s. Over 2 s, at 3.5 kg/kWh and GBP 80/MWh: mean
+    3.580e-4 GBP per step, sd 7.53e-4 per draw."""
     env, params, state = _setup("boiler_drum")
-    resting = state.replace(
-        level=jnp.float32(0.0), pressure=state.target_pressure, Q_fuel=jnp.float32(0.0)
-    )
-    sd = math.sqrt(2.0 * (0.1936**2 + 0.0351**2))
+    resting = state.replace(level=jnp.float32(0.0), q_steam=state.q_demand)
     floor = _floor(env, params, resting, jnp.arange(DRAWS))
-    assert floor == pytest.approx(0.1936 + 0.0351, abs=4 * sd / math.sqrt(DRAWS))
+    assert floor == pytest.approx(3.580e-4, abs=4 * 7.53e-4 / math.sqrt(DRAWS))
 
 
-def test_glass_furnace_measured_reward_is_the_cost_of_the_reading_received():
-    """A plant knows its crown only through the thermocouple, so the measured
-    cost is the observation's, lag and noise together, while ``reward`` scores
-    the true crown. In K, at ``e_floor`` 1, plus fuel as a share of the hold."""
-    env, params, state = _setup("glass_furnace", unrounded=False)
-    key = jax.random.PRNGKey(2)
-    for t in range(5):
-        obs, state, reward, _, info = env.step_env(
-            jax.random.fold_in(key, t), state, jnp.zeros(1), params
-        )
-        crown, _, fuel_pct, _, target, _ = np.asarray(obs, np.float64)
-        running = fuel_pct * params.fuel_max / 100.0
-        running *= params.running_weight / params.c_hold
-        expected = (target - crown) ** 2 + running
-        assert float(-info["measured_reward"]) == pytest.approx(expected, abs=2e-2)
-        true_cost = float(state.target_T_crown - state.T_crown) ** 2 + (
-            float(state.fuel_flow) * params.running_weight / params.c_hold
-        )
-        assert float(-reward) == pytest.approx(true_cost, abs=2e-2)
-
-
-@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3), ("battery", 330.0)])
+# battery's score has no tracking term since v4 (scoring.JOB_SCORED); its
+# meter reaches channel 3 at its figure in the instrument test above.
+@pytest.mark.parametrize("name, sigma_W", [("wind_turbine", 1e3)])
 def test_measured_power_is_the_meters(name, sigma_W):
     """The proposal's reason for wind's own reading: speed times torque, each
     through its own sensor, scatters about 10.6 kW against a 1 kW meter, and a
@@ -339,14 +314,17 @@ def test_measured_power_is_the_meters(name, sigma_W):
     env, params, state = _setup(name)
     true_MW = float(env.get_obs(state, _quiet(params))[3])
     state = state.replace(target_power=jnp.float32(true_MW * 1e6 + 1e5))
-    per_W = params.imbalance_price / 1e6 * params.delta_t / 3600.0
+    if name == "wind_turbine":  # lost production at 60 $/MWh (v5)
+        term, per_W = "lost", 1e-6 * params.delta_t / 3600.0 * params.energy_price
+    else:
+        term, per_W = "tracking", params.imbalance_price / 1e6 * params.delta_t / 3600.0
 
     def read(t):
         s = state.replace(time=t)
         terms = env.reward_terms(
             measured_state(env, s, params), params, tripped=jnp.bool_(False)
         )
-        return terms["tracking"] / per_W, env.get_obs(s, params)[3]
+        return terms[term] / per_W, env.get_obs(s, params)[3]
 
     error, obs_MW = jax.jit(jax.vmap(read))(jnp.arange(DRAWS))
     power = true_MW * 1e6 + 1e5 - np.asarray(error, np.float64)

@@ -10,114 +10,77 @@ from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
-#: Salt for the load path's key (``step_load``).
-_LOADS = 0x4C4F4144
-
 
 @struct.dataclass
 class FourTankParams(EnvParams):
-    # The plant constants are PC-gym's, not the Johansson rig's (PHYSICS.md).
-    # Gravitational acceleration (m/s²)
-    g: float = 9.81
-    # Pump split ratios (fraction of pump flow to lower tanks)
-    gamma1: float = 0.2
-    gamma2: float = 0.2
-    # Pump gain constants (m³/s per Volt)
-    k1: float = 0.00085
-    k2: float = 0.00095
-    # Outlet orifice areas (m²)
-    a1: float = 0.0035
-    a2: float = 0.003
-    a3: float = 0.002
-    a4: float = 0.0025
-    # Tank cross-sectional areas (m²)
-    A1: float = 1.0
-    A2: float = 1.0
-    A3: float = 1.0
-    A4: float = 1.0
+    # Johansson's quadruple-tank rig at Lund, its non-minimum phase setting P+
+    # [S1, p. 2046], in SI (REALITY.md, "The plant"; PHYSICS.md section 2).
+    g: float = 9.81  # m/s^2 [S1: 981 cm/s^2]
+    # Valve split, set by hand before a run and not moved during it [S3, p. 2].
+    gamma1: float = 0.43
+    gamma2: float = 0.34
+    # Pump gains, P+ (m^3/s per V) [S1: 3.14, 3.29 cm^3/(V s)]
+    k1: float = 3.14e-6
+    k2: float = 3.29e-6
+    # Outlet holes (m^2) [S1: 0.071, 0.057 cm^2]
+    a1: float = 0.071e-4
+    a2: float = 0.057e-4
+    a3: float = 0.071e-4
+    a4: float = 0.057e-4
+    # Tank cross-sections (m^2) [S1: 28, 32 cm^2]
+    A1: float = 28e-4
+    A2: float = 32e-4
+    A3: float = 28e-4
+    A4: float = 32e-4
 
-    # Pump voltage bounds (V)
+    # Pump voltage (V). The Lund maximum is not found; ours, 10 V, which puts
+    # the 3.15 V operating point at a third of the range (KTH runs at half of
+    # 15 V [S4, pp. 5-6]).
     v_min: float = 0.0
     v_max: float = 10.0
+    #: The P+ operating point, both pumps [S1, p. 2046].
+    v_nominal: float = 3.15
 
-    # Level bounds (m)
-    h_min: float = 0.05
-    precision_floor: float = 1e-3  # m, level transmitter resolution (1 mm)
-    h_max: float = 1.5
+    # Levels. The floor is an empty tank, h >= 0 [S2, p. 121], a physical
+    # limit, not a trip. The tank is full at 25 cm on the KTH rig [S4, p. 15]
+    # (the Lund height is not found); past it the water overflows back to the
+    # reservoir. No overflow trip or interlock was found, so neither is one.
+    h_max: float = 0.25  # m
+    precision_floor: float = 1e-3  # m, ours: the level reading's step
 
-    # Error scale, in metres, from the clipped reward this field was added
-    # for; unread since the reward became log-scaled. No oracle has read it:
-    # the current one tracks in floor units (``e_floor``). 5 cm is a real miss
-    # on a plant whose setpoints live between 0.10 and 0.30 m. See D1 in
-    # PHYSICS.md for why a band the reward ignores is worth watching.
-    tracking_band: float = 0.05
-
-    # Target level ranges for tanks 1 and 2.
-    #
-    # These MUST sit inside the plant's reachable envelope. With both pumps
-    # saturated at v_max the steady state tops out at h1 = 0.360, h2 = 0.429,
-    # so the previous (0.5, 1.0) band sat entirely above it and *no* sampled
-    # target was attainable -- every episode was unwinnable, and the shared
-    # effectiveness contract could not see it because the PID still beat every
-    # constant action while both sat far from setpoint.
-    #
-    # The band below is jointly reachable: because the pumps are cross-coupled,
-    # h1 and h2 are sampled independently but must be attainable *together*,
-    # and every pair in this box is.
-    #
-    # It is also sized against the UPPER tanks, which is the subtler
-    # constraint. A high h1 with a low h2 is held by a low v1 and a high v2 --
-    # and v1 is what feeds tank 4. At the (0.25, 0.12) corner of a wider box
-    # the steady h4 sits only 16 mm above the low-level trip, so any transient
-    # dip ends the episode; one seed in twenty tripped there regardless of
-    # gains. This box keeps at least 50 mm of margin on h4 at every corner.
-    target_h1_range: Tuple[float, float] = (0.11, 0.19)
-    target_h2_range: Tuple[float, float] = (0.14, 0.28)
-
-    # Initial level ranges. Chosen to start inside the same envelope: the old
-    # h1 upper bound of 0.4 was above the maximum sustainable level, so an
-    # episode could begin at a level the plant can never hold.
-    initial_h1_range: Tuple[float, float] = (0.11, 0.19)
-    initial_h2_range: Tuple[float, float] = (0.14, 0.26)
-    initial_h3_range: Tuple[float, float] = (0.25, 0.45)
-    # Raised from 0.09: the target box is sized to keep 50 mm of margin on h4
-    # above the 0.05 m trip, and starting at 0.09 gave only 40, so an episode
-    # could begin closer to the low-level trip than any commanded steady state
-    # ever gets.
-    initial_h4_range: Tuple[float, float] = (0.10, 0.16)
+    # ---- Episode (charter rule 17) ----
+    # Established operation: the rig at its P+ steady state, setpoints on it,
+    # then setpoint steps of about 5 percentage points under automatic control
+    # [S4, p. 9; S1, Figs. 5-6], here 1.25 cm of a 25 cm tank. Ours: three
+    # steps 1000 s apart, the NMP response's settling scale [S1, Fig. 6], the
+    # first away from the point, the second back, the third on the other tank.
+    setpoint_step: float = 0.0125  # m
+    setpoint_times: Tuple[int, int, int] = (300, 1300, 2300)  # steps
+    # Disturbances the rigs use [S4, Exercise 4.1.1, p. 9; S5, pp. 1-2]. Sizes
+    # and timing not found; ours:
+    #: an extra outlet opened in one upper tank, as a fraction of its own
+    #: outlet's area, for ``leak_duration`` steps at a random time;
+    leak_fraction: float = 0.3
+    leak_duration: int = 300
+    #: a cup of water poured into one lower tank at a random time (m^3).
+    cup_volume: float = 1.0e-4
 
     delta_t: float = 1.0
-    max_steps_in_episode: int = 1200
+    max_steps_in_episode: int = 3300
 
-    # ---- Unmeasured loads on the lower tanks (``step_load``; ours, PHYSICS.md) ----
-    #: Limit of each tank's draw, about 4 % of its 6e-3 m^3/s flow: the upper
-    #: tanks keep the 30 mm above the trip at every target and load.
-    load_flow: float = 2.5e-4
-    #: First arrival, the fixed settle of ``eval.FIXED_SETTLE``, so the whole
-    #: path is scored, and the steps between arrivals (5 min).
-    load_start: int = 581
-    load_period: int = 300
-    #: 0 switches the loads off, and the planner's copy holds the one it read.
-    load_scale: float = 1.0
-
-    # ---- Reward (docs/reward-shaping.md; version 2) ----
-    # Measured with no load on the plant, before PR 8 re-measures the floors:
-    # the shipped MPC held both levels to 1e-5 m after settling
-    # (`scripts/measure_hold.py`), so the normalisation uses the level
-    # transmitter's 1 mm resolution. One term per tank, summed. The span costs
-    # (1.45 / 1e-3)^2 = 2.1e6 per tank per step; overflow or dry-out twice the
-    # two-tank maximum.
-    reward_version: int = 2
-    e_floor: float = 1e-3  # m, level transmitter resolution, both tanks
+    # ---- Reward (charter rule 15) ----
+    # The rig's job is tracking: hold the two lower levels at their setpoints
+    # [S1, p. 2046]. No band was found, so the cost is quadratic in the error,
+    # one term per tank, on the level reading's 1 mm step (ours).
+    reward_version: int = 3
+    e_floor: float = 1e-3  # m
     e_tol: float = 0.0
     tracking_exponent: float = 2.0
-    failure_cost: float = 2.0 * (
-        (0.25 / 1e-3) ** 2 + (0.289 / 1e-3) ** 2
-    )  # reachable errors: steady tops 0.360 / 0.429 m against the lowest targets
-    #: Restart time priced into a trip (``reward.trip_cost``; 10 min at 1 s steps: refill after an overflow or dry-out, provisional).
-    restart_steps: int = 600
-    #: The oracle's best hold. Zero from the plant with no load, where exact
-    #: hold is achievable and ``e_floor`` is a scale, not a floor; PR 8 redoes it.
+    # The rig cannot trip (no interlock found), so a trip has no cost: 0, the
+    # charter's convention for a plant with no trip (B5).
+    failure_cost: float = 0.0
+    restart_steps: int = 1
+    #: The oracle's best hold: not measured on this rig yet.
     rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     #: True where e_floor is a resolution, not a measured or certified floor.
@@ -141,14 +104,14 @@ PARAM_UNITS = {
     "A4": "m^2",
     "v_min": "V",
     "v_max": "V",
-    "h_min": "m",
-    "precision_floor": "m",
+    "v_nominal": "V",
     "h_max": "m",
-    "tracking_band": "m",
-    "load_flow": "m^3/s",
-    "load_start": "steps",
-    "load_period": "steps",
-    "load_scale": "-",
+    "precision_floor": "m",
+    "setpoint_step": "m",
+    "setpoint_times": "steps",
+    "leak_fraction": "-",
+    "leak_duration": "steps",
+    "cup_volume": "m^3",
     "e_floor": "m",
     "reward_version": "-",
     "e_tol": "m",
@@ -173,34 +136,72 @@ class FourTankState(EnvState):
     v1: float
     v2: float
 
-    actuator_held: jax.Array = actuator_field(2)
-    #: The flows into tanks 1 and 2 over the last step (``step_load``), hidden.
-    load: jax.Array = struct.field(default_factory=lambda: jnp.zeros(2), kw_only=True)
-
-
-def step_load(state: FourTankState, params: FourTankParams):
-    """The flow into each lower tank over the step from ``state``, in m^3/s,
-    negative for a draw.
-
-    None until ``load_start``, then a uniform draw held for ``load_period``
-    steps. It comes from the episode's ``sensor_key`` and the clock, so no
-    action or step key moves it and a trip's restart keeps it: every policy on
-    one episode key meets the same loads. At ``load_scale`` 0 the state's load
-    stands, so the planner's copy (``plan_params``) keeps the one the oracle read.
-    """
-    block = jnp.maximum((state.time - params.load_start) // params.load_period, 0)
-    key = jax.random.fold_in(jax.random.fold_in(state.sensor_key, _LOADS), block)
-    draw = jax.random.uniform(key, (2,), state.load.dtype, -1.0, 1.0)
-    live = jnp.where(
-        state.time >= params.load_start,
-        params.load_scale * params.load_flow * draw,
-        0.0,
+    #: The episode's schedule, drawn at reset (hidden): the setpoint moves as
+    #: ``(tank, sign)`` per entry of ``setpoint_times``, the start step and
+    #: upper tank (0 for tank 3, 1 for tank 4) of the extra outlet, and the
+    #: step and lower tank of the cup.
+    #: A state built by hand has no moves, no outlet and no cup in its episode.
+    sp_tank: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
     )
-    return jnp.where(params.load_scale > 0, live, state.load)
+    sp_sign: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(3), kw_only=True
+    )
+    leak_start: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(-(10**9), jnp.int32), kw_only=True
+    )
+    leak_tank: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
+    cup_time: jax.Array = struct.field(
+        default_factory=lambda: jnp.asarray(-1, jnp.int32), kw_only=True
+    )
+    cup_tank: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
+    actuator_held: jax.Array = actuator_field(2)
 
 
-def compute_velocity(position, action, params: FourTankParams, load=(0.0, 0.0)):
-    """The four mass balances; ``load`` is the unmeasured flow into tanks 1, 2."""
+def steady_levels(volts, params: FourTankParams):
+    """The four levels both pumps at ``volts`` hold, from the mass balances
+    [S1, eq. (1)]: each outflow a_i sqrt(2 g h_i) equals its inflow."""
+    p = params
+    q3 = (1.0 - p.gamma2) * p.k2 * volts
+    q4 = (1.0 - p.gamma1) * p.k1 * volts
+    q1 = p.gamma1 * p.k1 * volts + q3
+    q2 = p.gamma2 * p.k2 * volts + q4
+    level = lambda q, a: (q / a) ** 2 / (2.0 * p.g)  # noqa: E731
+    return level(q1, p.a1), level(q2, p.a2), level(q3, p.a3), level(q4, p.a4)
+
+
+def setpoint_ranges(params: FourTankParams):
+    """The setpoints an episode can ask for: the operating point's lower
+    levels, one ``setpoint_step`` either side."""
+    h1, h2, _, _ = steady_levels(params.v_nominal, params)
+    s = params.setpoint_step
+    return (h1 - s, h1 + s), (h2 - s, h2 + s)
+
+
+def setpoint_move(state: FourTankState, params: FourTankParams, time):
+    """The move the schedule makes to the two setpoints at step ``time``: the
+    first away from the point, the second back, the third on the other tank."""
+    times = jnp.asarray(params.setpoint_times)
+    step = params.setpoint_step * state.sp_sign
+    first = jnp.where(time == times[0], step[0], 0.0) - jnp.where(
+        time == times[1], step[0], 0.0
+    )
+    third = jnp.where(time == times[2], step[2], 0.0)
+    delta = jnp.zeros(2)
+    delta = delta.at[state.sp_tank].add(first)
+    return delta.at[1 - state.sp_tank].add(third)
+
+
+def compute_velocity(
+    position, action, params: FourTankParams, load=(0.0, 0.0), leak=(0.0, 0.0)
+):
+    """The four mass balances [S1, eq. (1)]. ``load`` is an unmeasured flow
+    into tanks 1, 2 (the cup), ``leak`` the area of an extra outlet open in
+    tanks 3, 4 [S4, Exercise 4.1.1]."""
     h1, h2, h3, h4 = position[0], position[1], position[2], position[3]
     v1, v2 = action[0], action[1]
 
@@ -222,11 +223,11 @@ def compute_velocity(position, action, params: FourTankParams, load=(0.0, 0.0)):
         + load[1] / params.A2
     )
     dh3dt = (
-        -(params.a3 / params.A3) * jnp.sqrt(2 * params.g) * sqrt_h3
+        -((params.a3 + leak[0]) / params.A3) * jnp.sqrt(2 * params.g) * sqrt_h3
         + ((1 - params.gamma2) * params.k2 / params.A3) * v2
     )
     dh4dt = (
-        -(params.a4 / params.A4) * jnp.sqrt(2 * params.g) * sqrt_h4
+        -((params.a4 + leak[1]) / params.A4) * jnp.sqrt(2 * params.g) * sqrt_h4
         + ((1 - params.gamma1) * params.k1 / params.A4) * v1
     )
 
@@ -262,9 +263,19 @@ def compute_next_state(
     v2 = convert_raw_action_to_range(action_raw[1], params.v_min, params.v_max)
     action = jnp.array([v1, v2])
 
-    load = step_load(state, params)
+    t = state.time
+    cup = jnp.where(
+        t == state.cup_time, params.cup_volume / params.delta_t, 0.0
+    ) * jnp.array([state.cup_tank == 0, state.cup_tank == 1])
+    open_ = (t >= state.leak_start) & (t < state.leak_start + params.leak_duration)
+    leak = jnp.where(open_, params.leak_fraction, 0.0) * jnp.array(
+        [
+            (state.leak_tank == 0) * params.a3,
+            (state.leak_tank == 1) * params.a4,
+        ]
+    )
     _compute_velocity = partial(
-        compute_velocity, action=action, params=params, load=load
+        compute_velocity, action=action, params=params, load=cup, leak=leak
     )
     (h1, h2, h3, h4), metrics = integrate_dynamics(
         positions=jnp.array([state.h1, state.h2, state.h3, state.h4]),
@@ -272,9 +283,23 @@ def compute_next_state(
         compute_velocity=_compute_velocity,
         method=integration_method,
     )
+    # A full tank overflows back to the reservoir [S4, p. 15]: the level holds
+    # at the rim. An empty tank stays empty.
+    h1, h2, h3, h4 = (jnp.clip(h, 0.0, params.h_max) for h in (h1, h2, h3, h4))
+    target = jnp.stack([state.target_h1, state.target_h2]) + setpoint_move(
+        state, params, t + 1
+    )
     return (
         state.replace(
-            h1=h1, h2=h2, h3=h3, h4=h4, v1=v1, v2=v2, load=load, time=state.time + 1
+            h1=h1,
+            h2=h2,
+            h3=h3,
+            h4=h4,
+            v1=v1,
+            v2=v2,
+            target_h1=target[0],
+            target_h2=target[1],
+            time=state.time + 1,
         ),
         metrics,
     )
@@ -293,8 +318,9 @@ def get_obs(state: FourTankState, params: FourTankParams):
 
 
 def check_is_terminal(state: FourTankState, params: FourTankParams, xp=jnp):
-    h_vals = jnp.array([state.h1, state.h2, state.h3, state.h4])
-    terminated = jnp.any(jnp.logical_or(h_vals <= params.h_min, h_vals >= params.h_max))
+    """No trip: the rig has none [S2, p. 121; S4, p. 15]. An empty tank is a
+    nonlinearity and a full one overflows, both inside the dynamics."""
+    terminated = jnp.zeros((), dtype=bool)
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
 
@@ -342,7 +368,7 @@ def compute_reward_v1(state: FourTankState, params: FourTankParams, xp=jnp):
     docs/reward-shaping.md.
 
     """
-    span = params.h_max - params.h_min
+    span = params.h_max
     r1 = log_scaled_reward(
         xp.abs(state.target_h1 - state.h1), params.precision_floor, span, xp
     )

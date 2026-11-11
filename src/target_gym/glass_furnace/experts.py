@@ -1,68 +1,57 @@
-"""The expert (the PID slot) for the glass furnace task.
+"""The expert (the PID slot) for the glass furnace task: a PI on the fining share read
+at the cold end, held two sigma above its pass mark (charter, the two-sigma back-off).
 
-The oracle (the MPC slot) is in ``oracle.py``, so that the expert and
-the oracle each have a fingerprint of their own
-(``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
+Gains by SIMC from the valve's step test on the settled plant, with the closed-loop time
+equal to the reading's first move (``scripts/glass_slow_props.py``, step and walks); the
+values and the model are in src/target_gym/data/pid_gains.json. The reference ladder
+(``scripts/reference_ladder.py``) is the task's reference; this is its first rung, kept
+so the registry's expert slot runs the plant that is scored.
 """
-
-import math
 
 import jax.numpy as jnp
 from flax import struct
 
 
 @struct.dataclass
-class CrownPIParams:
-    """The crown PI, ``alpha`` what its reading's filter passes in one sample."""
+class FiningPIParams:
+    """The fining PI in raw action units: ``u0`` the design valve, ``backoff`` the
+    setpoint's distance above the pass mark."""
 
     Kp: float
     Ki: float
-    alpha: float
+    u0: float
+    backoff: float
     Kd: float = 0.0  # kept for the store's record: the recipe gives none
-    dt: float = 30.0
+    dt: float = 120.0
 
 
 @struct.dataclass
-class CrownPIState:
-    """The integral, the filtered crown, and whether it has seen a reading."""
-
+class FiningPIState:
     integral: float = 0.0
-    crown: float = 0.0
-    started: float = 0.0
 
 
-def crown_pi_step(params, state, obs, xp=jnp):
-    """A PI on the filtered crown reading, the integral stopped at the fuel's
-    limits. obs: [T_crown_meas, T_air_preheat, fuel_pct, reversal_phase,
-    target_T_crown, pull]."""
+def fining_pi_step(params, state, obs, xp=jnp):
+    """A PI on the cold-end fining reading (obs 4) against its pass mark (obs 5) plus the
+    back-off, the integral stopped at the valve's limits."""
     p = params
-    reading = obs[..., 0]
-    crown = xp.where(
-        state.started > 0.5, state.crown + p.alpha * (reading - state.crown), reading
-    )
-    e = obs[..., 4] - crown
+    e = obs[..., 5] + p.backoff - obs[..., 4]
     integral = state.integral + e * p.dt
-    u = p.Kp * e + p.Ki * integral
+    u = p.u0 + p.Kp * e + p.Ki * integral
     u_clipped = xp.clip(u, -1.0, 1.0)
-    return xp.stack([u_clipped], axis=-1), CrownPIState(
-        integral=xp.where(u == u_clipped, integral, state.integral),
-        crown=crown,
-        started=1.0 + 0.0 * reading,
+    return xp.stack([u_clipped], axis=-1), FiningPIState(
+        integral=xp.where(u == u_clipped, integral, state.integral)
     )
 
 
 def make_glass_furnace_pid_controller():
     """The scored PI as a pure :class:`~target_gym.experts.pid.Controller`;
-    ``.host()`` is what ``make_pid()`` returns. Gains and filter from the recipe
-    in ``scripts/tune_industrial_experts.py``, stored in
-    src/target_gym/data/pid_gains.json."""
+    ``.host()`` is what ``make_pid()`` returns."""
     from target_gym.experts.pid import Controller, gain
 
-    tf, dt = gain("glass_furnace", "Tf"), 30.0
-    params = CrownPIParams(
+    params = FiningPIParams(
         Kp=gain("glass_furnace", "Kp"),
         Ki=gain("glass_furnace", "Ki"),
-        alpha=-math.expm1(-dt / tf) if tf else 1.0,
-        dt=dt,
+        u0=gain("glass_furnace", "u0"),
+        backoff=gain("glass_furnace", "backoff"),
     )
-    return Controller(params, CrownPIState(), crown_pi_step)
+    return Controller(params, FiningPIState(), fining_pi_step)

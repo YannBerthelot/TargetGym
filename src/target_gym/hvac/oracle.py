@@ -5,85 +5,148 @@ its own (``provenance.oracle_fingerprint``). The planner problem, by the
 smoothing protocol's inventory (docs/proposals/oracle-smoothing-protocol.md,
 section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 
-- model: the env's own ``compute_velocity`` and integrator, with the raw
-  move's clip removed and the move bounded instead (T1); the weather's
-  deviation on its noise-free mean path, updated before the step as the env
-  does; the clock, sun, occupancy and setpoint precomputed along the plan;
-- objective: the gas bill, which is smooth, and the comfort hinge through
-  epigraph rows on every visited state (T2): the air's excess over the band
-  while occupied and its shortfall below it, the shortfall alone at setback,
-  each squared, exact since at most one is positive;
-- limit: the air temperature band, T_air_min < T_air < T_air_max on every
-  visited state, elastic at the trip cost per unit (T3);
-- no smoothed site (T5) and no dropped guard (T4).
+- model: the env's ``compute_velocity`` and integrator on the mass and slab
+  core (``velocity``), the move a supply water temperature inside the valve's
+  range (T1); the weather's deviation, updated before the step as the env
+  does: on its noise-free mean path in the registry's receding slot, and on
+  the episode's own path for the ceiling (``ceiling_data``), which knows the
+  weather ahead as a ceiling may; the clock, sun and gains along the plan;
+- objective: the heat pump's electricity at the tariff and the comfort
+  hinges through epigraph rows on every occupied state (T2): the room below
+  and above the band and the floor above its limit, each linear in
+  kelvin-hours at the work-loss price;
+- smoothed site (T5): the slab heat's heating-only edge, ``max(T_sup -
+  T_core, 0)`` in ``slab_heat``, which enters the dynamics and so cannot be an
+  epigraph row: K2's softplus at the solve's width, the exact edge at width 0,
+  where the planned cost of a plan is the env's
+  (``tests/oracles/test_thermal_energy_oracles.py``). Water at the valve's
+  lowest setting, which the env counts as off, is below the core, so it gives
+  no heat either way;
+- no limit trips (T3) and no dropped guard (T4).
 
-The reward is in euros, so the tie-break's budget is what half a resolution
-costs in one step in euros (G10). The cold start holds the emitter where the
-reset put it.
+Frost protection is not planned: the band keeps the room far above it.
 """
 
+import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.hvac.env import (
     WEATHER_OU_THETA,
-    compute_velocity,
+    electricity_price,
+    floor_surface_temperature,
+    heat_pump_cop,
     internal_gain,
     is_occupied,
     outdoor_temperature,
-    scheduled_setpoint,
+    slab_conductances,
     solar_gain,
     solve_air_and_surface,
     split_gains,
+    zone_conductances,
 )
 from target_gym.integration import integrate_dynamics
-from target_gym.oracles.controller import Oracle, TaskModel, raw_of
-from target_gym.oracles.shooting import Hinge, Limit
-from target_gym.reward import trip_cost
+from target_gym.oracles.controller import (
+    Oracle,
+    TaskModel,
+    raw_of,
+    scored_run,
+    softplus_clip,
+)
+from target_gym.oracles.shooting import Hinge
+
+
+def heat(T_supply, T_core, p, width):
+    """``slab_heat`` with its heating-only edge smoothed at ``width`` (K)."""
+    H_water = slab_conductances(p)["H_water"]
+    return H_water * softplus_clip(T_supply - T_core, 0.0, jnp.inf, width)
+
+
+def velocity(position, action, time, weather_dev, width, p):
+    """``compute_velocity`` with the slab heat of ``heat``."""
+    T_mass, T_core = position[0], position[1]
+    c, s = zone_conductances(p), slab_conductances(p)
+    T_out = outdoor_temperature(time, weather_dev, p)
+    phi_ia, phi_st, phi_m = split_gains(internal_gain(time, p), solar_gain(time, p), p)
+    T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
+    dT_mass = (
+        c["H_tr_ms"] * (T_surface - T_mass) + c["H_tr_em"] * (T_out - T_mass) + phi_m
+    ) / c["C_m"]
+    dT_core = (heat(action, T_core, p, width) + s["H_slab"] * (T_air - T_core)) / s[
+        "C_slab"
+    ]
+    return jnp.stack([dT_mass, dT_core]), None
 
 
 def hvac_model(env, p) -> TaskModel:
-    assert bool(p.setback_lower_bound_only) and float(p.tracking_exponent) == 2.0
     hours = p.delta_t / 3600.0
     decay = 1.0 - WEATHER_OU_THETA * p.delta_t  # the deviation's mean per step
-    band = p.comfort_tolerance
 
     def step(d, x, u, t):
-        start, occupied_setpoint, deviation = d["task"]
-        Q = 0.5 * (u[0] + 1.0) * p.Q_heat_max  # T1
-        dev = deviation * decay ** (t + 1)
+        start, deviation, path = d["task"]
+        widths = jnp.asarray(d["widths"])
+        width = widths[0] if widths.shape[0] else jnp.zeros((), x.dtype)
+        T_sup = p.T_supply_min + 0.5 * (u[0] + 1.0) * (p.T_supply_max - p.T_supply_min)
+        if path is None:
+            dev = deviation * decay ** (t + 1)
+        else:  # the episode's own weather, t + 1 steps after the solve's start
+            dev = path[jnp.minimum(t, path.shape[0] - 1)]
         x1, _ = integrate_dynamics(
             positions=x, delta_t=p.delta_t, method=env.integration_method,
             compute_velocity=partial(
-                compute_velocity, action=Q, time=start + t, weather_dev=dev, params=p
+                velocity, action=T_sup, time=start + t, weather_dev=dev,
+                width=width, p=p,
             ),
         )  # fmt: skip
         now = start + t + 1
         phi_ia, phi_st, _ = split_gains(internal_gain(now, p), solar_gain(now, p), p)
         T_air, _ = solve_air_and_surface(
-            x1[0], outdoor_temperature(now, dev, p), x1[1], phi_st, phi_ia, p
+            x1[0], x1[1], outdoor_temperature(now, dev, p), phi_st, phi_ia, p
         )
-        e = T_air - scheduled_setpoint(now, occupied_setpoint, p)
+        T_floor = floor_surface_temperature(x1[1], T_air, p)
         occupied = is_occupied(now, p)
-        y = jnp.stack([
-            jnp.where(occupied, e - band, -band),
-            jnp.where(occupied, -e - band, -e),
-            T_air,
-        ])  # fmt: skip
-        return x1, p.gas_price * x1[1] / 1000.0 * hours, y, T_air[None], ()
+        y = jnp.where(
+            occupied,
+            jnp.stack(
+                [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
+            ),
+            -1.0,
+        )
+        # The env scores the step's heat on the core it ends at.
+        kwh = heat(T_sup, x1[1], p, width) / heat_pump_cop(T_sup, p) / 1000.0 * hours
+        return x1, electricity_price(start + t, p) * kwh, y, T_air[None], ()
 
     weight = float(p.comfort_price * hours)
     return TaskModel(
         nx=2, nu=1, step=step,
-        state_x=lambda s: jnp.stack([s.T_mass, s.Q_emitter]),
-        data=lambda s: (s.time, s.setpoint_occupied, s.weather_dev),
-        hold=lambda s: raw_of(s.Q_emitter, 0.0, p.Q_heat_max)[None],
+        state_x=lambda s: jnp.stack([s.T_mass, s.T_core]),
+        data=lambda s: (s.time, s.weather_dev, None),
+        hold=lambda s: raw_of(s.T_supply, p.T_supply_min, p.T_supply_max)[None],
         tracked=lambda s: s.T_air[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=weight, power=2), Hinge(weight=weight, power=2)),
-        limits=(Limit(p.T_air_min, p.T_air_max, float(trip_cost(p))),),
-        tie_budget=weight * (0.5 * float(p.precision_floor)) ** 2,
+        hinges=(Hinge(weight=weight), Hinge(weight=weight), Hinge(weight=weight)),
+        tie_budget=weight * 0.5 * float(p.precision_floor),
     )  # fmt: skip
+
+
+def ceiling_data(env, p, state, step_keys, run_as=scored_run):
+    """The data of a plan from ``state`` over the steps of ``step_keys``: the
+    weather's deviation after every step, from the episode's step keys. The
+    deviation does not depend on the moves, so it is read off a run of the env
+    at any move (here the reset's supply). The run is the scored one's, in
+    float32 (``scored_run``; a test of the
+    model on x64 data passes its own ``run_as``): under x64 the weather draws other values.
+    """
+
+    def run(state, p, step_keys):
+        def advance(s, k):
+            s1 = env.step_env(k, s, jnp.zeros(1, jnp.float32), p)[1]
+            return s1, s1.weather_dev
+
+        return jax.lax.scan(advance, state, step_keys)[1]
+
+    path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.T_core))
+    return state.time, state.weather_dev, path
 
 
 def make_hvac_mpc(env, params) -> Oracle:
