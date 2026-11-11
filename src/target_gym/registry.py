@@ -1028,7 +1028,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
         oracle_data=_shared_oracle("reactor"),
-        version=6,
+        version=9,
         noise_fields=("demand_sigma",),
         scenarios=_scenarios("suite", module="target_gym.reactor.scenarios"),
     ),

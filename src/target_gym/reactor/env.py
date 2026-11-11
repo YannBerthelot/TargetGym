@@ -38,7 +38,8 @@ now, and the core sees it ``boron_delay`` steps later.
 
 Observation (partially observable)
 ----------------------------------
-``[n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]``.
+``[n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron (20 min late),
+hours to the ramp down, hours to the ramp up, the power xenon is balanced with]``.
 
 Action
 ------
@@ -106,7 +107,14 @@ class ReactorParams(EnvParams):
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
-    alpha_coolant: float = -30.0e-5  # Moderator temperature coefficient, on Tavg
+    # The moderator coefficient at the start of the cycle, where the core sits
+    # (1690 ppm): near zero there, ours, PHYSICS.md section 1 (physics review,
+    # finding 2, 2026-11-10).
+    alpha_coolant: float = -12.0e-5  # on Tavg
+    # The part-power axial shift's lumped coefficient (moderator and Doppler
+    # redistribution), kept at its value before the MTC moved so Krsko's +5 % delta
+    # I at half power holds: ours.
+    alpha_tilt: float = -30.0e-5
     # Zero feedback at full power on program.
     T_fuel_ref: float = 1051.4  # K
     T_coolant_ref: float = 580.2  # K, Tavg at full load
@@ -122,7 +130,10 @@ class ReactorParams(EnvParams):
 
     # ---- Soluble boron ----
     boron_ref: float = 1690.0  # ppm, Krsko fig. 3, at full power
-    boron_worth: float = -8.0e-5  # per ppm, ours
+    # Ours, inside the family's -6.7 to -10.9 pcm/ppm: BEAVRS measures 10.8 to 10.9
+    # at hot zero power and 975 to 1405 ppm (Tables 22, 23); boron is worth less at
+    # full power and at 1690 ppm. PHYSICS.md section 1.
+    boron_worth: float = -8.0e-5  # per ppm
     dilution_flow: float = 10.0  # kg/s, OAPS section 2.1
     boration_flow: float = 3.0  # kg/s, OAPS section 2.1
     boric_acid_ppm: float = 7800.0  # ppm, ours: a recycling unit's concentrate
@@ -174,7 +185,8 @@ class ReactorParams(EnvParams):
     n_max: float = 1.09  # the high-flux trip, 109 % of rated
     T_fuel_max: float = 1473.0  # K, well below UO2 melting (~3120 K)
     T_fuel_min: float = 500.0
-    T_coolant_max: float = 620.0  # K, the hot leg's saturation margin
+    # K, ours: below saturation at the nominal 2250 psia, 618.0 K (IAPWS-IF97).
+    T_coolant_max: float = 610.0
     # The minimum temperature for criticality, 541 F at Salem. It is a limit with
     # a time to act, not a trip: restore it or go to hot standby. No EDF figure is
     # public, so the Westinghouse-family value is kept (the EDF units are of that
@@ -212,6 +224,27 @@ class ReactorParams(EnvParams):
     #: Recent power level the xenon inventory is in equilibrium with at reset:
     #: narrow, because a unit that load-follows daily is never quite at rest.
     initial_xenon_power_range: Tuple[float, float] = (0.9, 1.0)
+    #: Fuel burnup, ppm of boron a day: BEAVRS (MIT, measured Westinghouse 4-loop),
+    #: Table 24, 2.27 ppm a day in cycle 1 and 3.34 in cycle 2. Lost through the
+    #: whole day as if at full power (D9).
+    burnup_range: Tuple[float, float] = (2.3, 3.3)
+    #: Days of burnup not yet diluted at reset: ours, the operator dilutes at least
+    #: once a day. The day starts lined out that much below its Tavg program.
+    carried_days_range: Tuple[float, float] = (0.0, 1.0)
+    #: Yesterday's axial iodine and xenon tilts (physics review, finding 3;
+    #: PHYSICS.md section 4): on a share of days equal to load following's,
+    #: yesterday was a load-follow day and one ``(I_tilt, Xe_tilt)`` pair is
+    #: drawn from the reference's ends of those days (scripts/reactor_tilt_table.py,
+    #: training seeds); otherwise yesterday was baseload, which ends with no tilt
+    #: to speak of (under 3.1e-4).
+    initial_tilts: Tuple[Tuple[float, float], ...] = (
+        (-0.010964, -0.004986), (-0.007372, -0.003397),  # edf_daily
+        (-0.009495, -0.006722), (-0.003252, -0.001931),  # edf_short_hold
+        (-0.010433, 0.007226), (-0.009624, 0.008357),  # krsko_slow
+        (-0.008858, 0.008466), (-0.01091, 0.005141),  # krsko_shallow
+        (-6.8e-05, 8.3e-05), (-0.009142, -0.006335),  # fast_return
+    )  # fmt: skip
+    initial_tilt_share: float = 250.0 / (5.5 + 50.0 / 60.0) / 365.0  # REALITY.md 7
 
     # ---- Time discretization ----
     # One control step applies the action for Reactor.control_period physics
@@ -296,6 +329,7 @@ PARAM_UNITS = {
     "Lambda_gen": "s",
     "alpha_fuel": "1/K",
     "alpha_coolant": "1/K",
+    "alpha_tilt": "1/K",
     "T_fuel_ref": "K",
     "T_coolant_ref": "K",
     "rho_ext_min": "-",
@@ -355,6 +389,10 @@ PARAM_UNITS = {
     "load_min": "-",
     "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
+    "burnup_range": "ppm/day",
+    "carried_days_range": "day",
+    "initial_tilts": "-",
+    "initial_tilt_share": "-",
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
@@ -367,6 +405,7 @@ PARAM_UNITS = {
     "rod_step_price": "$/step",
     "failure_cost": "reward",
     "restart_steps": "steps",
+    "standby_steps": "steps",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
 }
@@ -419,6 +458,7 @@ class ReactorState(EnvState):
     ril_outside: float = 0.0  # s the rods have sat past their insertion limit
     above_dnb: float = 0.0  # s Tavg has sat above its DNB limit without a break
     xenon_power: float = 1.0  # the recent power the starting xenon is balanced with
+    burn_rate: float = 0.0  # ppm/s of boron the fuel's burnup is worth today
     #: Core boron as the boronmeter has read it, newest first; the reading is the
     #: oldest, ``BORON_METER_STEPS`` control steps late.
     boron_meter: jax.Array = struct.field(
@@ -482,6 +522,11 @@ def rod_balance(T_fuel, T_avg, Xe_hat, params: ReactorParams):
     )
 
 
+def burnt(state, params: ReactorParams):
+    """The ppm of boron the fuel has burnt since reset, at full power's rate."""
+    return state.burn_rate * state.physics_time * params.delta_t
+
+
 def rod_worth(rod_in, params: ReactorParams):
     """The rods' worth with a fraction ``rod_in`` of the stroke in: the integral
     worth of a cosine flux, ``y - sin(2 pi y) / (2 pi)``, negative going in."""
@@ -537,7 +582,7 @@ def moderator_tilt(T_hot, T_cold, params: ReactorParams):
     rise warms the top less, which moves power up the core (Krsko, section 2)."""
     p = params
     full_rise = p.P_thermal_ref / p.m_dot_cp
-    return p.alpha_coolant * p.nu_Sigma_f * (full_rise - (T_hot - T_cold)) / 4.0
+    return p.alpha_tilt * p.nu_Sigma_f * (full_rise - (T_hot - T_cold)) / 4.0
 
 
 def tilt_rates(n, I_hat, Xe_hat, I_tilt, Xe_tilt, eps, p: ReactorParams):
@@ -746,6 +791,8 @@ def compute_next_state(
     boron = state.boron + (feed - state.boron) * closes
 
     rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
+    # Burnup since reset, as the boron it is worth (D9).
+    rho_ext = rho_ext + p.boron_worth * burnt(state, p)
     rod_eps = rod_tilt(rod_in, p)
 
     # ── Integrate coupled ODEs ──
@@ -941,9 +988,10 @@ def compute_reward_terms(
     per_K_s = (
         p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW * 1000.0 / 3600.0
     )  # $ per second per K off program
-    # Only Tavg below its program loses output (rule 15); above it the limits are
-    # protective and hotter steam gains a little.
-    error = xp.maximum(state.T_ref - 0.5 * (state.T_coolant + state.T_cold), 0.0)
+    # Tavg past its dead band on either side of its program: the band both cited
+    # procedures keep (physics review, finding 1, 2026-11-10), priced as the cold
+    # side's lost output.
+    error = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
     tracking = (
         per_K_s
         * p.delta_t

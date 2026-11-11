@@ -210,8 +210,10 @@ def test_rod_insertion_pushes_power_down_the_core_and_boron_leaves_it():
     # 40 steps in over 10 minutes, an hour held: Tavg falls and the offset goes negative.
     rods, _ = _run(env, p, s, [1.0 - 2.0 * 43.0 / 228.0, 0.0], 120)
     assert float(rods.delta_I) < -0.02
-    # The same reactivity by boron, against the rods' 30 min: the offset barely moves.
-    boron, _ = _run(env, p, s, [_hold(s, p)[0], 0.3], 120)
+    # Boron instead, against the rods' 30 min: the offset barely moves. A tenth of
+    # full boration for the hour (26 ppm, 210 pcm), so Tavg stays above its floor
+    # at the start-of-cycle MTC.
+    boron, _ = _run(env, p, s, [_hold(s, p)[0], 0.1], 120)
     assert float(boron.boron) > float(s.boron) + 1.0
     assert abs(float(boron.delta_I)) < 0.1 * abs(float(rods.delta_I))
 
@@ -230,10 +232,12 @@ def test_dilution_loses_strength_with_the_concentration():
     """Feed and bleed removes a fraction of what is there (OAPS, section 2.1)."""
     env, p, s = _reset(**XE_FULL)
     s = s.replace(boron_delay=jnp.int32(1))
-    high, _ = _run(env, p, s, [_hold(s, p)[0], -1.0], 20)
+    # 5 steps of full dilution (about 10 ppm, 80 pcm): long enough to measure, short
+    # enough that the hot leg stays under its envelope at the start-of-cycle MTC.
+    high, _ = _run(env, p, s, [_hold(s, p)[0], -1.0], 5)
     env, half, low_state = _reset(boron_ref=0.5 * p.boron_ref, **XE_FULL)
     low_state = low_state.replace(boron_delay=jnp.int32(1))
-    low, _ = _run(env, half, low_state, [_hold(s, half)[0], -1.0], 20)
+    low, _ = _run(env, half, low_state, [_hold(s, half)[0], -1.0], 5)
     fall_high = float(s.boron) - float(high.boron)
     fall_low = float(low_state.boron) - float(low.boron)
     assert fall_low == pytest.approx(0.5 * fall_high, rel=0.05)

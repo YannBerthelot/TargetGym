@@ -99,10 +99,11 @@ def test_power_settles_at_the_load_whatever_the_rods_do(offset):
 
 
 def test_rods_set_tavg_by_the_feedback_sum():
-    """200 pcm between two rod positions over 33 pcm/K: 6.06 K."""
+    """200 pcm between two rod positions over the feedback sum, alpha_coolant plus
+    alpha_fuel, 12 + 3 = 15 pcm/K at the start-of-cycle MTC: 13.33 K."""
     low = _hold(*_lined_out(0.8, -100e-5), 2400.0)
     high = _hold(*_lined_out(0.8, 100e-5), 2400.0)
-    assert _tavg(high) - _tavg(low) == pytest.approx(200.0 / 33.0, rel=0.03)
+    assert _tavg(high) - _tavg(low) == pytest.approx(200.0 / 15.0, rel=0.03)
 
 
 def test_a_turbine_cut_heats_the_cold_leg():
@@ -176,7 +177,8 @@ def test_the_load_ramps_at_two_percent_a_minute():
 
 
 def test_reset_starts_on_program_at_full_load():
-    params = P.replace(sensor_noise_scale=0.0)
+    """With no dilution carried over (reactor-v7 carries 0 to 1 day of it)."""
+    params = P.replace(sensor_noise_scale=0.0, carried_days_range=(0.0, 0.0))
     obs, state = ENV.reset_env(jax.random.PRNGKey(0), params)
     assert float(state.n) == pytest.approx(1.0)
     assert float(obs[4]) == pytest.approx(float(obs[5]), abs=1e-3)
