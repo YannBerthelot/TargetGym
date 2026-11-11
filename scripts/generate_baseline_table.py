@@ -529,8 +529,38 @@ def _caveats() -> list[str]:
     return ["## Caveats", "", *notes] if notes else []
 
 
+def _charter() -> list[str]:
+    """Charter J3's four lines on J, from ``data/charter``; nothing until a task
+    has a record."""
+    from target_gym import charter
+
+    records = {t: r for t in charter.charter_tasks() if (r := charter.load(t))}
+    if not records:
+        return []
+
+    def cell(ln) -> str:
+        return ln if isinstance(ln, str) else _fmt(ln["J"]) + f" ({ln['trips']})"
+
+    rows = []
+    for t, r in records.items():
+        lines = charter.j3(r)
+        j2 = r.get("j2", {}).get("accepted")
+        cells = [cell(lines[k]) for k in ("best_null", "reference", "mpc", "ceiling")]
+        rows.append(f"| {t} | {' | '.join(cells)} | {'—' if j2 is None else j2} |")
+    return [
+        "## Charter lines",
+        "",
+        "Expected cost per step `J` over each task's weighted scenarios, trips in",
+        "brackets, on seeds 100 to 109 (charter J3). The reference is the anchor.",
+        "",
+        "| task | best null | reference | MPC | ceiling | accepted (J2) |",
+        "| --- | --- | --- | --- | --- | --- |",
+        *rows,
+    ]
+
+
 def _page() -> str:
-    sections = (_glance(), _room(), _episode(), _returns(), _caveats())
+    sections = (_glance(), _room(), _charter(), _episode(), _returns(), _caveats())
     parts = [INTRO, *("\n".join(p) for p in sections if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 
