@@ -355,19 +355,24 @@ def test_imports_stay_inside_the_fingerprint():
     assert not problems, "\n".join(problems)
 
 
+#: Long strata (2026-11-11, owner): the aircraft run as streams of sorties on the
+#: 2D package's sortie, zone and event draws and its stream numbers, so the 3D
+#: aircraft and the patrol stamp those modules too.
+_STREAM = ("plane/scenarios.py", "plane/stream_events.py")
+
 #: The only extra sources the 21 declare: the 3D aircraft extend the 2D
 #: dynamics and their experts fly the 2D package's TECS, and patrol flies the
 #: 3D aircraft with its lead on the shared heading PID.
 DECLARED_BY_THE_21 = {
     **{
-        name: ("plane/dynamics.py", "plane/experts_tecs.py")
+        name: ("plane/dynamics.py", "plane/experts_tecs.py", *_STREAM)
         for name in ("plane3d_circle", "plane3d_figure8")
     },
     # Amendment 3: a task's scenario suite is part of what it means, so the
     # tasks that declare one stamp the shared scenario container with it.
     "plane": ("scenarios.py",),
     **{
-        name: ("plane/dynamics.py", "plane/experts_tecs.py", "scenarios.py")
+        name: ("plane/dynamics.py", "plane/experts_tecs.py", "scenarios.py", *_STREAM)
         for name in ("plane3d_heading", "plane3d_racetrack")
     },
     # The patrol flies the Hornet since 2026-11-10 (owner), so it stamps the
@@ -381,6 +386,7 @@ DECLARED_BY_THE_21 = {
             "experts/pid.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            *_STREAM,
         )
         for name in ("patrol", "patrol_range_bearing")
     },

@@ -7,7 +7,10 @@ Contract:
 - ``plane_energy``'s clearances are events: one moves the level by 1 000 or
   2 000 ft or the speed by 10 kt, the band trails it at 500 fpm [AIM 4-4-10],
   and without an event nothing is cleared, whatever the clock;
-- ``plane_sine``'s sinusoid repeats exactly, however long the plant has run.
+- ``plane_sine``'s sinusoid repeats exactly, however long the plant has run;
+- an event's kind (a sortie, a zone, the task's own) is drawn with chances in
+  proportion to ``event_mix``, each kind's share of the event rate, so every
+  share counts, the last one included.
 
 Oracles: the scenario's declared intensities, the AIM's 500 fpm, RVSM's
 1 000 ft steps, the sinusoid's 240 s period.
@@ -17,11 +20,13 @@ from __future__ import annotations
 
 import dataclasses
 from functools import lru_cache
+from types import SimpleNamespace
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from target_gym.plane.stream_events import SORTIE, TASK, ZONE, event_kind
 from target_gym.stream import StreamEnv, make_stream
 
 FT, KT = 0.3048, 1852.0 / 3600.0
@@ -148,3 +153,14 @@ def test_the_sinusoid_repeats_exactly_however_long_the_plant_has_run():
         2.0 * np.pi * 100 / period
     )
     np.testing.assert_allclose(float(early), expected, atol=0.01)
+
+
+def test_event_kinds_are_drawn_in_proportion_to_their_shares():
+    # Shares 1 : 1 : 2 give a sortie and a zone a quarter each and the task's own
+    # event half. Over 20 000 draws a share's standard deviation is at most
+    # sqrt(0.25 / 20 000), about 0.0035, so 0.015 is over 4 of them.
+    params = SimpleNamespace(event_mix=(1.0, 1.0, 2.0))
+    keys = jax.random.split(jax.random.PRNGKey(0), 20_000)
+    kinds = np.asarray(jax.vmap(lambda k: event_kind(k, params))(keys))
+    shares = [np.mean(kinds == kind) for kind in (SORTIE, ZONE, TASK)]
+    np.testing.assert_allclose(shares, [0.25, 0.25, 0.5], atol=0.015)

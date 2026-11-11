@@ -63,10 +63,11 @@ _SORTIE = 0x534F5254
 
 def event_kind(key, params):
     """Which kind of event the stream started: ``SORTIE``, ``ZONE`` or ``TASK``,
-    with chances ``params.event_mix``."""
-    sortie, zone, _ = params.event_mix
+    with chances in proportion to ``params.event_mix``, every share counted."""
+    shares = jnp.asarray(params.event_mix, jnp.float32)
+    edge = jnp.cumsum(shares) / jnp.sum(shares)
     u = jax.random.uniform(key)
-    return jnp.where(u < sortie, SORTIE, jnp.where(u < sortie + zone, ZONE, TASK))
+    return jnp.where(u < edge[0], SORTIE, jnp.where(u < edge[1], ZONE, TASK))
 
 
 def pick(kind, sortie, zone, task):

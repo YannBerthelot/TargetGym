@@ -686,6 +686,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane/experts_tecs.py",
             "scenarios.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, heading select scored on the RVSM, AIM and ACS bands.
@@ -716,6 +718,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("circle_suite", module="target_gym.plane3d.scenarios"),
@@ -749,6 +753,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane/experts_tecs.py",
             "scenarios.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v6: Amendment 2 (plane3d/PHYSICS.md): protected limits, air data,
         # established start, a turbulence zone, the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands.
@@ -781,6 +787,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # v4: the distance to the curve observed as the tracked output.
         # One scenario, declared to carry the stream's numbers.
@@ -811,6 +819,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "experts/pid.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
@@ -856,6 +866,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "experts/pid.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
@@ -1269,6 +1281,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane/dynamics.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
+            "patrol/scenarios.py",
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios(
@@ -1297,6 +1312,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "plane3d/env.py",
             "plane3d/experts.py",
             "plane/experts_tecs.py",
+            "plane/scenarios.py",
+            "plane/stream_events.py",
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("wake_surf_suite", module="target_gym.patrol.scenarios"),
