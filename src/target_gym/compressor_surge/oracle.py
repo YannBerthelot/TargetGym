@@ -50,6 +50,12 @@ from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_cl
 from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
 
+#: The zone hinge's softplus width, Pa (ours, the owner's pick of 2026-11-11):
+#: a tenth of a kPa against the 1.2 kPa band, so the plan charges about 1e-4
+#: of a zone step at the setpoint, where the env charges nothing; at 1 kPa it
+#: charged half a step there and pulled the header onto the setpoint.
+ZONE_WIDTH = 0.1 * KPA
+
 
 def commands(p, u):
     """The drive setpoint and valve opening the raw move ``u`` commands,
@@ -147,11 +153,12 @@ def compressor_model(env, p) -> TaskModel:
         # Each side's hinge on its own (K2's abs, p_w(x) + p_w(-x)): softplus of
         # abs keeps abs's corner at the setpoint, where the plan holds, and
         # the solver stalled on it.
-        e = target - dp
-        past = jax.nn.softplus((e - p.header_band) / KPA) + jax.nn.softplus(
-            (-e - p.header_band) / KPA
+        # Each side's slope is the zone price per kPa past the band.
+        e, w = target - dp, ZONE_WIDTH
+        past = jax.nn.softplus((e - p.header_band) / w) + jax.nn.softplus(
+            (-e - p.header_band) / w
         )
-        cost = cost + p.zone_price * p.delta_t * past
+        cost = cost + p.zone_price * p.delta_t * (w / KPA) * past
         y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 

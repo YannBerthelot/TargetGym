@@ -399,6 +399,29 @@ def test_the_compressors_planned_zone_cost_has_no_kink_at_the_setpoint():
     assert abs((cp2 - cp1) / h - (cm1 - cm2) / h) < 1e-4
 
 
+def test_the_compressors_plan_charges_almost_no_zone_inside_the_band():
+    """The env charges nothing for the zone while the header is inside its
+    band (env.py, ``zone``). The plan's smoothed hinge may overstate that,
+    but at the setpoint, a full band width (1.2 kPa) from either edge, the
+    charge stays under 1 % of a step outside the zone (zone_price x delta_t
+    = 100): under 1. The stage cost from the reset, which sits at the
+    setpoint, is compared with the same model's cost when the band is so
+    wide that no hinge can charge; the difference is the zone's charge."""
+
+    def stage_cost(**overrides):
+        env, params, oracle = _oracle("compressor_surge", **overrides)
+        m = oracle.model
+        _, state = env.reset_env(jax.random.PRNGKey(0), params)
+        with enable_x64():
+            s = float64(state)
+            d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+            return float(m.step(d, m.state_x(s), m.hold(s), 0)[1]), params
+
+    cost, params = stage_cost()
+    no_zone, _ = stage_cost(header_band=1e9)
+    assert cost - no_zone < 0.01 * float(params.zone_price * params.delta_t)
+
+
 @pytest.mark.parametrize(
     "name, budget",
     [(name, 0.25) for name in FIVE + AIRCRAFT]
