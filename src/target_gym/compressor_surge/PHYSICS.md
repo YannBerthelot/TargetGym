@@ -853,8 +853,10 @@ to start the drive.
 model is the env's step written again on the env's own functions
 (`compressor_step`): ten substeps, each moving the drive setpoint and the
 valve toward their commands at their rate limits and then taking one RK4
-step, with the consumers' deviation on its noise-free mean path, a^k times
-its measured value. The rewrites, by the smoothing protocol's inventory:
+step, the valve's command passed behind the positioner's dead time as the
+env passes it (the plan's state carries the commands still queued), with the
+consumers' deviation on its noise-free mean path, a^k times its measured
+value. The rewrites, by the smoothing protocol's inventory:
 
 - the commands' clips are replaced by bounds on the moves (T1);
 - the tracking term is written as (e / e_floor)^2, the reward itself since

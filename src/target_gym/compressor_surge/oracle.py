@@ -13,8 +13,10 @@ section 5.4, and decision S10), run by
   bound loses nothing and keeps the plan off the full-rate plateau, where a
   command changes nothing and IPOPT stalled; the corner left inside the
   reach smoothed by softplus at the K5 widths (T5,
-  ``data/oracle_widths/compressor_surge.json``); the consumers' deviation
-  on its noise-free mean path, a^t times its measured value;
+  ``data/oracle_widths/compressor_surge.json``); the valve behind its
+  positioner's dead time, as the env passes it (``history``): the state
+  carries the commands still in the positioner; the consumers' deviation on
+  its noise-free mean path, a^t times its measured value;
 - objective (version 3, charter Amendment 3): the recycle energy in kJ, and
   the header zone as a smooth hinge, the zone price per second past the band
   (T2);
@@ -28,10 +30,14 @@ section 5.4, and decision S10), run by
 The cold start holds the drive setpoint and the valve where they are.
 """
 
+import functools
+import math
+
 import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
+from target_gym import records
 from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
@@ -45,6 +51,12 @@ from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of, softplus_clip
 from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
+
+#: The zone hinge's softplus width, Pa (ours, the owner's pick of 2026-11-11):
+#: a tenth of a kPa against the 1.2 kPa band, so the plan charges about 1e-4
+#: of a zone step at the setpoint, where the env charges nothing; at 1 kPa it
+#: charged half a step there and pulled the header onto the setpoint.
+ZONE_WIDTH = 0.1 * KPA
 
 
 def commands(p, u):
@@ -74,21 +86,39 @@ def reach_scale(p, steps):
     )
 
 
+def history(p) -> int:
+    """How many past valve commands the positioner can still pass: those
+    issued within ``valve_lag`` of a step ago. The env keeps more
+    (``VALVE_HISTORY``), but the newest command issued at least ``valve_lag``
+    before a substep's end is among these (env.py, ``delayed``)."""
+    return math.ceil(float(p.valve_lag) / float(p.delta_t)) + 1
+
+
 def compressor_step(env, p, x, u, t, task, widths, deltas=None):
-    """One env step from ``x`` = (m_c, dp, N, N_ramp, x) under the raw move
-    ``u``: ``(x_next, phi_min, the substep Phis, the rate limits' arguments)``.
-    ``widths`` are the drive's and the valve's (0.0 is the exact clip), and
-    ``deltas[i, j]`` is added to site i's output at substep j (K5's probe)."""
-    _, demand, clock, drift, *_ = task
-    n = _substeps(env.integration_method)
+    """One env step from ``x`` = (m_c, dp, N, N_ramp, x, the last ``history``
+    valve commands, newest first) under the raw move ``u``: ``(x_next,
+    phi_min, the substep Phis, the rate limits' arguments)``. ``widths`` are
+    the drive's and the valve's (0.0 is the exact clip), and ``deltas[i, j]``
+    is added to site i's output at substep j (K5's probe)."""
+    _, demand, clock, drift, time = task
+    n, K = _substeps(env.integration_method), history(p)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
     dev = drift * jnp.exp(-p.demand_theta * p.delta_t) ** t
     deltas = jnp.zeros((2, n)) if deltas is None else deltas
+    # The positioner's queue, as the env's: each command with the time it was
+    # issued, the step's start, so at the same float operations.
+    cmds = jnp.concatenate([jnp.reshape(x_cmd, (1,)), x[5 : 5 + K]])
+    issued = (time + t - jnp.arange(K + 1)) * p.delta_t
+    t0 = (time + t) * p.delta_t
+
+    def delayed(tau):
+        ready = issued <= tau - p.valve_lag
+        return cmds[jnp.where(jnp.any(ready), jnp.argmax(ready), K)]
 
     def substep(carry, j):
         m_c, dp, N, N_ramp, xv = carry
-        args = jnp.stack([N_cmd - N_ramp, x_cmd - xv])
+        args = jnp.stack([N_cmd - N_ramp, delayed(t0 + (j + 1) * h) - xv])
         r_N, lo_x, hi_x = (
             p.drive_rate * h,
             p.valve_close_rate * h,
@@ -107,31 +137,42 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
         phi = new[0] / (rho * p.A_c * p.U_r * new[2])
         return (new[0], new[1], new[2], N_ramp, xv), (phi, args)
 
-    out, (phis, args) = jax.lax.scan(substep, tuple(x), jnp.arange(n))
+    out, (phis, args) = jax.lax.scan(substep, tuple(x[:5]), jnp.arange(n))
     phi_min = -p.soft_min_temperature * jax.nn.logsumexp(-phis / p.soft_min_temperature)
-    return jnp.stack(out), phi_min, phis, args
+    return jnp.concatenate([jnp.stack(out), cmds[:K]]), phi_min, phis, args
 
 
-def compressor_model(env, p) -> TaskModel:
+def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
+    """The planner problem; the zone's edge is planned ``zone_backoff`` Pa
+    inside the band (K11 on the header, ``zone`` in the widths file)."""
+    band = p.header_band - zone_backoff
 
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _ = d["task"]
+        setpoints, _, clock, *_ = d["task"]
         target = scheduled_setpoint(setpoints, 0.0, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
         cost = p.energy_price * power * p.delta_t / 1000.0
-        past = jax.nn.softplus((jnp.abs(target - dp) - p.header_band) / KPA)
-        cost = cost + p.zone_price * p.delta_t * past
-        y = jnp.stack([phi_min - 2.0 * p.W])
+        # Each side's hinge on its own (K2's abs, p_w(x) + p_w(-x)): softplus of
+        # abs keeps abs's corner at the setpoint, where the plan holds, and
+        # the solver stalled on it. Each side's slope is the zone price per
+        # kPa past the band.
+        e, w = target - dp, ZONE_WIDTH
+        past = jax.nn.softplus((e - band) / w) + jax.nn.softplus((-e - band) / w)
+        cost = cost + p.zone_price * p.delta_t * (w / KPA) * past
+        y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
+    K = history(p)
     return TaskModel(
-        nx=5, nu=2, step=step,
-        state_x=lambda s: jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]),
+        nx=5 + K, nu=2, step=step,
+        state_x=lambda s: jnp.concatenate(
+            [jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]), s.valve_cmds[:K]]
+        ),
         data=lambda s: (
-            s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
+            s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev, s.time,
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
@@ -143,8 +184,11 @@ def compressor_model(env, p) -> TaskModel:
 
 
 def make_compressor_surge_mpc(env, params) -> Oracle:
-    """Registry factory: the shared solver's oracle on ``compressor_model``."""
-    return Oracle(env, params, "compressor_surge", compressor_model)
+    """Registry factory: the shared solver's oracle on ``compressor_model``,
+    its zone backed off by the widths file's measure."""
+    zone = records.load_row("oracle_widths", "compressor_surge")["zone"]
+    build = functools.partial(compressor_model, zone_backoff=zone["backoff_kpa"] * KPA)
+    return Oracle(env, params, "compressor_surge", build)
 
 
 #: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):

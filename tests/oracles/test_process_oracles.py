@@ -34,16 +34,33 @@ import pytest
 from target_gym import records
 from target_gym.benchmark import episode_keys
 from target_gym.cement_kiln.oracle import soft_max
+from target_gym.compressor_surge.env import live_target
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
-#: Exactness is the rewrites', so a disturbance the planner holds over its plan
-#: by design is held still here: the autoclave's feed wander (its v5 has no
-#: block clock, which this test used to start 5 steps before a switch).
-QUIET = {"unstable_cstr": {"feed_T_wander": 0.0}}
+#: Exactness is the rewrites', so what a planner leaves out of its plan by
+#: design is held still here: a disturbance it holds over the plan (the
+#: autoclave's feed wander; the CSTR's daily feed cycle, collapsed onto its
+#: middle; the compressor consumers' noise, whose mean path it plans on), and
+#: a score term it does not price (the turbine tower's fatigue, which reads
+#: the history's turning points; the compressor's header zone, an indicator
+#: the plan prices as a smooth hinge).
+QUIET = {
+    "unstable_cstr": {"feed_T_wander": 0.0},
+    "cstr": {"feed_T_range": (297.15, 297.15)},
+    "wind_turbine": {"tower_share": 0.0},
+    "compressor_surge": {"demand_sigma": 0.0, "zone_price": 0.0},
+}
+#: An event already in force at the solve, as the state carries it (certainty
+#: equivalence): the CSTR's catalyst loss and feed build-up, and four_tank's
+#: extra outlet in tank 4, each opened before the reset.
+IN_FORCE = {
+    "cstr": ({"k0_drop": 0.4, "feed_rise": 0.1}, {"event_at": -1.0}),
+    "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
+}
 C2 = (
     "hvac",
     "boiler_drum",
@@ -83,24 +100,42 @@ def test_the_kiln_solves_seed_zeros_reset():
 
 
 @pytest.mark.medium
+def test_the_four_tank_rig_solves_its_reset_though_it_has_no_trip():
+    """The rig has no trip, so its trip costs nothing (failure_cost 0), yet an
+    empty or overflowing tank still bounds every level. At rest at the P+
+    operating point the first solve is a plain one: converged, inside the
+    cap, with no retry."""
+    env, params, oracle = _oracle("four_tank")
+    assert float(params.failure_cost) == 0.0
+    key = episode_keys(jax.random.PRNGKey(0), 1, 3300)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
 @pytest.mark.parametrize(
-    "name, load",
-    [(n, None) for n in ON_SOLVER]
-    + [("cstr", (0.7, -0.015)), ("four_tank", (2e-4, -1e-4))],
+    "name, in_force",
+    [(n, False) for n in ON_SOLVER] + [(n, True) for n in IN_FORCE],
 )
-def test_the_exact_rewrites_replay_on_the_env(name, load):
+def test_the_exact_rewrites_replay_on_the_env(name, in_force):
     """Ten stages from training seed 100's reset, under the moves that hold
     the actuators (raw 0 where the reset holds none in the box) plus a
     0.05 sine. The two runs differ only in the order of a few float64
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
     a rewrite is not exact. The compressor's sites run exact (width 0). With
-    a ``load`` in force at the solve, the plan and the env both hold it."""
-    env, params, oracle = _oracle(name, **QUIET.get(name, {}))
+    an event in force at the solve, the plan and the env both hold it."""
+    overrides, fields = IN_FORCE[name] if in_force else ({}, {})
+    env, params, oracle = _oracle(name, **QUIET.get(name, {}), **overrides)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
-        if load is not None:
-            state = state.replace(load=jnp.array(load, state.load.dtype))
+        state = state.replace(
+            **{k: jnp.asarray(v, getattr(state, k).dtype) for k, v in fields.items()}
+        )
         st, m = float64(state), oracle.model
         hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
         wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
@@ -311,6 +346,124 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         np.testing.assert_allclose(
             getattr(past, field), getattr(reached, field), rtol=1e-6, err_msg=field
         )
+
+
+def test_the_compressors_planned_surge_limit_is_the_surge_line():
+    """The surge line is Phi = 2W (compressor_surge/PHYSICS.md; env.py's
+    ``psi_surge``). One step from the reset under the held move: the plan's
+    surge margin, its output less the limit's bound, is the env's phi_min
+    less 2W after the same step. Float32 env against the float64 model on
+    a margin of order 0.1: 1e-5."""
+    env, params, oracle = _oracle("compressor_surge")
+    m, (limit,) = oracle.model, oracle.model.limits
+    key = jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, params)
+    hold = m.hold(state)
+    after = env.step_env(key, state, hold, params)[1]
+    with enable_x64():
+        s = float64(state)
+        d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+        y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
+    planned = float(y[0]) - limit.lo
+    assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+
+
+def test_the_compressors_planned_zone_cost_has_no_kink_at_the_setpoint():
+    """Every reward kink the plan keeps is smoothed (the smoothing protocol's
+    K2 and T2): the oracle holds the header at its setpoint, so a corner in
+    the planned cost there stalls the solver. From the reset, which sits at
+    the setpoint (asserted within half a pascal), the stage cost's slope in
+    the header pressure is taken over [-2h, -h] and [h, 2h] with h = 1 Pa;
+    any corner at the setpoint lies between them. A smooth cost's slopes
+    differ by its curvature over 3h, under 1e-4 per Pa here (the zone's
+    softplus at 1.2 band widths: 0.1/kPa x 0.18 / 1 kPa x 3 Pa, about 5e-5);
+    the corner of abs inside the hinge differs by about 2 x 0.1 x
+    sigmoid(-1.2), 0.046 per Pa."""
+    env, params, oracle = _oracle("compressor_surge")
+    m = oracle.model
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    with enable_x64():
+        s = float64(state)
+        d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+        x, hold = m.state_x(s), m.hold(s)
+
+        def cost(dp):
+            x1, c, *_ = m.step(d, x.at[1].set(x[1] + dp), hold, 0)
+            return float(c), float(x1[1])
+
+        h = 1.0
+        after = cost(0.0)[1]
+        cm2, cm1, cp1, cp2 = (cost(k * h)[0] for k in (-2, -1, 1, 2))
+    setpoint = float(live_target(state, params))
+    assert abs(after - setpoint) < 0.5
+    assert abs((cp2 - cp1) / h - (cm1 - cm2) / h) < 1e-4
+
+
+def test_the_compressors_plan_charges_almost_no_zone_inside_the_band():
+    """The env charges nothing for the zone while the header is inside its
+    band (env.py, ``zone``). The plan's smoothed hinge may overstate that,
+    but at the setpoint, a full band width (1.2 kPa) from either edge, the
+    charge stays under 1 % of a step outside the zone (zone_price x delta_t
+    = 100): under 1. The stage cost from the reset, which sits at the
+    setpoint, is compared with the same model's cost when the band is so
+    wide that no hinge can charge; the difference is the zone's charge."""
+
+    def stage_cost(**overrides):
+        env, params, oracle = _oracle("compressor_surge", **overrides)
+        m = oracle.model
+        _, state = env.reset_env(jax.random.PRNGKey(0), params)
+        with enable_x64():
+            s = float64(state)
+            d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+            return float(m.step(d, m.state_x(s), m.hold(s), 0)[1]), params
+
+    cost, params = stage_cost()
+    no_zone, _ = stage_cost(header_band=1e9)
+    assert cost - no_zone < 0.01 * float(params.zone_price * params.delta_t)
+
+
+def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
+    """K11 on the zone (the owner's call of 2026-11-11): the plan holds the
+    header inside the band by the back-off b in the widths file, the
+    planner's worst one-step error on it. So the plan prices the header at
+    band - b as a softplus hinge prices its own corner: at least w log 2
+    times the slope (K2's gap), zone_price x delta_t x (w / 1 kPa) x log 2.
+    A plan edged at the band itself charges softplus(-b / w) < log 2 there.
+    The header is put at band - b below the setpoint by shifting the
+    reset's pressure, found by secant to within a pascal (asserted)."""
+    from target_gym.compressor_surge.oracle import ZONE_WIDTH
+
+    b = records.load_row("oracle_widths", "compressor_surge")["zone"]["backoff_kpa"]
+    assert b > 0.0
+
+    band = float(_oracle("compressor_surge")[1].header_band)
+
+    def charge(**overrides):
+        env, params, oracle = _oracle("compressor_surge", **overrides)
+        m = oracle.model
+        _, state = env.reset_env(jax.random.PRNGKey(0), params)
+        edge = float(live_target(state, params)) - band + b * 1000.0
+        with enable_x64():
+            s = float64(state)
+            d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+            x, hold = m.state_x(s), m.hold(s)
+
+            def at(shift):
+                x1, c, *_ = m.step(d, x.at[1].add(shift), hold, 0)
+                return float(x1[1]), float(c)
+
+            (a, pa), (b_, pb) = (0.0, at(0.0)[0]), (-1000.0, at(-1000.0)[0])
+            for _ in range(6):  # secant to the edge
+                a, pa, b_ = b_, pb, b_ - (pb - edge) * (b_ - a) / (pb - pa)
+                pb = at(b_)[0]
+            after, c = at(b_)
+        assert abs(after - edge) < 1.0
+        return c, params
+
+    c, params = charge()
+    no_zone, _ = charge(header_band=1e9)
+    hinge_corner = params.zone_price * params.delta_t * ZONE_WIDTH / 1000.0
+    assert c - no_zone >= float(hinge_corner) * math.log(2.0) * (1 - 1e-6)
 
 
 @pytest.mark.parametrize(
