@@ -184,7 +184,11 @@ def own_gust_field(aircraft: int):
 def lead_leg(time, params, xp=jnp):
     """Which leg of the lead's route is being flown at *time*."""
     per_leg = xp.maximum(params.lead_leg_seconds / params.delta_t, 1.0)
-    return ((time / per_leg).astype(int)) % N_LEAD_LEGS
+    # The clock wrapped on whole routes: the same count inside a window, and in
+    # a stream a count float32 divides exactly however long the plant runs
+    # (long-strata S1).
+    route = xp.asarray(xp.round(per_leg * N_LEAD_LEGS), jnp.int32)
+    return ((xp.mod(time, route) / per_leg).astype(int)) % N_LEAD_LEGS
 
 
 @struct.dataclass
@@ -376,6 +380,13 @@ class PatrolParams(PlaneParams3D):
     #: 25.1329, A4.2]; ``wake_surf`` sets it, where a vortex can roll the
     #: follower past what its ailerons hold.
     upset_bank: float = 0.0
+    #: A sortie's all-up mass in a stream, kg (long-strata S1b): the patrol's
+    #: zero-fuel mass with a quarter of the internal 4 926 kg to all of it
+    #: aboard (ours; the scored window carries 3 000 kg, ``hornet.FUEL``).
+    sortie_mass_range: Tuple[float, float] = (
+        hornet.MASS - hornet.FUEL + 0.25 * 4_926.0,
+        hornet.MASS - hornet.FUEL + 4_926.0,
+    )
 
     delta_t: float = 1.0
 
@@ -461,6 +472,7 @@ class WakeSurfParams(PatrolParams):
     vmo_eas: float = _A320.vmo_eas
     inner_loop: InnerLoop = InnerLoop()
     airliner_lead: bool = True
+    sortie_mass_range: Tuple[float, float] = _A320.sortie_mass_range
 
     #: Transatlantic cruise levels, FL330 to FL370 (ours, the A320's cruise).
     target_altitude_range: Tuple[float, float] = (33_000.0 * 0.3048, 37_000.0 * 0.3048)
@@ -501,6 +513,8 @@ def make_cruise_state(
     params: PatrolParams,
     target_altitude: float,
     target_heading: float,
+    mass=None,
+    fuel=None,
 ) -> PlaneState3D:
     """Build a trimmed, straight-and-level :class:`PlaneState3D` at cruise.
 
@@ -510,10 +524,15 @@ def make_cruise_state(
     attitude loop's integral at that trim. Spawning at ``initial_theta`` with the
     elevator merely balanced there left a Hornet, which trims near 6 deg, 6 deg
     short of the lift it needs.
+
+    ``mass`` and ``fuel`` default to the scored configuration's; a stream's
+    sortie passes its own (long-strata S1b).
     """
+    mass = params.initial_mass if mass is None else mass
+    fuel = params.initial_fuel_quantity if fuel is None else fuel
     x_dot = speed * jnp.cos(psi)
     y_dot = speed * jnp.sin(psi)
-    theta, trim, power = trim_level(speed, z, params.initial_mass, params)
+    theta, trim, power = trim_level(speed, z, mass, params)
     return PlaneState3D(
         x=x,
         x_dot=x_dot,
@@ -528,11 +547,11 @@ def make_cruise_state(
         psi=psi,
         alpha=theta,  # gamma = 0 at level flight
         gamma=0.0,
-        m=params.initial_mass,  # fuel is a component of it, not an addition
+        m=mass,  # fuel is a component of it, not an addition
         power=power,
         stick=trim,
         aileron=jnp.deg2rad(params.initial_aileron),
-        fuel=params.initial_fuel_quantity,
+        fuel=fuel,
         time=0,
         target_altitude=target_altitude,
         target_heading=target_heading,

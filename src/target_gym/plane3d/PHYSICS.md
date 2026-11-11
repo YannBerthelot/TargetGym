@@ -432,10 +432,10 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_circle` | 600 | 1 | 10 min | 3 in [-1, 1] | 17 | 39 |
-| `plane3d_figure8` | 1000 | 1 | 17 min | 3 in [-1, 1] | 21 | 39 |
-| `plane3d_heading` | 600 | 1 | 10 min | 3 in [-1, 1] | 19 | 39 |
-| `plane3d_racetrack` | 1200 | 1 | 20 min | 3 in [-1, 1] | 25 | 39 |
+| `plane3d_circle` | 600 | 1 | 10 min | 3 in [-1, 1] | 17 | 42 |
+| `plane3d_figure8` | 1000 | 1 | 17 min | 3 in [-1, 1] | 21 | 42 |
+| `plane3d_heading` | 600 | 1 | 10 min | 3 in [-1, 1] | 19 | 42 |
+| `plane3d_racetrack` | 1200 | 1 | 20 min | 3 in [-1, 1] | 25 | 42 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -825,3 +825,37 @@ The expert reads these values, and so does every tuner. The oracle plans and act
 on the true state, so it stays a full-state bound. `reward`, trips and the score
 read the true state. `info["measured_reward"]` is the same cost on the readings,
 with `psi` from the velocities read and any trip taken from the true state.
+
+## The stream (docs/proposals/long-strata.md, S1, S1b and R8)
+
+As a continuing plant (`target_gym.stream`) the 3D tasks fly a sequence of
+sorties, as the 2D aircraft (plane/PHYSICS.md, "The stream"): a sortie lasts
+1.90 h on average [AIRBUS-A320], starts established in cruise at a mass drawn over
+60 to 78 t and held, and turbulence zones start at 0.45 an hour with their own
+intensity. Sources and searches: plane/REALITY.md, "The stream". What differs:
+
+- **`plane3d_heading`'s vectors** are events at 24 an hour (ours: the window's one
+  per 150 s; ATC gives about two headings per aircraft per approach sector
+  [PRINZO], but no source gives the time on frequency). A vector draws a heading
+  over `target_heading_range`; its size is the turn from the heading flown. The
+  window's periodic vectors are off in a stream (`heading_clearance_period` 0).
+- **`plane3d_racetrack`'s holds** are its sorties: a hold lasts 7.5 min on average,
+  Heathrow's 2016 average [NATS-HOLDS], and each new hold is a new aircraft at its
+  own mass and level, on a fresh orientation. No level changes in the stack (owner,
+  2026-11-11).
+- **The steady wind** moves to a new scenario's as a first-order lag of
+  `wind_tau`, 2 010 s, instead of jumping: the largest switch, 67 kt, then starts
+  at 2 kt a minute, the horizontal shear AC 00-30C marks as moderate turbulence
+  near a jet, 40 kt per 150 NM crossed at 450 kt [AC00-30C]. The state carries the
+  wind the aircraft is in (`mean_wind_x`, `mean_wind_y`).
+- **Restart** (R8; owner, 2026-11-11): the sortie's replacement, established at
+  its level with its mass, on its own pattern: on the circle, the figure eight or
+  the hold it flies (the hold's turns as sized when it began), or on its cleared
+  heading.
+- **Outside world and records.** The gusts and a vector's size (`heading_change`,
+  the turn from the heading flown) are records, carried through a trip but the
+  policy's.
+- `plane3d_circle`, `plane3d_figure8` and the racetrack are closed shapes, so
+  their paths never run out.
+
+In a window nothing changes (PR description: bit-identical, traced and constant).

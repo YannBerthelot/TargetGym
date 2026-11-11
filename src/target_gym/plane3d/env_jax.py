@@ -16,7 +16,13 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
-from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
+from target_gym.base import (
+    actuate,
+    canonical_dtypes,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.plane.dynamics import (
     BANK_DEMAND_MAX,
@@ -30,6 +36,16 @@ from target_gym.plane.dynamics import (
     total_wind_3d,
     trim_level,
     trim_stick,
+)
+from target_gym.plane.stream_events import (
+    carry,
+    event_kind,
+    fuel_for,
+    in_stream,
+    pick,
+    sortie_key,
+    sortie_mass,
+    start_zone,
 )
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.plane3d.env import (
@@ -79,6 +95,9 @@ class _Airplane3DBase(
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
     #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    #: The mass is the sortie's: in a stream it is held (S1b), drawn from the
+    #: stream's seed, so the outside world; in a window the burn moves it, and a
+    #: restart keeps what was burned.
     OUTSIDE_WORLD = (
         "target_altitude",
         "target_heading",
@@ -86,15 +105,33 @@ class _Airplane3DBase(
         "target_y",
         "target_radius",
         "target_half_leg",
-        "heading_change",
         "clearance_time",
+        "zone_start",
+        "zone_end",
+        "zone_sigma",
+        "mean_wind_x",
+        "mean_wind_y",
+        "m",
+        "fuel",
+    )
+    #: Carried through a trip but the policy's: the gust, whose Dryden filter
+    #: runs on the aircraft's airspeed, and a vector's size, the turn from the
+    #: heading flown when it came.
+    RECORDS = ("gust_x", "gust_y", "gust_z", "heading_change")
+    #: Runs as a continuing plant (``target_gym.stream``): sorties renew with a
+    #: held mass, turbulence zones and vectors are events carrying their own
+    #: size, the steady wind lags a switch, the patterns are closed shapes.
+    STREAM_READY = True
+    #: What a new sortie flies into: the weather carries on (S1b).
+    WEATHER = (
+        "zone_start",
+        "zone_end",
+        "zone_sigma",
         "gust_x",
         "gust_y",
         "gust_z",
-        "zone_start",
-        "zone_end",
-        "m",
-        "fuel",
+        "mean_wind_x",
+        "mean_wind_y",
     )
 
     render_plane = classmethod(_render)
@@ -148,6 +185,7 @@ class _Airplane3DBase(
     ):
         if params is None:
             params = self.default_params
+        params = self._in_wind(state, params)
 
         # Not every learner squashes, so a raw action past the box acts as the
         # bound rather than as a command the plant could never receive.
@@ -174,7 +212,76 @@ class _Airplane3DBase(
         new_state, reward, terminated, info = finish_step(
             self, key, state, new_state, params, metrics=metrics, overspeed=warning
         )
+        new_state = new_state.replace(
+            mean_wind_x=jnp.asarray(params.wind_x, jnp.float32),
+            mean_wind_y=jnp.asarray(params.wind_y, jnp.float32),
+        )
         return self.get_obs(new_state, params), new_state, reward, terminated, info
+
+    def _in_wind(self, state, params):
+        """``params`` with the steady wind the aircraft is in: a window's own,
+        and in a stream the scenario's reached as a first-order lag of
+        ``wind_tau`` from the wind it was in, so a switch never jumps it (as the
+        other plants' regime levels move; long-strata S1)."""
+        a = jnp.exp(-params.delta_t / jnp.maximum(params.wind_tau, params.delta_t))
+        wx = params.wind_x + (state.mean_wind_x - params.wind_x) * a
+        wy = params.wind_y + (state.mean_wind_y - params.wind_y) * a
+        return params.replace(
+            wind_x=in_stream(params, wx, params.wind_x),
+            wind_y=in_stream(params, wy, params.wind_y),
+        )
+
+    def start_event(self, state: PlaneState3D, key, params: PlaneParams3D):
+        """The stream's event hook (docs/proposals/long-strata.md, S1 and S1b): a
+        new sortie, a turbulence zone or the task's own event, by
+        ``params.event_mix``. A sortie starts established with a fresh mass, on
+        a fresh pattern at a fresh level, in the weather the last one left
+        (``WEATHER``) and on the same clocks; a zone starts now with the
+        scenario's intensity."""
+        k_kind, k_zone, k_task, k_sortie = jax.random.split(key, 4)
+        now = state.time * params.delta_t
+        start, end, sigma = start_zone(
+            state.zone_start, state.zone_end, state.zone_sigma, now, k_zone, params
+        )
+        zone = state.replace(zone_start=start, zone_end=end, zone_sigma=sigma)
+        sortie = carry(self.reset_env(k_sortie, params)[1], state, self.WEATHER)
+        task = self._task_event(state, k_task, params)
+        return pick(event_kind(k_kind, params), sortie, zone, task)
+
+    def _task_event(self, state, key, params):
+        """The task's own event in a stream; a pattern has none."""
+        return state
+
+    def restart_plant(self, key, state: PlaneState3D, params: PlaneParams3D):
+        """After a crash, the sortie's replacement (long-strata R8; owner,
+        2026-11-11): established in cruise at the sortie's level and with its
+        mass, on its pattern or heading, all of which the outside world keeps
+        (``OUTSIDE_WORLD``), so two policies keep meeting the same sorties. The
+        hour of ``restart_steps`` prices the gap. ``plane/REALITY.md`` names no
+        post-trip state: no source has a trip end a flight."""
+        level = state.target_altitude
+        here = params.replace(
+            stream_mode=False,
+            target_altitude_range=(level, level),
+            initial_altitude_range=(level, level),
+            initial_altitude_offset_range=(0.0, 0.0),
+            initial_mass=state.m,
+            **self._on_pattern(state),
+        )
+        fresh = self._fresh(key, here, state)
+        return canonical_dtypes(self._placed(fresh, state, key))
+
+    def _fresh(self, key, params, state):
+        """A reset under ``params``, which put it on ``state``'s pattern."""
+        return self.reset_env(key, params)[1]
+
+    def _on_pattern(self, state):
+        """The parameters that put a reset on ``state``'s pattern."""
+        return {}
+
+    def _placed(self, fresh, state, key):
+        """``fresh`` moved onto ``state``'s pattern where params cannot say it."""
+        return fresh
 
     def _next_clearance(self, key, state, params):
         """The state after ATC's clearance for this step, if any (the heading
@@ -190,6 +297,11 @@ class _Airplane3DBase(
         """Compute shared initial state fields. Returns (remaining_key, base_kwargs)."""
         if params is None:
             params = self.default_params
+        # In a stream a reset is a sortie: it draws its mass (long-strata S1b).
+        # A window keeps its own.
+        mass = in_stream(
+            params, sortie_mass(sortie_key(key), params), params.initial_mass
+        )
         key, altitude_key, target_altitude_key = jax.random.split(key, 3)
 
         target_altitude = jax.random.uniform(
@@ -243,14 +355,19 @@ class _Airplane3DBase(
             psi=initial_psi,
             alpha=initial_alpha,
             gamma=initial_gamma,
-            m=params.initial_mass,  # fuel is a component of it, not an addition
+            m=mass,  # fuel is a component of it, not an addition
             power=params.initial_power,
             stick=trim + jnp.deg2rad(params.initial_stick),
             aileron=jnp.deg2rad(params.initial_aileron),
-            fuel=params.initial_fuel_quantity,
+            fuel=in_stream(
+                params, fuel_for(mass, params), params.initial_fuel_quantity
+            ),
             time=0,
             target_altitude=target_altitude,
             pitch_integ=trim / STICK_TRAVEL,
+            zone_sigma=jnp.asarray(params.turbulence_sigma, jnp.float32),
+            mean_wind_x=jnp.asarray(params.wind_x, jnp.float32),
+            mean_wind_y=jnp.asarray(params.wind_y, jnp.float32),
         )
         return key, base_kwargs
 
@@ -273,7 +390,7 @@ class _Airplane3DBase(
         turbulence zone drawn [BEA447 Figure 24]."""
         z = base_kwargs["target_altitude"]
         speed = assigned_tas_3d(z, z, params)
-        theta, stick, power = trim_level(speed, z, params.initial_mass, params)
+        theta, stick, power = trim_level(speed, z, base_kwargs["m"], params)
         onset_key, length_key = jax.random.split(key)
         start = jax.random.uniform(
             onset_key,
@@ -425,6 +542,25 @@ class Plane3DHeading(_Airplane3DBase):
             clearance_time=jnp.where(due, state.time, state.clearance_time),
         )
 
+    def _task_event(self, state, key, params):
+        """A vector in a stream (long-strata S1): a new heading drawn over
+        ``target_heading_range``, its size the turn from the heading flown, as
+        the window's vectors come."""
+        heading = jax.random.uniform(
+            key,
+            minval=params.target_heading_range[0],
+            maxval=params.target_heading_range[1],
+        )
+        return state.replace(
+            target_heading=heading,
+            heading_change=jnp.abs(wrap_angle(heading - heading_3d(state, params))),
+            clearance_time=jnp.asarray(state.time, jnp.float32),
+        )
+
+    def _on_pattern(self, state):
+        h = state.target_heading
+        return dict(target_heading_range=(h, h))
+
     def compute_reward(self, state, params):
         return compute_reward_heading(state, params)
 
@@ -436,6 +572,20 @@ class Plane3DHeading(_Airplane3DBase):
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
+        # Established on heading 0, a literal: the window's graph as it was.
+        return self._reset_on(key, params, 0.0)
+
+    def _fresh(self, key, params, state):
+        """A restart established on the heading it was cleared onto."""
+
+        @canonical_reset
+        def on_heading(env, k, p):
+            return env._reset_on(k, p, state.target_heading)
+
+        return on_heading(self, key, params)[1]
+
+    def _reset_on(self, key, params, heading):
+        """The reset, established on ``heading`` (rad)."""
         if params is None:
             params = self.default_params
         key, base_kwargs = self._reset_common(key, params)
@@ -446,10 +596,11 @@ class Plane3DHeading(_Airplane3DBase):
             minval=params.target_heading_range[0],
             maxval=params.target_heading_range[1],
         )
-        # Amended: established on heading 0, cleared onto the target at once;
-        # the capture is the job here (plane/REALITY.md, missions).
+        # Amended: established on ``heading`` (0 in a window), cleared onto
+        # the target at once; the capture is the job here (plane/REALITY.md,
+        # missions).
         key, zone_key = jax.random.split(key)
-        established = self._established(zone_key, base_kwargs, params, 0.0)
+        established = self._established(zone_key, base_kwargs, params, heading)
         base_kwargs = jax.tree_util.tree_map(
             lambda a, b: jnp.where(params.amended, a, b), established,
             dict(base_kwargs, zone_start=0.0, zone_end=0.0),
@@ -556,6 +707,20 @@ class Plane3DRacetrack(_Airplane3DBase):
         # the air data (Amendment 2); 28 with the wind sensor.
         self.obs_shape = (28,) if observe_wind else (25,)
 
+    def _on_pattern(self, state):
+        h = state.target_heading
+        return dict(pattern_heading_range=(h, h))
+
+    def _placed(self, fresh, state, key):
+        """On the hold the sortie flies: its turns were sized for the wind at
+        its start, which a restart's own sizing would not repeat."""
+        c, s_ = jnp.cos(state.target_heading), jnp.sin(state.target_heading)
+        radius, half = state.target_radius, state.target_half_leg
+        along = jax.random.uniform(
+            jax.random.fold_in(key, 1), minval=-half, maxval=half
+        )
+        return fresh.replace(x=along * c - radius * s_, y=along * s_ + radius * c)
+
     def compute_reward(self, state, params):
         return compute_reward_racetrack(state, params)
 
@@ -598,7 +763,11 @@ class Plane3DRacetrack(_Airplane3DBase):
             params.amended, 0.5 * speed * leg_time, target_radius * _RACETRACK_LEG
         )
         # Orientation of the pattern, and where along the near leg to start.
-        pattern_heading = jax.random.uniform(heading_key, minval=0.0, maxval=2 * jnp.pi)
+        pattern_heading = jax.random.uniform(
+            heading_key,
+            minval=params.pattern_heading_range[0],
+            maxval=params.pattern_heading_range[1],
+        )
         along = jax.random.uniform(along_key, minval=-half_leg, maxval=half_leg)
 
         # Start on the leg at +radius abeam, heading along the pattern.
@@ -691,6 +860,10 @@ class Plane3DCircle(_Airplane3DBase):
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (20,) if observe_wind else (17,)
+
+    def _on_pattern(self, state):
+        r = state.target_radius
+        return dict(target_radius_range=(r, r))
 
     def compute_reward(self, state, params):
         return compute_reward_circle(state, params)
@@ -814,6 +987,10 @@ class Plane3DFigureEight(_Airplane3DBase):
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
         self.obs_shape = (24,) if observe_wind else (21,)
+
+    def _on_pattern(self, state):
+        r, o = state.target_radius, state.target_heading
+        return dict(target_radius_range=(r, r), figure8_angle_range=(o, o))
 
     def compute_reward(self, state, params):
         return compute_reward_figure8(state, params)

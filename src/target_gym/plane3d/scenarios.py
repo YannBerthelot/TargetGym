@@ -7,6 +7,7 @@ fixed wind meets each seed's pattern from its own side) and the zone. Numbers
 marked "ours" lie inside the family range beside them (plane3d/PHYSICS.md).
 """
 
+from target_gym.plane.scenarios import REGIME_H, stream
 from target_gym.scenarios import Scenario
 
 # Weights, each scenario's share of operating time (Amendment 3, J5). Turbulence
@@ -28,14 +29,41 @@ SEVERE = 21.46 * FT
 #: quoted by secondary sources, plane/REALITY.md), 67 kt at 10 000 ft.
 MODERATE, STRONG = 30.0 * KT, 50.0 * KT
 
+# ---- The stream (docs/proposals/long-strata.md, draft 4, S1 and S1b) ----
+# Sources and searches: plane/REALITY.md, "The stream".
+#: Vectors in a stream, per hour: the window's one every 150 s as the mean
+#: (ours: ATC gives about two headings per aircraft per approach sector
+#: [PRINZO], but no source gives the time on frequency).
+VECTORS_PER_H = 3600.0 / 150.0
+#: A hold's mean length, h: Heathrow's average hold, 6.5 to 8.5 min over
+#: 2014 to 2016, just over 7.5 min in 2016 [NATS-HOLDS]. Each new hold is a
+#: new aircraft at its own mass and level (S1b).
+HOLD_H = 7.5 / 60.0
 
-def _common(strong=True):
+
+def _heading_stream(zones=True):
+    """The heading task's stream fields: vectors are events, not a schedule."""
+    return stream(
+        REGIME_H,
+        zones=zones,
+        task_per_h=VECTORS_PER_H,
+        heading_clearance_period=0.0,
+    )
+
+
+def _hold_stream(zones=True):
+    """The racetrack's stream fields: each hold a sortie of its own."""
+    return stream(REGIME_H, sortie_h=HOLD_H, zones=zones)
+
+
+def _common(strong=True, fields=_heading_stream):
     return (
         Scenario(
             "normal",
             {},
             source="BEA447 Figure 24: one light zone of 3 to 30 min",
             description="one light zone, still mean air",
+            **fields(),
             weight=0.35,
         ),
         Scenario(
@@ -43,6 +71,7 @@ def _common(strong=True):
             {"turbulence_sigma": 0.0},
             source="RVSM A.4.1.4 (nonturbulent air)",
             description="still air",
+            **fields(zones=False),
             weight=0.3,
         ),
         Scenario(
@@ -50,6 +79,7 @@ def _common(strong=True):
             {"turbulence_sigma": WORST},
             source="BEA447 Figure 24 (zones up to 0.5 g peak to peak)",
             description="one zone at the recorded worst",
+            **fields(),
             weight=0.05,
         ),
         Scenario(
@@ -57,6 +87,7 @@ def _common(strong=True):
             {"wind_x": MODERATE},
             source="IFH ch. 10 (holds and tracks are flown correcting for wind); ours, 30 kt",
             description="a steady 30 kt wind",
+            **fields(),
             weight=0.2,
         ),
     ) + (_strong() if strong else ())
@@ -70,6 +101,7 @@ def _strong():
             source="IFH ch. 10; ours, 50 kt, under the design wind at every level",
             description="a steady 50 kt wind",
             weight=0.1,
+            **_heading_stream(),
         ),
     )
 
@@ -82,6 +114,7 @@ def heading_suite():
             source="MIL-F-8785C Figure 7, severe (1e-5 exceedance) at 5 500 m",
             description="vectors through one zone of severe turbulence, 6.5 m/s",
             weight=1e-4,
+            **_heading_stream(),
         ),
         Scenario(
             "long_zone",
@@ -89,19 +122,21 @@ def heading_suite():
             source="BEA447 Figure 24 (zones of up to 30 min)",
             description="vectors through a zone covering the whole window",
             weight=0.05,
+            **_heading_stream(),
         ),
     )
 
 
 def racetrack_suite():
     low = (3_000.0, 14_000.0 * FT)
-    return _common(strong=False) + (
+    return _common(strong=False, fields=_hold_stream) + (
         Scenario(
             "low_hold_wind",
             {"wind_x": STRONG, "target_altitude_range": low},
             source="IFH ch. 10 (1 min legs and 230 KIAS to 14 000 ft); ours, 50 kt",
             description="a low hold, 1 min legs, in a 50 kt wind",
             weight=0.07,
+            **_hold_stream(),
         ),
         Scenario(
             "design_wind_low",
@@ -109,6 +144,7 @@ def racetrack_suite():
             source="PANS-OPS design wind 2h + 47 kt at 10 000 ft (secondary, REALITY.md)",
             description="a low hold, 1 min legs, in the wind its area is built for",
             weight=0.02,
+            **_hold_stream(),
         ),
         Scenario(
             "high_hold_wind",
@@ -116,5 +152,34 @@ def racetrack_suite():
             source="IFH ch. 10 (1.5 min legs and 265 KIAS above 14 000 ft); ours, 50 kt",
             description="a high hold, 1.5 min legs, in a 50 kt wind",
             weight=0.08,
+            **_hold_stream(),
+        ),
+    )
+
+
+def circle_suite():
+    """``plane3d_circle``'s one window, declared to carry its stream numbers."""
+    return (
+        Scenario(
+            "normal",
+            {},
+            source="ArduPlane LOITER circles a point [P409] (plane/REALITY.md)",
+            description="an orbit through one light zone",
+            weight=1.0,
+            **stream(REGIME_H),
+        ),
+    )
+
+
+def figure8_suite():
+    """``plane3d_figure8``'s one window, declared to carry its stream numbers."""
+    return (
+        Scenario(
+            "normal",
+            {},
+            source="eights on pylons [ACS] (plane/REALITY.md)",
+            description="the figure eight through one light zone",
+            weight=1.0,
+            **stream(REGIME_H),
         ),
     )
