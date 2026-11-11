@@ -409,7 +409,7 @@ smooth form of that.
 | AoA limit | the buffet line's | ours: the model's own stall boundary; the A320's alpha max is not found |
 | `vmo_eas`, `mmo` | 350 kt, 0.82 | cited: TCDS item 10 |
 | `max_alt` | 39 100 ft | cited: TCDS item 11 |
-| `altitude_band` | 65 ft | cited: RVSM A.4.1.4 |
+| altitude band | 65 ft | cited: RVSM A.4.1.4 |
 | `speed_band`, `mach_band` | 10 kt, 0.02 | cited: AIM 4-4-12, read 2026-11-08 on faa.gov |
 | band cost shape | squared excess in band widths | ours: the owner's choice, see above |
 | `gust_scale_length` | 1 750 ft | cited: MADDEN, after MIL-F-8785C |

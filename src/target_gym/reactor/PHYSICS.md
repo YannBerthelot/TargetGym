@@ -290,7 +290,7 @@ small within a day (0.56 to 0.8 K of Tavg at the BEAVRS rates), so it matters mo
 together with that carried debt.
 
 **Retired tests (owner, 2026-11-08, TESTING.md section 10).**
-`test_peak_xenon_worth_is_in_the_published_band` (the task has no scram; the load cut's
+The scram's peak xenon worth test (the task has no scram; the load cut's
 swing is tested against Krsko instead), `test_the_reactors_winning_null_has_a_written_exception`
 (the old plant's written exception is gone; acceptance, J2, still checks the nulls) and
 `test_a_day_has_two_moves_for_the_scorer` (the old scorer's move detector, which the
