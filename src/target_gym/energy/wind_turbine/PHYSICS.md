@@ -266,3 +266,24 @@ Each scenario's real operating time, in hours a year (`scenarios.py`): normal
 extreme gust 0.17 (one 10 min window a year, the gust being a one-year event
 [S13]). The rest are ours, from a Rayleigh wind of mean 8.5 to 10 m/s, with the
 family ranges in `scenarios.py`.
+
+---
+
+<!-- BEGIN GENERATED FACTS -->
+
+<!-- Written by scripts/generate_physics_facts.py. Do not edit by hand:
+     `make ci-docs` fails if this block does not match the code. Prose
+     about *why* these numbers are what they are belongs outside it. -->
+
+### Facts, generated from the code
+
+| environment | steps | step (s) | episode | action | obs | float state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 24 |
+
+`float state` counts the scalar and array float fields the state carries,
+`time` excluded; the gap between it and `obs` is what the controller cannot
+see. Episode lengths are the scored configuration's (`env.default_params`),
+which is what the recorded baselines use.
+
+<!-- END GENERATED FACTS -->

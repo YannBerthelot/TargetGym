@@ -16,7 +16,7 @@ env, params = tg.make("glass_furnace")
 | Observation space | `Box((12,))` |
 | Tracked variable(s) | fining share read at the cold end |
 | Episode length | 5040 steps of 120 s (7 days) |
-| Cite as | `glass_furnace-v4` |
+| Cite as | `glass_furnace-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space
@@ -73,10 +73,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The old MPC read the retired plant's params, so the MPC slot is empty; the ceiling is scripts/glass_slow_oracle.py, not yet converged (PHYSICS.md, section 2).
-
-!!! warning "The shipped expert is weak here"
-    The fining PI costs 335,604 EUR a 7-day episode, mean of the conformance test's two seeds, against 242,995 for the best constant valve (raw 0.0, 0.5 kg/s). Its setpoint sits two sigma above a pass mark the reward prices as a step, so it loses glass where a wide constant margin does not: full back-off is what this reward pays for (PHYSICS.md, cold review item 4). A finding for the reference ladder; not tuned.
+A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
 
 ## Arguments
 

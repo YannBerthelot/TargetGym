@@ -167,16 +167,16 @@
   },
   "glass_furnace": {
     "tuning_rule": "SIMC with tc = theta on the valve's step test of the settled attempt 3 plant (scripts/glass_slow_props.py step); setpoint two sigma above the pass mark, sigma the fining reading's spread under this PI on six walk seeds (scripts/glass_slow_props.py walks). Provisional until the reference ladder measures its own",
-    "Kp": 1.9796,
-    "Ki": 1.7911690191820487e-05,
+    "Kp": 1.1913,
+    "Ki": 5.967838893898407e-06,
     "Kd": 0.0,
     "u0": -0.09119999999999995,
-    "backoff": 0.0292,
+    "backoff": 0.0498,
     "model": {
-      "k": 11.003,
-      "tau_h": 41.75,
-      "theta_h": 3.833,
-      "sigma": 0.0146
+      "k": 7.878,
+      "tau_h": 55.45,
+      "theta_h": 11.817,
+      "sigma": 0.0249
     }
   },
   "distillation": {
@@ -437,20 +437,20 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "ph_neutralization": {
-    "Kp": 0.138292,
-    "Ti": 95.280105,
+    "Kp": 0.354805,
+    "Ti": 300.0,
     "Tf": 0.0,
     "model": {
       "demand": {
-        "k": 19.685139,
-        "tau1": 95.280105,
-        "theta": 17.500001,
-        "band": 0.104163,
-        "step": 0.016667,
-        "bands": 18.898425,
-        "spread": 1.069436,
+        "k": 17.231106,
+        "tau1": 458.526735,
+        "theta": 37.5,
+        "band": 0.121989,
+        "step": 0.009091,
+        "bands": 14.125147,
+        "spread": 1.175083,
         "tests": 10.0,
-        "tau_c": 17.500001
+        "tau_c": 37.5
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -476,19 +476,11 @@
   },
   "hvac": {
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "kp": 0.23639991504753094,
-    "Ti": 1308.6862984169786,
     "model": {
-      "T_air": {
-        "k": 3.0755,
-        "tau1": 1308.686298,
-        "theta": 450.0,
-        "band": 0.16148,
-        "step": 0.271687,
-        "bands": 5.174462,
-        "spread": 1.123592,
-        "tests": 10.0,
-        "tau_c": 450.0
+      "curve": {
+        "T_set": 21.0,
+        "T_out_design": -10.0,
+        "T_supply_design": 27.71875
       }
     }
   }

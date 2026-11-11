@@ -57,7 +57,7 @@ modelling choice.
 | Silica crown, hot side | Visible degradation above 1620 C; theoretical limit 1630 C | Wear, a cost over the campaign. No automatic protection found | [S13; S14] |
 | Silica crown, cold side | Sodium silicate forms below 1400 C | Wear | [S13] |
 | Real crown operation | 1550 to 1580 C on one float furnace, std 2.21 K under operators, 1.2 K under MPC | Where operators keep it | [S1, slide 13] |
-| Glass quality: bubbles | Bubbles leave only when fining is complete; sulfate fining is strong in oxidised melts from 1420 to 1500 C | A zone: glass with defects is lost to cullet | [S12; S31] |
+| Glass quality: bubbles | Bubbles leave only when fining is complete; sulfate fining is strong in oxidised melts from 1420 to 1500 C; fining is set by "the time-temperature integral of melting and refining"; the shortest path's residence is 15 to 25 % of the mean; front-end firing in the refiner can raise reboil bubbles | A zone: glass with defects is lost to cullet | [S12; S31; S45; S46] |
 | Canal | At least 1100 C before the tin bath | A zone for forming | [S16] |
 | Price of glass lost to cullet | not found | | |
 | Crown wear rate against temperature | see section 7 | | |
@@ -184,3 +184,5 @@ ports, batch islands covering 85 % of the island zone [S10]. A 1300 t/d float fu
 - [S42] Producer page, tin bath and lehr lengths, https://www.uzsm.uz/en/activities/production/production-secial-building-materials/glassware/
 - [S43] US12410087B2, cullet ratio, https://patents.google.com/patent/US12410087B2/en
 - [S44] US9103799B2, batch camera, https://patents.google.com/patent/US9103799B2/en
+- [S45] US6673730, float glass fining by the time-temperature integral, reboil from refiner firing, https://patents.google.com/patent/US6673730B1/en
+- [S46] US6871514B2, critical path residence, https://patents.google.com/patent/US6871514B2/en
