@@ -97,6 +97,27 @@ the normal day (0.7), a planned 10 % rise or fall in pull shown 8 h ahead (0.05 
 and an unannounced 6 % rise or fall in the gas's heating value (0.1 each), each starting
 at a time the seed draws between 24 and 96 h.
 
+**The stream** (docs/proposals/long-strata.md, S1). As a continuing plant
+(`target_gym.stream`) each scenario is a regime of a week on average. In a pull
+regime the line plans one pull change a visit on average: announced when it comes
+(`start_event`), it starts `pull_notice_h` later as the plan shows it, ramps over
+`pull_ramp_h`, holds `event_hold_h` (3 days) from its start and goes back over the
+same ramp. In a gas regime a swing comes 1.5 times a day on average and holds 8 h
+from its start before it ramps back over `gas_swing_h`, as LNG did at one French
+site: three episodes in about two days, each about 8 h above half its rise
+(REALITY.md section 9, [ST1]). Each change carries the size it started with, so it
+runs to its return through a switch of regime, and the events' clock is rebased at
+each event, so it stays exact however long the furnace runs. One change of each
+kind runs at a time: one drawn while its kind is under way is absorbed (ours). A
+stream starts with no change of its own window, the walks already at their
+stationary spread. The dwells, the pull rate and the pull hold are ours, set once
+without tuning (REALITY.md section 9).
+
+**Trips.** None: the crown is held by the plant's override and the canal and the
+fining are priced zones, so the furnace never leaves an envelope. Long-strata R8's
+restart ("a cooled crown") has nothing to restart here, and the task has no
+`restart_plant`.
+
 **Job and score (rule 15).** Keep the glass fined and at forming temperature at the canal
 at the least fuel (REALITY.md, section 6). Cost per step: fuel at 60.5 EUR/MWh [S21], plus
 the charged pull at 600 EUR/t (`ours`, the owner's pick) when the canal is under 1100 C
@@ -135,6 +156,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | Planned pull change | +-10 % | Inside 2 % float wander [S5] to a container plant's 29 to 42 % [S3, slide 8] |
 | Gas swing | +-6 % of heating value | 3 MJ/m3 within a day [S20] on a Wobbe index of about 50, arithmetic |
 | Pull ramp, notice, gas ramp, event window | 2 h, 8 h, 6 h, 24 to 96 h | Not found; ours |
+| Stream: regime dwells, pull change rate and hold | A week each; one change a visit, held 3 days | Not found; ours (REALITY.md section 9). The gas swings' rate and hold, 1.5 a day held 8 h, are sourced [ST1] |
 | Fining pass | 0.5 | Middle of Beerkens' 1420 to 1500 C band [S31] |
 | Lost glass price | 600 EUR/t | Not found; the owner's pick near one market figure seen once |
 | Crown override margin and gains | 5 K, 0.0101 kg/s per K, 2 h | Ours, a protection's design; SIMC on the fuel step |
@@ -244,7 +266,7 @@ sulfate stay hidden. `sensor_noise_scale = 0` gives the noise-free task.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `glass_furnace` | 5040 | 120 | 168.0 h | 1 in [-1, 1] | 12 | 44 |
+| `glass_furnace` | 5040 | 120 | 168.0 h | 1 in [-1, 1] | 12 | 48 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
