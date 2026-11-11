@@ -25,6 +25,33 @@ PULL_STEP = (
 )
 GAS_STEP = 0.06  # 3 MJ/m3 within a day on a Wobbe index of about 50 [S20], arithmetic
 
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1): how long each
+#: regime lasts (``dwell_h``), how often its event comes (``events_per_h``) and how
+#: long a change holds before it goes back (``event_hold_h``). REALITY.md section 9
+#: gives the sources and the searches; a number marked ours was set once, without
+#: tuning.
+NORMAL_DWELL_H = 7 * 24.0  # ours
+PULL_DWELL_H = 7 * 24.0  # ours: a planned change and its return in one visit
+PULL_HOLD_H = 3 * 24.0  # ours
+GAS_DWELL_H = 7 * 24.0  # ours: a week of blended gas
+#: [ST1]: at one French site, LNG came three times in about two days, each episode
+#: about 8 h above half its 2 MJ/m3 rise. With the task's 6 h ramp, an 8 h hold from
+#: the start keeps the swing above half its size for those 8 h.
+GAS_EVENTS_PER_H = 1.5 / 24.0
+GAS_HOLD_H = 8.0
+#: A stream starts no event of its own window: only the stream starts events.
+_NO_WINDOW_EVENT = {"pull_change_window_h": (1.0e9, 1.0e9)}
+
+
+def _stream(dwell_h, events_per_h=0.0, hold_h=None):
+    """A regime's stream fields: its dwell, its event rate and its event's hold."""
+    held = {} if hold_h is None else {"event_hold_h": hold_h}
+    return dict(
+        dwell_h=dwell_h,
+        events_per_h=events_per_h,
+        stream_overrides={**_NO_WINDOW_EVENT, **held},
+    )
+
 
 def suite() -> tuple:
     """The scenarios, normal day first."""
@@ -35,6 +62,7 @@ def suite() -> tuple:
             "[S5] pull wanders about 2 %; [S19] gas composition weekly or daily",
             "established operation: the walks only",
             weight=WEIGHTS["normal"],
+            **_stream(NORMAL_DWELL_H),
         ),
         Scenario(
             "pull_up",
@@ -42,6 +70,7 @@ def suite() -> tuple:
             "[S1, slide 10] pull change in float control; [S3, slide 8]; [S4]",
             "a planned 10 % rise in pull, shown ahead by its notice",
             weight=WEIGHTS["pull_up"],
+            **_stream(PULL_DWELL_H, 1.0 / PULL_DWELL_H, PULL_HOLD_H),
         ),
         Scenario(
             "pull_down",
@@ -49,6 +78,7 @@ def suite() -> tuple:
             "[S1, slide 10]; [S3, slide 8]; [S4]",
             "a planned 10 % fall in pull, shown ahead by its notice",
             weight=WEIGHTS["pull_down"],
+            **_stream(PULL_DWELL_H, 1.0 / PULL_DWELL_H, PULL_HOLD_H),
         ),
         Scenario(
             "gas_rich",
@@ -56,6 +86,7 @@ def suite() -> tuple:
             "[S20] LNG and biomethane move the Wobbe index over 3 MJ/m3 within a day",
             "an unannounced 6 % rise in the gas's heating value",
             weight=WEIGHTS["gas_rich"],
+            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H),
         ),
         Scenario(
             "gas_lean",
@@ -63,5 +94,6 @@ def suite() -> tuple:
             "[S20]",
             "an unannounced 6 % fall in the gas's heating value",
             weight=WEIGHTS["gas_lean"],
+            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H),
         ),
     )

@@ -138,6 +138,38 @@ ports, batch islands covering 85 % of the island zone [S10]. A 1300 t/d float fu
 14 m wide melter, a waist 7.5 m long and 4.5 m wide, a working end 20 m long and 10 m wide
 [S18].
 
+## 9. The stream: how long regimes last and how often events come (2026-11-11)
+
+Searched for the continuing furnace (docs/proposals/long-strata.md, S1). A figure
+counts when it was read twice on separate fetches; "seen once" marks the rest.
+
+- **Gas swings at a consumer.** At one French site in June 2016, LNG raised the
+  Wobbe index from 50.4 to 52.4 MJ/m3 between 18:59 and 20:59 on 6 June, and the
+  index went back to pipe gas and up again three times in about two days; each
+  LNG episode spent about 8 h above half its rise, and the third (to 52.7 MJ/m3)
+  was still on at the chart's end (read from the chart) [ST1]. The source behind
+  the slide is a glass-melting paper. The stream's gas regimes take 1.5 swings a
+  day, each held 8 h. The swing there is 4 % in 1 to 2 h, against the task's 6 %
+  over 6 h (ours, section 7); the window keeps its own.
+- **Seen once.** ENTSOG: at mixed exit points no daily change above 5.5 MJ/m3 was
+  recorded, though a month can exceed it; 2 of 29 points with 15 min data changed
+  by more than 3 MJ/m3 within 15 min. JRC: maximum hourly rates of change of 2.7
+  to 3.5 MJ/m3 an hour in four countries. A container-glass vendor guide: "40+"
+  job changes a line a year, 20 to 80 in its examples.
+- **Not found.** How often a float line changes pull, by how much, with how much
+  notice and how fast; how long a changed pull holds; how long an LNG-affected
+  period of a network lasts. Searched: float pull change, thickness change, job
+  change (also in Chinese), GRTgaz, Gasunie, National Gas and DVGW Wobbe series.
+  The regime dwells (a week), the pull change rate (one a pull regime's visit) and
+  its hold (3 days) are ours.
+
+### Sources for section 9
+
+- [ST1] J. Leicher (GWI), "Gas Quality and Hydrogen from the Perspective of
+  Industrial End Users", Swedish Gas Days 2019, slide 7, citing M. Ourliac, "Deal
+  with gas quality variations and melt glass with syngas from gasification",
+  IFRF/GWI TOTeM 44, Essen, 2017. https://www.energigas.se/media/2515/1_2-joerg-leicher_gwi-s.pdf
+
 ## Sources
 
 - [S1] G. Noboa, Glass Service, Glassman Sao Paulo 2019 slides, https://glassmanevents.com/content-images/main/01-Gabriel-Noboa-Glassman-Sao-Paulo-05122019.pdf

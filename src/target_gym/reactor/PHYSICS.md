@@ -213,7 +213,7 @@ holds at 50 % and comes back, at the scenario's rate, with a small wobble.
 | 7 | boron in the core (ppm), as the boronmeter read it 20 min ago |
 | 8 | hours until the planned ramp down starts, 0 once it has |
 | 9 | hours until the planned ramp up starts, 0 once it has |
-| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history) |
+| 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history); after a trip's restart, the power whose balance is the restart's xenon, 1 when it is above full power's |
 
 Actions: `[rod demand, boron flow]` in [-1, 1]. Rod demand reads as obs 2. Boron flow
 is -1 for full dilution, +1 for full boration. Xenon, iodine, their tilts, the boron
@@ -230,7 +230,48 @@ operator's xenon tool starts from.
 | Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, so hot standby | STS LCO 3.4.1 (US EPR GTS and AP1000 bases, from search summaries); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
 | rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
 
-The clock starts each day at 0 (ours: the episode is the 24 h window).
+The offset's clock looks back 24 h, in whole control hours: at the start of each
+hour the hour just done is filed and the hour filed a day ago leaves the count, so
+time outside the band a day ago stops counting ("1 hour during the previous 24
+hours", the CAOC wording; REALITY.md section 8 [ST1]). A window is one day and
+counts from 0, as before.
+
+### The stream (docs/proposals/long-strata.md, S1)
+
+As a continuing plant (`target_gym.stream`) each load-follow scenario is a day:
+it lasts 24 h on average and brings one day's program on average
+(`events_per_h` 1/24), and baseload days last 24 h too, so each day is a
+load-follow day at load following's share (0.108, REALITY.md section 7). The
+dispatch announces each day (`start_event`): the load starts down a time drawn in
+`day_notice_range` (the window's own 0.5 to 2 h) ahead, ramps at the scenario's rate
+to its minimum, holds a time drawn in `hold_range`, and comes back. The day carries
+its rate and depth, so it runs to its end through a switch, and the plan's clock is
+rebased on each new day, so it stays exact however long the plant runs. A day drawn
+while one is under way, from its announcement to the end of its return ramp, is
+absorbed (ours). A stream starts with no day planned: nothing ahead and full load.
+
+Burnup runs as in a window, and every 30 days (`renewal_days`, ours; owner,
+2026-11-11) the stream refuels the core: it is renewed at its cycle point as at
+reset, uncharged, the outside world carrying on, and burnup counts again from
+there. At 2.3 to 3.3 ppm a day this keeps the boron within about 100 ppm of the
+start of cycle the coefficients describe; without it a year's stream would end
+near 700 ppm. A window never refuels.
+
+**The restart after a trip** (long-strata R8; owner, 2026-11-11). The trip's
+lump prices the whole return to power, 48 h after a scram (`restart_steps`) and
+15 h after a timed limit's hot standby (`standby_steps`), both ours inside the
+family's 24 to 70 h. The plant then restarts back on its plan: at the plan's load
+where the day stands, lined out on its program with the rods parked, critical on
+boron with the burnup since the last refuelling diluted, as operators line out a
+restart. Iodine and xenon, means and tilts, are what that time at zero power
+left (`env.xenon_after_shutdown`, the plant's own rates at n = 0 solved
+exactly): from balance at full power, xenon is about 0.19 of balance after 48 h
+and builds back over the next two days, which asks about 250 ppm of dilution, and
+it is about 1.34 after 15 h, still above balance, and burns out. The policy rides
+that xenon transient and the dynamics charge it, so nothing is paid twice. The
+core's burn rate, boron delay and point in its cycle stay. Before, a trip
+restarted at once in established operation, as `reset_env` would, and its load
+plan and frequency wobble started again from the day's beginning.
 
 ---
 
@@ -374,7 +415,7 @@ so the comparison between rungs stays fair.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 107 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 134 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -418,7 +459,8 @@ cost the envelope can produce, and `restart_steps` the time a restart would take
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
 ends the window (`base.failure_kernel`): the step that leaves the envelope is
 charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts at once as `reset_env` would, on the same clock. `terminated` stays
+restarts back on its plan with the xenon its dead time left (`restart_plant`,
+section 4, "The stream"), on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
 old weights are read only by it).

@@ -208,6 +208,16 @@ class ReactorParams(EnvParams):
     load_min: float = 0.5
     load_ramp_rate: float = 0.02 / 60.0  # 1/s
     ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
+    #: A stream refuels the core every ``renewal_days`` plant days: renewed at its
+    #: cycle point as at reset, uncharged, the outside world carrying on (owner,
+    #: 2026-11-11; ours, 30 days in ``scenarios.py``, which keeps the boron within
+    #: about 100 ppm of the start of cycle the coefficients describe). 0, the
+    #: default, never: a window is one day of the cycle.
+    renewal_days: float = 0.0
+    #: How far ahead the dispatch announces a load-follow day in a stream, where
+    #: each day is an event (``Reactor.start_event``): the window's own notice. A
+    #: stream sets ``ramp_down_range`` to the past, so it starts with no day.
+    day_notice_range: Tuple[float, float] = (1800.0, 7200.0)  # s
     hold_range: Tuple[float, float] = (3.0 * 3600.0, 8.0 * 3600.0)  # s
     # The wobble is an OU process on the load: 5 min correlation, 0.5 % sd, two-sided
     # at full load too, so the scorer's median step stays the wobble's.
@@ -286,8 +296,9 @@ class ReactorParams(EnvParams):
     # Time outside the band counts at every power during load follow (EDF's scope),
     # and 1 h of it in 24 h is allowed (Westinghouse's allowance, D.C. Cook and RAOC
     # specifications, pooled in since EDF's was not found). Past it the plant must
-    # derate to 50 %, priced as the derate's lost output at spot. The clock starts
-    # the day at 0: the window is the episode, ours.
+    # derate to 50 %, priced as the derate's lost output at spot. The clock looks
+    # back 24 h in whole control hours (``roll_offset_clock``), so time outside a
+    # day ago stops counting; a window is one day and counts from 0.
     ao_allowed: float = 3600.0  # s in 24 h
     derate_to: float = 0.5  # of rated power
     derate_price_per_MWh: float = 80.0  # the derate's lost output, spot as for trips
@@ -326,6 +337,7 @@ class ReactorParams(EnvParams):
 
 #: Units of the ReactorParams fields, for the generated environment pages.
 PARAM_UNITS = {
+    "renewal_days": "d",
     "Lambda_gen": "s",
     "alpha_fuel": "1/K",
     "alpha_coolant": "1/K",
@@ -467,6 +479,97 @@ class ReactorState(EnvState):
 
     actuator_held: jax.Array = actuator_field(2)
 
+    #: The day's program carries its own rate (1/s) and depth (of rated load), so
+    #: a load-follow day runs to its end whatever the params do meanwhile, and its
+    #: clock counts physics sub-steps from ``plan_t0``: 0 in a window, rebased by a
+    #: stream at each new day, so the plan stays exact however long the plant runs
+    #: (docs/proposals/long-strata.md, S1).
+    plan_t0: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
+    plan_rate: float = struct.field(default=0.02 / 60.0, kw_only=True)
+    plan_depth: float = struct.field(default=0.5, kw_only=True)
+    #: The offset's allowance looks back 24 h (``roll_offset_clock``): seconds
+    #: outside the band in each of the last 24 control hours, and ``ao_outside``
+    #: as it stood when the current hour began.
+    ao_hours: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(OFFSET_HOURS, jnp.float32), kw_only=True
+    )
+    ao_mark: float = struct.field(default=0.0, kw_only=True)
+    #: The physics sub-step of the core's last refuelling, which burnup counts
+    #: from (``burnt``): 0 in a window; a stream's renewal moves it.
+    burn_t0: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
+    )
+
+
+#: Hours the offset's allowance looks back over: "1 hour during the previous 24
+#: hours" (REALITY.md section 4).
+OFFSET_HOURS = 24
+
+
+def plan_seconds(physics_time, state, params: "ReactorParams"):
+    """Seconds on the load plan's clock at ``physics_time`` sub-steps: from
+    ``plan_t0``, the sub-step a stream last rebased it, 0 in a window."""
+    return (physics_time - state.plan_t0) * params.delta_t
+
+
+def planned_load(t, state, xp=jnp):
+    """The day's load at ``t`` plan seconds, with the day's own rate and depth:
+    full, down a ramp, held, back up a ramp (``scheduled_load`` with the shape the
+    day carries)."""
+    down = xp.minimum(
+        state.plan_rate * xp.maximum(t - state.ramp_down_at, 0.0), state.plan_depth
+    )
+    up = xp.minimum(
+        state.plan_rate * xp.maximum(t - state.ramp_up_at, 0.0), state.plan_depth
+    )
+    return 1.0 - down + up
+
+
+def roll_offset_clock(state, params: "ReactorParams", sub_steps: int):
+    """The offset's clock as a rolling 24 h count. At the start of each control
+    hour the hour just done is filed, and the hour filed 24 h ago leaves
+    ``ao_outside``, so time outside the band a day ago stops counting. Within a
+    window's first day nothing leaves, so a window counts exactly as before.
+    ``sub_steps`` physics sub-steps make a control step."""
+    per_hour = jnp.maximum(
+        jnp.round(3600.0 / (params.delta_t * sub_steps)), 1.0
+    ).astype(jnp.int32)
+    t = jnp.asarray(state.time, jnp.int32)
+    hour = t // per_hour
+    boundary = (t % per_hour == 0) & (t > 0)
+    leaving = state.ao_hours[hour % OFFSET_HOURS]
+    filed = state.ao_hours.at[(hour - 1) % OFFSET_HOURS].set(
+        state.ao_outside - state.ao_mark
+    )
+    outside = state.ao_outside - leaving
+    return state.replace(
+        ao_hours=jnp.where(boundary, filed, state.ao_hours),
+        ao_outside=jnp.where(boundary, outside, state.ao_outside),
+        ao_mark=jnp.where(boundary, outside, state.ao_mark),
+    )
+
+
+def xenon_after_shutdown(I, Xe, seconds, params: "ReactorParams"):
+    """Iodine and xenon after ``seconds`` with no flux, in the plant's normalised
+    units, for the means or the tilts alike: iodine decays, and xenon is fed by it
+    and decays (the rates of ``_slow_rates`` at n = 0, solved exactly)."""
+    p = params
+    feed = (LAMBDA_XENON + p.sigma_phi0) / (1.0 + p.gamma_ratio)
+    e_I = jnp.exp(-LAMBDA_IODINE * seconds)
+    e_X = jnp.exp(-LAMBDA_XENON * seconds)
+    fed = feed * I * (e_I - e_X) / (LAMBDA_XENON - LAMBDA_IODINE)
+    return I * e_I, Xe * e_X + fed
+
+
+def balance_power(Xe, params: "ReactorParams"):
+    """The power whose balanced xenon is ``Xe`` (``steady_state_xenon`` read
+    backwards), clipped to [0, 1]: a xenon above full power's balance reads 1."""
+    lam, s = LAMBDA_XENON, params.sigma_phi0
+    room = jnp.maximum(lam + s - Xe * s, 1e-12)
+    return jnp.clip(Xe * lam / room, 0.0, 1.0)
+
 
 def steady_state_precursors(n_0: float, params: ReactorParams) -> jnp.ndarray:
     """Precursor concentrations that keep dC_i/dt = 0 at neutron density n_0."""
@@ -523,8 +626,9 @@ def rod_balance(T_fuel, T_avg, Xe_hat, params: ReactorParams):
 
 
 def burnt(state, params: ReactorParams):
-    """The ppm of boron the fuel has burnt since reset, at full power's rate."""
-    return state.burn_rate * state.physics_time * params.delta_t
+    """The ppm of boron the fuel has burnt since reset or the last refuelling
+    (``burn_t0``), at full power's rate."""
+    return state.burn_rate * (state.physics_time - state.burn_t0) * params.delta_t
 
 
 def rod_worth(rod_in, params: ReactorParams):
@@ -859,9 +963,7 @@ def compute_next_state(
         - p.demand_theta * state.load_wobble * p.delta_t
         + p.demand_sigma * jnp.sqrt(p.delta_t) * noise
     )
-    day = scheduled_load(
-        new_physics_time * p.delta_t, state.ramp_down_at, state.ramp_up_at, p
-    )
+    day = planned_load(plan_seconds(new_physics_time, state, p), state)
     new_load = day + wobble
 
     return (
@@ -926,7 +1028,7 @@ def get_obs(state: ReactorState, params: ReactorParams):
     Hidden: C_i, T_fuel, T_sg, iodine, xenon, and the boron on its way.
     """
     T_avg = 0.5 * (state.T_coolant + state.T_cold)
-    now = state.physics_time * params.delta_t
+    now = plan_seconds(state.physics_time, state, params)
     return jnp.array(
         [
             state.n,
