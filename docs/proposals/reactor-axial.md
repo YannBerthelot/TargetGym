@@ -120,6 +120,15 @@ in this rebuild) fails with a replay gap of 0.86 to 0.99, already on reactor-v6,
 any of today's changes. The IPOPT ceilings replay their plans on the env, so their
 costs stand; the planner's model is not exact on that test.
 
+The Krsko-day validation (v8 finding) failed on the test's own procedure, not the
+plant. Its boron trim, 0.1 per K, was set when the MTC was -30 pcm/K. A ppm moves
+Tavg by -boron_worth / (alpha_coolant + alpha_fuel), so at -12 the same gain is about
+2.2 times the loop gain: the trim oscillated, saturating 37 % of the time, Tavg swung
+-17 to +15 K, and the day tripped twice, the fit reading across the restarts. With
+-30 restored, the same day stays inside 2 K and delta I peaks at 3.8 %. The owner
+chose (2026-11-11) to scale the trim with the plant so it keeps the loop gain it was
+written with; the band and the contract are unchanged, and the test passes.
+
 ### Ceilings, room and price sensitivity on reactor-v9
 
 Adam foresight, 3000 iterations, seeds 100 to 109. Room is the reference's cost over
