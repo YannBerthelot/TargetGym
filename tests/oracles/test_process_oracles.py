@@ -422,6 +422,50 @@ def test_the_compressors_plan_charges_almost_no_zone_inside_the_band():
     assert cost - no_zone < 0.01 * float(params.zone_price * params.delta_t)
 
 
+def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
+    """K11 on the zone (the owner's call of 2026-11-11): the plan holds the
+    header inside the band by the back-off b in the widths file, the
+    planner's worst one-step error on it. So the plan prices the header at
+    band - b as a softplus hinge prices its own corner: at least w log 2
+    times the slope (K2's gap), zone_price x delta_t x (w / 1 kPa) x log 2.
+    A plan edged at the band itself charges softplus(-b / w) < log 2 there.
+    The header is put at band - b below the setpoint by shifting the
+    reset's pressure, found by secant to within a pascal (asserted)."""
+    from target_gym.compressor_surge.oracle import ZONE_WIDTH
+
+    b = records.load_row("oracle_widths", "compressor_surge")["zone"]["backoff_kpa"]
+    assert b > 0.0
+
+    band = float(_oracle("compressor_surge")[1].header_band)
+
+    def charge(**overrides):
+        env, params, oracle = _oracle("compressor_surge", **overrides)
+        m = oracle.model
+        _, state = env.reset_env(jax.random.PRNGKey(0), params)
+        edge = float(live_target(state, params)) - band + b * 1000.0
+        with enable_x64():
+            s = float64(state)
+            d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+            x, hold = m.state_x(s), m.hold(s)
+
+            def at(shift):
+                x1, c, *_ = m.step(d, x.at[1].add(shift), hold, 0)
+                return float(x1[1]), float(c)
+
+            (a, pa), (b_, pb) = (0.0, at(0.0)[0]), (-1000.0, at(-1000.0)[0])
+            for _ in range(6):  # secant to the edge
+                a, pa, b_ = b_, pb, b_ - (pb - edge) * (b_ - a) / (pb - pa)
+                pb = at(b_)[0]
+            after, c = at(b_)
+        assert abs(after - edge) < 1.0
+        return c, params
+
+    c, params = charge()
+    no_zone, _ = charge(header_band=1e9)
+    hinge_corner = params.zone_price * params.delta_t * ZONE_WIDTH / 1000.0
+    assert c - no_zone >= float(hinge_corner) * math.log(2.0) * (1 - 1e-6)
+
+
 @pytest.mark.parametrize(
     "name, budget",
     [(name, 0.25) for name in FIVE + AIRCRAFT]

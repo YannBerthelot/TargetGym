@@ -30,12 +30,14 @@ section 5.4, and decision S10), run by
 The cold start holds the drive setpoint and the valve where they are.
 """
 
+import functools
 import math
 
 import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
+from target_gym import records
 from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
@@ -140,7 +142,10 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     return jnp.concatenate([jnp.stack(out), cmds[:K]]), phi_min, phis, args
 
 
-def compressor_model(env, p) -> TaskModel:
+def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
+    """The planner problem; the zone's edge is planned ``zone_backoff`` Pa
+    inside the band (K11 on the header, ``zone`` in the widths file)."""
+    band = p.header_band - zone_backoff
 
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
@@ -152,12 +157,10 @@ def compressor_model(env, p) -> TaskModel:
         cost = p.energy_price * power * p.delta_t / 1000.0
         # Each side's hinge on its own (K2's abs, p_w(x) + p_w(-x)): softplus of
         # abs keeps abs's corner at the setpoint, where the plan holds, and
-        # the solver stalled on it.
-        # Each side's slope is the zone price per kPa past the band.
+        # the solver stalled on it. Each side's slope is the zone price per
+        # kPa past the band.
         e, w = target - dp, ZONE_WIDTH
-        past = jax.nn.softplus((e - p.header_band) / w) + jax.nn.softplus(
-            (-e - p.header_band) / w
-        )
+        past = jax.nn.softplus((e - band) / w) + jax.nn.softplus((-e - band) / w)
         cost = cost + p.zone_price * p.delta_t * (w / KPA) * past
         y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
@@ -181,8 +184,11 @@ def compressor_model(env, p) -> TaskModel:
 
 
 def make_compressor_surge_mpc(env, params) -> Oracle:
-    """Registry factory: the shared solver's oracle on ``compressor_model``."""
-    return Oracle(env, params, "compressor_surge", compressor_model)
+    """Registry factory: the shared solver's oracle on ``compressor_model``,
+    its zone backed off by the widths file's measure."""
+    zone = records.load_row("oracle_widths", "compressor_surge")["zone"]
+    build = functools.partial(compressor_model, zone_backoff=zone["backoff_kpa"] * KPA)
+    return Oracle(env, params, "compressor_surge", build)
 
 
 #: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):

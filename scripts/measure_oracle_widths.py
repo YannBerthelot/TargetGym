@@ -31,10 +31,6 @@ import numpy as np
 
 from target_gym import records
 from target_gym.benchmark import episode_keys
-from target_gym.boiler_drum.env import STEAM_OU_THETA
-from target_gym.cement_kiln.env import FEED_OU_THETA
-from target_gym.energy.wind_turbine.env import WIND_OU_THETA
-from target_gym.hvac.env import WEATHER_OU_THETA
 from target_gym.oracles.controller import enable_x64, float64
 from target_gym.oracles.rates import RateLimit
 from target_gym.oracles.widths import kink_width, limit_backoff, noise_backoff
@@ -197,6 +193,44 @@ def compressor_sites(points) -> tuple[dict, list]:
 
     widths = [out[name]["width"] or 0.0 for name in sorted(sites)]
     return out, [float(b) for b in limit_backoff(phi_min, widths, pts, n)]
+
+
+def compressor_zone(points, sites) -> dict:
+    """K11 on the header zone's edge (the owner's call of 2026-11-11: the plan
+    rode the band and a step slipped out): the planner's worst one-step error
+    on the header pressure, kPa, at the probes: the drive's and valve's
+    smoothing gap plus one innovation of the demand deviation."""
+    from target_gym.compressor_surge.env import KPA, _substeps
+    from target_gym.compressor_surge.oracle import compressor_model, compressor_step
+
+    name = "compressor_surge"
+    spec = REGISTRY[name]
+    env, p = spec.make_env(), float64(spec.make_test_params())
+    model, n = compressor_model(env, p), _substeps(env.integration_method)
+    pts = [(float64(s), jnp.asarray(u, jnp.float64)) for s, u in points]
+
+    @jax.jit
+    def header(probe, deltas):
+        state, u = probe
+        x1 = compressor_step(
+            env, p, model.state_x(state), u, 0, model.data(state), (0.0, 0.0), deltas
+        )[0]  # fmt: skip
+        return (x1[1] / KPA)[None]
+
+    @jax.jit
+    def header_by_demand(probe, d):
+        state, u = probe
+        task = _with_deviation(name, model.data(state), d)
+        x1 = compressor_step(env, p, model.state_x(state), u, 0, task, (0.0, 0.0))[0]
+        return (x1[1] / KPA)[None]
+
+    widths = [sites[k]["width"] or 0.0 for k in sorted(sites)]
+    gap = float(limit_backoff(header, widths, pts, n)[0])
+    a, sigma = NOISY[name][1](p)
+    std = float(sigma) * float(np.sqrt(1.0 - a**2))
+    steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
+    noise = float(noise_backoff(header_by_demand, std, pts, RISK, steps)[0])
+    return {"backoff_kpa": gap + noise, "gap_kpa": gap, "noise_kpa": noise}
 
 
 def _table_jumps(state, p):
@@ -529,21 +563,39 @@ NOISY = {
     ),
     "boiler_drum": (
         "target_gym.boiler_drum.oracle:boiler_model",
-        lambda p: (1.0 - STEAM_OU_THETA * p.delta_t, p.q_steam_noise_std),
+        lambda p: (
+            1.0 - _theta("boiler_drum.env", "STEAM_OU_THETA") * p.delta_t,
+            p.q_steam_noise_std,
+        ),
     ),
     "wind_turbine": (
         "target_gym.energy.wind_turbine.oracle:wind_model",
-        lambda p: (1.0 - WIND_OU_THETA * p.delta_t, p.turbulence_std),
+        lambda p: (
+            1.0 - _theta("energy.wind_turbine.env", "WIND_OU_THETA") * p.delta_t,
+            p.turbulence_std,
+        ),
     ),
     "cement_kiln": (
         "target_gym.cement_kiln.oracle:kiln_model",
-        lambda p: (1.0 - FEED_OU_THETA * p.delta_t, p.feed_noise_std),
+        lambda p: (
+            1.0 - _theta("cement_kiln.env", "FEED_OU_THETA") * p.delta_t,
+            p.feed_noise_std,
+        ),
     ),
     "hvac": (
         "target_gym.hvac.oracle:hvac_model",
-        lambda p: (1.0 - WEATHER_OU_THETA * p.delta_t, p.T_out_noise_std),
+        lambda p: (
+            1.0 - _theta("hvac.env", "WEATHER_OU_THETA") * p.delta_t,
+            p.T_out_noise_std,
+        ),
     ),
 }
+
+
+def _theta(module, name):
+    """A noise's reversion rate, imported when its task is measured, so a task
+    whose constant has moved does not stop the others."""
+    return getattr(importlib.import_module(f"target_gym.{module}"), name)
 
 
 def _wobble(p, period):
@@ -553,9 +605,20 @@ def _wobble(p, period):
     return a**period, p.demand_sigma * np.sqrt(p.delta_t / (1.0 - a**2))
 
 
+#: Where a task's deviation sits in its model's task data, if not last: the
+#: compressor's ``time`` came after it with the valve's dead time.
+DEVIATION_AT = {"compressor_surge": 3}
+
+
+def _with_deviation(name, task, d):
+    """The task data with ``d`` added to its deviation."""
+    i = DEVIATION_AT.get(name, len(task) - 1)
+    return (*task[:i], task[i] + d, *task[i + 1 :])
+
+
 def noise_terms(name: str, points) -> list:
     """K11's noise term of each limit, in ``TaskModel.limits`` order: one
-    innovation of the deviation, the last field of the model's task data."""
+    innovation of the deviation, a field of the model's task data."""
     where, decay = NOISY[name]
     module, attr = where.split(":")
     build = getattr(importlib.import_module(module), attr)
@@ -572,7 +635,7 @@ def noise_terms(name: str, points) -> list:
         state, u = probe
         task = model.data(state)
         data = {
-            "task": (*task[:-1], task[-1] + d), "end": 10**9,
+            "task": _with_deviation(name, task, d), "end": 10**9,
             "widths": jnp.zeros(n_sites),
         }  # fmt: skip
         return jnp.atleast_1d(model.step(data, model.state_x(state), u, 0)[2])[hinges:]
@@ -593,12 +656,18 @@ def main(tasks) -> None:
                 noise = aircraft_noise(name, points)
             else:
                 noise = noise_terms(name, points) if name in NOISY else []
+            zone = (
+                {"zone": compressor_zone(points, sites)}
+                if name == "compressor_surge"
+                else {}
+            )
         n = max(len(gaps), len(noise))
         gaps, noise = gaps or [0.0] * n, noise or [0.0] * n
         backoffs = [g + b for g, b in zip(gaps, noise)]
         row = {
             "sites": sites, "limit_backoffs": backoffs, "limit_gaps": gaps,
             "limit_noise": noise, "guards": GUARDS[name], "protocol": PROTOCOL,
+            **zone,
             "probes": f"the expert's states, training seeds {SEEDS.start} to "
             f"{SEEDS.stop - 1}, every {EVERY}th step" if points else None,
         }  # fmt: skip
