@@ -84,6 +84,7 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `level_trip_high` | +0.254 | m | [S20], "Drum Level HH (+254 mm)" |
 | `level_trip_delay` | 10 | s | [S9] items 23 and 24, "for more than ten seconds"; [S21] on why trips are delayed |
 | `restart_steps` | 4500 | steps | [S17] Table 1, hard coal hot start 2.5 to 3 h, low end, at 2 s steps |
+| `restart_load` | 0.25 | of nominal steam | Ours, the family's low-load floor (`low_load`'s 25 %): the minimum fire a hot restart relights at (owner, 2026-11-11) |
 | `failure_cost` | 4.267 | GBP per step | `q_steam_nominal` for one 2 s step, at `steam_rate` and `imbalance_price`: the generation a restart does not make |
 | `e_floor_level`, `e_floor_pressure` | 2.67e-3 m, 0.05 bar | - | Ours, read only by the time-in-band KPI tables, never by the score |
 | `delta_t` | 2 | s | Ours: S1 logged at 0.1 Hz and shows the swell within one or two samples, so 2 s resolves it |
@@ -110,8 +111,18 @@ off the plan, resting on plan costs a learner `0.047 sqrt(2 / pi) * 2e-3 =
 | Firing and feedwater ranges | Actuator range | `Q_max`, `q_feed_max` |
 
 A trip charges `restart_steps * failure_cost = GBP 19,203`, the generation of
-840 t of nominal steam over a 2.5 h hot start, and the plant restarts at a new
-planned load (`base.failure_kernel`).
+840 t of nominal steam over a 2.5 h hot start. The unit restarts hot
+(`restart_plant`; long-strata R8, owner 2026-11-11): purged and relit at nominal
+pressure and normal water level, on minimum fire (`restart_load`, 25 % of
+nominal steam), while the plan it tripped on carries on. The turbine then
+reloads at the plan's ramp rate: the valve passes the smaller of the plan and
+25 % plus the rate times the time since the restart (`pickup`), until it meets
+the plan. The steam the valve does not pass is off plan, and the score charges
+it; the policy holds pressure and level through the reload. The observation's
+load now stays the plan's; the steam flow reading shows the valve's. The
+boiler's expert reloads without a second trip from plan loads of 0.41 to 0.96,
+its level within -0.09 to +0.12 m. Without the reload (the valve passing the
+whole plan at once) the swell reached the high trip level above a 0.9 load.
 
 **Zones and cheap side (rule 22).** The score prices no zone. The level window
 between the trips, -330 to +254 mm, is a trip limit with no price inside it, so
@@ -263,6 +274,11 @@ The two failures are known deviations (rule 13), on S1's own model:
 
 ## 7. Deviations still in the model
 
+- A trip's lump still prices a whole 2.5 h hot start [S17], while the restart
+  now plays out the reload from minimum fire to the plan. If [S17]'s hot start
+  runs to full load, the lump pays twice for part of that reload (long-strata
+  R8); the dead time to light-off alone is not found yet. The reload's rate is
+  the plan's (ours).
 - The feedwater flow loop is perfect: the action is flow, as a cascade's
   setpoint, with no pump or valve characteristic (cold review 7).
 - The level reading is white noise with no delay; S3 fits coloured noise from

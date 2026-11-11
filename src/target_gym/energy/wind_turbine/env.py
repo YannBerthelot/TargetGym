@@ -115,7 +115,9 @@ class WindTurbineParams(EnvParams):
     #: The mean wind's correlation time in a stream, s: its score is an
     #: Ornstein-Uhlenbeck process of this time, and the mean wind its quantile
     #: on ``v_mean_range``, uniform in the long run as a window draws it
-    #: (``mean_wind``). 0, as a window has it: the mean wind holds its draw.
+    #: (``mean_wind``). At a switch the range's ends move to the new regime's
+    #: over the same time, a first-order lag, so the mean wind does not jump
+    #: (owner, 2026-11-11). 0, as a window has it: the mean wind holds its draw.
     v_mean_tau: float = 0.0
     #: Reference wind of the class, m/s (ours: class I, 50 m/s [S13]); only
     #: the gust's 1.35 (Ve1 - V) branch reads it, which never binds here.
@@ -276,6 +278,10 @@ class WindTurbineState(EnvState):
     #: The mean wind's standard-normal score: ``v_mean`` is its quantile on the
     #: scenario's ``v_mean_range`` (``mean_wind``).
     v_mean_z: float = 0.0
+    #: The ends of the range ``v_mean`` is the quantile on, m/s: the scenario's
+    #: ``v_mean_range``, or on their way to it after a stream's switch.
+    v_mean_lo: float = 0.0
+    v_mean_hi: float = 0.0
     #: Each event carries its own size, so it runs to its end through a switch
     #: (docs/proposals/long-strata.md, S1): the gust's V_gust as it started (m/s;
     #: 0 reads it off the params, as a window does), the de-rate's rating and when
@@ -447,11 +453,13 @@ def gust(t, v_hub, t0, params: WindTurbineParams, size=0.0):
 
 
 def mean_wind(state: "WindTurbineState", key, params: WindTurbineParams):
-    """The mean wind's next ``(score, value)``. In a stream (``v_mean_tau`` > 0)
-    the score is an Ornstein-Uhlenbeck process, stationary N(0, 1), and the mean
-    wind its quantile on ``v_mean_range``: uniform on the range in the long run,
-    the law a window draws it from (docs/proposals/long-strata.md, E4). In a
-    window both hold."""
+    """The mean wind's next ``(score, value, range's low end, high end)``. In a
+    stream (``v_mean_tau`` > 0) the score is an Ornstein-Uhlenbeck process,
+    stationary N(0, 1), and the mean wind its quantile on the range: uniform on
+    ``v_mean_range`` in the long run, the law a window draws it from
+    (docs/proposals/long-strata.md, E4). The range's ends close their gap to
+    ``v_mean_range`` at the score's rate, so after a switch the mean wind moves
+    to the new regime's over ``v_mean_tau``. In a window all hold."""
     p = params
     tau = jnp.maximum(p.v_mean_tau, p.delta_t)
     a = jnp.exp(-p.delta_t / tau)
@@ -460,9 +468,16 @@ def mean_wind(state: "WindTurbineState", key, params: WindTurbineParams):
     )
     z = a * state.v_mean_z + jnp.sqrt(-jnp.expm1(-2.0 * p.delta_t / tau)) * eps
     lo, hi = p.v_mean_range
+    lo = lo + (state.v_mean_lo - lo) * a
+    hi = hi + (state.v_mean_hi - hi) * a
     v = lo + (hi - lo) * jax.scipy.special.ndtr(z)
     moves = p.v_mean_tau > 0.0
-    return jnp.where(moves, z, state.v_mean_z), jnp.where(moves, v, state.v_mean)
+    return (
+        jnp.where(moves, z, state.v_mean_z),
+        jnp.where(moves, v, state.v_mean),
+        jnp.where(moves, lo, state.v_mean_lo),
+        jnp.where(moves, hi, state.v_mean_hi),
+    )
 
 
 def tower_base_moment(x_tower, params: WindTurbineParams):
@@ -599,7 +614,7 @@ def compute_next_state(
         & (t_derate < state.derate_until)
     )
     rating = jnp.where(derated, state.derate_level, p.rating)
-    v_mean_z, v_mean = mean_wind(state, key, p)
+    v_mean_z, v_mean, v_mean_lo, v_mean_hi = mean_wind(state, key, p)
 
     return (
         state.replace(
@@ -614,6 +629,8 @@ def compute_next_state(
             v_turb=v_turb,
             v_mean=v_mean,
             v_mean_z=v_mean_z,
+            v_mean_lo=v_mean_lo,
+            v_mean_hi=v_mean_hi,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
             target_power=rating * p.P_rated,

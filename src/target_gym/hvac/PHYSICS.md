@@ -145,8 +145,13 @@ No source gives how long a cold snap or a sunny spell lasts (REALITY.md), so
 the dwell is ours, set once without tuning and open for the owner. The day
 (weather cycle, sun, office hours, tariff) reads a step count wrapped on
 `DAY_STEPS`, exact however long the plant runs; the weather's deviation is
-already mean-reverting from its long-run law. In a window nothing changes: a
-scored window is bit-identical to what it was.
+already mean-reverting from its long-run law. At a switch the outdoor mean does
+not jump: it moves to the new regime's as a first-order lag of `T_out_mean_tau`,
+6 h, as a front takes hours to pass (ours, owner 2026-11-11; REALITY.md has no
+source for how fast). A linear lag keeps the long-run mean and the regimes'
+shares. The 24 h forecast includes where the mean is heading, as a forecast sees
+a front coming. In a window nothing changes: a scored window is bit-identical to
+what it was.
 
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each

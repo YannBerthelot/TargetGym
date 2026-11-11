@@ -79,6 +79,10 @@ class BoilerDrumParams(EnvParams):
     #: at the low end of "most commonly used" (Agora Energiewende 2017,
     #: Table 1, p. 47; REALITY.md [S17]), at 2 s steps.
     restart_steps: int = 4500
+    #: The load a trip's hot restart fires for once relit, as a fraction of
+    #: nominal steam: minimum fire (ours, the family's low-load floor; owner,
+    #: 2026-11-11). The policy takes the unit back to its plan from there.
+    restart_load: float = 0.25
     #: The generation a restart step does not make, in GBP: nominal steam for
     #: one step, over the steam rate, at the imbalance price.
     failure_cost: float = 93.35 * 2.0 / 3.5 / 1000.0 * 80.0
@@ -183,6 +187,7 @@ class BoilerDrumParams(EnvParams):
 PARAM_UNITS = {
     "reward_version": "-",
     "restart_steps": "steps",
+    "restart_load": "fraction of nominal steam",
     "failure_cost": "GBP per step",
     "steam_rate": "kg/kWh",
     "imbalance_price": "GBP/MWh",
@@ -262,6 +267,10 @@ class BoilerDrumState(EnvState):
     # The step the plan's clock counts from: plan times above are seconds since
     # it. 0 in a window; a stream rebases it at each event, so they stay small.
     plan_t0: jnp.ndarray = struct.field(default=0, kw_only=True)
+    # After a trip's restart the turbine reloads: the most the valve passes at
+    # p_nominal, kg/s, rising at the plan's rate until it meets the plan. 1e9
+    # when not reloading, as in every window (owner, 2026-11-11).
+    pickup: jnp.ndarray = struct.field(default=1.0e9, kw_only=True)
     # How long the level has stayed past each trip, s (``level_trip_delay``).
     time_high: jnp.ndarray
     time_low: jnp.ndarray
@@ -533,12 +542,17 @@ def compute_next_state(
         action_raw[1], min_action=0.0, max_action=pr.q_feed_max
     )
     q_demand = load_plan(state, plan_seconds(state, pr, 1), pr)
+    # The valve passes the plan, or less while the turbine reloads after a
+    # restart; the steam it does not pass is off plan, and the score charges it.
+    pickup = state.pickup + state.ramp_rate * pr.delta_t
+    pickup = jnp.where(pickup >= q_demand, 1.0e9, pickup)
+    q_valve = jnp.minimum(q_demand, pickup)
     Q_cap, q_cap = actuator_caps(state, plan_seconds(state, pr), pr)
     Q_fuel = jnp.minimum(Q_fuel, Q_cap)
     q_feed = jnp.minimum(q_feed, q_cap)
 
     _compute_velocity = partial(
-        compute_velocity, action=(Q_fuel, q_feed), q_demand=q_demand, params=pr
+        compute_velocity, action=(Q_fuel, q_feed), q_demand=q_valve, params=pr
     )
     new_positions, _ = integrate_dynamics(
         positions=jnp.array([state.pressure, state.V_wt, state.alpha_r, state.V_sd]),
@@ -563,8 +577,9 @@ def compute_next_state(
             alpha_r=alpha_r,
             V_sd=V_sd,
             level=level,
-            q_steam=steam_draw(q_demand, pressure, pr),
+            q_steam=steam_draw(q_valve, pressure, pr),
             q_demand=q_demand,
+            pickup=pickup,
             Q_fuel=Q_fuel,
             q_feed=q_feed,
             time_high=time_high,

@@ -54,6 +54,7 @@ class BuildingHVAC(
         "T_out",
         "T_out_hist",
         "weather_dev",
+        "T_out_level",
     )
     #: Runs as a continuing plant (``target_gym.stream``): its day wraps on a step
     #: count, and its scenarios are regimes with no event of their own.
@@ -164,6 +165,7 @@ class BuildingHVAC(
             T_out=T_out,
             T_out_hist=history,
             weather_dev=weather_dev,
+            T_out_level=jnp.asarray(params.T_out_mean) + jnp.zeros_like(weather_dev),
             T_supply=T_supply,
             Q_slab=slab_heat(T_supply, T_core, params),
             T_return=return_temperature(T_supply, T_core, params),

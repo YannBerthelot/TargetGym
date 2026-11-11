@@ -272,6 +272,41 @@ class BoilerDrum(
             lambda old, new: jnp.where(busy, old, new), state, started
         )
 
+    def restart_plant(
+        self, key: chex.PRNGKey, state: BoilerDrumState, params: BoilerDrumParams
+    ) -> BoilerDrumState:
+        """A trip's restart (long-strata R8; owner, 2026-11-11): the unit is
+        purged and relit hot, at nominal pressure and normal water level, firing
+        for ``restart_load`` of nominal steam whatever its plan calls for. The
+        plan carries on (``OUTSIDE_WORLD``), so the policy takes the unit back
+        to it and the dynamics charge the steam it delivers off plan meanwhile;
+        the trip's lump prices the dead time before. The turbine reloads from
+        there at the plan's rate (``pickup``)."""
+        del key
+        p = params
+        q_min = p.restart_load * p.q_steam_nominal
+        V_wt, alpha_r, V_sd, _, Q = steady_state(p, p.p_nominal, q_min)
+        values = dict(
+            pressure=p.p_nominal,
+            V_wt=V_wt,
+            alpha_r=alpha_r,
+            V_sd=V_sd,
+            level=0.0,
+            q_steam=q_min,
+            Q_fuel=Q,
+            q_feed=q_min,
+            time_high=0.0,
+            time_low=0.0,
+            pickup=q_min,
+        )
+        hot = state.replace(
+            **{
+                f: jnp.asarray(v, jnp.asarray(getattr(state, f)).dtype)
+                for f, v in values.items()
+            }
+        )
+        return hot.replace(actuator_held=self.initial_action(hot, p))
+
     def initial_action(self, state: BoilerDrumState, params: BoilerDrumParams):
         """The raw action that keeps the reset's firing and feedwater."""
         return jnp.array(

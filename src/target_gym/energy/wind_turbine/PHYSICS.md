@@ -88,7 +88,7 @@ times slower.
 | `v_ref` | 50 m/s | ours, class I of 37.5 to 50 m/s [S13]; the branch it feeds never binds |
 | `gust`, `gust_window` | 0; 60 to 580 s | [S13]: a 1-year event; the window is ours (any time a whole gust fits after a minute) |
 | `derate_to`, `derate_window` | 1.0; 60 to 300 s | [S11 Fig. ES-8]; the 10 % size of the scenario is S11's AGC de-rate (p. xix); the window is ours |
-| `v_mean_tau` | 0 (window); 6 h (stream) | ours: the mean wind's correlation time in a stream; no source in REALITY.md; 0 holds the window's draw |
+| `v_mean_tau` | 0 (window); 6 h (stream) | ours: the mean wind's correlation time in a stream, and the time over which a switch moves the range's ends (owner, 2026-11-11); no source in REALITY.md; 0 holds the window's draw |
 | `derate_hold` | 1e9 s (window); 8 h (stream, curtailment) | ours: how long a curtailment holds before the rating returns, the shift its regime lasts; no source; a window never reaches it |
 | `overspeed_factor` | 1.20 | [S17], "approximately 20 %" |
 | `rating` | 1.0 | [S1 Sec. 7], [S9 Ex. 29] |
@@ -286,7 +286,9 @@ window's events, and the scenario's event starts through `start_event`:
   Ornstein-Uhlenbeck process with a 6 h correlation time, and the mean wind is
   its quantile on the regime's `v_mean_range`, so in the long run it is uniform
   on the range, the law a window draws it from. A switch of regime keeps the
-  score and moves the wind to the new range's quantile at once.
+  score, and the range's ends (`v_mean_lo`, `v_mean_hi`) move to the new
+  regime's as a first-order lag of the same 6 h (owner, 2026-11-11), so the
+  mean wind does not jump. A linear lag keeps the long-run mean.
 - Each event's clock counts from its own onset (`gust_c0`, `derate_c0`), so
   float32 keeps it exact however long the plant runs.
 

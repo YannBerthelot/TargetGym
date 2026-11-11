@@ -8,11 +8,15 @@ Contract:
 - the mean wind is no longer drawn once and held: in a stream it moves, inside its
   regime's ``v_mean_range``, and keeps the window's draw (uniform on the range) as
   its long-run law;
+- at a switch the range's ends move to the new regime's as a first-order lag of the
+  mean wind's correlation time ``v_mean_tau``, so the mean wind does not jump: it is
+  the quantile of its score on the range where the ends stand (owner, 2026-11-11);
 - the event clocks keep exact time however long the plant has run;
 - a stream starts with neither the window's gust nor its curtailment.
 
 Oracles: the scenarios' declared ranges, sizes and hold, ``P_rated``, the gust's
-10.5 s, and a Kolmogorov-Smirnov bound for the uniform law.
+10.5 s, a Kolmogorov-Smirnov bound for the uniform law, a first-order lag's
+closed form and the normal law's CDF (SciPy).
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from scipy.special import ndtr
 
 from target_gym.stream import make_stream
 
@@ -55,6 +60,7 @@ def wind():
         return jax.lax.scan(body, state, jax.random.split(key, N))[1]
 
     return SimpleNamespace(
+        env=env,
         params=params,
         reset=jax.jit(env.reset_env),
         start=jax.jit(env.start_event),
@@ -132,3 +138,24 @@ def test_a_stream_starts_without_the_window_s_events(wind, name):
         np.testing.assert_allclose(obs[:, RATING], p.P_rated / 1e6, rtol=1e-6)
         np.testing.assert_allclose(departure, 0.0, atol=1e-4)
         s = s.replace(time=s.time + N)
+
+
+def test_at_a_switch_the_mean_wind_s_range_moves_over_its_correlation_time(wind):
+    tau = 60.0  # s: the N steps of 0.25 s
+    normal = wind.params("normal", v_mean_tau=tau)  # 13 to 25 m/s
+    near = wind.params("near_rated", v_mean_tau=tau)  # 11.4 to 14 m/s
+    _, s = wind.reset(jax.random.PRNGKey(4), normal)
+
+    @jax.jit
+    def scores(state):
+        def body(s, k):
+            _, s1, *_ = wind.env.step_env(k, s, wind.env.initial_action(s, near), near)
+            return s1, (s1.v_mean, s1.v_mean_z)
+
+        keys = jax.random.split(jax.random.PRNGKey(9), N)
+        return jax.lax.scan(body, state, keys)[1]
+
+    v, z = (np.asarray(a, np.float64) for a in scores(s))
+    left = np.exp(-np.arange(1, N + 1) * near.delta_t / tau)
+    lo, hi = 11.4 + (13.0 - 11.4) * left, 14.0 + (25.0 - 14.0) * left
+    np.testing.assert_allclose(v, lo + (hi - lo) * ndtr(z), rtol=1e-5)

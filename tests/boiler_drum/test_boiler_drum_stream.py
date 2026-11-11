@@ -9,9 +9,16 @@ Contract:
   (``s_to_ramp`` from ``ramp_start_range``), it ramps from where the plan stands to
   a load in the regime's ``load_range`` at a rate in its ``ramp_rate_range``;
 - the plan keeps exact time however long the plant has run;
-- a stream starts on a flat plan, with neither the window's ramp nor its upset.
+- a stream starts on a flat plan, with neither the window's ramp nor its upset;
+- a trip restarts the unit hot (R8; owner, 2026-11-11): purged and relit, at nominal
+  pressure and normal water level, firing for ``restart_load`` of nominal steam
+  (25 %, ours) whatever its plan calls for, and the plan carries on;
+- the turbine is then reloaded at the plan's ramp rate: the valve passes the smaller
+  of the plan and 25 % plus the rate times the time since the restart. The plan's
+  load now stays the observation's; the steam flow reading shows the valve's.
 
-Oracles: the scenarios' declared ranges and hold, ``runback_load``, the step of 2 s.
+Oracles: the scenarios' declared ranges and hold, ``runback_load``, the step of 2 s,
+and the energy balance of a steady drum: firing = steam * (h_steam - h_feedwater).
 """
 
 from __future__ import annotations
@@ -123,3 +130,54 @@ def test_a_stream_starts_on_a_flat_plan_without_the_window_s_events(boiler):
     np.testing.assert_array_equal(obs[:, LOAD_NOW], obs[0, LOAD_NOW])
     np.testing.assert_array_equal(obs[:, PLANNED], obs[0, LOAD_NOW])
     assert (obs[:, S_TO_RAMP] == 0.0).all() and (obs[:, FUEL_CAP] == 100.0).all()
+
+
+def test_a_trip_restarts_the_unit_hot_on_minimum_fire_and_its_plan_carries_on(boiler):
+    from target_gym.boiler_drum.env import steam_enthalpy
+
+    p = boiler.params("normal")
+    _, s = boiler.reset(jax.random.PRNGKey(5), p)
+    # 0.3 m of water above normal level, already held past the high trip for 10 s:
+    # the next 2 s step trips the turbine (level_trip_high 0.254 m, delay 10 s).
+    flooded = s.replace(V_wt=s.V_wt + 0.3 * p.A_d, time_high=jnp.asarray(10.0))
+    obs, after, _, _, info = boiler.env.step_env(
+        jax.random.PRNGKey(6), flooded, boiler.env.initial_action(s, p), p
+    )
+    assert bool(info["tripped"])
+    q_min = 0.25 * p.q_steam_nominal
+    assert float(after.pressure) == pytest.approx(p.p_nominal, rel=1e-6)
+    assert abs(float(after.level)) < 1e-6
+    assert float(after.q_feed) == pytest.approx(q_min, rel=1e-6)
+    firing = q_min * (steam_enthalpy(p.p_nominal, p) - p.h_feedwater)
+    assert float(after.Q_fuel) == pytest.approx(float(firing), rel=1e-5)
+    # The plan, the outside world, is the one the unit tripped on.
+    for field in ("load_from", "load_to", "ramp_rate", "plan_t0"):
+        np.testing.assert_array_equal(getattr(after, field), getattr(s, field), field)
+
+
+def _tripped(boiler, p, seed):
+    """The state a level trip restarts into, from a reset on ``seed``."""
+    _, s = boiler.reset(jax.random.PRNGKey(seed), p)
+    flooded = s.replace(V_wt=s.V_wt + 0.3 * p.A_d, time_high=jnp.asarray(10.0))
+    obs, after, _, _, info = boiler.env.step_env(
+        jax.random.PRNGKey(6), flooded, boiler.env.initial_action(s, p), p
+    )
+    assert bool(info["tripped"])
+    return obs, after
+
+
+def test_after_a_restart_the_turbine_reloads_at_the_plan_s_ramp_rate(boiler):
+    p = boiler.params("normal")
+    _, s = _tripped(boiler, p, seed=0)  # a plan at 0.91 of nominal
+    hold = boiler.env.initial_action(s, p)  # firing held at minimum
+    valve, load_now, plan = [], [], []
+    for k in range(30):  # one minute
+        obs, s, *_ = boiler.env.step_env(jax.random.PRNGKey(k), s, hold, p)
+        valve.append(float(s.q_steam * p.p_nominal / s.pressure))  # at p_nominal
+        load_now.append(float(obs[LOAD_NOW]))
+        plan.append(float(s.q_demand))
+    np.testing.assert_allclose(load_now, plan, rtol=1e-6)
+    k = np.arange(1, 31)
+    expected = np.minimum(plan, 0.25 * p.q_steam_nominal + float(s.ramp_rate) * 2.0 * k)
+    assert expected[-1] < plan[-1]  # still reloading after a minute
+    np.testing.assert_allclose(valve, expected, rtol=1e-5)
