@@ -265,13 +265,19 @@ def _direct_hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, up_rate
     dv = obs[0:2] - v_slot
     back_rate, right_rate = -(dv @ fwd), dv @ right
 
-    trim = xp.where(started, s.int_back + p.ki_x * e_back * dt, power)
-    trim = xp.clip(trim, 0.0, 1.0)
+    # Each integral runs only while the demand it feeds is inside its limit,
+    # TECS's and L1's anti-windup (docs/proposals/expert-protocols-aircraft.md,
+    # ``x_band``): a demand pinned at its limit through a turn reversal would
+    # otherwise wind it up and carry the wingman across the slot.
+    free_x = xp.abs(p.kp_x * e_back + p.kd_x * back_rate + s.int_back - 0.5) < 0.5
+    trim = s.int_back + xp.where(free_x, p.ki_x * e_back * dt, 0.0)
+    trim = xp.clip(xp.where(started, trim, power), 0.0, 1.0)
     throttle = xp.clip(trim + p.kp_x * e_back + p.kd_x * back_rate, 0.0, 1.0)
 
     speed = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + obs[3] ** 2 + 1e-6)
-    int_up = xp.where(started, s.int_up + e_up * dt, 0.0)
-    int_up = xp.clip(int_up, -p.int_max, p.int_max)
+    free_z = xp.abs(p.kp_z * e_up + p.ki_z * s.int_up) < p.climb_max
+    int_up = s.int_up + xp.where(free_z, e_up * dt, 0.0)
+    int_up = xp.where(started, xp.clip(int_up, -p.int_max, p.int_max), 0.0)
     climb = xp.clip(-(p.kp_z * e_up + p.ki_z * int_up), -p.climb_max, p.climb_max)
     gamma = obs[8]
     pitch = obs[4] + (xp.arcsin(xp.clip(climb / speed, -0.5, 0.5)) - gamma)
@@ -280,9 +286,10 @@ def _direct_hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, up_rate
     pitch = pitch + p.k_bank_comp * (load_factor - 1.0)
     del up_rate  # the climb demand is the rate loop; kept for the estimator's form
 
-    int_right = xp.where(started, s.int_right + e_right * dt, 0.0)
-    int_right = xp.clip(int_right, -p.int_max, p.int_max)
     lateral = speed * omega + p.kp_y * e_right + p.kd_y * right_rate
+    free_y = xp.abs(lateral + p.ki_y * s.int_right) < p.gravity * xp.tan(p.max_bank_rad)
+    int_right = s.int_right + xp.where(free_y, e_right * dt, 0.0)
+    int_right = xp.where(started, xp.clip(int_right, -p.int_max, p.int_max), 0.0)
     lateral = lateral + p.ki_y * int_right
     bank = xp.clip(xp.arctan(lateral / p.gravity), -p.max_bank_rad, p.max_bank_rad)
     action = xp.stack(
@@ -413,6 +420,10 @@ HOLD = FormationHoldParams(
     # raw difference: the lowest mean RMS slot error of 0, 0.25, 0.5, 1, 2, 3,
     # 5, 10 and 20 s on training seeds 100-103 (2026-11-10).
     t_rate=0.0,
+    # The lead's turn rate unfiltered, its heading's raw difference: filtered
+    # (0.3 and 0.6), the formation's wingmen fell a step further behind a
+    # reversal and tripped (training seeds 100-109, 2026-11-10).
+    k_omega=1.0,
     # The Hornet's own extra pitch per g in a turn (plane3d/hornet.py), in
     # place of the A320's 0.15: a turn's offset halves on training seeds.
     k_bank_comp=hornet.PITCH_PER_G,
@@ -445,6 +456,15 @@ def make_patrol_pid_controller() -> Controller:
     return Controller(HOLD, FormationHoldState(), patrol_hold_step)
 
 
+#: The range-and-bearing follower's hold: the same, its lead's turn rate
+#: filtered as before (``k_omega`` 0.3), since its lead heading is an estimate:
+#: the lowest worst seed of 0.1, 0.3, 0.6 and 1 on training seeds 100-109
+#: (2026-11-10), 9.5 m against 20.5 m unfiltered.
+RANGE_BEARING_HOLD = HOLD.replace(k_omega=0.3)
+
+
 def make_patrol_range_bearing_pid_controller() -> Controller:
     """The range-and-bearing patrol's expert: the same hold, behind the estimator."""
-    return Controller(HOLD, FormationHoldState(), patrol_range_bearing_hold_step)
+    return Controller(
+        RANGE_BEARING_HOLD, FormationHoldState(), patrol_range_bearing_hold_step
+    )

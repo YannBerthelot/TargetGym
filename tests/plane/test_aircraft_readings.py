@@ -548,12 +548,12 @@ def test_the_multi_agent_view_reads_at_the_params_it_is_given():
 
 
 @pytest.mark.large
-@pytest.mark.xfail(strict=True, reason="PR 9: the 20 s filter loses a 0.03 rad/s lead")
 @pytest.mark.parametrize("seed", range(100, 104))
-def test_the_range_bearing_expert_survives_its_range_noise(seed):
-    """Differenced raw, 15 m of range noise is 21 m/s of lead speed and the
-    expert trips on every training seed. This is the filter's floor, not the
-    8.5 m hold of tests/patrol/test_formation_hold.py."""
+def test_the_range_bearing_expert_survives_its_readings(seed):
+    """On its readings (azimuth, the lead's Mode S altitude; the range is seen,
+    not read, since 2026-11-10) the estimator's raw difference flies every
+    training seed without a trip. Under TCAS's 15 m of range noise, 21 m/s of
+    lead speed differenced raw, it tripped on all of them."""
     env, params = tg.make(BO)
     ctrl = registry.get(BO).make_pid_controller()
     key = jax.random.PRNGKey(seed)

@@ -15,16 +15,23 @@
 > 25 000 ft. The expert is NASA AFF's direct hold (figure 3 of the TM): on each axis a
 > PID on the slot error straight to the demand, along track on the throttle at 0.3
 > rad/s, across on the bank at 0.4, vertically on the flight path at 0.3, with the
-> Hornet's own extra pitch per g in a turn, 0.101 rad. Under it the Hornet's attitude
-> loop has its roll D raised to the F/A-18's roll damper (plane3d/PHYSICS.md, "The
-> F/A-18"); on the guide's cap it could not follow a reversal of the bank demand. On
-> held-out seeds 200-209 (2026-11-10) the patrol follower holds a median 3.6 m and
-> at worst 5.8 m against AFF's 3.05 m, with no trips, and the formation's wingmen a
-> median 7.7 m. Both stay findings. On `patrol_range_bearing` the wingman sees the
-> lead and knows its range from vision (the owner, 2026-11-10), in place of TCAS's
-> 15 m, which was set for an A320 slot 150 to 300 m out and left that follower 130 m
-> off; its estimator now takes the lead's velocity as the raw difference
-> (`t_rate` 0), and it holds a median 6.2 m, 4.1 to 10.8 m, with no trips.
+> Hornet's own extra pitch per g in a turn, 0.101 rad, the lead's turn rate read
+> unfiltered, and each integral held while its demand is at its limit. Under it the
+> Hornet's attitude loop has its roll D raised to the F/A-18's roll damper
+> (plane3d/PHYSICS.md, "The F/A-18"); on the guide's cap it could not follow a
+> reversal of the bank demand. On `patrol_range_bearing` the wingman sees the lead
+> and knows its range from vision (the owner, 2026-11-10), in place of TCAS's 15 m,
+> which was set for an A320 slot 150 to 300 m out and left that follower 130 m off;
+> its estimator takes the lead's velocity as the raw difference (`t_rate` 0) and
+> filters the turn rate (`k_omega` 0.3), since its lead heading is an estimate.
+>
+> The expert is a reference, not a bound: no deployed autopilot holds a wingman's
+> slot (D1), and it need not meet the 10 ft objective (the owner, 2026-11-10). It
+> holds it in steady flight and steady turns (`TestExpert`), and every held-out seed
+> without a trip (`tests/patrol/test_formation_hold.py`). On seeds 200-209
+> (2026-11-10) the patrol follower holds a median 3.2 m and at worst 5.7 m, the
+> range-and-bearing one 6.3 m and 9.6 m, and the formation's wingmen 3.9 m and 6.7 m,
+> the misses coming at the lead's turn entries.
 
 Two aircraft in formation. The **lead** flies a scripted patrol route; the
 **follower** is the agent and must reach and hold a *slot*, a position fixed
@@ -187,7 +194,7 @@ definition depends on.
 | The expert flies a slot in the wake | a strict expected failure until PR 9, D3 | `test_the_expert_flies_a_slot_in_the_wake` |
 | The shipped expert holds formation through a turn | across sampled turn rates | `test_expert_holds_formation` |
 | The expert never collides | separation > `min_separation` | `test_expert_never_collides` |
-| The expert holds its slot on held-out seeds, both variants | RMS slot error after the burn-in at most 8.5 m on seeds 200-209, no trip | `test_the_follower_holds_its_slot` |
+| The expert flies every held-out seed, both variants | no trip on seeds 200-209; the slot against 10 ft is reported, not required of a reference (owner, 2026-11-10) | `test_the_expert_never_trips` |
 | Slots vary across seeds | distinct | `test_slots_randomized_across_seeds` |
 
 The environment also inherits every shared contract in

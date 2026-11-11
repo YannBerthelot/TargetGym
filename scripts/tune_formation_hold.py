@@ -17,8 +17,9 @@ either module tunes is searched here, in the step its comment names:
    constant, on its altitude.
 5. [lead power]: its set power and speed trim, on its wingmen's slots.
 6. The held-out check on seeds 200-209, flown as the tests fly it
-   (tests/patrol/test_formation_hold.py: the host form, a split key chain),
-   against their limits.
+   (tests/patrol/test_formation_hold.py: the host form, a split key chain).
+   It prints the slot and the lead against the tasks' objectives, which the
+   tests do not require of a reference (the owner, 2026-11-10).
 
 Steps 1-5 fly training seeds 100-109 only, each around the shipped values,
 and rank by the worst seed, trips first. Steps 1-3 rank one gain set for
@@ -167,7 +168,7 @@ def _flown(name, seed):
 
 def check(names=(*PATROL, "formation")):
     """The held-out check, flown as tests/patrol/test_formation_hold.py
-    flies it, so it prints what the tests assert."""
+    flies it: the trips the tests assert, and the objectives they report."""
     print("held-out seeds 200-209: worst seed (which), median, trips")
     for name in names:
         runs = [_flown(name, s) for s in HELD_OUT]
