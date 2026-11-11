@@ -187,8 +187,11 @@ class Reactor(
         )
         restart = jnp.where(standby, params.standby_steps, params.restart_steps)
         trip = restart * params.failure_cost
-        reward = jnp.where(tripped, -trip, reward)
-        measured = jnp.where(tripped, -trip, measured)
+        # The trip's dollars are version 2's. Version 1 has no trip cost, as in the
+        # shared step (``base``): its reward stays the legacy score of the state.
+        charged = jnp.logical_and(tripped, params.reward_version != 1)
+        reward = jnp.where(charged, -trip, reward)
+        measured = jnp.where(charged, -trip, measured)
         terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
         terms["failure"] = jnp.where(tripped, trip, terms["failure"])
 
