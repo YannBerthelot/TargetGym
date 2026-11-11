@@ -15,11 +15,14 @@ WRONG = 0.20  # BMS error sd: MPS-ACCURE's outliers above 40 %, read as 2 sigma
 #: 2026-11-11). Each regime lasts one EFA block (4 h, NESO-SOE Table 1), the unit
 #: its weight counts in, and brings the window's one event a visit, so each upset
 #: keeps its weight's count a year: the long deviation its 20 (Q8, ours, family
-#: range 5 to 50). How long each regime lasts beyond its block is ours, unconfirmed
-#: by the owner. A stream starts with neither of the window's events, prices on a
-#: ring, and the BMS recalibrating once the true charge leaves the LFP plateau at
-#: 20 % or 80 % (ARX-LFP's "roughly SOC 20% to 80%"; that the BMS corrects right
-#: there is ours, family range 5 to 20 % and 80 to 99 %). The wrong estimate acts
+#: range 4 to 50: ENTSO-E lists the 20 most significant long deviations of 2017 to
+#: 2021, REALITY.md [ST3]). How long each regime lasts beyond its block is ours,
+#: unconfirmed by the owner. A stream starts with neither of the window's events,
+#: prices on a ring, and the BMS recalibrating once the true charge leaves the LFP
+#: plateau at 20 % or 80 % (ARX-LFP's "roughly SOC 20% to 80%", where env.py's OCV
+#: curve leaves its plateau; a TI gauge corrects outside 12 to 34 % and 92 to 93 %
+#: for two LiFePO4 cells, REALITY.md [ST1]; family range 5 to 34 % and 80 to 93 %).
+#: The wrong estimate acts
 #: through those recalibrations: each in that regime draws its error at sd 20 %.
 _BLOCK_H = 4.0
 _STREAM = dict(
@@ -70,7 +73,7 @@ def battery_scenarios():
             source="REALITY.md sec. 5, bad day: ENTSOE-LER sec. 1; NESO-ST para. "
             "6.11(vi); NESO-GUIDE p. 4",
             description="a one-way response of 0.19 to 0.46 p.u. for 30 to 90 min",
-            # blocks a year. Ours, family range 5 to 50: deviations of 50 to 100 mHz for 30 to 90 min (ENTSOE-LER)
+            # blocks a year. Ours, family range 4 to 50: deviations of 50 to 100 mHz for 30 to 90 min (ENTSOE-LER; REALITY.md [ST3])
             weight=20.0,
             **_ONE_A_BLOCK,
         ),

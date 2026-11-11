@@ -259,3 +259,53 @@ abstract (L4). Facts used:
 
 How often each operating window occurs (normal day, grade changes, feed
 upsets): not found in these sources.
+
+### Stream numbers, second search (2026-11-11)
+
+A second search looked for plant records, operator surveys and standards on
+how long a plant runs between upsets and how long each upset lasts. Every
+figure below was read once and confirmed on a second fetch.
+
+- **A normal day.** The ASM consortium's visits to large process plants found
+  that abnormal situations "occur almost on a daily basis in most large
+  process" plants; most are small, and they are more likely during startup,
+  feed changes, product grade changes and shutdown [ST1, p. 3]. The stream's
+  normal regime keeps its day, now sourced for a large plant.
+- **A shift.** Most US refineries have staffed process operations with two
+  12-hour shifts since the 1990s, and 91.7 % of 351 refinery workers surveyed
+  worked 12-hour shifts [ST2, pp. 118, 120]. Across 400 shift operations in
+  all industries, 37 % ran 12-hour and 34 % 8-hour shifts [ST3]. Family range
+  8 to 12 h; the stream's 8 h is inside it. That an upset regime lasts a
+  shift, and brings one event a visit, is ours.
+- **Grade changes.** On a high-pressure stirred-autoclave EVA/LDPE plant, the
+  best operator-run grade transition took 50 min from the start of off-spec
+  to steady operation, and the latest run of another took 3 h 5 min [ST4,
+  PDF pp. about 172 and 181]. A specialty polyethylene line averaged 2
+  transitions a month [ST5, a vendor case study; the process is not stated].
+  On those figures a grade holds about two weeks and the move between grades
+  takes 1 to 3 h. The stream's `grade_change` regime instead steps the
+  setpoint for an 8 h hold and comes back, and its weight (0.1) and one event
+  per 8 h visit make about 9 grade changes a month. Kept as is: a two-week
+  hold at that rate would leave the zone on the stepped setpoint most of the
+  time. A grade change as a level switch at about 2 a month is the owner's
+  call.
+- **Not found.** How long an initiator batch or makeup lasts, and how fast
+  the feed cooler recovers after the ethylene feed warms. Searched: LDPE
+  grade changes per week or month, peroxide initiator day tanks, the
+  Lupotech brochure (no times).
+
+- [ST1] P. Bullemer, D. Reising, "Managing Human Reliability: An Abnormal
+  Situation Management Historical Perspective", Mary Kay O'Connor Process
+  Safety Center Symposium, 2015, p. 3.
+  https://process.honeywell.com/content/dam/process/en/documents/document-lists/doc_asm-consortium/white-papers/October%2031%202015%20-%20Managing%20Human%20Reliability%20An%20Abnormal%20Situation%20Management%20Historical%20Perspective.pdf
+- [ST2] McNamara, Robbins, "Shift Work and Sleep Disturbance in the Oil
+  Industry", Workplace Health & Safety 71(3), 2023, pp. 118, 120 (journal
+  pages). https://stacks.cdc.gov/view/cdc/230000/cdc_230000_DS1.pdf
+- [ST3] Circadian, "8-Hour vs. 12-Hour Shift Schedules" (survey year not
+  given). https://circadian.com/managing-247-article-1-0712
+- [ST4] Alleyne, "Optimal grade transition policies for a high pressure EVA
+  polymerization plant", MSc thesis, University of Alberta, 2006 (AT
+  Plastics autoclave, transitions of 30 May 2006).
+  https://ualberta.scholaris.ca/bitstreams/0dc5b41d-b35e-43f0-b50c-26909cd05df9/download
+- [ST5] Seeq, "Chemical Reactor Product Transition Optimization" (undated
+  vendor case study). https://www.seeq.com/?p=5399

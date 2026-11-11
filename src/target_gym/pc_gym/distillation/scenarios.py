@@ -16,11 +16,13 @@ def _row(name, overrides, **kw):
     return dict(name=name, overrides=overrides, **kw)
 
 
-#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
-#: how often each window occurs or how long a feed step lasts (REALITY.md, "How often
-#: each window occurs": not found), so every number here is ours, set once without
-#: tuning and open for the owner. A normal day lasts a day; an upset regime lasts a
-#: shift and brings one event per visit on average, which steps every feed its
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How often each window occurs", second search 2026-11-11). A normal day lasts a
+#: day: a large process plant meets an abnormal situation almost daily [ST1]. The
+#: rest is ours, set once without tuning and open for the owner (a crude unit
+#: switches crude every 2 to 5 days [ST4], outside this splitter family): an upset
+#: regime lasts a shift, 8 h (shifts run 8 to 12 h [ST2, ST3]), and brings one event
+#: per visit on average, which steps every feed its
 #: scenario moves. A feed step holds for a shift (8 h, 480 min), until the upstream
 #: unit's rate or crude is restored, then the feed returns to nominal.
 _DAY_H, _SHIFT_H = 24.0, 8.0

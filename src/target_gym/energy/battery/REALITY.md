@@ -342,3 +342,42 @@ Added 2026-11-08 for the frequency-weighted headline: no source in this record
 gives how many EFA blocks a year hold a price spike, a negative hour, a long
 one-way frequency deviation or a BMS error near its outliers; the weights are
 ours (PHYSICS.md).
+
+### Stream numbers, second search (2026-11-11)
+
+Every figure below was read once and confirmed on a second fetch.
+
+- **Knee SOC.** A TI Impedance Track gauge takes no OCV reading for an SOC
+  correction while a cell sits inside its disqualified ("keep out") voltage
+  range, which for two LiFePO4 chemistries spans 34 to 93 % and 12 to 92 %
+  SOC [ST1, Table 1]; the percentages are illustrative, the gauge decides on
+  voltage. A 2025 cell study reports "~0.2V change between 5-90% SoC" [ST2,
+  p. 4], and ARX-LFP models the plateau as [20 %, 80 %]. Family range: low
+  knee 5 to 34 %, high knee 80 to 93 %. The stream keeps 20 % and 80 %, where
+  env.py's OCV curve leaves its plateau (`ocv_knee_width`); a high knee near
+  TI's 92 to 93 % would need the curve moved with it.
+- **Long deviations.** ENTSO-E's 2024 input to the LER cost-benefit analysis
+  lists the "20 most significant LLEFDs" in Continental Europe from 2017 to
+  2021 [ST3, p. 6]. An LLEFD is an average deviation beyond the standard
+  50 mHz for longer than the 15 min time to restore frequency. The list is a
+  selection, so there were at least 4 a year. One in January 2019 averaged
+  -30 mHz (0 to -60 mHz) from 9 January 13:25 to 11 January 09:37, about 44 h
+  [ST4, sec. 2.1]. A count a year of 50 to 100 mHz deviations lasting 30 to
+  90 min, in GB or Continental Europe: not found. Searched: ENTSOE-LER, the
+  ENTSO-E 2024 CBA results and workshop slides, NESO's DR and DM pages, Modo,
+  Watt-Logic. The 20 a year stay ours, family range 4 to 50.
+- **Price runs.** How many consecutive hours a GB negative price or spike
+  lasts: not found (Modo Energy's analyses give daily totals, not runs). The
+  regime's 4 h block stays (NESO-SOE).
+
+Sources for this section:
+
+- [ST1] Keller, Texas Instruments Analog Applications Journal, 1Q 2011
+  (SLYT402), Table 1. https://ti.com/lit/pdf/slyt402
+- [ST2] Thakoordeen et al., CSIR conference paper, October 2025, p. 4.
+  https://researchspace.csir.co.za/bitstreams/ab3aa7fb-9cf7-404c-9cdf-6025c3ae7304/download
+- [ST3] ENTSO-E RG CE, "Updated input and assumptions for CBA LER", draft,
+  31 Jan 2024, p. 6.
+  https://consultations.entsoe.eu/system-operations/updated-input-data-assumptions-cba-ler-sogl-156-11/supporting_documents/RG%20CE%20%20Report%20on%20updated%20input%20fo%20CBA%20LER.pdf
+- [ST4] ENTSO-E, "Long Lasting Frequency Deviations", final report, sec. 2.1.
+  https://eepublicdownloads.entsoe.eu/clean-documents/SOC%20documents/SOC%20Reports/Long%20Lasting%20Frequency%20Deviations%20Final%20Report.pdf

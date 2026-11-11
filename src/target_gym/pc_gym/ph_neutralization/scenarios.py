@@ -18,13 +18,14 @@ def _row(name, overrides, **kw):
 
 _QUIET = {"acid_upset_size": 0.0, "flow_swing": 0.0}
 
-#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
-#: how often each window occurs or how long an upset lasts (REALITY.md, "How often
-#: each window occurs": not found), so every number here is ours, set once without
-#: tuning and open for the owner. A normal day lasts a day; an upset regime lasts a
-#: shift and brings one upset per visit on average (the buffer loss is the regime
-#: itself and brings none). An influent upset holds 2 h, until the producing unit's
-#: batch ends, then ramps back.
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How often each window occurs", second search 2026-11-11). A normal day lasts a
+#: day: a large process plant meets an abnormal situation almost daily [ST1]. The
+#: rest is ours, set once without tuning and open for the owner (no source gives how
+#: long an influent upset lasts): an upset regime lasts a shift, 8 h (shifts run 8
+#: to 12 h [ST2, ST3]), and brings one upset per visit on average (the buffer loss
+#: is the regime itself and brings none). An influent upset holds 2 h, until the
+#: producing unit's batch ends, then ramps back.
 _DAY_H, _SHIFT_H, _UPSET_HOLD_H = 24.0, 8.0, 2.0
 #: A stream starts none of its window's upsets: only the stream starts them.
 _NO_WINDOW_UPSETS = {"window_upsets": 0.0}

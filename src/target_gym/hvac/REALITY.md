@@ -202,6 +202,58 @@ Added 2026-11-08 for the frequency-weighted headline: no source in this
 record gives how many weeks of a heating season are cold snaps, sunny spells
 or low-occupancy weeks; the weights are ours (PHYSICS.md).
 
+## How long each regime lasts (stream, 2026-11-11)
+
+A second search for the stream's dwells and for the 6 h lag of the outdoor
+mean (`T_out_mean_tau`). Every figure below was read once and confirmed on a
+second fetch.
+
+- **Cold snap.** KNMI's climate model composite of western European cold
+  spells (5 to 10 E, 50 to 55 N; a cold day has a 5-day mean temperature
+  below the winter's 10th percentile) finds "the CS lasts for 5 to 6 days",
+  in the present climate and in 2060 to 2099 alike [ST1, p. 2, sec. 4.2]. It
+  is a model composite, not a station count; no observed mean duration was
+  found. The stream's cold snap lasts 5.5 days on average.
+- **Settled and sunny spells.** A weather regime over Europe holds "a week to
+  a month", with persistence "typically longer than 10 days" [ST2]. Winter
+  blocks last 10.0 days on average in the European sector and 9.6 days over
+  the Atlantic, counting blocks of at least 5 days [ST3, Table 2]; over a
+  whole year, 5.70 days in the Euro-Atlantic region [ST4, sec. 4.1]. A block
+  is not a clear sky, so the sunny spell keeps its fortnight; family range a
+  week to a month, blocks 5.7 to 10 days.
+- **Normal and shoulder fortnights.** Inside a regime's week to a month
+  [ST2]; kept.
+- **Low occupancy.** Dutch schools close two weeks at Christmas (19 December
+  2026 to 3 January 2027) and one week in May [ST5]. That is a school, not
+  this office family; office closures: not found. Kept at a fortnight.
+- **The 6 h lag.** Not found as a time constant. A strong cold front over
+  the western US drops the temperature by 7 C or more "in a 2-3 h period"
+  [ST6], but that is the threshold of the climatology's definition, not a
+  typical front. Searched: frontal passage composites of 2 m temperature in
+  Europe, hourly temperature falls behind cold fronts, and Met Office, NWS and
+  DWD explainers (no hours given).
+
+Sources for this section:
+
+- [ST1] de Vries, Haarsma, Hazeleger, "Western European cold spells in current
+  and future climate", GRL 39, L04706, 2012 (KNMI).
+  https://cdn.knmi.nl/system/downloads/files/000/000/056/original/2012_GRL050665.pdf
+- [ST2] Grams, Ferranti, Magnusson, "How to make use of weather regimes in
+  extended-range predictions for Europe", ECMWF Newsletter 165, 2020.
+  https://www.ecmwf.int/sites/default/files/elibrary/2020/19843-how-make-use-weather-regimes-extended-range-predictions-europe.pdf
+- [ST3] Barriopedro et al., "A Climatology of Northern Hemisphere Blocking",
+  J. Climate 19, 2006, Table 2.
+  https://docta.ucm.es/bitstreams/6c32e5cf-8cf7-450e-bd99-ad407b9a722b/download
+- [ST4] Detring et al., "Occurrence and transition probabilities of omega and
+  high-over-low blocking in the Euro-Atlantic region", Weather Clim. Dynam. 2,
+  927, 2021. https://wcd.copernicus.org/articles/2/927/2021/
+- [ST5] Rijksoverheid, school holiday dates.
+  https://www.rijksoverheid.nl/themas/onderwijs/schoolvakanties/vaststellen-data-schoolvakanties
+  and https://www.rijksoverheid.nl/onderwerpen/schoolvakanties/kerstvakantie/kerstvakantie-2026
+- [ST6] Steenburgh, Shafer, "Climatology of Strong Cold Fronts over the
+  Western United States", AMS 22nd WAF / 18th NWP conference, 2007, abstract.
+  https://ams.confex.com/ams/22WAF18NWP/techprogram/paper_124110.htm
+
 ## For the owner to open by hand
 
 - ASHRAE Standard 55-2023, section on temperature variation with time (full

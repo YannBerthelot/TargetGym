@@ -9,13 +9,14 @@ each window occurs, so each is ours: the normal day in the family range 0.5 to
 0.9, the rest split among the upsets.
 """
 
-#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). No source gives
-#: how often each window occurs or how long an upset lasts (REALITY.md, "How often
-#: each window occurs": not found), so every number here is ours, set once without
-#: tuning and open for the owner. A normal day lasts a day; an upset regime lasts a
-#: shift and brings one event per visit on average. A setpoint move holds for a
-#: shift, a catalyst loss until the next catalyst change (a day), a feed rise until
-#: its batch runs out (2 h); the cooling loss keeps its 5 min.
+#: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1), from REALITY.md
+#: ("How often each window occurs", second search 2026-11-11). A normal day lasts a
+#: day: a large process plant meets an abnormal situation almost daily [ST1]. The
+#: rest is ours, set once without tuning and open for the owner: an upset regime
+#: lasts a shift, 8 h (shifts run 8 to 12 h [ST2, ST3]), and brings one event per
+#: visit on average; no source gives how long a reactor's upset holds. A setpoint
+#: move holds for a shift, a catalyst loss until the next catalyst change (a day), a
+#: feed rise until its batch runs out (2 h); the cooling loss keeps its 5 min.
 _DAY_H, _SHIFT_H = 24.0, 8.0
 #: A stream starts no event of its own window: only the stream starts events.
 _NO_WINDOW_EVENT = {"event_window": (1.0e9, 1.0e9)}
