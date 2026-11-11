@@ -250,7 +250,8 @@ Spurlock rows were read a third time.
   all of them trips), with pump outages of "about 3 days" on average
   [ST2, sec. 3.6], the repair time while a spare pump runs. Family range:
   0.5 ID fan runbacks and 0.75 to 1.25 feed pump trips a unit-year. The
-  weights are kept: they move the scored headline, so the owner decides.
+  weights are kept: they move the scored headline, so the owner decides. The
+  stream delivers one upset a visit of these regimes (PHYSICS.md, the stream).
 - **Load changes a day.** Not found as a count. [S24] calls a load follow
   significant above 15 to 20 % of capacity and gives typical sizes of 30 to
   35 %, but no number a year. Searched: [S24], WECC and Intertek's 2020

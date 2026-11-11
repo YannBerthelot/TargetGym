@@ -104,7 +104,8 @@ rest.
   weekends (RTE, 2025); day-ahead programmes are due the day before at 16:30 (CRE
   deliberation 2024-45), which would make a day's notice hours rather than the
   task's 0.5 to 2 h. The stream keeps the day as a 24 h regime and the window's
-  notice, ours.
+  notice, ours, and delivers one day a load-follow visit, so EDF's 39.5 days a year
+  (PHYSICS.md, the stream).
 - **Load following through the cycle.** EDF's units keep the full range, an 80 %
   amplitude down to 20 % of rated power, up to 90 % of the normal cycle, and only
   the floor rises after [S17, slides 6 and 12]. Seen once: past about 90 % of the

@@ -176,13 +176,17 @@ window's events, and the scenario's event starts through `start_event`:
   change a visit), the event is a planned load change, as the window's one
   ramp: announced 300 to 900 s ahead, from where the plan stands to a load in
   the regime's `load_range`, at a rate in its `ramp_rate_range`.
-- In the ID fan runback and feed pump trip regimes (an hour on average, one
-  upset a visit, as the weights count them), the event is the window's upset.
-  It carries its kind and its return in the state, so it runs to its return
-  through a switch: the runback holds `event_hold` (1 h), then the fans are
-  back and the unit ramps up to its plan at the plan's rate.
+- In the ID fan runback and feed pump trip regimes (2.775 h on average, one
+  upset a visit on average, as the weights count them), the event is the
+  window's upset. It carries its kind and its return in the state, so it runs
+  to its return through a switch: the runback holds `event_hold` (2.775 h),
+  then the fans are back and the unit ramps up to its plan at the plan's rate.
 - While a runback still holds the load down the unit master takes no new
-  event (ours).
+  event (ours). An upset keeps it busy about 3 h, longer than a visit's mean,
+  so a visit draws upsets at 1.06 an hour, the rate at which a visit that
+  starts with none under way delivers one on average (owner, 2026-11-11;
+  `scenarios.py`); one draw a visit delivered 0.6. A quarter of the visits
+  then bring no upset and a fifth bring two or more.
 - Plan times count from `plan_t0`, the step the plan was last rebased at
   (each event), so float32 keeps them exact however long the plant runs.
 

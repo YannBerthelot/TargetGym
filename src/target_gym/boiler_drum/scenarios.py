@@ -10,13 +10,15 @@ Each row holds ``target_gym.scenarios.Scenario``'s fields; the registry builds
 them, so this package imports nothing outside its fingerprint.
 """
 
+import math
+
 #: The stream's numbers (docs/proposals/long-strata.md, draft 4, S1). REALITY.md ("How
 #: often each window occurs", second search 2026-11-11) sources one: a runback or a
 #: feed pump trip lasts 2.775 h, the median of the six ID fan and feed pump forced
 #: derates in one plant-year of four units ([ST1], 0.35 to 67 h). It brings one
-#: upset a visit and holds the unit back that long before it ramps up; with the
-#: weights below unchanged, that is 1.1 runbacks and 0.72 feed pump trips a year
-#: (sourced, 0.5 and 0.75 to 1.25 a unit-year [ST1, ST2]). [S3] has setpoints
+#: upset a visit and holds the unit back that long before it ramps up; at the
+#: weights below that is 0.5 runbacks and one feed pump trip a year (sourced, 0.5
+#: and 0.75 to 1.25 a unit-year [ST1, ST2]). [S3] has setpoints
 #: "change several times during every 24 h". The rest is ours, set once without
 #: tuning and open for the owner:
 #: - normal load following lasts a day and changes load four times in it (S3's
@@ -30,9 +32,22 @@ _NO_WINDOW_EVENT = {"window_ramp": False, "event_time_range": (1.0e9, 1.0e9)}
 _REGIME = dict(
     dwell_h=_SHIFT_H, events_per_h=1.0 / _SHIFT_H, stream_overrides=_NO_WINDOW_EVENT
 )
+#: An upset keeps the unit master busy, a draw then absorbed (``env_jax.start_event``),
+#: for its hold and its ramp back to the plan: from the rows' 75 to 100 % load, run
+#: back to 50 %, it climbs 37.5 % on average at the plan's 1 to 6 %/min, ln(6) / 5
+#: min a % on average, so 13.4 min.
+_UPSET_BUSY_H = _UPSET_H + 37.5 * math.log(6.0) / 5.0 / 60.0
+#: Upsets drawn an hour in an upset visit, so that it delivers one on average (owner,
+#: 2026-11-11): one draw a visit delivered 0.6. A visit that starts with no upset
+#: under way gets a draw before it ends with chance p = lam / (lam + 1/dwell) and
+#: outlasts an upset with chance q = exp(-busy/dwell), so it delivers p / (1 - p q)
+#: upsets; one a visit needs lam = 1 / (dwell q), 1.06 an hour. The long-visit
+#: form, r / (1 - r busy), has no solution here (r busy = 1.08), but a visit starts
+#: free: a quarter of the visits bring no upset and a fifth bring two or more.
+_UPSETS_PER_H = 1.0 / (_UPSET_H * math.exp(-_UPSET_BUSY_H / _UPSET_H))
 _UPSET = dict(
     dwell_h=_UPSET_H,
-    events_per_h=1.0 / _UPSET_H,
+    events_per_h=_UPSETS_PER_H,
     stream_overrides={**_NO_WINDOW_EVENT, "event_hold": _UPSET_H * 3600.0},
 )
 
