@@ -670,9 +670,10 @@ def _figure8_radii():
     return np.asarray(reset(keys).target_radius), params
 
 
-def test_the_figure8_is_about_35_km_across_its_half_width():
+def test_the_figure8_is_about_37_km_across_its_half_width():
+    """36 to 38 km: tips of a / 3 that 22.5 deg flies at 219 m/s (Amendment 4)."""
     radii, _ = _figure8_radii()
-    assert 33_000.0 < radii.min() and radii.max() < 37_000.0
+    assert 36_000.0 <= radii.min() and radii.max() <= 38_000.0
 
 
 def test_the_figure8_tips_ask_for_no_more_than_25_degrees_at_the_flown_speed():

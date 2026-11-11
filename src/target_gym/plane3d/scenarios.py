@@ -16,9 +16,13 @@ from target_gym.scenarios import Scenario
 # 0.005 to 0.05 (the holding area is built to contain a rare wind).
 
 FT, KT = 0.3048, 1852.0 / 3600.0
-#: The light zone's 0.55 m/s (0.2 g peak to peak, derived for the aircraft at
-#: 5 500 m, plane/PHYSICS.md) and the recorded worst, 0.5 g: 2.5 times it.
-WORST = 2.5 * 0.55
+#: The light zone's 0.564 m/s (0.2 g peak to peak, derived for the aircraft at
+#: 5 500 m on its own lift slope, plane3d/PHYSICS.md) and the recorded worst,
+#: 0.5 g: 2.5 times it.
+WORST = 2.5 * 0.564
+#: MIL-F-8785C's severe intensity at 5 500 m (Figure 7, 1e-5 exceedance, as
+#: JSBSim tabulates it): 22.1 ft/s at 15 000 ft, 20.0 at 25 000, so 21.5 ft/s.
+SEVERE = 21.46 * FT
 #: Steady winds aloft, ours, inside the family range: calm up to the holding
 #: area's design wind, 2h + 47 kt at h thousand feet (PANS-OPS Doc 8168 as
 #: quoted by secondary sources, plane/REALITY.md), 67 kt at 10 000 ft.
@@ -72,6 +76,13 @@ def _strong():
 
 def heading_suite():
     return _common() + (
+        Scenario(
+            "severe_zone",
+            {"turbulence_sigma": SEVERE},
+            source="MIL-F-8785C Figure 7, severe (1e-5 exceedance) at 5 500 m",
+            description="vectors through one zone of severe turbulence, 6.5 m/s",
+            weight=1e-4,
+        ),
         Scenario(
             "long_zone",
             {"zone_onset_range": (0.0, 0.0), "zone_duration_range": (600.0, 600.0)},

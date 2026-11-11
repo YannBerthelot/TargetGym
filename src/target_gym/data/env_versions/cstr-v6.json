@@ -1,4 +1,5 @@
 {
-  "fingerprint": "b70ec032c889fa0c",
-  "stamped": "2026-11-09T08:48:34+00:00"
+  "fingerprint": "be38d0cb62394e95",
+  "note": "cstr-v6: the feed holds at feed_T_period 0 outside jit too, as it already did inside (eaf1650); jitted rollouts unchanged",
+  "stamped": "2026-11-11T18:56:33+00:00"
 }

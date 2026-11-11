@@ -53,7 +53,7 @@ from target_gym.plane3d.env import (
     get_obs_figure8,
     get_obs_heading,
     get_obs_racetrack,
-    holding_turn_rate,
+    heading_3d,
     wrap_angle,
 )
 from target_gym.plane3d.rendering import _render
@@ -359,7 +359,7 @@ class Plane3DHeading(_Airplane3DBase):
                 "x_dot", "y_dot", "z", "z_dot", "theta", "theta_dot", "phi",
                 "phi_dot", "gamma", "psi", "target_altitude", "target_heading",
                 "power", "stick", "aileron", "target_speed", "airspeed",
-                "load_factor",
+                "load_factor", "heading",
             )
         )
     }  # fmt: skip
@@ -379,13 +379,15 @@ class Plane3DHeading(_Airplane3DBase):
             max_steps_in_episode=600,
             heading_clearance_period=150.0,
             amended=True,
-            turbulence_sigma=0.55,
+            turbulence_sigma=0.564,
             zone_onset_range=(0.0, 600.0),
             initial_altitude_offset_range=(0.0, 0.0),
             e_floor_altitude=band,
             e_tol_altitude=band,
             e_floor_heading=ten,
             e_tol_heading=ten,
+            # Fuel and time inside the bands, as ``plane`` (owner, 2026-11-10).
+            economy_weight=1.0,
             rho_floor_tracking=0.0,
             rho_floor=0.0,
             # As the 2D aircraft: the ground is the one trip, priced by us.
@@ -394,8 +396,9 @@ class Plane3DHeading(_Airplane3DBase):
 
     def __init__(self, integration_method: str = "rk4_1", observe_wind: bool = False):
         super().__init__(integration_method, observe_wind)
-        # 18 with the air data (Amendment 2, rule 16); 21 with the wind sensor.
-        self.obs_shape = (21,) if observe_wind else (18,)
+        # 18 with the air data (Amendment 2, rule 16), 19 with the IRS heading
+        # the vectors are flown on; 22 with the wind sensor.
+        self.obs_shape = (22,) if observe_wind else (19,)
 
     def _next_clearance(self, key, state, params):
         """Every ``heading_clearance_period`` s a new heading over
@@ -416,7 +419,7 @@ class Plane3DHeading(_Airplane3DBase):
             target_heading=jnp.where(due, heading, state.target_heading),
             heading_change=jnp.where(
                 due,
-                jnp.abs(wrap_angle(heading - state.psi)),
+                jnp.abs(wrap_angle(heading - heading_3d(state, params))),
                 state.heading_change,
             ),
             clearance_time=jnp.where(due, state.time, state.clearance_time),
@@ -457,7 +460,11 @@ class Plane3DHeading(_Airplane3DBase):
             target_x=0.0,
             target_y=0.0,
             target_radius=0.0,
-            heading_change=jnp.abs(wrap_angle(target_heading - base_kwargs["psi"])),
+            heading_change=0.0,
+        )
+        flown = heading_3d(state, params)
+        state = state.replace(
+            heading_change=jnp.abs(wrap_angle(target_heading - flown))
         )
         return self.get_obs(state, params), state
 
@@ -527,7 +534,7 @@ class Plane3DRacetrack(_Airplane3DBase):
         return PlaneParams3D(
             max_steps_in_episode=1200,
             amended=True,
-            turbulence_sigma=0.55,
+            turbulence_sigma=0.564,
             zone_onset_range=(0.0, 1200.0),
             initial_altitude_offset_range=(0.0, 0.0),
             assigned_speed_mode=1,
@@ -570,12 +577,17 @@ class Plane3DRacetrack(_Airplane3DBase):
             minval=params.target_radius_range[0],
             maxval=params.target_radius_range[1],
         )
-        # Amended: the hold's own geometry [IFH ch. 10]. Turns at its rate at
-        # the assigned speed set the radius; the inbound leg's minute (1.5
-        # above 14 000 ft) at that speed sets the leg, in still air.
+        # Amended: the hold's own geometry [IFH ch. 10]. As an RNAV hold, its
+        # turns are sized for the greatest ground speed, the assigned speed
+        # plus the steady wind, at ``hold_design_bank``, so the downwind turn
+        # is flyable inside the protected bank; the inbound leg's minute (1.5
+        # above 14 000 ft) at the assigned speed sets the leg.
         z = base_kwargs["target_altitude"]
         speed = assigned_tas_3d(z, z, params)
-        hold_radius = speed / holding_turn_rate(speed, params)
+        wind = jnp.sqrt(params.wind_x**2 + params.wind_y**2)
+        hold_radius = (speed + wind) ** 2 / (
+            params.gravity * jnp.tan(params.hold_design_bank)
+        )
         leg_time = jnp.where(
             z <= params.holding_split_altitude,
             params.holding_leg_low,
@@ -655,7 +667,18 @@ class Plane3DCircle(_Airplane3DBase):
         # floor units.
         rho = (0.6657 / 1.0) ** 2 + (0.4504 / 3.0) ** 2
         return PlaneParams3D(
-            max_steps_in_episode=300,
+            # The amended plant (Amendment 4): the protected 30 deg bank and
+            # the autopilot's 0.2 g, light Dryden zones, established at its
+            # level. Radii a 25 deg turn flies on the cruise schedule at every
+            # level, 10.5 km at 8 000 m and 219 m/s (V^2 / (g tan 25 deg)), to
+            # 15 km; 600 s, a lap of the largest at the slowest speed to two of
+            # the smallest at the fastest.
+            amended=True,
+            max_steps_in_episode=600,
+            target_radius_range=(10_500.0, 15_000.0),
+            turbulence_sigma=0.564,
+            zone_onset_range=(0.0, 600.0),
+            initial_altitude_offset_range=(0.0, 0.0),
             e_floor_altitude=1.0,
             e_floor_path=3.0,
             rho_floor_tracking=rho,
@@ -716,6 +739,14 @@ class Plane3DCircle(_Airplane3DBase):
             y_dot=y_dot,
             psi=psi,
         )
+        # Amended: established on the circle's tangent, at its level and speed.
+        key, zone_key = jax.random.split(key)
+        established = self._established(zone_key, base_kwargs, params, tangent_heading)
+        established.update(x=start_x, y=start_y)
+        base_kwargs = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(params.amended, a, b), established,
+            dict(base_kwargs, zone_start=0.0, zone_end=0.0),
+        )  # fmt: skip
 
         state = PlaneState3D(
             **base_kwargs,
@@ -763,8 +794,15 @@ class Plane3DFigureEight(_Airplane3DBase):
         # failure cost is twice the path's size, as it was at the old 10 km.
         rho = (1.2871 / 3.0) ** 2
         return PlaneParams3D(
+            # The amended plant (Amendment 4), as the circle. The tips' radius
+            # a / 3 at 22.5 deg, the expert's bank with a quarter in hand under
+            # the protected 30, and 219 m/s at 8 000 m: a = 3 V^2 / (g tan
+            # 22.5 deg) = 35.5 km; 36 to 38 km.
+            amended=True,
+            turbulence_sigma=0.564,
+            zone_onset_range=(0.0, 1000.0),
             max_steps_in_episode=1000,
-            target_radius_range=(34_000.0, 36_000.0),
+            target_radius_range=(36_000.0, 38_000.0),
             e_floor_path=3.0,
             rho_floor_tracking=rho,
             rho_floor=rho,
@@ -835,6 +873,14 @@ class Plane3DFigureEight(_Airplane3DBase):
             y_dot=y_dot,
             psi=psi,
         )
+        # Amended: established at the tip, on its tangent, level and at speed.
+        key, zone_key = jax.random.split(key)
+        established = self._established(zone_key, base_kwargs, params, tangent_heading)
+        established.update(x=start_x, y=start_y)
+        base_kwargs = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(params.amended, a, b), established,
+            dict(base_kwargs, zone_start=0.0, zone_end=0.0),
+        )  # fmt: skip
 
         state = PlaneState3D(
             **base_kwargs,

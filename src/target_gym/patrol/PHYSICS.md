@@ -1,5 +1,38 @@
 # Close patrol — physics model, provenance and validation
 
+> **Amendment 4 (2026-11-10): the patrol flies F/A-18 Hornets.** Both aircraft are
+> the F/A-18 of plane3d/PHYSICS.md ("The F/A-18", `plane3d/hornet.py`) on the
+> amended plant, on NASA's AFF mission (NASA/TM-2002-210729): the lead at 250 KCAS
+> between 20 000 and 32 000 ft, the slot in the cruise position 34 to 70 m back and
+> 17 to 45 m to a random side, `min_separation` one Hornet length (56 ft, AFF's
+> nose-to-tail limit), and the station-keeping limit AFF's own 10 ft one sigma,
+> replacing the A320's 8.5 m "scaled by span". Where this document still speaks of
+> the A320, the 40 m separation, the 290 KCAS lead or the 8.5 m limit, read the
+> Hornet's. Both aircraft spawn in level trim; the air keeps 20 s. `wake_surf`
+> (plane3d/PHYSICS.md, "Wake surfing") is this module with A320s 3 km apart.
+>
+> The lead turns at up to 0.0303 rad/s, the parade turn's 30 deg of bank [CNATRA] at
+> 25 000 ft. The expert is NASA AFF's direct hold (figure 3 of the TM): on each axis a
+> PID on the slot error straight to the demand, along track on the throttle at 0.3
+> rad/s, across on the bank at 0.4, vertically on the flight path at 0.3, with the
+> Hornet's own extra pitch per g in a turn, 0.101 rad, the lead's turn rate read
+> unfiltered, and each integral held while its demand is at its limit. Under it the
+> Hornet's attitude loop has its roll D raised to the F/A-18's roll damper
+> (plane3d/PHYSICS.md, "The F/A-18"); on the guide's cap it could not follow a
+> reversal of the bank demand. On `patrol_range_bearing` the wingman sees the lead
+> and knows its range from vision (the owner, 2026-11-10), in place of TCAS's 15 m,
+> which was set for an A320 slot 150 to 300 m out and left that follower 130 m off;
+> its estimator takes the lead's velocity as the raw difference (`t_rate` 0) and
+> filters the turn rate (`k_omega` 0.3), since its lead heading is an estimate.
+>
+> The expert is a reference, not a bound: no deployed autopilot holds a wingman's
+> slot (D1), and it need not meet the 10 ft objective (the owner, 2026-11-10). It
+> holds it in steady flight and steady turns (`TestExpert`), and every held-out seed
+> without a trip (`tests/patrol/test_formation_hold.py`). On seeds 200-209
+> (2026-11-10) the patrol follower holds a median 3.2 m and at worst 5.7 m, the
+> range-and-bearing one 6.3 m and 9.6 m, and the formation's wingmen 3.9 m and 6.7 m,
+> the misses coming at the lead's turn entries.
+
 Two aircraft in formation. The **lead** flies a scripted patrol route; the
 **follower** is the agent and must reach and hold a *slot*, a position fixed
 in the lead's body frame, so many metres behind, to one side, and above or
@@ -119,8 +152,8 @@ wingman's own wake, which only the unscored ranks behind it would meet.
 
 ### The range-and-bearing variant
 
-`PlanePatrolRangeBearing` replaces the full relative state with what a TCAS-style
-sensor gives: **range, azimuth and elevation** to the lead, measured in the
+`PlanePatrolRangeBearing` replaces the full relative state with what the wingman
+sees and a TCAS-style sensor gives: **range, azimuth and elevation** to the lead, measured in the
 follower's body frame, plus the follower's own state and the commanded slot. It
 was `patrol_bearing_only` until 0.8.0. A bearings-only tracker is passive and must
 work out range from its own manoeuvres; this one measures range, by interrogating
@@ -145,7 +178,7 @@ definition depends on.
 | Collision trips the plant | the version-2 reward is at most minus the trip cost | `test_collision_terminates_with_penalty` |
 | Losing formation trips the plant | at `max_slot_error` | `test_lost_formation_terminates` |
 | Separation trips before the wingtips meet | span + 0.5 m trips, 41 m does not | `test_separation_trips_before_the_wingtips_meet` |
-| Either aircraft past the envelope trips | load, bank, VMO, MMO, on each seat | `test_any_aircraft_past_the_envelope_trips` |
+| No aircraft trips past its protected envelope | load, bank, MMO past the protection, on each seat, the slot out of reach | `test_no_aircraft_trips_past_its_protected_envelope` |
 | Both aircraft spawn on the schedule, inside the envelope | the schedule's speed at the drawn height | `test_every_aircraft_spawns_on_the_schedule_inside_the_envelope` |
 | The lead holds its level on the schedule at any mass | 2 m and 1 m/s in still air, 73.5 and 62 t | `test_the_scripted_lead_holds_its_level_on_the_schedule` |
 | The hard turn is coordinated | 0.03 rad/s, `tan(bank) = V w / g` | `test_the_hard_turn_is_a_coordinated_30_deg_bank` |
@@ -161,7 +194,7 @@ definition depends on.
 | The expert flies a slot in the wake | a strict expected failure until PR 9, D3 | `test_the_expert_flies_a_slot_in_the_wake` |
 | The shipped expert holds formation through a turn | across sampled turn rates | `test_expert_holds_formation` |
 | The expert never collides | separation > `min_separation` | `test_expert_never_collides` |
-| The expert holds its slot on held-out seeds, both variants | RMS slot error after the burn-in at most 8.5 m on seeds 200-209, no trip | `test_the_follower_holds_its_slot` |
+| The expert flies every held-out seed, both variants | no trip on seeds 200-209; the slot against 10 ft is reported, not required of a reference (owner, 2026-11-10) | `test_the_expert_never_trips` |
 | Slots vary across seeds | distinct | `test_slots_randomized_across_seeds` |
 
 The environment also inherits every shared contract in
@@ -239,9 +272,32 @@ is charged too, and coming too close to the lead trips the plant.
 | 24 | slot error, the distance to the slot (m) |
 | 25 | target slot error, always 0 |
 
+### Task: `wake_surf`
+
+Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where
+the lead's upwash lifts it, and pay for fuel and time as an operator does. The
+station sits 0.87 of a span outboard and below by the vortex's sink; inside a
+30 m box about it only the economy counts, so the cost falls where the follower
+finds the upwash, and the vortex core a span inboard can roll it past 60 deg, an
+upset (plane3d/PHYSICS.md, Amendment 4, wake surfing).
+
+| obs | meaning |
+|---|---|
+| 0-9 | the follower's own state, as in `plane3d_heading` |
+| 10-12 | offset from the station in the lead's frame: back, right, up (m) |
+| 13-15 | velocity relative to the lead in the lead's frame: forward, right, up (m/s) |
+| 16-18 | the station in the lead's frame: back, right, up (m) |
+| 19 | the lead's heading relative to the follower's (rad) |
+| 20 | the lead's speed (m/s) |
+| 21 | throttle, 0 to 1 |
+| 22 | elevator deflection (rad) |
+| 23 | aileron deflection (rad) |
+| 24 | distance to the station (m) |
+| 25 | target distance, always 0 |
+
 ### Task: `patrol_range_bearing`
 
-The `patrol` task flown from a TCAS-style sensor: the wingman sees range,
+The `patrol` task flown by sight and a TCAS-style sensor: the wingman sees range,
 azimuth and elevation to the lead instead of the lead's relative state. The
 lead's heading, which places the slot, is not measured and has to be inferred
 from how the bearing changes. The tracked value is the measured range,
@@ -397,8 +453,9 @@ those slots: it is stricter than NASA's requirement there too.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 69 |
-| `patrol_range_bearing` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 69 |
+| `patrol` | 200 | 1 | 3 min | 3 in [-1, 1] | 26 | 219 |
+| `patrol_range_bearing` | 200 | 1 | 3 min | 3 in [-1, 1] | 21 | 219 |
+| `wake_surf` | 1800 | 1 | 30 min | 3 in [-1, 1] | 26 | 219 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -413,8 +470,8 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_slot` | 3 m | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
-| `e_tol_slot` | 0 | **provisional.** The formation's station-keeping radius is a procedural number to be supplied. |
+| `e_floor_slot` | 3 m; 30 m on `wake_surf`, its station box (ours, a span) | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
+| `e_tol_slot` | 0; 30 m on `wake_surf` | **provisional** on the patrol: the formation's station-keeping radius is a procedural number to be supplied. On `wake_surf` the station box, inside which only the economy counts (plane3d/PHYSICS.md, wake surfing) |
 | `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the oracle holds alignment below it (1.6e-3 rad, lowest per-seed hold in the test turbulence), so the instrument sets the scale |
 | `failure_cost` | 2 x ((1500 / 3)^2 + (pi / 0.0087)^2) = 7.6e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash, collision or lost formation loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |
@@ -482,13 +539,14 @@ The lead's readings on `patrol`:
 | `lead.z_dot` | 0.03 m/s | 1 ft/min | Lead IRS vertical speed over the datalink | No source: a placeholder | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
 | `lead.psi` | 1.3e-4 rad at 230 m/s, as 0.03 / V | from the lead's velocities | Lead true track over the datalink | Confirmed | [NovAtel OEM7](https://docs.novatel.com/OEM7/Content/Technical_Specs_Receiver/SMART7_Performance_Specs.htm) |
 
-On `patrol_range_bearing` the follower has no datalink, so a TCAS-style sensor
-reports the lead instead. **These figures are provisional, marked pending a real
-sensor.** None has been sourced for a wingman at 150 to 300 m:
+On `patrol_range_bearing` the follower has no datalink: it sees the lead, and a
+TCAS-style sensor reports its bearing and altitude. **These figures are
+provisional, marked pending a real sensor.** None has been sourced for a wingman
+40 to 80 m out:
 
 | reading | sigma | step | instrument | status | source |
 | --- | --- | --- | --- | --- | --- |
-| range | 15 m | none | TCAS II range from Mode S reply timing | No source: unsourced, provisional | none opened |
+| range | none | none | Seen: the wingman judges the lead's distance by eye (the owner, 2026-11-10; it was TCAS II's, 15 m, set for slots 150 to 300 m out) | Assumed | none |
 | azimuth | 0.026 rad | none | TCAS II four-monopole direction-finding antenna | Corrected: the random part, provisional | [Harman 1984](https://archive.ll.mit.edu/mission/aviation/publications/publication-files/ms-papers/Harman_1984_CACA_MS-6526_WW-18698A.pdf) |
 | elevation | 0.0088 rad at 250 m, as 1 / range | through `lead.z` | TCAS relative altitude from Mode S reports | No source: provisional | none opened |
 
@@ -518,11 +576,10 @@ the vertical speed figure is a placeholder.
 
 The expert reads these values, and so does every tuner. The range-and-bearing
 estimator takes the lead's velocity as the filtered rate of the lead's position
-(`t_rate`, 20 s), since a raw difference turns 15 m of range noise into 21 m/s of
-speed noise and trips on every training seed. The filter's lag sets a steady
-cross-track offset in a turn of about `V * omega * t_rate / k_y`, so this expert
-does not yet hold the 8.5 m limit: the expert protocol on noisy plants has to
-replace this estimator. The oracle plans and acts on the true state, so it stays
+(`t_rate`): 20 s while the range carried TCAS's 15 m, whose raw difference was
+21 m/s of speed noise; 0, the raw difference, since the range comes from vision.
+The difference's step of lag still leaves this expert short of the 10 ft limit: the
+expert protocol on noisy plants has to replace this estimator. The oracle plans and acts on the true state, so it stays
 a full-state bound. `reward`, trips and the score read the true state.
 `info["measured_reward"]` is the same cost on the field readings, with any trip
 taken from the true state. A channel reading stays out of it, so on

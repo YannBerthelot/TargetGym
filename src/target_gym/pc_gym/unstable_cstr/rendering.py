@@ -3,11 +3,20 @@
 The schematic is the autoclave: contents tinted by temperature between the cold
 feed and the decomposition trip, the initiator injection drawn by its rate.
 Held at an unstable point, the reactor either heats until it trips or cools
-until polymerisation stops; the strip shows which way it is going.
+until polymerisation stops; the strip shows which way it is going. The feed
+is drawn as it enters now, its temperature wandering and stepping with the
+scenario's event; the controller reads neither.
 """
 
 from target_gym import render_kit as rk
-from target_gym.pc_gym.unstable_cstr.env import compute_reward
+from target_gym.pc_gym.unstable_cstr.env import compute_reward, events
+
+
+def _feed(state, params):
+    """``(T_f, initiator efficiency, flow scale)`` entering now."""
+    _, T_f, f, scale = events(state, params, float(state.time) * params.delta_t)
+    return float(T_f), float(f) / params.f_eff, float(scale)
+
 
 HISTORY_KEYS = ("t", "target", "T", "I_f", "reward")
 
@@ -21,15 +30,39 @@ def _draw_reactor(ax, state, params):
     rk.fill_level(ax, vx, vy, vw, vh, 0.95, color=body, alpha=0.5)
     cx = vx + vw / 2
     ax.plot([cx, cx], [vy + 0.05, vy + vh + 0.05], color=rk.DIM, lw=2, zorder=5)
+    T_f, eff, scale = _feed(state, params)
+    moved = abs(T_f - params.T_feed) > params.feed_T_wander or scale != 1.0
     rk.label(
         ax,
         0.06,
         0.94,
-        f"ETHYLENE  {params.T_feed:.0f} K",
-        color=rk.DIM,
+        f"ETHYLENE  {T_f:.1f} K  ×{scale:.2f} flow  ●",
+        color=rk.ORANGE if moved else rk.PURPLE,
         size=7,
         ha="left",
     )
+    if eff < 1.0:
+        rk.label(
+            ax,
+            0.06,
+            0.90,
+            f"initiator efficiency {eff:.0%}  ●",
+            color=rk.PURPLE,
+            size=7,
+            ha="left",
+        )
+    at = float(state.event_at)
+    now = float(state.time) * params.delta_t
+    if at < 1e8 and now < at:
+        rk.label(
+            ax,
+            0.94,
+            0.94,
+            f"event in {at - now:.0f} s",
+            color=rk.AMBER,
+            size=7,
+            ha="right",
+        )
     rate = rk.clamp01(
         (float(state.I_f) - params.I_f_min) / (params.I_f_max - params.I_f_min)
     )
@@ -66,11 +99,17 @@ def render_autoclave(state, params, step, history):
             rk.AMBER,
         ),
         rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
+            "FEED T",
+            f"{_feed(state, params)[0]:.1f} K",
+            # Zero at the nominal feed; full scale past the wander and the step.
+            (_feed(state, params)[0] - params.T_feed)
+            / (1.5 * max(params.feed_T_wander, abs(params.feed_T_step), 1e-9)),
+            rk.ORANGE,
+            bipolar=True,
+            neg_color=rk.BLUE,
+            hidden=True,
         ),
+        rk.cost_gauge(history["reward"], params),
     ]
     strip = rk.Strip(
         history["t"],

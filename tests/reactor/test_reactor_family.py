@@ -28,6 +28,7 @@ PARK = 3.0  # 225 steps withdrawn, Krsko fig. 3
 KRSKO_TRAVEL = 35.0  # 225 to 190 steps, fig. 3's axis and trace
 KRSKO_BAND = 0.05  # +-5 % delta I, section 2
 FIGURE_SLACK = 0.01  # reading a delta I trace off fig. 6
+WRITTEN_AT = -33.0e-5  # alpha_coolant + alpha_fuel when the trim was set, 1/K
 
 
 @pytest.mark.parametrize("n", [1.0, 0.5])
@@ -48,7 +49,13 @@ def krsko_day():
     """Krsko's day 1: 100 to 50 % at 8 %/h and straight back. As in the paper, bank
     D is positioned for delta I but only inside its 35-step travel, and boron
     trims Tavg for criticality. The two loops' gains are ours: a procedure, not
-    the plant; a slow trim, since boron arrives 5 to 15 min late."""
+    the plant; a slow trim, since boron arrives 5 to 15 min late.
+
+    The trim's gain was set at 0.1 per K when the plant's MTC was -30 pcm/K. A ppm
+    moves Tavg by -boron_worth / (alpha_coolant + alpha_fuel), so the same gain on a
+    weaker MTC is a stronger loop: at -12 it oscillated, Tavg swung +-15 K and the
+    plant tripped twice (owner, 2026-11-11). The gain scales with the plant so the
+    loop keeps the gain it was written with, in K per K."""
     env = Reactor()
     p = ReactorParams(
         demand_sigma=0.0,
@@ -62,13 +69,15 @@ def krsko_day():
         ramp_up_at=jnp.asarray(down_at + 0.5 / p.load_ramp_rate, s.n.dtype),
     )
 
+    trim = 0.1 * (p.alpha_coolant + p.alpha_fuel) / WRITTEN_AT  # per K
+
     def step(carry, _):
         s, steps_in = carry
         # 0.1 step per 30 s step per 1 % of delta I, inside the bank's travel.
         steps_in = jnp.clip(steps_in + 10.0 * s.delta_I, PARK, PARK + KRSKO_TRAVEL)
         rods = 1.0 - 2.0 * steps_in / STROKE
         error = s.T_ref - 0.5 * (s.T_coolant + s.T_cold)  # K, positive when cold
-        boron = jnp.clip(-0.1 * error, -1.0, 1.0)  # dilute when cold
+        boron = jnp.clip(-trim * error, -1.0, 1.0)  # dilute when cold
         a = jnp.stack([rods, boron]).astype(jnp.float32)
         _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
         return (s, steps_in), (s.delta_I, s.time, s.Xe_hat, s.target_n)

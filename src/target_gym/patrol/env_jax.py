@@ -22,6 +22,7 @@ from target_gym.base import (
     ChannelReading,
     FieldReading,
     actuate,
+    canonical_dtypes,
     canonical_reset,
     finish_step,
     measured_obs,
@@ -31,10 +32,13 @@ from target_gym.patrol.env import (
     N_LEAD_LEGS,
     PatrolParams,
     PatrolState,
+    WakeSurfParams,
     check_is_terminal_patrol,
     compute_next_state_patrol,
     compute_reward_patrol,
     compute_reward_terms_patrol,
+    compute_reward_terms_wake_surf,
+    compute_reward_wake_surf,
     desired_slot_position,
     get_obs_full,
     get_obs_range_bearing,
@@ -206,11 +210,14 @@ class _PlanePatrolBase(
             minval=params.slot_right_range[0],
             maxval=params.slot_right_range[1],
         )
+        # On either side of the lead, at random: the range is the offset's size.
+        side = jnp.where(jax.random.bernoulli(jax.random.fold_in(right_key, 1)), 1, -1)
+        slot_right = side * slot_right
         slot_up = jax.random.uniform(
             up_key, minval=params.slot_up_range[0], maxval=params.slot_up_range[1]
         )
 
-        speed = lead_cruise_speed(lead_alt)
+        speed = lead_cruise_speed(lead_alt, params)
         lead = make_cruise_state(
             x=0.0,
             y=0.0,
@@ -270,12 +277,12 @@ class _PlanePatrolBase(
             y=slot_y + noise[1],
             z=slot_z + noise[2],
             psi=lead.psi,
-            speed=lead_cruise_speed(lead.target_altitude),
+            speed=lead_cruise_speed(lead.target_altitude, params),
             params=params,
             target_altitude=state.follower.target_altitude,
             target_heading=state.follower.target_heading,
         ).replace(time=state.follower.time)
-        return fresh.replace(follower=follower)
+        return canonical_dtypes(fresh.replace(follower=follower))
 
     # -- rendering / video -------------------------------------------------
     def render(self, screen, state: PatrolState, params: PatrolParams, frames, clock):
@@ -347,13 +354,14 @@ class PlanePatrolRangeBearing(_PlanePatrolBase):
 
     # PHYSICS.md section on readings. Provisional, pending a real sensor.
     # Elevation is no channel of its own: it inherits ``lead.z``. The lead's
-    # other readings reach only the measured reward.
+    # other readings reach only the measured reward. The range has no reading:
+    # the wingman sees the lead, and from vision knows how far it is (the
+    # owner, 2026-11-10), in place of TCAS's 15 m, set for slots 150 to 300 m out.
     readings: tuple = (
         *_FOLLOWER,
         *_LEAD_FIX,
         _LEAD_MODE_S_ALTITUDE,
         *_LEAD_VELOCITY,
-        ChannelReading(10, sigma=15.0),  # range, m
         ChannelReading(11, sigma=0.026),  # azimuth, rad
     )
 
@@ -368,3 +376,34 @@ class PlanePatrolRangeBearing(_PlanePatrolBase):
         # The tracked value is that one range reading, not a second instrument.
         obs = super().get_obs(state, params)
         return obs.at[19].set(obs[10])
+
+
+class WakeSurf(PlanePatrol):
+    """``wake_surf``: wake-energy retrieval. An A320 follower holds a station
+    3 km behind an A320 lead, in the lead's upwash, as Airbus's fello'fly did
+    with two A350s (plane3d/PHYSICS.md, wake surfing).
+
+    The observation is the patrol's 26 values. The cost is the station box
+    and the follower's operator cost, fuel and time by the cost index: inside
+    the box, the less thrust the lead's upwash leaves the follower needing, the
+    less it pays. The vortex core lies a span inboard of the station, and a
+    vortex that rolls the follower past 60 deg is an upset, a trip.
+
+    Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
+    """
+
+    registry_name: str = "wake_surf"
+
+    @property
+    def default_params(self) -> WakeSurfParams:
+        # The scored configuration: 30 min of cruise in trail (ours: one renewal
+        # window of a long-haul pairing).
+        return WakeSurfParams(max_steps_in_episode=1800)
+
+    def compute_reward(self, state, params):
+        return compute_reward_wake_surf(state, params)
+
+    def reward_terms(self, state, params, tripped=None):
+        if tripped is not None:
+            state = _read_angles(state, params)
+        return compute_reward_terms_wake_surf(state, params, tripped=tripped)

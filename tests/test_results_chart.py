@@ -40,14 +40,18 @@ def _row(name, expert, oracle, ceiling):
 
 
 def test_the_chart_shows_the_recorded_results(gen):
-    """Every registered task, with its recorded expert hold, oracle hold and
-    ceiling, as protocol_results.json has them."""
+    """Every registered task recorded on a tracking hold, in registry order,
+    with its recorded expert hold, oracle hold and ceiling, as
+    protocol_results.json has them; a task no oracle ships for (``wake_surf``)
+    has no oracle hold. A task charged in money has no tracking hold and is
+    shown by its charter record instead (owner, 2026-11-11)."""
     data = records.load("protocol_results")
+    tracked = {n: r for n, r in data.items() if "hold_tracking" in r["pid"]}
     rows = {r["name"]: r for r in gen.chart_rows(data)}
-    assert list(rows) == list(registry.REGISTRY)
-    for name, recorded in data.items():
+    assert list(rows) == [n for n in registry.REGISTRY if n in tracked]
+    for name, recorded in tracked.items():
         assert rows[name]["expert"] == recorded["pid"]["hold_tracking"]
-        assert rows[name]["oracle"] == recorded["mpc"]["hold_tracking"]
+        assert rows[name]["oracle"] == recorded.get("mpc", {}).get("hold_tracking")
         assert rows[name]["ceiling"] == recorded["ceiling"]
 
 
@@ -82,6 +86,22 @@ def test_the_image_places_each_task_against_its_expert(gen):
     assert 'data-ceiling="-3.00"' in marks["plane"]
     assert 'data-ceiling="0.30"' in marks["cstr"]
     assert 'data-oracle="off-axis"' in marks["cstr"]
+
+
+def test_a_task_with_no_oracle_is_drawn_without_one(gen):
+    """A task no oracle ships for has its expert and ceiling on the chart and
+    no oracle mark, rather than a mark at a made-up place."""
+    data = {
+        "plane": _row("plane", expert=100.0, oracle=1.0, ceiling=0.1),
+        "wake_surf": {"ceiling": 1.0, "pid": {"hold_tracking": 10.0, "gain": 10.0}},
+    }
+    rows = {r["name"]: r for r in gen.chart_rows(data)}
+    assert rows["wake_surf"]["oracle"] is None
+    svg = gen.results_svg(list(rows.values()))
+    mark = re.search(r'<g data-task="wake_surf"[^>]*>(.*?)</g>', svg).group(0)
+    assert 'data-oracle="none"' in mark
+    assert 'data-ceiling="-1.00"' in mark
+    assert "nan" not in svg
 
 
 @pytest.mark.parametrize("dark", [False, True])

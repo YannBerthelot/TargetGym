@@ -1,0 +1,28 @@
+{
+  "cpu": "AMD EPYC 9454 48-Core Processor",
+  "exception": "check 2: no published figure could be found or opened, after two searches with a re-fetch check (accepted 2026-11-06)",
+  "expert_figure": {
+    "status": "no sourced figure"
+  },
+  "expert_fingerprint": "aad82ee74d255af2",
+  "generated": "2026-11-11T17:53:07+00:00",
+  "null_wins": [],
+  "nulls": {
+    "constant 0.0": {
+      "ratio": 2.530638816712158e-07,
+      "win_rate": 0.0
+    },
+    "constant 0.5": {
+      "ratio": 1.4651871528963702e-06,
+      "win_rate": 0.0
+    },
+    "constant 1.0": {
+      "ratio": 2.3610776024048622e-07,
+      "win_rate": 0.0
+    },
+    "table": {
+      "ratio": 8.675658412378845e-07,
+      "win_rate": 0.0
+    }
+  }
+}

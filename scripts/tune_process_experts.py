@@ -214,76 +214,44 @@ def tune_first_order() -> dict:
     }
 
 
-def _cstr_rest(p, C_a, xp=np, Ti=None, Caf=None):
-    """T and raw coolant at which ``C_a`` is steady, from the two balances."""
-    Ti, Caf = (p.Ti if Ti is None else Ti), (p.Caf if Caf is None else Caf)
-    qV = p.q / p.V
-    rate = qV * (Caf - C_a)
-    T = -p.EA_over_R / xp.log(rate / (p.k0 * C_a))
-    heat = qV * (Ti - T) + (-p.deltaHr) * rate / (p.rho * p.C)
-    T_c = T - heat * p.rho * p.C * p.V / p.UA
-    return T, 2 * (T_c - p.T_c_min) / (p.T_c_max - p.T_c_min) - 1
+def _cstr_raw(p, T, T_f):
+    """The raw water that holds the reactor at ``T`` with the feed at ``T_f``,
+    from the three balances (``env.steady_state``)."""
+    from target_gym.pc_gym.cstr.env import steady_state
+
+    F_w = steady_state(T, T_f, p)[2]
+    return 2 * (F_w - p.Fw_min) / (p.Fw_max - p.Fw_min) - 1
 
 
 def tune_cstr() -> dict:
-    """Inner loop on T, then the outer on the analyser with the inner closed."""
+    """The temperature loop on the cooling water (PHYSICS.md, sections 9, 10):
+    in manual at the water each seed's setpoint needs, the feed held at the
+    middle of its day, then a water bump read for S1's 110 min of settling."""
     name = "cstr"
-    spec, p = REGISTRY[name], _params(name, load_scale=0.0)
+    nominal = _params(name)
+    T_mid = float(sum(nominal.feed_T_range) / 2)
+    # The feed's daily cycle is the plant's only load, so it stands still (R2).
+    spec, p = REGISTRY[name], _params(name, feed_T_range=(T_mid, T_mid))
     env = spec.make_env()
-    dt = float(p.delta_t)
-    rest = manual(lambda o, xp: xp.reshape(_cstr_rest(p, o[2], xp)[1], (1,)))
-    cvs = [lambda o, s, q: o[1], lambda o, s, q: o[0]]
-    limits = [(None, None)] * 2
-
-    # What the largest load takes (ours: both limits at once, at the band's middle).
-    C_mid = float(sum(p.target_CA_range) / 2)
-    T_mid, raw_mid = _cstr_rest(p, C_mid)
-    T_far, raw_far = _cstr_rest(p, C_mid, Ti=p.Ti - p.Ti_load, Caf=p.Caf + p.Caf_load)
-    T_near, _ = _cstr_rest(p, C_mid, Caf=p.Caf - p.Caf_load)
-
-    inner = Plant(spec, p, cvs, limits, controller=rest)
-    inst_T = Instrument.of(env, p, "T")
-    T_loop = read_loop(inner, "T on coolant", 0, 0, 0.1, 60, inst_T, room=inner.room(0))
-    T_out = tuned(T_loop, inst_T.h, RAW_BAND, abs(raw_far - raw_mid))
-    Kp_T, Ti_T, Tf_T = T_out["Kc"], T_out["Ti"], T_out["Tf"]
-    a = -np.expm1(-dt / Tf_T) if Tf_T else 1.0
-
-    def closed(T_sp, y, m):
-        """The inner PI, as the expert runs it."""
-        T_f, integral = (y[0], 0.0) if m is None else m
-        T_f = T_f + a * (y[0] - T_f)
-        e = T_sp[0] - T_f
-        u = Kp_T * (e + (integral + e * dt) / Ti_T)
-        if -1.0 <= u <= 1.0:
-            integral += e * dt
-        return np.clip([u], -1.0, 1.0), (T_f, integral)
-
-    # From here on the MV is the setpoint, at the temperature each seed rests at.
-    outer = Plant(
-        spec,
-        p,
-        cvs,
-        limits,
-        controller=rest,
-        start=lambda a, m: inner._y[:, [0]],
-        actuate=closed,
-        mv_range=FREE,
+    rest = manual(lambda o, xp: xp.reshape(_cstr_raw(p, o[3], T_mid), (1,)))
+    plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest)
+    inst = Instrument.of(env, p, "T")
+    # S1, Fig. 2: a 2 C setpoint step settled in 110 min.
+    window = round(110.0 / float(p.delta_t))
+    loop = read_loop(plant, "T on water", 0, 0, 0.1, window, inst, room=plant.room(0))
+    # The largest load is the feed's day, as the water it moves at the setpoint.
+    T_sp = float(p.T_setpoint)
+    u_d = abs(
+        float(_cstr_raw(p, T_sp, nominal.feed_T_range[1]))
+        - float(_cstr_raw(p, T_sp, nominal.feed_T_range[0]))
     )
-    inst_C = Instrument.of(env, p, "C_a")
-    # The move the coolant's room allows, through the steady gain on T.
-    room = abs(T_loop["k"]) * float(1 - np.max(np.abs(inner.u0)))
-    C_loop = read_loop(outer, "C_a on T_sp", 0, 1, 0.5, 80, inst_C, room=room)
-    C_out = tuned(
-        C_loop, inst_C.h, RAW_BAND / abs(Kp_T), max(T_near - T_mid, T_mid - T_far)
-    )
+    out = tuned(loop, inst.h, RAW_BAND, u_d)
+    # The expert's error is T less its setpoint, and the water cools: Kp is -Kc.
     return {
-        "Kp": C_out["Kc"],
-        "Ti": C_out["Ti"],
-        "Kp_T": Kp_T,
-        "Ti_T": Ti_T,
-        "Tf_C": C_out["Tf"],
-        "Tf_T": Tf_T,
-        "model": {"T": record(T_loop, T_out), "C_a": record(C_loop, C_out)},
+        "Kp": -out["Kc"],
+        "Ti": out["Ti"],
+        "Tf": out["Tf"],
+        "model": {"T": record(loop, out)},
     }
 
 
@@ -303,21 +271,22 @@ def tune_ph_neutralization() -> dict:
     span = float(p.q3_max - p.q3_min)
 
     def rest(o, xp):
-        return xp.reshape(
-            2 * (reagent_demand(o[2], lab, xp) - p.q3_min) / span - 1, (1,)
-        )
+        # Stage 1 at the lab's demand for the set point, the stage-2 trim shut.
+        base = 2 * (reagent_demand(o[2], lab, xp) - p.q3_min) / span - 1
+        return xp.stack([base, -xp.ones_like(base)])
 
     def demand(o, s, q):
-        return reagent_demand(o[0], curve, jnp)
+        # The stage-1 probe, which the expert's base valve reads.
+        return reagent_demand(o[4], curve, jnp)
 
     plant = Plant(spec, p, [demand], [(None, None)], controller=manual(rest))
-    inst = Instrument.of(env, p, "pH")
+    inst = Instrument.of(env, p, "pH_s1")
     raw_per_flow = 2 / span
     loop = read_loop(
         plant, "demand on q3", 0, 0, 0.1 * raw_per_flow, 120, inst, room=plant.room(0)
     )
     loop = rescaled(loop, raw_per_flow)
-    target = float(sum(p.target_pH_range) / 2)
+    target = float(p.setpoint_pH)
     # The largest load is the buffer's whole span of the demand at the target.
     u_d = abs(
         float(reagent_demand(target, curve, np))
@@ -428,7 +397,11 @@ def _column_gains(p, n=3000):
     response with the feed and the sensors quiet, in float64, since float32 stalls
     a 194 min mode about 2e-4 short of rest."""
     from target_gym.pc_gym.distillation.env import tray_temperature
-    from target_gym.pc_gym.unstable_cstr.experts import enable_x64
+
+    try:  # JAX 0.10 removed the experimental one; JAX 0.6 has only that.
+        from jax import enable_x64
+    except ImportError:
+        from jax.experimental import enable_x64
 
     spec = REGISTRY["distillation"]
     env = spec.make_env()
@@ -763,138 +736,53 @@ def tune_compressor_surge() -> dict:
     return gains
 
 
-def _datasheet_pd(p):
-    """The inner PD, SIMC on the datasheet: nobody holds this output, and its pole
-    of 2.4 /min leaves too short a window to read it. A closed test over 36 s
-    reads 12 K/min/K at a fit of 60 %, for 2.09 from the energy balance, since a
-    gain and a lag give one curve there. The lag is the thermowell's, and the half
-    rule (5.12) splits the jacket's between it and the delay, with the valve and
-    half a step. N5 and N7 leave a loop that stabilises the plant alone (R10)."""
-    slope = float(p.UA / (p.rho * p.C * p.V))
-    well = float(REGISTRY["unstable_cstr"].make_env().readings[1].lag)
-    jacket = float(p.tau_j)
-    lag = well + jacket / 2
-    theta = jacket / 2 + float(p.actuator_lag) + float(p.delta_t) / 2
-    Kp = 1 / (slope * 2 * theta)
-    return Kp, Kp * lag
-
-
-def _pole_vector(p, level=0.55) -> tuple:
-    """One coolant, so no pairing to choose: the check is which reading closes
-    the inner loop. The unstable mode's size on C_a and T, in noise bands."""
-    from target_gym.pc_gym.unstable_cstr.env import steady_temperature
-
-    T = float(steady_temperature(level, p, np))
-    r = float(p.k0 * np.exp(-p.EA_over_R / T))
-    slope = level * r * p.EA_over_R / T**2  # of the rate, per K
-    heat = -p.deltaHr / (p.rho * p.C)
-    qV, ua = p.q / p.V, p.UA / (p.rho * p.C * p.V)
-    A = np.array([[-qV - r, -slope], [heat * r, heat * slope - qV - ua]])
-    values, vectors = np.linalg.eig(A)
-    mode = vectors[:, int(np.argmax(values.real))]
-    env = REGISTRY["unstable_cstr"].make_env()
-    sd = float(env.readings[0].sigma), float(env.readings[1].sigma)
-    return (
-        float(values.real.max()),
-        abs(mode[0]) / (6 * sd[0]),
-        abs(mode[1]) / (6 * sd[1]),
-    )
-
-
 def tune_unstable_cstr() -> dict:
-    """Inner PD closed from the datasheet's, outer PI with it closed, and the
-    limits from the steady map (expert-protocols-process.md section 4)."""
-    from target_gym.pc_gym.unstable_cstr import experts as X
-    from target_gym.pc_gym.unstable_cstr.env import steady_coolant, steady_temperature
+    """The zone temperature on the initiator (PHYSICS.md, sections 9, 10): in
+    manual at the initiator each seed's setpoint needs, the feed's wander off,
+    then a short bump. The unstable mode's 175 s is slow against the test, so
+    the read is integrating (SIMC, Skogestad 2003), its lag counted as delay."""
+    from target_gym.pc_gym.unstable_cstr.env import steady_state
 
     name = "unstable_cstr"
-    spec, p = REGISTRY[name], _params(name)
+    spec, p = REGISTRY[name], _params(name, feed_T_wander=0.0)
     env = spec.make_env()
-    dt, span = float(p.delta_t), float(p.T_c_max - p.T_c_min)
-    per_K = 2 / span
-    Kp_T, Kd_T = _datasheet_pd(p)
-    print(f"  inner PD from the datasheet: Kp {Kp_T:.4g}, Kd {Kd_T:.4g}")
-    pole, on_C, on_T = _pole_vector(p)
-    print(f"  pole {pole:.3g} /min; its mode reads {on_C:.3g} on C_a, {on_T:.3g} on T")
+    span = float(p.I_f_max - p.I_f_min)
 
-    def raw(T_c):
-        return per_K * (T_c - p.T_c_min) - 1
+    def rest(o, xp):
+        I_f = steady_state(o[2], p)[2]
+        return xp.reshape(2 * (I_f - p.I_f_min) / span - 1, (1,))
 
-    def settle_step(_p, m, obs, xp=jnp):
-        T_sp = steady_temperature(obs[3], p, xp)
-        bias = steady_coolant(obs[3], 0.0, p, xp)
-        rate = xp.where(m[0] > 0, (obs[1] - m[1]) / dt, 0.0)
-        T_c = bias + Kp_T * (T_sp - obs[1]) - Kd_T * rate
-        return xp.reshape(raw(T_c), (1,)), (xp.ones_like(T_sp), obs[1], T_sp, bias)
-
-    def closed(u, y, m):
-        """The inner PD as the expert runs it. ``u`` is the setpoint and the
-        bias, ``y`` T first."""
-        last = y[0] if m is None else m
-        T_c = u[1] + Kp_T * (u[0] - y[0]) - Kd_T * (y[0] - last) / dt
-        return np.reshape(raw(np.clip(T_c, p.T_c_min, p.T_c_max)), (1,)), y[0]
-
-    levels = np.linspace(*p.target_CA_range, 21)
-    rest = np.array(
-        [[float(steady_coolant(L, d, p, np)) for d in (-6.0, 0.0, 6.0)] for L in levels]
-    )
-    # Item 2: the coolant at the band's middle, no drift.
-    bias = float(steady_coolant(0.55, 0.0, p, np))
-
-    # Outer loop: C_a on the setpoint, the inner PD closed around that bias.
-    def at_rest(a, m):
-        T_sp = np.asarray(m[2])[:, -1] + (np.asarray(m[3])[:, -1] - bias) / Kp_T
-        return np.stack([T_sp, np.full_like(T_sp, bias)], axis=1)
-
-    test = Plant(
+    plant = Plant(
         spec,
         p,
-        [lambda o, s, q: o[1], lambda o, s, q: o[0]],
-        [(None, None)] * 2,
-        controller=Controller(None, (0.0, 0.0, 0.0, 0.0), settle_step),
-        start=at_rest,
-        actuate=closed,
-        applied=lambda u, a: u[:1],
-        mv_range=FREE,
-        direction=lambda u, size: size,
+        [lambda o, s, q: o[0]],
+        [(None, float(p.T_trip))],
+        controller=manual(rest),
     )
-    inst_C = Instrument.of(env, p, "C_a")
-    room = float(min((rest - p.T_c_min).min(), (p.T_c_max - rest).min()))
-    C_loop = read_loop(test, "C_a on T_sp", 0, 1, -0.5, 80, inst_C, room=room / Kp_T)
-    # Items 3 and 4: the P loop's offset over the steady map.
-    e_eq = float(np.abs(rest - bias).max()) / Kp_T
-    line_margin = float(np.maximum(bias - rest, 0.0).max()) / Kp_T
-    C_out = tuned(C_loop, inst_C.h, DEAD_BAND * span / Kp_T, e_eq)
-    Kc, Ti_Ca = -C_out["Kc"], C_out["Ti"]
-    # Item 5: the largest scheduled switch never clips the outer move.
-    window = abs(Kc) * max(p.switch_sizes) + e_eq
-    # Item 6: the steepest ramp the inner loop follows on the coolant's room,
-    # (room / Kp_T) / (tau_c + theta), and SIMC's Kp_T is 1 / (k' (tau_c + theta)).
-    sp_rate = room * float(p.UA / (p.rho * p.C * p.V))
-    settings = {
-        "Kp_T": Kp_T,
-        "Kd_T": Kd_T,
-        "Kc_Ca": Kc,
-        "Ti_Ca": Ti_Ca,
-        "Tf_Ca": C_out["Tf"],
-        "sp_rate": sp_rate,
-        "sp_below": window,
-        "sp_above": window,
-        "sp_line_margin": line_margin,
-        "Tc_bias": bias,
-    }
-    try:
-        X.check_cascade_gains({**X.DEFAULT_GAINS, **settings})
-        print("  guard: passes")
-    except X.UnstableCascadeGains as finding:
-        print(f"  guard, a report (D2): {finding}")
-    print(f"  slowest rates {X.closed_loop_rates({**X.DEFAULT_GAINS, **settings})}")
+    inst = Instrument.of(env, p, "T")
+    # 40 s, the test PHYSICS.md section 10 asks of an unstable plant.
+    window = round(40.0 / float(p.delta_t))
+    loop = read_loop(
+        plant,
+        "T on initiator",
+        0,
+        0,
+        0.02,
+        window,
+        inst,
+        room=plant.room(0),
+        model="integrating_lag",
+    )
+    loop = {**loop, "theta": loop["theta"] + loop["tau1"]}
+    # A dosing pump has no sourced dead band, so SIMC's values stand (N5, N7).
+    out = tuned(loop, inst.h)
+    # The expert's error is T less its setpoint, and initiator heats: Kp is -Kc.
     return {
-        **settings,
-        "model": {
-            "C_a": record(C_loop, C_out),
-            "pole": {"rate": pole, "on C_a": on_C, "on T": on_T},
-        },
+        "Kp": -out["Kc"],
+        "Ti": out["Ti"],
+        "Td": 0.0,
+        "Tf": out["Tf"],
+        "model": {"T": record(loop, out)},
     }
 
 

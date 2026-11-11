@@ -10,6 +10,7 @@ the oracle each have a fingerprint of their own
 (``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 """
 
+import jax
 import jax.numpy as jnp
 from flax import struct
 
@@ -19,7 +20,9 @@ from target_gym.experts.pid import (
     _wrap_angle,
     filtered_derivative,
 )
-from target_gym.plane.experts_tecs import AIRLINER
+from target_gym.plane.dynamics import BANK_DEMAND_MAX, PITCH_DEMAND_MAX
+from target_gym.plane.experts_tecs import AIRLINER, TECSParams
+from target_gym.plane3d import hornet
 from target_gym.plane3d.experts import (
     Plane3DGuidanceParams,
     Plane3DGuidanceState,
@@ -33,14 +36,33 @@ from target_gym.plane3d.experts import (
 # Indices into the full patrol observation (patrol.env.get_obs_full).
 _PSI, _E_BACK, _E_RIGHT, _E_UP = 9, 10, 11, 12
 _RV_FWD, _RV_RIGHT, _SLOT_BACK, _SLOT_RIGHT = 13, 14, 16, 17
+_RV_UP, _POWER = 15, 21
 _REL_HEADING = 19
 # Indices into the range-and-bearing observation; 0-9 are as above.
 _RANGE, _AZ, _EL = 10, 11, 12
 _RB_SLOT_BACK, _RB_SLOT_RIGHT, _RB_SLOT_UP = 13, 14, 15
+_RB_POWER = 16
+
+
+#: The Hornet's TECS: AIRLINER's gains with the Hornet's own flight test at the
+#: AFF point, full military power climbing 25 m/s and idle sinking 15 m/s
+#: (the model's excess thrust, plane3d/hornet.py).
+HORNET_TECS = AIRLINER.replace(climb_max=25.0, sink_min=15.0)
 
 
 @struct.dataclass
-class FormationHoldParams(Plane3DGuidanceParams):
+class HornetGuidanceParams(Plane3DGuidanceParams):
+    """The 3D autopilot on the Hornet: AFF's 250 KCAS [AFF], a speed floor of
+    1.2 times its 61.9 m/s clean stall, and its TECS."""
+
+    cruise_cas: float = 250.0 * 1852.0 / 3600.0
+    cruise_mach: float = 0.70
+    v_min_eas: float = 74.0
+    tecs: TECSParams = HORNET_TECS
+
+
+@struct.dataclass
+class FormationHoldParams(HornetGuidanceParams):
     """A formation hold's gains, over the 3D tasks' autopilot.
 
     The hold is the one formation-flight research flew (AFIT's formation
@@ -60,7 +82,7 @@ class FormationHoldParams(Plane3DGuidanceParams):
     the lead's turn rate, ``k_ref`` the demands' rates the autopilot is fed
     forward, and ``k_eng`` closes the throttle on the engine's power state.
     ``t_rate`` is the filter time on the range-and-bearing estimator's lead
-    velocity: differenced raw, 15 m of range noise is 21 m/s of lead speed.
+    velocity, 0 for the raw difference.
     """
 
     # Tuned on training seeds 100-109, one set for every follower (both
@@ -86,6 +108,31 @@ class FormationHoldParams(Plane3DGuidanceParams):
     dv_max: float = 20.0  # m/s
     max_intercept: float = 0.5  # rad
     int_max: float = 2000.0  # m s
+    # ---- The fighter's direct hold (``law`` 1, ``_direct_hold``) ----
+    #: 0, the guidance cascade above over TECS (the airliner's, ``wake_surf``);
+    #: 1, NASA AFF's structure on the Hornet: each axis a PID on the slot
+    #: error, its rate from the relative velocity, straight to the demand.
+    law: float = 0.0
+    #: Placed from the plant's own response at the AFF point, a damping of 0.8
+    #: on every axis. Along track at 0.3 rad/s: a unit of power gives 36.9 kN
+    #: / 15.1 t = 2.44 m/s^2, so kp = 0.09 / 2.44 per m and kd = 0.48 / 2.44
+    #: per m/s. Across at 0.4 rad/s, the bank loop being faster than the
+    #: engine: a radian of bank gives g, so a lateral demand of 0.16 per m and
+    #: 0.64 per m/s. Vertically a climb demand of 0.3 per m. The integrals at
+    #: a tenth of the loop's rate. The engine's 2.6 s and the bank loop's 1 s
+    #: keep each loop's third-order Routh condition (lag x kp < kd) with room.
+    #: Checked on training seeds 100-103 [slot loops]: along track at 0.45
+    #: and across at 0.5 each diverge on a seed, 0.3 and 0.4 hold every one.
+    kp_x: float = 0.037  # power per m
+    kd_x: float = 0.197  # power per m/s
+    ki_x: float = 0.0011  # power per m s
+    kp_y: float = 0.16  # m/s^2 per m
+    kd_y: float = 0.64  # m/s^2 per m/s
+    ki_y: float = 0.0064  # m/s^2 per m s
+    kp_z: float = 0.3  # m/s per m
+    ki_z: float = 0.009  # m/s per m s
+    #: The largest climb or descent the vertical loop asks, m/s.
+    climb_max: float = 10.0
 
 
 @struct.dataclass
@@ -108,6 +155,7 @@ class FormationHoldState(Plane3DGuidanceState):
     dy_prev: float = 0.0
     vx_prev: float = 0.0
     vy_prev: float = 0.0
+    int_up: float = 0.0
 
 
 def _lead_axes(psi_lead, xp):
@@ -197,13 +245,93 @@ def _hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, **carry):
     )
 
 
+def _direct_hold(p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, up_rate):
+    """NASA AFF's formation autopilot on the Hornet (NASA/TM-2002-210729,
+    figure 3): on each axis a PID on the slot error, its rate the relative
+    velocity, straight to the demand the inner loop holds. Along track the
+    throttle, its integral the power trim (taken up bumpless from ``power``,
+    the engine's reading, on the first step); vertically the flight path, a
+    climb of ``kp_z`` per metre about the lead's level, with the extra pitch
+    of a banked turn (``k_bank_comp`` per g); across track the bank
+    of the lateral acceleration the lead's turn needs plus the correction.
+    A positive bank turns toward increasing heading, to the left."""
+    e_back, e_right, e_up = slot_err
+    started = s.started > 0.0
+    dt = p.dt
+    omega_now = _wrap_angle(psi_lead - s.psi_lead_prev, xp) / dt
+    omega = xp.where(started, s.omega + p.k_omega * (omega_now - s.omega), 0.0)
+    fwd, right = _lead_axes(psi_lead, xp)
+    v_slot = v_lead + omega * slot[1] * fwd + omega * slot[0] * right
+    dv = obs[0:2] - v_slot
+    back_rate, right_rate = -(dv @ fwd), dv @ right
+
+    # Each integral runs only while the demand it feeds is inside its limit,
+    # TECS's and L1's anti-windup (docs/proposals/expert-protocols-aircraft.md,
+    # ``x_band``): a demand pinned at its limit through a turn reversal would
+    # otherwise wind it up and carry the wingman across the slot.
+    free_x = xp.abs(p.kp_x * e_back + p.kd_x * back_rate + s.int_back - 0.5) < 0.5
+    trim = s.int_back + xp.where(free_x, p.ki_x * e_back * dt, 0.0)
+    trim = xp.clip(xp.where(started, trim, power), 0.0, 1.0)
+    throttle = xp.clip(trim + p.kp_x * e_back + p.kd_x * back_rate, 0.0, 1.0)
+
+    speed = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + obs[3] ** 2 + 1e-6)
+    free_z = xp.abs(p.kp_z * e_up + p.ki_z * s.int_up) < p.climb_max
+    int_up = s.int_up + xp.where(free_z, e_up * dt, 0.0)
+    int_up = xp.where(started, xp.clip(int_up, -p.int_max, p.int_max), 0.0)
+    climb = xp.clip(-(p.kp_z * e_up + p.ki_z * int_up), -p.climb_max, p.climb_max)
+    gamma = obs[8]
+    pitch = obs[4] + (xp.arcsin(xp.clip(climb / speed, -0.5, 0.5)) - gamma)
+    # The extra pitch a banked turn needs, as the 3D autopilot adds it.
+    load_factor = 1.0 / xp.maximum(xp.cos(obs[6]), 0.35)
+    pitch = pitch + p.k_bank_comp * (load_factor - 1.0)
+    del up_rate  # the climb demand is the rate loop; kept for the estimator's form
+
+    lateral = speed * omega + p.kp_y * e_right + p.kd_y * right_rate
+    free_y = xp.abs(lateral + p.ki_y * s.int_right) < p.gravity * xp.tan(p.max_bank_rad)
+    int_right = s.int_right + xp.where(free_y, e_right * dt, 0.0)
+    int_right = xp.where(started, xp.clip(int_right, -p.int_max, p.int_max), 0.0)
+    lateral = lateral + p.ki_y * int_right
+    bank = xp.clip(xp.arctan(lateral / p.gravity), -p.max_bank_rad, p.max_bank_rad)
+    action = xp.stack(
+        [2.0 * throttle - 1.0, pitch / PITCH_DEMAND_MAX, bank / BANK_DEMAND_MAX]
+    )
+    new = s.replace(
+        started=xp.ones_like(e_up),
+        int_back=trim,
+        int_right=int_right,
+        int_up=int_up,
+        psi_lead_prev=psi_lead,
+        omega=omega,
+    )
+    return action, new
+
+
+def _either_hold(
+    p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, up_rate, **carry
+):
+    """``law`` 1's direct hold, or the guidance cascade (``_hold``)."""
+    direct, direct_state = _direct_hold(
+        p, s, obs, xp, slot_err, v_lead, psi_lead, slot, power, up_rate
+    )
+    direct_state = direct_state.replace(**carry)
+    cascade, cascade_state = _hold(
+        p, s, obs, xp, slot_err, v_lead, psi_lead, slot, **carry
+    )
+    pick = p.law > 0.5
+    action = xp.where(pick, direct, cascade)
+    state = jax.tree_util.tree_map(
+        lambda a, b: xp.where(pick, a, b), direct_state, cascade_state
+    )
+    return action, state
+
+
 def patrol_hold_step(params, state, obs, xp=jnp):
     """The full-observation hold: the slot error, the lead's heading and its
     velocity (own velocity less the relative one) are all observed."""
     psi_lead = obs[_PSI] + obs[_REL_HEADING]
     fwd, right = _lead_axes(psi_lead, xp)
     v_lead = obs[0:2] - obs[_RV_FWD] * fwd - obs[_RV_RIGHT] * right
-    return _hold(
+    return _either_hold(
         params,
         state,
         obs,
@@ -212,6 +340,8 @@ def patrol_hold_step(params, state, obs, xp=jnp):
         v_lead,
         psi_lead,
         (obs[_SLOT_BACK], obs[_SLOT_RIGHT]),
+        obs[_POWER],
+        obs[_RV_UP],
     )
 
 
@@ -256,7 +386,7 @@ def patrol_range_bearing_hold_step(params, state, obs, xp=jnp):
         -(dx * right[0] + dy * right[1]) - slot_right,
         -dz - obs[_RB_SLOT_UP],
     )
-    return _hold(
+    return _either_hold(
         params,
         state,
         obs,
@@ -265,6 +395,8 @@ def patrol_range_bearing_hold_step(params, state, obs, xp=jnp):
         v_lead,
         psi_lead,
         (slot_back, slot_right),
+        obs[_RB_POWER],
+        obs[3],
         dx_prev=filtered[0],
         dy_prev=filtered[1],
         vx_prev=obs[0],
@@ -280,7 +412,43 @@ def patrol_range_bearing_hold_step(params, state, obs, xp=jnp):
 #: (scripts/tune_aircraft_guidance.py). TECS weighs height and speed evenly in the pitch channel
 #: (``spd_weight`` 0.5, between the airliner's 0, which leaves the speed to
 #: the throttle alone, and ArduPilot's default 1) [engine and energy].
-HOLD = FormationHoldParams(tau_hdg=3.0, tecs=AIRLINER.replace(spd_weight=0.5))
+HOLD = FormationHoldParams(
+    tau_hdg=3.0,
+    tecs=HORNET_TECS.replace(spd_weight=0.5),
+    law=1.0,
+    # The range from vision, not TCAS's 15 m, so the lead's velocity is the
+    # raw difference: the lowest mean RMS slot error of 0, 0.25, 0.5, 1, 2, 3,
+    # 5, 10 and 20 s on training seeds 100-103 (2026-11-10).
+    t_rate=0.0,
+    # The lead's turn rate unfiltered, its heading's raw difference: filtered
+    # (0.3 and 0.6), the formation's wingmen fell a step further behind a
+    # reversal and tripped (training seeds 100-109, 2026-11-10).
+    k_omega=1.0,
+    # The Hornet's own extra pitch per g in a turn (plane3d/hornet.py), in
+    # place of the A320's 0.15: a turn's offset halves on training seeds.
+    k_bank_comp=hornet.PITCH_PER_G,
+)
+
+
+#: The wake-surfing follower's hold: the formation hold over the A320's own
+#: autopilot (the 3D tasks' cruise schedule, speed floor and TECS). Its slot
+#: gains are the patrol's, not tuned for a station 3 km in trail.
+WAKE_SURF_HOLD = HOLD.replace(
+    law=0.0,
+    k_bank_comp=0.15,  # the A320's (plane3d.experts)
+    cruise_cas=290.0 * 1852.0 / 3600.0,
+    cruise_mach=0.78,
+    v_min_eas=96.0,
+    # Step 1 of scripts/tune_formation_hold.py --wake-surf, on training seeds
+    # 100-109 (2026-11-10): the worst seed's RMS 156 m, from 215 m, no trips.
+    tecs=AIRLINER.replace(spd_weight=1.0, thr_damp=6.0, time_const=5.0),
+    k_ref=1.0,
+)
+
+
+def make_wake_surf_pid_controller() -> Controller:
+    """``wake_surf``'s expert: the formation hold on the A320, at its station."""
+    return Controller(WAKE_SURF_HOLD, FormationHoldState(), patrol_hold_step)
 
 
 def make_patrol_pid_controller() -> Controller:
@@ -288,6 +456,15 @@ def make_patrol_pid_controller() -> Controller:
     return Controller(HOLD, FormationHoldState(), patrol_hold_step)
 
 
+#: The range-and-bearing follower's hold: the same, its lead's turn rate
+#: filtered as before (``k_omega`` 0.3), since its lead heading is an estimate:
+#: the lowest worst seed of 0.1, 0.3, 0.6 and 1 on training seeds 100-109
+#: (2026-11-10), 9.5 m against 20.5 m unfiltered.
+RANGE_BEARING_HOLD = HOLD.replace(k_omega=0.3)
+
+
 def make_patrol_range_bearing_pid_controller() -> Controller:
     """The range-and-bearing patrol's expert: the same hold, behind the estimator."""
-    return Controller(HOLD, FormationHoldState(), patrol_range_bearing_hold_step)
+    return Controller(
+        RANGE_BEARING_HOLD, FormationHoldState(), patrol_range_bearing_hold_step
+    )

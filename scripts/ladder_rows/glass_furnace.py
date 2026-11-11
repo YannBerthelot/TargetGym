@@ -10,7 +10,7 @@ override, so neither asks a rung here.
 Sizes come from the plant's own figures:
 
 - the fining share's step test on the registered plant (``pid_gains.json`` under
-  ``glass_furnace``, its ``model``): 41.75 h of lag after 3.83 h of dead time;
+  ``glass_furnace``, its ``model``): 55.45 h of lag after 11.82 h of dead time;
 - the crown's step on the fuel, 808 K per kg/s over a 4.1 h lag (``env_jax``, where the
   override is designed on it);
 - the walks' spreads (``GlassFurnaceParams.walk_sd``): the gas's heating value wanders by
@@ -111,7 +111,7 @@ def row() -> Row:
     hot0 = float(P.sensors(state0, p.grid, pp)["hot"])
     headroom = (float(p.crown_high - p.override_margin) - hot0) / crown_k / per_raw
     # The fining share's response: its dead time and four lags.
-    tau, theta = 41.75, 3.833  # h, the valve's step test (pid_gains.json, model)
+    tau, theta = 55.45, 11.817  # h, the valve's step test (pid_gains.json, model)
     window = math.ceil((theta + 4.0 * tau) * hour)
     # The crown answers in its own 4.1 h lag: four of them.
     crown_window = math.ceil(4.0 * 4.1 * hour)

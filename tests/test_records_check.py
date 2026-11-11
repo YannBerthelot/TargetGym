@@ -26,6 +26,9 @@ RECORD_CHECKS = {
         "test_mpc_does_not_beat_a_measured_floor",
         "test_the_recorded_mpc_cost_is_what_the_mpc_measures_now",
     },
+    "tests/test_charter_records.py": {
+        "test_each_charter_task_has_a_current_valid_record",
+    },
 }
 
 

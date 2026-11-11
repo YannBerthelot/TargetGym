@@ -47,19 +47,26 @@ def reference_actions(env, p, ref, seed):
 
 def plan_cost(env, p, seed, actions, surrogate=False):
     """The cost of a plan from the reset of ``seed``, as the reward charges it.
-    With ``surrogate``, also the planner's band hinge (``oracle.PLAN_BAND_WEIGHT``)
-    on each step's offset, which gives the penalty clock a gradient."""
+    With ``surrogate``, also the planner's hinges, which give the timed limits a
+    gradient: the band's (``oracle.PLAN_BAND_WEIGHT``) on each step's offset, and
+    a step of lost output per K of Tavg above its DNB limit."""
     from target_gym.reactor.oracle import PLAN_BAND_WEIGHT
 
     _, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
     per = PLAN_BAND_WEIGHT * 100.0 * 30.0 / 3600.0
 
+    from target_gym.reactor.env import tavg_dnb_limit
+
+    hot_per_K = float(p.failure_cost)  # a step of lost output per K, the plan's
+
     def step(s, x):
         a, key = x
         _, s, r, _, info = env.step_env(key, s, a, p)
         off = jnp.abs(s.delta_I - s.n * p.ao_ref) - p.ao_band * s.n
-        return s, (-r, info["tripped"], per * jnp.maximum(off, 0.0))
+        hot = 0.5 * (s.T_coolant + s.T_cold) - tavg_dnb_limit(p)
+        hinge = per * jnp.maximum(off, 0.0) + hot_per_K * jnp.maximum(hot, 0.0)
+        return s, (-r, info["tripped"], hinge)
 
     _, (cost, trips, hinge) = jax.lax.scan(step, s, (actions, keys))
     if surrogate:

@@ -28,7 +28,9 @@ from target_gym.reactor.env import (
 
 
 def reset(seed=0):
-    env, p = Reactor(), ReactorParams()
+    # On program at reset: no dilution carried over (reactor-v7's carried debt
+    # would start the plant up to 0.8 K cold).
+    env, p = Reactor(), ReactorParams(carried_days_range=(0.0, 0.0))
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     return env, p, obs, s
 
@@ -52,7 +54,10 @@ def tavg_off_by(s, kelvin):
     return s.replace(T_coolant=s.T_coolant - kelvin, T_cold=s.T_cold - kelvin)
 
 
-@pytest.mark.parametrize("off, expected", [(1.0, 0.0), (1.59, 0.0), (2.6, 0.31944)])
+@pytest.mark.parametrize(
+    "off, expected",
+    [(1.0, 0.0), (1.59, 0.0), (2.6, 0.31944), (-1.59, 0.0), (-2.6, 0.31944)],
+)  # negative: hot, charged alike (the physics review's finding 1)
 def test_tavg_costs_only_past_the_rods_dead_band(off, expected):
     env, p, obs, s = reset()
     terms = compute_reward_terms(tavg_off_by(s, off), p)
@@ -70,7 +75,13 @@ def test_the_criticality_floor_ends_the_run_only_after_its_allowed_time(seconds,
 def test_the_time_under_the_floor_counts_up_and_resets():
     env, p, obs, s = reset()
     hold = np.array([1.0 - 2.0 * p.rod_park, 0.0])
-    cold = tavg_off_by(s, 30.0).replace(below_floor=s.n * 0 + 100.0)
+    # 40 K cold, with boron trimmed so the core stays critical there: the fuel
+    # dumps about 8 K of heat into colder water within the step, and at the
+    # start-of-cycle MTC an untrimmed cold core heats itself back further.
+    extra = p.alpha_coolant * -40.0  # reactivity the cold water adds
+    cold = tavg_off_by(s, 40.0).replace(
+        below_floor=s.n * 0 + 100.0, boron=s.boron - extra / p.boron_worth
+    )
     s1, _ = compute_next_state(hold, cold, p, integration_method=env.integration_method)
     assert float(s1.below_floor) == pytest.approx(100.0 + p.delta_t)
     s2, _ = compute_next_state(

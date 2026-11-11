@@ -122,6 +122,10 @@ integrators, and the turbulence is hidden.
 | 12 | throttle, 0 to 1 |
 | 13 | elevator deflection (rad) |
 | 14 | aileron deflection (rad) |
+| 15 | assigned speed, as a true airspeed (m/s) |
+| 16 | airspeed, against the wind and gust (m/s) |
+| 17 | normal load factor (g) |
+| 18 | heading, where the nose points (rad), the vector's quantity (Amendment 4) |
 
 ### Task: `plane3d_circle`
 
@@ -162,6 +166,10 @@ flight.
 | 18 | cross-track error to the nearest point, positive outside the pattern (m) |
 | 19 | heading of the pattern at the nearest point (rad) |
 | 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
+| 21 | the hold's half leg (m) |
+| 22 | assigned speed, as a true airspeed (m/s) |
+| 23 | airspeed, against the wind and gust (m/s) |
+| 24 | normal load factor (g) |
 
 ### Task: `plane3d_figure8`
 
@@ -424,9 +432,9 @@ xfail. That is a controller gap, not a physics gap; it is tracked in
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane3d_circle` | 300 | 1 | 5 min | 3 in [-1, 1] | 17 | 39 |
+| `plane3d_circle` | 600 | 1 | 10 min | 3 in [-1, 1] | 17 | 39 |
 | `plane3d_figure8` | 1000 | 1 | 17 min | 3 in [-1, 1] | 21 | 39 |
-| `plane3d_heading` | 600 | 1 | 10 min | 3 in [-1, 1] | 18 | 39 |
+| `plane3d_heading` | 600 | 1 | 10 min | 3 in [-1, 1] | 19 | 39 |
 | `plane3d_racetrack` | 1200 | 1 | 20 min | 3 in [-1, 1] | 25 | 39 |
 
 `float state` counts the scalar and array float fields the state carries,
@@ -593,13 +601,148 @@ racetrack, of the wind scenarios' speeds; the bank MV is bounded by
 `protected_bank`; the zones for rule 22's back-off are the altitude band (+-65 ft heading, +-100 ft hold), +-10 kt, +-10
 deg and 1 389 m bands. Until then TECS with course hold or L1 is the reference.
 
-**Known deviation: the `amended` flag (rule 13).** The Extra 3D tasks
+**Known deviation: the `amended` flag (rule 13), resolved in Amendment 4: every aircraft task now flies the amended plant.** The Extra 3D tasks
 (`plane3d_circle`, `plane3d_figure8`), patrol, `patrol_range_bearing` and
 formation fly the unamended plant, which trips at 60 deg of bank and at VMO, which
 REALITY.md contradicts, and lets the bank demand reach 45 deg. Extra tasks are
 exempt, so this breaks no rule, but it keeps two plants. The owner's decision
 (2026-11-08): flip the flag on each of them the next time it is touched, and
 re-record its baselines then.
+
+## Amendment 4: the 2026-11-10 review
+
+The plant changes of plane/PHYSICS.md's Amendment 4 (the swept wing, the tail and
+its downwash, inertia, the engine at altitude, the autopilot's 0.2 g, the
+retuned attitude loop) reach every 3D task through `longitudinal_airframe`. What is
+the 3D aircraft's own:
+
+**Heading is the nose, not the track.** ATC vectors are headings [IFH ch. 7]; the
+task scored the ground track, which a crosswind turns away from it by the drift
+angle (7.7 deg at 50 kt across 193 m/s). `plane3d_heading` now scores `heading_3d`,
+the direction of the velocity through the air (with no sideslip in the model, where
+the nose points), and observes it as an IRS does, a nineteenth channel (`heading`;
+`psi` stays the track). The expert's heading hold turns on it at the coordinated rate
+for its airspeed. Tests: `test_a_vector_is_scored_on_the_heading_flown_not_the_track`,
+`test_the_irs_heading_reads_the_nose_and_psi_the_track`.
+
+**The hold is flyable in its wind.** The racetrack's turns were sized for still air,
+so in its 30 to 67 kt scenarios the downwind turn asked 36 to 43 deg of bank against
+the 30 deg protected bank, and the reference's whole cost there was that. An RNAV hold
+sizes its turns for the greatest ground speed at the AIM's 25 deg, so the downwind
+turn takes 25 deg and the upwind one less (Garmin, RNAV holding:
+<https://twincommander.com/newsletter/garmin-tips-and-tricks-rnav-holding>): the
+radius is `(TAS + wind)^2 / (g tan 25 deg)` (`hold_design_bank`). Test:
+`test_the_holds_downwind_turn_is_flyable_in_its_wind`.
+
+**What the operator pays.** `plane3d_heading` charges `economy` as `plane` does (fuel
+and time by the cost index per air distance, plane/PHYSICS.md); the racetrack does
+not (a hold's time is ATC's).
+
+**Scenarios.** The light sigma is re-derived at 5 500 m on the airplane's own lift
+slope, 6.23 /rad at M 0.61: dn/dw = 0.0714 g per m/s, so 0.564 m/s (was 0.55), the
+worst zone 1.41. `plane3d_heading` adds a severe zone, MIL-F-8785C's severe intensity
+at 5 500 m, 21.5 ft/s (Figure 7, as JSBSim tabulates it), 6.54 m/s, at a 1e-4 share.
+
+**The circle and the figure-8 fly the amended plant.** The owner's decision of
+2026-11-08 was to flip `amended` on the Extra tasks when next touched; done on
+2026-11-10. They gain the 30 deg protected bank, the autopilot's 0.2 g and the
+protected load factor and incidence, light Dryden zones (0.564 m/s) in place of the
+continuous 2 m/s gust, no bank or VMO trips, and an established start (at the level
+and the cruise speed, in trim, on the path's tangent). Their scores carry no speed
+term, so nothing else moves.
+
+The bank a level orbit needs on the cruise schedule is `atan(V^2 / (g r))`: 8 km took
+31.5 deg at 8 000 m (219 m/s), past the protection, though only at that corner (20.5
+deg at 3 000 m). The circle's radius is now 10.5 to 15 km, where a 25 deg turn flies
+the schedule at every level (`V^2 / (g tan 25 deg)` = 10.5 km at 219 m/s), and its
+episode 600 s, a lap of the largest orbit at the slowest speed to two of the smallest
+at the fastest. The figure-8's tips, of radius a / 3, needed 23.4 deg at 8 000 m on
+the old half-width of 34 km: inside the protection but past the 22.5 deg its expert
+flies with a quarter in hand, so the half-width is now 36 to 38 km (`3 V^2 / (g tan
+22.5 deg)` = 35.5 km). Both experts fly the protected 30 deg and the amended speed
+floor, 96 m/s EAS. On training seeds 100 and 101 the circle's expert holds 0.5 to
+0.7 m mean path error (2.4 m worst) and the figure-8's 1.0 m (3.4 m worst), with no
+trip; the roll loop overshoots the 30 deg demand to 34 deg, as on the hold.
+
+### The F/A-18 (patrol and formation)
+
+The owner's decision of 2026-11-10: a fighter's formation on a fighter. `patrol`,
+`patrol_range_bearing` and `formation` fly an F/A-18 Hornet on this plant,
+`plane3d/hornet.py`, the amended plant (limits protected, the ground and the
+formation's own trips the only ones). Sources: [HARV] Chakraborty, Seiler and Balas,
+AIAA GNC 2009 (Tables 1, 2, 7, 8); [AFF] Hanson et al., NASA/TM-2002-210729; [F404]
+and [NATOPS] secondary.
+
+| Number | Value | Status |
+|---|---|---|
+| weight, wing, span, MAC | 15.1 t (33 310 lb), 37.16 m^2, 11.41 m, 3.51 m | cited: [HARV] Table 1 |
+| radii of gyration | 3.68 m pitch, 1.44 m roll | cited: [HARV] Iyy 151 293, Ixx 23 000 slug ft^2 |
+| lift slope | 0.0831 /deg, CL0 -0.020 | derived: the secant of [HARV]'s cubic over 0 to 10 deg |
+| `CL_max`, stall | 1.70 at 20.7 deg | cited peak [HARV]; where the secant reaches it (its 38 deg LEX lift: a known deviation) |
+| drag | CD0 0.020, e 0.8 | ours |
+| stabilator arm, area | 4.96 m, 11.4 m^2 | calibrated: [HARV] Cm_delta -1.061 and Cm_q -3.00 at 4 deg, its slope DATCOM's for A 2.4, 35 deg (ours) |
+| downwash | 0.46 of the far field, de/da 0.4 | ours: a fighter's |
+| wing-body centre | 0.26 m behind the centre of gravity | calibrated: [HARV] Cm_alpha -0.993 |
+| stabilator setting | -5.33 deg | calibrated: zero deflection at the AFF point |
+| roll | Cl_p -0.337, aileron calibrated to Cl_delta_a 0.143 | cited: [HARV] Table 7 |
+| engines | 2 x 47.6 kN military, SFC 22.9 g/(kN s), 3.25 s idle to full | secondary: [F404]; afterburner not modelled (ours) |
+| limits | +7.5, -3.0 g, no autopilot limit, bank unprotected to 67 deg | +7.5 secondary [NATOPS]; the rest ours |
+| attitude loop | pitch 2.29 / 0.032 / 0.127, roll 0.637 / 0.032 / 0.344, scaler about 116 m/s EAS | the A320's procedure at the AFF point (`tune_inner_loop.py --airframe hornet`), roll D up to [HARV]'s roll damper, 0.154 rad per rad/s there (docs/proposals/expert-protocols-aircraft.md, amendment of 2026-11-10) |
+| pitch per extra g in a turn | 0.101 rad | derived: W / (q S a) at the AFF point; the formation hold's `k_bank_comp` |
+
+At the AFF point, M 0.56 and 25 000 ft: trim incidence 5.8 deg, airplane lift slope
+5.63 /rad ([HARV]'s 5.68), static margin 18 % MAC ([HARV] gives 17.5 to 20 %), short
+period 2.34 rad/s at a damping of 0.18, phugoid 75 s, a 25 m/s climb at military power.
+
+The mission is AFF's: the lead at 250 KCAS between 20 000 and 32 000 ft, a slot in the
+cruise position on a bearing line 3 to 6 plane widths out with a step down [CNATRA],
+34 to 70 m back, 17 to 45 m to a side drawn at random (the formation's V from 22 m, so
+its spawn noise cannot put two wingmen of a rank together), 0 to 10 m below; never
+closer than one length, 56 ft, AFF's nose-to-tail limit (`min_separation`); the
+station-keeping limit AFF's own, 10 ft one sigma, not the A320's span scaled; light
+turbulence, as AFF flew ("no turbulence" to "light chop"). The lead turns at up to
+0.0303 rad/s, the parade turn's 30 deg [CNATRA] at 25 000 ft (28 to 33 deg over the
+band): at 0.0476 rad/s (40 deg) the band's top took 45.4 deg, past the 45 deg both the
+lead's and the wingmen's autopilots fly, and the wingmen fell hundreds of metres behind.
+
+Both aircraft now spawn in level trim (`trim_level`): spawned at `initial_theta` with
+the elevator merely balanced there, the Hornet, which trims near 6 deg, started 6 deg
+short of its lift and its lead lost 1.2 km of height.
+
+### Wake surfing (`wake_surf`)
+
+The owner's decision of 2026-11-10: wake-energy retrieval for the A320. Airbus's
+fello'fly flew two A350s 3 km apart, the follower in the leader's upwash, for a fuel
+saving its press release puts at over 5 % on long haul
+(<https://www.airbus.com/en/newsroom/press-releases/2021-11-airbus-and-its-partners-demonstrate-how-sharing-the-skies-can-save>);
+the C-17 $AVE trials held 3 000 to 6 000 ft in trail for up to 10 %
+(<https://www.af.mil/News/Article-Display/Article/466878/inspired-by-nature-innovative-c-17-flight-tests-to-save-af-millions/>).
+`wake_surf` is the patrol with an A320 on both seats (`WakeSurfParams`, the lead on the
+airliner autopilot) and the follower at a station 2.8 to 3.7 km in trail.
+
+The station is where the model's own wake gives the most upwash behind a level lead:
+0.87 of a span outboard, 31 m, NASA's 13 % tip overlap, and 19 to 26 m below, the
+vortex's sink over 12 to 16 s. There the upwash is 2.1 m/s and saves 6.7 kN of the
+follower's drag, with a steady rolling gust of -0.16 rad/s to trim out; the vortex core
+lies 15 m inboard. The score is a 30 m box about the station (ours; no public tolerance
+was found) and the follower's `economy`: inside the box the cost falls only where the
+follower finds the upwash, about 0.82 a second against 1.0 out of it. A bank past
+60 deg is an upset, a trip (Hazardous [AMC 25.1329, A4.2]). The air memory is 20 s so
+the follower 16 s behind still meets the air its lead left.
+
+**The reference.** The patrol's formation hold on the A320's own autopilot (290
+KCAS then M 0.78, TECS), its energy step retuned on `wake_surf` alone
+(`scripts/tune_formation_hold.py --wake-surf`, training seeds 100 to 109): TECS's speed
+weight 1.0, throttle damping 6, time constant 5 s and `k_ref` 1.0 bring the worst
+seed's RMS distance from the station to 156 m, from 215 m, with no trip. That is far
+outside the 30 m box: a weak baseline, documented as such. Its slot loops were set for
+close formation, and 3 km in trail, with an engine 6 s slow at cruise, they porpoise.
+
+**Known deviations.** The lead flies straight and level: the station is held in the
+lead's frame, and in a turn the wake stays on the lead's past track, 100 m off that
+frame at 0.3 deg/s. The vortex does not meander in the turbulence; it decays and sinks
+as in the patrol (Holzapfel and Steen's median). No oracle ships yet
+(`baselines_note`).
 
 ## Reward (version 2)
 

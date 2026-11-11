@@ -51,13 +51,17 @@ from target_gym.reactor.env import (
     scheduled_load,
     steady_state_precursors,
     steady_state_temperatures,
+    tavg_dnb_limit,
     tavg_program,
 )
 from target_gym.reactor.experts import (
     RodControlParams,
     RodControlState,
+    boron_can_follow,
+    ppm_flow,
     rod_control_step,
-    xenon_feedforward,
+    xenon_play,
+    xenon_rate,
 )
 
 SEEDS = tuple(range(100, 110))
@@ -74,6 +78,8 @@ BORON_BUMP = (
 #: The boron line's delay the operator plans with: the middle of its drawn range,
 #: 10 to 30 steps, ours, since an operator knows the line, not today's draw.
 LEAD_STEPS = 20
+#: A bump test's length: an hour of 30 s steps.
+BUMP_STEPS = 120
 #: The procedure's action band on the offset: half the 0.05 target band, ours,
 #: fixed by the owner on 2026-11-08 before any rerun (PHYSICS.md section 6).
 ACTION_BAND = 0.025
@@ -179,6 +185,14 @@ class Tune:
     wd_Ti: float = 1.0
 
 
+def xenon_tool(I_x, Xe_x, debt, n, obs, clock, p):
+    """The operator's xenon tool with its play (PHYSICS.md section 6), the same on
+    every rung: the boron flow, the next iodine and xenon, and the debt."""
+    rate, I_x, Xe_x = xenon_rate(I_x, Xe_x, n, clock == 0.0, p, DT, history=obs[10])
+    moved, debt = xenon_play(debt, rate, p, DT, LEAD_STEPS * DT, DEAD_BAND)
+    return ppm_flow(moved / DT, obs[7], p), I_x, Xe_x, debt
+
+
 def dead(e):
     return jnp.sign(e) * jnp.maximum(jnp.abs(e) - DEAD_BAND, 0.0)
 
@@ -192,7 +206,7 @@ def make_policy(tune, rung, p):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, target, last_e, last_ao, last_r, clock, down, up, bt, I_x, Xe_x = m
+        u, b, target, last_e, last_ao, last_r, clock, down, up, bt, I_x, Xe_x, debt = m
         n, rod, T_avg, T_ref = obs[0], obs[2], obs[4], obs[5]
         di, to_down, to_up = obs[6], obs[8], obs[9]
         # The plan, read once at the start: absolute times on the policy's clock.
@@ -231,16 +245,14 @@ def make_policy(tune, rung, p):
                 stuck, bt + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), 0.0
             )
             out = b + bt + (out - b_before_override)
-        # Every rung: the operator's xenon tool (experts.xenon_feedforward).
-        xenon, I_x, Xe_x = xenon_feedforward(
-            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
-        )
+        # Every rung: the operator's xenon tool, with its play.
+        xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = out + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x)
+        return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x, debt)
 
     zero = jnp.asarray(0.0)
-    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 9
+    memory = (jnp.asarray(PARK), zero, jnp.asarray(PARK)) + (zero,) * 10
     return act, memory
 
 
@@ -259,7 +271,7 @@ def procedure(p, tune):
         return scheduled_load(t + DT, down, up, p) - scheduled_load(t, down, up, p)
 
     def act(m, obs):
-        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x = m
+        u, b, last_ao, last_e, clock, down, up, I_x, Xe_x, debt, rc = m
         n, rod, T_avg, T_ref, di = obs[0], obs[2], obs[4], obs[5], obs[6]
         down = jnp.where(clock == 0.0, obs[8] * 3600.0, down)
         up = jnp.where(clock == 0.0, obs[9] * 3600.0, up)
@@ -267,20 +279,30 @@ def procedure(p, tune):
         # The action band: no error within ACTION_BAND of the reference.
         ao = jnp.sign(off) * jnp.maximum(jnp.abs(off) - ACTION_BAND, 0.0)
         u = u + tune.wd_Kc * ((ao - last_ao) + DT / tune.wd_Ti * ao)
+        # Through a ramp boron can't follow, the rod program takes Tavg; the offset
+        # loop picks up from where it leaves the rods (PHYSICS.md section 6).
+        now = (
+            scheduled_load(clock + DT, down, up, p) - scheduled_load(clock, down, up, p)
+        ) / DT
+        fast = ~boron_can_follow(now, obs[7], p)
+        rc_a, rc = rod_control_step(RodControlParams(), rc, obs[:6])
+        u = jnp.where(fast, rc_a[0], u)
         u = jnp.clip(u, rod - STEPS_PER_MOVE, rod + STEPS_PER_MOVE)
-        deepest = 1.0 - 2.0 * rod_insertion_limit(n, p)
+        # Above the insertion limit where the plan puts the power by the step's
+        # end: on a ramp up the limit tightens as the power rises.
+        after = jnp.maximum(n, scheduled_load(clock + DT, down, up, p))
+        deepest = 1.0 - 2.0 * rod_insertion_limit(after, p)
         u = jnp.clip(u, deepest, PARK)
         e = dead(T_ref - T_avg)
         b = jnp.clip(b + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), -1.0, 1.0)
-        xenon, I_x, Xe_x = xenon_feedforward(
-            I_x, Xe_x, n, obs[7], clock == 0.0, p, DT, history=obs[10]
-        )
+        xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = b + tune.ff * planned_step(clock, down, up) + xenon
         a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
-        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x)
+        return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x, debt, rc)
 
     zero = jnp.asarray(0.0)
-    return act, (jnp.asarray(PARK),) + (zero,) * 8
+    rc0 = RodControlState(zero, zero, zero)
+    return act, (jnp.asarray(PARK),) + (zero,) * 9 + (rc0,)
 
 
 def reference(saved, p):
@@ -324,16 +346,26 @@ def published(p, tune):
 # ---------------------------------------------------------------------------
 
 
+class TrippedDuringTest(RuntimeError):
+    """A bump test tripped the plant. The restart would be read as the response."""
+
+
 def closed(env, q, s, act, memory, n):
-    """``n`` steps of ``act`` on ``q`` from ``s``; the states."""
+    """``n`` steps of ``act`` on ``q`` from ``s``; the states. A trip raises
+    ``TrippedDuringTest``: a test that trips the plant reads its restart, not its
+    response (the v9 sweep's sign flip), so it is refused, never fitted."""
 
     def step(carry, _):
         s, m = carry
         a, m = act(m, env.get_obs(s, q))
-        _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, q)
-        return (s, m), s
+        _, s, _, _, info = env.step_env(jax.random.PRNGKey(0), s, a, q)
+        return (s, m), (s, info["tripped"])
 
-    return jax.lax.scan(step, (s, memory), None, length=n)[1]
+    states, tripped = jax.lax.scan(step, (s, memory), None, length=n)[1]
+    if np.any(np.asarray(tripped)):
+        first = int(np.argmax(np.asarray(tripped)))
+        raise TrippedDuringTest(f"the plant tripped at step {first} of {n}")
+    return states
 
 
 def offset(tr):
@@ -359,6 +391,40 @@ def design(fits, rule):
 #: Where the offset's response stops being read as a line: four times the band, ours.
 #: At half power a few rod steps move it by tenths, and past this it bends to its clip.
 LINEAR_OFFSET = 0.2
+
+
+def tavg_bump(q, s):
+    """The dilution step for the Tavg bump, sized from the curve book (owner,
+    2026-11-10): an operator knows the boron worth and the MTC, and steps so that
+    the predicted rise over the hour after the line's delay ends at the DNB limit,
+    never more than ``BORON_BUMP``. A ppm moves Tavg ``-boron_worth / (alpha_coolant
+    + alpha_fuel)`` K; a unit of dilution takes ``dilution_flow * boron /
+    primary_mass`` ppm a second."""
+    per_ppm = -q.boron_worth / (q.alpha_coolant + q.alpha_fuel)
+    per_unit = per_ppm * q.dilution_flow * float(s.boron) / q.primary_mass  # K/s
+    room = float(tavg_dnb_limit(q)) - float(tavg(s))
+    hour = (BUMP_STEPS - LEAD_STEPS) * DT
+    return -min(abs(BORON_BUMP), room / (abs(per_unit) * hour))
+
+
+def boron_on_tavg(env, q, s):
+    """Boron on Tavg with the rods held where they sit, read as an integrator past
+    the line's delay: K/s per unit of boron action, and the delay. The step is
+    ``tavg_bump``; a paired run without it takes out the day's own drift."""
+    rods = 1.0 - 2.0 * s.rod_in
+    still = closed(
+        env,
+        q,
+        s,
+        lambda m, o: (jnp.array([rods, 0.0]), m),
+        jnp.asarray(0.0),
+        BUMP_STEPS,
+    )
+    step = tavg_bump(q, s)
+    a = jnp.array([rods, step])
+    tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
+    slope, delay = integrator(tavg(tr) - tavg(still))
+    return slope / step, max(delay, float(s.boron_delay) * DT)
 
 
 def boron_bump(env, base, read, limit=np.inf):
@@ -434,15 +500,8 @@ def bumps(env, params):
     ) / p.primary_mass  # fmt: skip
     ff = ppm_per_load / (rate * DT)
 
-    # The override's loop: boron on Tavg with the rods held where they sit, read as an
-    # integrator past the line's delay.
-    def boron_on_tavg(q, s):
-        a = jnp.array([1.0 - 2.0 * s.rod_in, BORON_BUMP])
-        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
-        slope, delay = integrator(tavg(tr))
-        return slope / BORON_BUMP, max(delay, float(s.boron_delay) * DT)
-
-    fits = [[boron_on_tavg(q, s) for q, s in pts] for pts in every]
+    # The override's loop: boron on Tavg with the rods held where they sit.
+    fits = [[boron_on_tavg(env, q, s) for q, s in pts] for pts in every]
     (t_Kc, t_Ti), report["boron_on_Tavg"] = design(fits, simc_integrating)
 
     # The procedure's rods: ROD_BUMP steps in, boron held, an hour, on the offset.

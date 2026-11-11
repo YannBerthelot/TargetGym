@@ -158,6 +158,22 @@ before the rerun and replacing what is above where they differ:
 - **D stops at the guide's limit,** 0.1 [0.127], and ships there if no test oscillates (section 4's
   rule for a cap). This replaces step 3's "no cap", whose reason did not hold.
 
+**Amendment, 2026-11-10: the Hornet** (`scripts/tune_inner_loop.py --airframe hornet`, at the AFF
+point, M 0.56 at 25 000 ft). Run as above, the recipe left the Hornet's roll loop at P 0.1 [0.127]:
+step 1 halves P on the defaults' D, step 2 walks it down to the floor, and step 3 then raises D
+but never P again. A 30 deg bank demand reached 25 deg and stuck there. Two changes, the A320's
+tune unchanged by either (re-run 2026-11-10):
+
+- **Step 3b, P again once D is set:** up while the next step is clean. ArduPlane's current manual
+  tuning guide (its rate loop, P then D as G-MAN) lets P rise a little once D is set.
+- **Roll D may rise to the airframe's own roll damper,** in place of the guide's 0.1: the F/A-18
+  feeds roll rate to the ailerons at 0.8 rad per rad/s at 250 ft/s and 25 000 ft, less at higher
+  dynamic pressure (Chakraborty, Seiler and Balas 2009, IV.A.2). Taken as 1 / q to the AFF point
+  (ours: the paper gives the range, 0.08 to 0.8, not the schedule), 0.154, which is D 0.278 [0.354].
+
+The Hornet ships P 0.5, D 0.27, I 0.025 [0.637, 0.344, 0.032] on roll and P 1.8, D 0.1, I 0.025
+[2.29, 0.127, 0.032] on pitch. A 30 deg bank demand reaches 31 deg in 2 s and settles at 30.9.
+
 ### 3.3 TECS (G-TECS Parts C and D)
 
 Start at 4.0.9's defaults (TIME_CONST 5, PTCH_DAMP 0.0, INTEG_GAIN 0.1, THR_DAMP 0.5, RLL2THR 10),

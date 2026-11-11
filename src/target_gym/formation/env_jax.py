@@ -13,7 +13,13 @@ import jax
 import jax.numpy as jnp
 from gymnax.environments import environment, spaces
 
-from target_gym.base import actuate, canonical_reset, finish_step, measured_obs
+from target_gym.base import (
+    actuate,
+    canonical_dtypes,
+    canonical_reset,
+    finish_step,
+    measured_obs,
+)
 from target_gym.expert_access import RegistryExperts
 from target_gym.formation.env import (
     LEAD_OBS_BASE,
@@ -212,7 +218,7 @@ class Formation(
         and heading: solvable, not trimmed. The route and gusts are left at
         their reset values for the caller to set."""
         k = self.num_wingmen
-        speed = lead_cruise_speed(lead_alt)
+        speed = lead_cruise_speed(lead_alt, params)
         lead = make_cruise_state(
             x=0.0,
             y=0.0,
@@ -270,13 +276,15 @@ class Formation(
             state.slot_up,
             params,
         )
-        return fresh.replace(
-            lead=fresh.lead.replace(time=state.lead.time),
-            wingmen=fresh.wingmen.replace(
-                time=state.wingmen.time,
-                target_heading=state.wingmen.target_heading,
-                target_altitude=state.wingmen.target_altitude,
-            ),
+        return canonical_dtypes(
+            fresh.replace(
+                lead=fresh.lead.replace(time=state.lead.time),
+                wingmen=fresh.wingmen.replace(
+                    time=state.wingmen.time,
+                    target_heading=state.wingmen.target_heading,
+                    target_altitude=state.wingmen.target_altitude,
+                ),
+            )
         )
 
     # -- rendering / video -------------------------------------------------

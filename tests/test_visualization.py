@@ -143,3 +143,38 @@ def test_every_environment_renders(name):
     # A renderer that silently draws nothing still returns a frame, and every
     # other assertion here passes for a flat rectangle.
     assert values.std() > 1.0, f"{name}: frame is uniform -- the renderer drew nothing"
+
+
+# ---------------------------------------------------------------------------
+# The step-cost gauge
+#
+# Contract (render_kit.cost_gauge's docstring): every scored task's reward is
+# ``-cost``, and the bar reads the last step's cost over the task's per-step
+# failure cost, which a surviving step stays below; a task with no trip cost
+# scales by the dearest step seen so far.
+# ---------------------------------------------------------------------------
+
+
+class _Priced:
+    failure_cost = 8.0
+
+
+class _Unpriced:
+    failure_cost = 0.0
+
+
+def test_cost_gauge_reads_cost_against_the_trip_cost():
+    from target_gym import render_kit as rk
+
+    gauge = rk.cost_gauge([-1.0, -2.0], _Priced(), "GBP")
+    # The last step cost 2 against a trip's 8 per step: a quarter of the bar.
+    assert gauge.frac == pytest.approx(0.25)
+    assert gauge.value.startswith("2")
+
+
+def test_cost_gauge_without_a_trip_cost_scales_by_the_dearest_step():
+    from target_gym import render_kit as rk
+
+    gauge = rk.cost_gauge([-4.0, -1.0], _Unpriced())
+    # The last step cost 1, the dearest so far 4.
+    assert gauge.frac == pytest.approx(0.25)

@@ -24,7 +24,7 @@ Every task by its registry name, from the package root:
 import target_gym as tg
 
 env, params = tg.make("cstr")
-assert len(tg.list_envs()) == 24
+assert len(tg.list_envs()) == 25
 ```
 
 ### Environment and parameter classes

@@ -136,6 +136,12 @@ def hinge_costs(hinges, y):
     return out
 
 
+def widths_row(name: str) -> dict:
+    """``name``'s smoothing widths (``data/oracle_widths``), the row ``Oracle``
+    reads, for a task model that needs a value from it at build time."""
+    return records.load_row("oracle_widths", name)
+
+
 class Oracle:
     """The oracle of task ``name``: ``step(obs, state)`` reads the true state.
 
@@ -153,7 +159,7 @@ class Oracle:
         self.tc = int(horizon["T_c_steps"])
         self.n_ep = episode_samples(int(params.max_steps_in_episode), self.tc)
         self.P = min(int(horizon["P"]), self.n_ep)  # H12: never past the episode
-        smoothing = records.load_row("oracle_widths", name)
+        smoothing = widths_row(name)
         sites = smoothing["sites"].values()
         self.widths = np.array([s["width"] for s in sites], float)
         self.scales = np.array([s["scale"] for s in sites], float)

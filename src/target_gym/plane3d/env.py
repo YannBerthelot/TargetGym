@@ -32,6 +32,8 @@ from target_gym.plane.dynamics import (
     compute_next_surface,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    economy_cost,
+    engine_response_rate,
     in_zone,
     outside_envelope,
     protected_pitch_demand,
@@ -145,6 +147,7 @@ class PlaneParams3D(EnvParams):
     # falling from ``buffet_mach`` at ``buffet_slope`` per unit of Mach (ours).
     load_factor_max: float = 2.5
     load_factor_min: float = -1.0
+    ap_load_increment: float = 0.2
     vmo_eas: float = 350.0 * 1852.0 / 3600.0
     mmo: float = 0.82
     buffet_mach: float = 0.3
@@ -168,19 +171,14 @@ class PlaneParams3D(EnvParams):
     # 84 deg/s against an A320's 25-30.
     aileron_effectiveness: float = 0.4
 
-    # Aero coefficients (shared with 2D)
-    # Finite-wing lift-curve slope, derived (PHYSICS.md 4):
-    #   a = a0 / (1 + a0/(pi*AR*e))  with a0 = 2*pi/rad, AR = 34.1^2/122.6 = 9.48,
-    #   e = 0.85  ->  5.034 /rad = 0.0879 /deg.
-    # Was 0.04 /deg (-54%), which both inflated cruise trim AoA to 4.06 deg
-    # (A320 flies ~2 deg) and disagreed with `k`, which correctly encodes the
-    # same AR. With the derived slope, cl0 + cl_alpha*aoa_stall = 1.52 ~ CL_max,
-    # so cl0/aoa_stall/CL_max/cl_alpha become mutually consistent.
-    cl_alpha: float = 0.08786  # per deg
+    # Aero coefficients and the longitudinal airframe: the 2D aircraft's, read
+    # from ``PlaneParams`` so the two cannot drift (plane/PHYSICS.md 3 and 4).
+    cl_alpha: float = 0.08378
+    sweep_half_chord: float = 0.38186
     cl0: float = 0.2
     cd0: float = 0.02
     k: float = 0.045
-    aoa_stall: float = 15.0
+    aoa_stall: float = 15.5
     CL_max: float = 1.5
     # Negative-stall limit. A cambered wing stalls asymmetrically: the negative
     # branch bottoms out near -10 deg AoA. Without this the corrected (steeper)
@@ -190,7 +188,7 @@ class PlaneParams3D(EnvParams):
     # Degrees beyond `aoa_stall` at which the separation sigmoid is centred, so
     # that lift *peaks at* aoa_stall rather than being halved there.
     aoa_stall_width: float = 3.0
-    M_crit: float = 0.80
+    M_crit: float = 0.8
     # Shock stall above M_crit (PHYSICS.md D3): the attainable lift falls
     # once shocks form, rather than rising with the Prandtl-Glauert factor.
     # k = 4.0 puts CL_max back to its low-speed value by M 0.9 and at 40 %
@@ -199,12 +197,23 @@ class PlaneParams3D(EnvParams):
     shock_stall_floor: float = 0.25
     k_drag: float = 5.0
 
-    I: float = 9_000_000  # Iyy (pitch)
-    I_x: float = 2_500_000  # Ixx (roll)
-    moment_arm_stabilizer: float = 15.0
-    moment_arm_wings: float = 1.5
-    stabilizer_surface: float = 27
-    elevator_surface: float = 10
+    pitch_gyration_radius: float = 8.666
+    #: Roll radius of gyration, m: JSBSim's A320, 1.28e6 kg m^2 over its empty
+    #: 50.3 t, applied at the all-up mass (1.9e6 at 73.5 t).
+    roll_gyration_radius: float = 5.039
+    moment_arm_stabilizer: float = 13.36
+    moment_arm_wings: float = 0.822
+    stabilizer_surface: float = 31.0
+    tail_cl_alpha: float = 0.07021
+    tail_aspect_ratio: float = 5.0
+    tail_sweep_half_chord: float = 0.411
+    tail_k: float = 0.0796
+    tail_CL_max: float = 1.0
+    tail_aoa_stall: float = 15.0
+    tail_efficiency: float = 0.9
+    elevator_effectiveness: float = 0.5
+    downwash_ratio: float = 1.0
+    stabilizer_setting: float = 0.02417
 
     # Roll-specific A320 parameters
     wingspan: float = 35.8
@@ -332,6 +341,15 @@ class PlaneParams3D(EnvParams):
     #: Holding turns: 3 deg/s or 30 deg of bank, whichever is less [IFH ch. 10].
     holding_rate: float = 3.0 * 3.14159265 / 180.0
     holding_bank: float = 30.0 * 3.14159265 / 180.0
+    #: The bank a hold's turns are sized for, rad: an RNAV hold's radius is
+    #: set at the maximum ground speed, the airspeed plus the wind, by the
+    #: AIM's 25 deg, so the downwind turn takes 25 deg and the upwind one less
+    #: (Garmin, RNAV holding; AIM). In still air, the IFH's holding turn.
+    hold_design_bank: float = 25.0 * 3.14159265 / 180.0
+    #: What the operator pays inside the bands (plane.dynamics.economy_cost).
+    cost_index: float = 30.0
+    economy_weight: float = 0.0
+    economy_scale: float = 1.242
     #: Heading select is vectoring (rule 17, Amendment 3): a new heading every
     #: this many seconds, drawn over ``target_heading_range`` (ours: vectors come
     #: one after another; no source gives their spacing). 0: one clearance.
@@ -364,6 +382,10 @@ PARAM_UNITS = {
     "assigned_speed_mode": "-",
     "holding_rate": "rad/s",
     "holding_bank": "rad",
+    "hold_design_bank": "rad",
+    "cost_index": "kg/min",
+    "economy_weight": "-",
+    "economy_scale": "kg/s",
     "protected_bank": "rad",
     "heading_clearance_period": "s",
     "holding_split_altitude": "m",
@@ -405,11 +427,22 @@ PARAM_UNITS = {
     "buffet_slope": "-",
     "bank_limit": "rad",
     "k_drag": "-",
-    "I": "kg.m^2",
+    "pitch_gyration_radius": "m",
     "moment_arm_stabilizer": "m",
     "moment_arm_wings": "m",
     "stabilizer_surface": "m^2",
-    "elevator_surface": "m^2",
+    "tail_cl_alpha": "1/deg",
+    "tail_aspect_ratio": "-",
+    "tail_sweep_half_chord": "rad",
+    "tail_k": "-",
+    "tail_CL_max": "-",
+    "tail_aoa_stall": "deg",
+    "tail_efficiency": "-",
+    "elevator_effectiveness": "-",
+    "downwash_ratio": "-",
+    "stabilizer_setting": "rad",
+    "sweep_half_chord": "rad",
+    "ap_load_increment": "g",
     "precision_floor": "m",
     "reward_version": "-",
     "tracking_exponent": "-",
@@ -435,7 +468,7 @@ PARAM_UNITS = {
     "shear_ref_alt": "m",
     "aileron_response_rate": "1/s",
     "aileron_effectiveness": "-",
-    "I_x": "kg.m^2",
+    "roll_gyration_radius": "m",
     "wingspan": "m",
     "aileron_surface": "m^2",
     "moment_arm_aileron": "m",
@@ -883,6 +916,18 @@ def compute_reward_figure8(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     )
 
 
+def heading_3d(state, params, xp=jnp):
+    """The aircraft's heading, rad: where its nose points. With no sideslip in
+    the model (PHYSICS.md D1) that is the direction of the velocity through the
+    air, gust included; ``psi`` is the track over the ground, which a wind
+    turns away from it by the drift angle. ATC vectors are headings [IFH ch. 7],
+    and an IRS reads both."""
+    wind_x, wind_y, _ = total_wind_3d(
+        state.z, state.gust_x, state.gust_y, state.gust_z, params
+    )
+    return xp.arctan2(state.y_dot - wind_y, state.x_dot - wind_x)
+
+
 def air_data_3d(state, params, xp=jnp):
     """What the autopilot reads besides the state (rule 16): the assigned
     speed as a true airspeed, the airspeed and the normal load factor."""
@@ -894,8 +939,13 @@ def air_data_3d(state, params, xp=jnp):
 
 
 def get_obs_heading(state: PlaneState3D, xp=jnp, params=None):
-    """Observation for heading task (15 values, 18 with the air data)."""
-    extra = [] if params is None else air_data_3d(state, params, xp)
+    """Observation for heading task (15 values, 19 with the air data and the
+    IRS heading, which the vector is flown on)."""
+    extra = (
+        []
+        if params is None
+        else air_data_3d(state, params, xp) + [heading_3d(state, params, xp)]
+    )
     return xp.stack(
         [
             state.x_dot,
@@ -1143,6 +1193,9 @@ def compute_next_state_3d(
             z,
             mass_now,
             params,
+            # A level turn needs 1 / cos(bank) g; the autopilot's margin is
+            # about that load, not about 1 g.
+            load_reference=1.0 / jnp.maximum(jnp.cos(phi), 0.1),
         )
         demand = jnp.where(params.amended, protected, pitch_demand)
         stick_output, pitch_integ = attitude_axis(
@@ -1183,7 +1236,7 @@ def compute_next_state_3d(
             power_requested,
             power,
             dt,
-            params.power_response_rate,
+            engine_response_rate(z, params.power_response_rate),
             params.idle_power,
         )
         thrust = compute_thrust_output(
@@ -1316,7 +1369,8 @@ def compute_reward_terms_heading(
     # toward the target at a holding turn's rate from the clearance [IFH ch.
     # 10], so the band travels with that turn; ahead of it costs nothing. Unamended, the allowance
     # is ``e_tol_heading`` (0) and this is plain tracking.
-    error = xp.abs(wrap_angle(state.psi - state.target_heading))
+    # The vector is a heading, so the error is the heading's, not the track's.
+    error = xp.abs(wrap_angle(heading_3d(state, params, xp) - state.target_heading))
     rate = holding_turn_rate(
         assigned_tas_3d(state.target_altitude, state.target_altitude, params, xp),
         params,
@@ -1336,6 +1390,14 @@ def compute_reward_terms_heading(
     terms = {
         "tracking": altitude_cost(state, params, xp) + heading,
         "running": speed_cost_3d(state, params, xp),
+        "economy": economy_cost(
+            state.power,
+            state.z,
+            airspeed_3d(state, params, xp),
+            assigned_tas_3d(state.z, state.target_altitude, params, xp),
+            params,
+            xp,
+        ),
     }
     return _downtime(terms, state, params, xp, tripped)
 

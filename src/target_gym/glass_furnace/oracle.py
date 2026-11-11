@@ -20,6 +20,18 @@ loses a step and pays its 416.88 EUR jump for a saving that vanishes with the mo
 limits are planned ``FINING_BACKOFF`` and ``CANAL_BACKOFF`` inside the marks, so a plan
 still passes them when the runner replays it step by step.
 
+The furnace runs on after the episode: the tasks are continuing, ended by a time limit
+that no agent sees (docs/rl-protocol.md). So the plan does not end at the cut. Its last
+knot is held for ``TAIL_HOURS`` more on the walks' mean path, under the same limits, and
+the tail's fuel is charged in the plan's objective, though not in the cost the plan
+reports, which is the episode's. Without a tail the plan closes the valve on its last
+knot, whose fuel first moves the canal's fining 5.4 h later, and spends the fining the
+furnace needs after the cut. With a tail whose fuel is free, the plan drops the knot
+before the last and buys its fining back with that fuel (about 0.6 point of the room,
+measured 2026-11-09). Charged for it, the plan pays for the fining it leaves: over the
+episode's last day it spends 0.26 point of the room more than the cascade, which leaves
+its furnace as it is (measured 2026-11-10).
+
 The planner runs in the env's float32: under x64, ``jax.random.normal`` draws other walk
 innovations from the same keys, so a float64 plan would be planned on another episode.
 
@@ -30,16 +42,21 @@ differentiation through the episode. Convergence is shown by a certificate the
 solver does not grade itself: the KKT stationarity of the plan, from non-negative
 multipliers on its active limits and bounds (``kkt``), and its worst violation.
 
-On the registered plant it does not converge (measured 2026-11-09, seeds 100 to 104,
-``data/oracle_ceilings/glass_furnace.json``). SLSQP stops on a failed line search
-with the KKT certificate near 1: the plant is not smooth in the valve. Each cell's
-fining share is a ratchet (``physical``: the max of what it carries and what its
-temperature has done), and the refiner's cooling loop clamps at zero, so the limits'
-Jacobians jump. The ratchet also makes pulsed firing pay, at equal mean fuel, so the
-iterates pulse the valve between its ends on the knots' period. A solve's plan is
-then its cheapest iterate that loses no glass, or its last one raised until it loses
-none, whichever costs less; it is replayed and its replayed cost reported, an upper
-bound on the ceiling, so the room from it is a lower bound.
+On the registered plant it does not converge (measured 2026-11-10 with the charged
+tail, seeds 100 to 104, ``data/oracle_ceilings/glass_furnace.json``): none of 50 starts
+did, two per seed, 300 iterations each. SLSQP stops at its iteration cap or on a failed
+line search, with the KKT certificate near 1.
+The plant is not smooth in the valve: the fining band has two ends
+(``physical.fining_done``), and the refiner's cooling loop clamps at zero, so the
+limits' Jacobians jump. The iterates drop the valve for a knot every 12 to 20 h, and
+the last one mostly loses glass. A solve's plan is then its cheapest iterate that loses
+no glass, or its last one repaired, whichever costs less. The repair raises the knots
+cheapest to first order, or every knot alike, whichever costs less. On the 50 starts the
+first was kept on 47, at most 0.07 EUR per step over the last iterate, where raising
+alike had cost 0.7 to 4.4 EUR on 26 of them; the other three last iterates lost glass
+far past the limits and were raised alike. The plan is replayed and its replayed cost reported, an upper bound on the ceiling, so the room
+from it is a lower bound. On no scenario-seed does it cost more than the reference
+ladder's kept rung.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
 plan made with full foresight. Without one it plans on the walks' mean path from the
@@ -61,9 +78,11 @@ from target_gym.glass_furnace import physical as P
 #: The suite was solved on 4 h knots: 2 h knots cost twice and ran no better.
 KNOT_HOURS = 4.0
 #: Inside the pass mark (fining share) and the canal target (K): the planner's scan and
-#: the runner's step-by-step replay round apart, with a margin (ours). Worth about 1e-5
-#: of the fuel bill.
-FINING_BACKOFF, CANAL_BACKOFF = 1e-4, 1e-3
+#: the runner's step-by-step replay round apart in float32, by up to 7e-5 of share and
+#: 0.028 K of canal over an episode (measured 2026-11-10 on four kept plans, where a
+#: 1e-3 K backoff let the runner lose 1 to 4 steps), so about three and two times that
+#: (ours).
+FINING_BACKOFF, CANAL_BACKOFF = 2e-4, 0.05
 #: Limit rows' scale for the solver: fining shares to tenths, the canal in K, the
 #: valve's headroom under the override in hundredths of a kg/s.
 FINING_SCALE, CANAL_SCALE, HEADROOM_SCALE = 10.0, 0.1, 100.0
@@ -79,6 +98,16 @@ ACTIVE = 1e-6
 MAX_ITER, FTOL = 400, 1e-8
 #: Stationarity a converged float32 plan reaches (ours, float32 Jacobians).
 KKT_TOL = 1e-3
+#: The first-order repair of a last iterate that loses glass: at most this many rounds,
+#: each aiming a lost row this far (scaled) past its limit, past the linearisation's
+#: error (ours: one round sufficed on gas_lean 104, measured 2026-11-10).
+REPAIR_ROUNDS, REPAIR_INSIDE = 5, 1e-3
+#: Hours the last knot is held past the episode, under the limits, its fuel charged: the
+#: fining's dead time (11.8 h, scripts/ladder_rows/glass_furnace.py) plus a knot, with a
+#: margin (ours). Without a tail, the plans' end effect spans the last 24 h (measured
+#: 2026-11-09). Industrial MPC predicts past its last move until the moves' effects have
+#: settled (Qin and Badgwell 2003, p. 747); decision D4 lines out at the horizon's end.
+TAIL_HOURS = 24.0
 
 
 class Plan(NamedTuple):
@@ -86,6 +115,7 @@ class Plan(NamedTuple):
     knots: np.ndarray  # kg/s, one per knot
     cost: float  # EUR per step, the reward's mean cost on the planned rollout
     running: float  # EUR per step, its fuel bill
+    tail_running: float  # EUR per tail step, the tail's fuel bill as planned
     lost_steps: int  # steps the planned rollout loses
     status: int  # SLSQP's exit mode, 0 converged
     message: str
@@ -101,6 +131,11 @@ def rollout(env, params, state, keys, valve):
     """The env's episode from ``state`` under ``valve`` (kg/s per step), on the
     episode's step ``keys``: per step ``(cost, running, fining, canal, headroom)``, EUR,
     the reward's own readings, and kg/s between the override's cap and the valve."""
+    return _scan(env, params, state, keys, valve)[1]
+
+
+def _scan(env, params, state, keys, valve):
+    """``rollout``'s readings and the state it ends in."""
 
     def f(s, x):
         k, u = x
@@ -114,16 +149,15 @@ def rollout(env, params, state, keys, valve):
         headroom = jnp.maximum(cap, params.fuel_min) - u
         return s1, (-r, run, read["fining"], read["canal"], headroom)
 
-    return jax.lax.scan(f, state, (keys, valve))[1]
+    return jax.lax.scan(f, state, (keys, valve))
 
 
 def episode_keys(seed: int, n_steps: int):
     """``(reset key, step keys (n_steps, 2))`` that ``benchmark.run_policy`` runs
-    seed ``seed`` on."""
-    from target_gym.benchmark import episode_keys as keys
-
-    reset, steps = keys(jax.random.PRNGKey(seed), 1, n_steps)
-    return reset[0], steps[:, 0]
+    seed ``seed`` on: ``benchmark.episode_keys`` for one episode, restated here
+    so the oracle's fingerprint covers it (a test holds the two equal)."""
+    k_reset, k_steps = jax.random.split(jax.random.PRNGKey(seed))
+    return jax.random.split(k_reset, 1)[0], jax.random.split(k_steps, n_steps)
 
 
 def kkt(grad, rows, jac, lo_gap, hi_gap):
@@ -146,31 +180,54 @@ def kkt(grad, rows, jac, lo_gap, hi_gap):
 
 
 def solve(
-    env, params, state, keys, knot_steps: int, start=None, max_iter=MAX_ITER, log=None
-):
+    env, params, state, keys, knot_steps: int, start=None, max_iter=MAX_ITER, log=None,
+    tail_hours=TAIL_HOURS, charge_tail=True,
+):  # fmt: skip
     """The plan from ``state`` over the steps ``keys`` cover, one valve per
-    ``knot_steps``; ``start`` the knots to start from (the state's valve if None);
-    ``log(iteration, knots, EUR per step, worst row)`` called after each iteration if given.
+    ``knot_steps``, its last knot held ``tail_hours`` past them on the walks' mean path,
+    under the limits, the tail's fuel charged in the objective unless ``charge_tail`` is
+    False; ``start`` the knots to start from (the state's valve if None);
+    ``log(iteration, knots, objective, worst row)`` called after each iteration if
+    given. The objective is the fuel bill over the episode and the tail, per episode
+    step; the plan's ``cost`` is the episode's alone.
     """
-    from scipy.optimize import minimize
+    from scipy.optimize import linprog, minimize
 
     n = int(keys.shape[0])
     k = -(-n // knot_steps)
     p, st = params, state
     lo, hi = float(p.fuel_min), float(p.fuel_max)
+    n_tail = int(round(tail_hours * 3600.0 / float(p.delta_t)))
+    tail_p = p.replace(walk_sd=(0.0,) * len(E.WALKS))
+    tail_keys = jax.random.split(jax.random.PRNGKey(0), n_tail)
 
     def valve(z):
         return jnp.repeat(z, knot_steps)[:n]
 
     def outs(z):
-        cost, run, fining, canal, headroom = rollout(env, p, st, keys, valve(z))
+        end, (cost, run, fining, canal, headroom) = _scan(env, p, st, keys, valve(z))
+        run_t = jnp.zeros(1)
+        if n_tail:
+            _, (_, run_t, f_t, c_t, h_t) = _scan(
+                env, tail_p, end, tail_keys, jnp.full(n_tail, z[-1])
+            )
+            fining, canal, headroom = (jnp.concatenate(v) for v in
+                                       ((fining, f_t), (canal, c_t), (headroom, h_t)))  # fmt: skip
         rows = jnp.concatenate([
             FINING_SCALE * (fining - p.fining_pass - FINING_BACKOFF),
             CANAL_SCALE * (canal - p.canal_target - CANAL_BACKOFF),
             HEADROOM_SCALE * headroom,
         ])  # fmt: skip
-        lost = (fining < p.fining_pass) | (canal < p.canal_target)
-        return jnp.mean(run), rows, jnp.mean(cost), jnp.sum(lost)
+        lost = (fining[:n] < p.fining_pass) | (canal[:n] < p.canal_target)
+        spent = jnp.sum(run) + (jnp.sum(run_t) if charge_tail else 0.0)
+        return (
+            spent / n,
+            rows,
+            jnp.mean(cost),
+            jnp.sum(lost),
+            jnp.mean(run),
+            jnp.mean(run_t),
+        )
 
     value = jax.jit(outs)
     jac = jax.jit(jax.jacfwd(lambda z: outs(z)[:2]))
@@ -189,8 +246,8 @@ def solve(
 
     best = {}
 
-    def keeps(rows):  # no step loses glass: the fining and canal rows
-        return bool(np.all(rows[: 2 * n] >= 0.0))
+    def keeps(rows):  # no step of the episode or the tail loses glass
+        return bool(np.all(rows[: 2 * (n + n_tail)] >= 0.0))
 
     def progress(z):
         count[0] += 1
@@ -210,30 +267,51 @@ def solve(
     )  # fmt: skip
     z, how = np.clip(res.x, lo, hi), "final"
     if not keeps(at(z, False)[1]):
-        # The last iterate loses glass. Repair it: the least raise of every knot that
-        # loses none, by bisection, against the best iterate that lost none.
+        # The last iterate loses glass. Two repairs, and the cheaper kept: the raise of the
+        # knots cheapest to first order that lifts every limit row a little past its
+        # limit, from the Jacobians, repeated from there; and the least raise of every
+        # knot alike, by bisection. The cheaper stands against the best iterate that
+        # lost none.
+        m, lifted = 2 * (n + n_tail), z
+        for _ in range(REPAIR_ROUNDS):
+            rows = at(lifted, False)[1][:m]
+            if np.all(rows >= 0.0):
+                break
+            g, J = at(lifted, True)
+            moved = np.abs(J[:m]).max(axis=1) > 0.0  # rows no knot reaches stay as are
+            need = np.where(rows < 0.0, REPAIR_INSIDE - rows, -rows)[moved]
+            lp = linprog(g, A_ub=-J[:m][moved], b_ub=-need, method="highs",
+                         bounds=[(0.0, hi - v) for v in lifted])  # fmt: skip
+            if lp.status != 0:
+                break
+            lifted = np.clip(lifted + lp.x, lo, hi)
+        repairs = [(lifted, "raised at least cost to first order")]
+
         def raised(d):
             return np.clip(z + d, lo, hi)
 
         a, b = 0.0, hi - lo
         if keeps(at(raised(b), False)[1]):
             for _ in range(30):
-                m = 0.5 * (a + b)
-                a, b = (a, m) if keeps(at(raised(m), False)[1]) else (m, b)
-            if at(raised(b), False)[0] < best.get("f", np.inf):
-                best.update(f=at(raised(b), False)[0], z=raised(b))
-                how = f"final iterate raised {b:.2e} kg/s"
-            else:
-                how = "best iterate that lost no glass"
-        elif "z" in best:
+                mid = 0.5 * (a + b)
+                a, b = (a, mid) if keeps(at(raised(mid), False)[1]) else (mid, b)
+            repairs.append((raised(b), f"raised alike by {b:.2e} kg/s"))
+        for fixed, step in repairs:
+            f, rows = at(fixed, False)
+            if keeps(rows) and f < best.get("f", np.inf):
+                best.update(f=f, z=fixed)
+                how = f"final iterate {step}"
+        if how == "final" and "z" in best:
             how = "best iterate that lost no glass"
         z = best.get("z", z)
-    run, rows, cost, lost = (np.asarray(v, float) for v in value(jnp.asarray(z)))
+    _, rows, cost, lost, run, run_t = (
+        np.asarray(v, float) for v in value(jnp.asarray(z))
+    )
     g, J = at(z, True)
     stat, active = kkt(g, rows, J, z - lo, hi - z)
     return Plan(
         valve=np.asarray(valve(jnp.asarray(z))), knots=z, cost=float(cost),
-        running=float(run), lost_steps=int(lost), status=int(res.status),
+        running=float(run), tail_running=float(run_t), lost_steps=int(lost), status=int(res.status),
         message=str(res.message), iterations=int(res.nit),
         capped=int(res.nit) >= max_iter, kkt=stat,
         violation=float(max(0.0, -rows.min())), active=active, how=how,

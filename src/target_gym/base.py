@@ -14,6 +14,15 @@ _SENSORS = 0x53454E53
 _ACTUATOR = 0x41435455
 
 
+def canonical_dtypes(state):
+    """``state`` with every leaf an array of the dtype a stepped state has: a
+    Python float becomes float32, as ``canonical_reset`` gives a reset. A task's
+    ``restart_plant`` returns through it, so a restart matches a step."""
+    return jax.tree_util.tree_map(
+        lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), state
+    )
+
+
 def canonical_reset(reset_env):
     """Give ``reset_env`` the same state dtypes a stepped state has, and store
     the episode's ``sensor_key``.
@@ -34,9 +43,7 @@ def canonical_reset(reset_env):
     @functools.wraps(reset_env)
     def wrapper(self, key, params=None):
         obs, state = reset_env(self, key, params)
-        state = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=jnp.asarray(x).dtype), state
-        )
+        state = canonical_dtypes(state)
         state = state.replace(
             sensor_key=jax.random.key_data(jax.random.fold_in(key, _SENSORS))
         )

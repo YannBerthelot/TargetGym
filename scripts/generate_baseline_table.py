@@ -120,21 +120,24 @@ def _seeds(counts) -> str:
 
 def chart_rows(data: dict) -> list[dict]:
     """One row per registered task in ``data``, in registry order: what the
-    chart draws, as recorded."""
+    chart draws, as recorded. A task no oracle ships for has ``None`` for the
+    oracle's hold and gain. A task charged in money has no hold to draw
+    (``scoring.held``) and is left out."""
     from target_gym.registry import GROUPS, REGISTRY
+    from target_gym.scoring import held
 
     return [
         {
             "name": name,
             "group": GROUPS[spec.group],
             "expert": data[name]["pid"]["hold_tracking"],
-            "oracle": data[name]["mpc"]["hold_tracking"],
+            "oracle": data[name].get("mpc", {}).get("hold_tracking"),
             "ceiling": data[name]["ceiling"],
             "expert_gain": data[name]["pid"]["gain"],
-            "oracle_gain": data[name]["mpc"]["gain"],
+            "oracle_gain": data[name].get("mpc", {}).get("gain"),
         }
         for name, spec in REGISTRY.items()
-        if name in data
+        if name in data and held(data[name])
     ]
 
 
@@ -190,28 +193,41 @@ def results_svg(rows: list[dict], dark: bool = False) -> str:
         y += head_h
         for r in group:
             cy = y + row_h / 2
-            oracle = _decades(r["oracle"], r["expert"])
+            has_oracle = r["oracle"] is not None
+            oracle = _decades(r["oracle"], r["expert"]) if has_oracle else None
             ceiling = _decades(r["ceiling"], r["expert"])
-            mark = "off-axis" if not np.isfinite(oracle) else f"{oracle:.2f}"
+            if not has_oracle:
+                mark = "none"
+            else:
+                mark = "off-axis" if not np.isfinite(oracle) else f"{oracle:.2f}"
             parts = [
-                text(left - 24, cy + 4, r["name"], 11.5, anchor="end", extra=_MONO),
-                f'<line x1="{x(0):.1f}" x2="{x(oracle):.1f}" y1="{cy}" y2="{cy}" '
-                f'stroke="{ink["conn"]}" stroke-width="2" stroke-linecap="round"/>',
+                text(left - 24, cy + 4, r["name"], 11.5, anchor="end", extra=_MONO)
             ]
-            for v in (oracle, ceiling):
+            if has_oracle:
+                parts.append(
+                    f'<line x1="{x(0):.1f}" x2="{x(oracle):.1f}" y1="{cy}" '
+                    f'y2="{cy}" stroke="{ink["conn"]}" stroke-width="2" '
+                    'stroke-linecap="round"/>'
+                )
+            for v in (oracle, ceiling) if has_oracle else (ceiling,):
                 if v < lo:
                     parts.append(text(x(lo) - 11, cy + 4, "‹", 12, "muted", "middle"))
                 if v > hi:
                     parts.append(text(x(hi) + 9, cy + 4, "›", 12, "muted", "middle"))
-            parts += [
+            parts.append(
                 f'<rect x="{x(ceiling) - 1:.1f}" y="{cy - 7}" width="2" '
-                f'height="14" rx="1" fill="{ink["tick"]}"/>',
-                f'<rect x="{x(oracle) - 5:.1f}" y="{cy - 5}" width="10" '
-                f'height="10" rx="1.5" fill="{ink["oracle"]}" '
-                f'stroke="{ink["bg"]}" stroke-width="2"/>',
+                f'height="14" rx="1" fill="{ink["tick"]}"/>'
+            )
+            if has_oracle:
+                parts.append(
+                    f'<rect x="{x(oracle) - 5:.1f}" y="{cy - 5}" width="10" '
+                    f'height="10" rx="1.5" fill="{ink["oracle"]}" '
+                    f'stroke="{ink["bg"]}" stroke-width="2"/>'
+                )
+            parts.append(
                 f'<circle cx="{x(0):.1f}" cy="{cy}" r="5.5" '
-                f'fill="{ink["expert"]}" stroke="{ink["bg"]}" stroke-width="2"/>',
-            ]
+                f'fill="{ink["expert"]}" stroke="{ink["bg"]}" stroke-width="2"/>'
+            )
             body.append(
                 f'<g data-task="{r["name"]}" data-oracle="{mark}" '
                 f'data-ceiling="{ceiling:.2f}">' + "".join(parts) + "</g>"
@@ -373,7 +389,8 @@ def _glance() -> list[str]:
         "and where the ceiling sits: tracking every quantity within its",
         "instrument's resolution. Switch the anchor to the ceiling to see how far",
         "each controller is from as good as a real plant can verify. Hover a row",
-        "for the numbers, including the whole episode.",
+        "for the numbers, including the whole episode. Only tasks scored on",
+        "tracking are drawn; a task charged in money is under Charter lines.",
         "",
         '<div class="tg-results-chart"></div>',
         '<script type="application/json" id="tg-results-data">'
@@ -383,11 +400,13 @@ def _glance() -> list[str]:
 
 
 def _room() -> list[str]:
-    from target_gym.scoring import headroom, score
+    from target_gym.scoring import headroom, held, score
 
     data = _protocol()
     rows = {}
     for name, r in data.items():
+        if not held(r):
+            continue
         pid, mpc, c = r.get("pid"), r.get("mpc"), r["ceiling"]
         b = pid and pid["hold_tracking"]
         x = mpc and mpc["hold_tracking"]
@@ -515,8 +534,38 @@ def _caveats() -> list[str]:
     return ["## Caveats", "", *notes] if notes else []
 
 
+def _charter() -> list[str]:
+    """Charter J3's four lines on J, from ``data/charter``; nothing until a task
+    has a record."""
+    from target_gym import charter
+
+    records = {t: r for t in charter.charter_tasks() if (r := charter.load(t))}
+    if not records:
+        return []
+
+    def cell(ln) -> str:
+        return ln if isinstance(ln, str) else _fmt(ln["J"]) + f" ({ln['trips']})"
+
+    rows = []
+    for t, r in records.items():
+        lines = charter.j3(r)
+        j2 = r.get("j2", {}).get("accepted")
+        cells = [cell(lines[k]) for k in ("best_null", "reference", "mpc", "ceiling")]
+        rows.append(f"| {t} | {' | '.join(cells)} | {'—' if j2 is None else j2} |")
+    return [
+        "## Charter lines",
+        "",
+        "Expected cost per step `J` over each task's weighted scenarios, trips in",
+        "brackets, on seeds 100 to 109 (charter J3). The reference is the anchor.",
+        "",
+        "| task | best null | reference | MPC | ceiling | accepted (J2) |",
+        "| --- | --- | --- | --- | --- | --- |",
+        *rows,
+    ]
+
+
 def _page() -> str:
-    sections = (_glance(), _room(), _episode(), _returns(), _caveats())
+    sections = (_glance(), _room(), _charter(), _episode(), _returns(), _caveats())
     parts = [INTRO, *("\n".join(p) for p in sections if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 

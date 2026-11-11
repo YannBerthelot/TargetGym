@@ -10,9 +10,12 @@ Contract, from conservation, the sources and the owner's score, not from any cod
 - what the current carries along the tank keeps its bounds: a share stays in [0, 1] past
   a sharp front, as a total-variation-diminishing scheme guarantees (Sweby);
 - the refiner's cooling is a flow out of the books, and colder glass reaches the canal;
-- fining: glass releases the share of its sulfate that its temperature allows over the
-  sourced band, 1420 to 1500 C, keeps what it released, and carries it with the flow;
-  batch glass arrives with none. The canal reads the leaving glass's share by its flow;
+- fining: a time-temperature integral (US6673730), not the peak. In the sourced band,
+  1420 to 1500 C, glass fines at a rate: over a time dt its unfined share falls by
+  exp(-dt f / fining_time), f the band's share at its temperature (0 at 1420 C, 1 at
+  1500 C). Cooled glass keeps what it fined, since the gas it released is spent. The
+  share is carried with the flow, and batch glass arrives with none. The canal reads
+  the leaving glass's share by its flow;
 - reward in money: fuel at the gas price; the glass charged while the canal is under its
   target or under-fined is lost at its price, on the pull actually charged. The silica
   crown's 1620 C (degradation) is the plant's own override, not a price (owner,
@@ -133,11 +136,40 @@ def test_cooling_the_refiner_cools_the_canal(plant):
     assert float(cool[-1]) < float(warm[-1]) - 1.0
 
 
-def test_glass_past_the_band_has_finished_fining(plant):
+def test_glass_past_the_band_fines_at_its_rate_not_at_once(plant):
+    """One step over the band's top from no fining: 1 - exp(-dt / fining_time), 0.0328
+    at 120 s on 1 h, not the whole share at once."""
     g, p, s = plant
-    hot = s.replace(T=jnp.full_like(s.T, p.T_fine_high + 100.0))
+    hot = s.replace(
+        T=jnp.full_like(s.T, p.T_fine_high + 100.0), fining=jnp.zeros_like(s.T)
+    )
     new, _ = P.plant_step(hot, 0.46, 5.79, 0.25, 0.2, 0.0, g, p)
-    assert float(P.sensors(new, g, p)["fining"]) == pytest.approx(1.0, abs=1e-3)
+    expected = 1.0 - np.exp(-p.delta_t / p.fining_time)
+    assert float(P.sensors(new, g, p)["fining"]) == pytest.approx(expected, rel=1e-3)
+
+
+def _held(temperatures_c, p, start=0.0):
+    X = jnp.asarray(start)
+    for T in temperatures_c:
+        X = P.fining_after(X, T + 273.15, p.delta_t, p)
+    return float(X)
+
+
+def test_fining_follows_the_time_in_the_band_not_the_peak(plant):
+    """Two hours swung step by step between 1440 and 1480 C fine as much as two hours
+    held at 1460 C: the band's share averages 0.5 either way, so both reach
+    1 - exp(-0.5 * 2 h / fining_time)."""
+    _, p, _ = plant
+    n = int(round(2 * 3600.0 / p.delta_t))
+    expected = 1.0 - np.exp(-0.5 * 2 * 3600.0 / p.fining_time)
+    assert _held([1460.0] * n, p) == pytest.approx(expected, rel=1e-4)
+    assert _held([1440.0, 1480.0] * (n // 2), p) == pytest.approx(expected, rel=1e-4)
+
+
+def test_cooled_glass_keeps_the_fining_it_has_done(plant):
+    _, p, _ = plant
+    cold = float(p.T_fine_low) - 273.15 - 50.0
+    assert _held([cold] * 30, p, start=0.6) == pytest.approx(0.6, abs=1e-6)
 
 
 def test_glass_under_the_band_brings_no_fining_to_the_canal(plant):

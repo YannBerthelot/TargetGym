@@ -70,9 +70,33 @@ def test_feedback_coefficients_are_negative_and_doppler_is_in_range(params):
     assert -4e-5 <= params.alpha_fuel <= -2e-5, "Doppler outside the PWR range"
 
 
-def test_moderator_coefficient_is_in_the_pwr_range(params):
-    """-10 to -50 pcm/K, and it is what lets the plant follow its turbine."""
-    assert -50e-5 <= params.alpha_coolant <= -10e-5
+def test_moderator_coefficient_is_a_start_of_cycle_value(params):
+    """The core is at the start of its cycle (1690 ppm, OAPS's start-of-cycle ramps).
+    There the MTC is near zero and grows more negative as boron falls (NRC generic
+    fundamentals PWR 192004; nuclear-power.com, MTC): BEAVRS measures the isothermal
+    coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power at 975
+    and 1405 ppm, and technical specifications keep it at or below 0 above 50 %
+    power. A late-cycle value (-30 pcm/K and beyond, about -64 to -79 pcm/K at end
+    of life) does not belong here. Bounds: -9 to -18 pcm/K, the physics review's
+    judgment for hot full power at the start of a cycle (finding 2), taken by the owner
+    on 2026-11-10 when the family sweep showed the weak end (0 to -7) cannot carry
+    the 5 %/min returns the member runs."""
+    assert -18e-5 <= params.alpha_coolant <= -9e-5
+
+
+def test_boron_worth_is_in_the_start_of_cycle_range(params):
+    """BEAVRS, Tables 22 and 23, hot zero power: cycle 1, bank D in moves the
+    critical boron 975 to 902 ppm for 788 pcm, 10.8 pcm/ppm; cycle 2, banks D and C
+    move it 1405 to 1273 ppm for 426 + 1014 pcm, 10.9 pcm/ppm. Boron is worth less
+    per ppm at full power and higher boron; two NRC papers give 6.73 and 8.15
+    pcm/ppm (search summaries). The family range is 6.7 to 10.9 pcm/ppm."""
+    assert -10.9e-5 <= params.boron_worth <= -6.7e-5
+
+
+def test_the_hot_leg_envelope_is_below_boiling(params):
+    """Saturation at the nominal 2250 psia, 15.51 MPa, is 618.0 K (IAPWS-IF97 region
+    4); the vessel exit must stay below it."""
+    assert params.T_coolant_max < 618.0
 
 
 # ---------------------------------------------------------------------------

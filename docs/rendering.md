@@ -85,10 +85,13 @@ frame_array = rk.finish(fig)
 ```
 
 **`target_gym.render_aircraft`** is pygame, because the aircraft project a
-solid A320 mesh every frame and matplotlib is far too slow for that. It carries
-the palette, the console chrome, the mesh and its three projections (side,
-top-down, rear), and all four aircraft modules import from it rather than from
-each other. They used to reach into each other — `patrol` imported eleven
+solid model every frame and matplotlib is far too slow for that. It carries
+the palette, the console chrome, the aircraft models and their three
+projections (side, top-down, rear), and all four aircraft modules import from
+it rather than from each other. Each task is drawn as the airframe it flies,
+picked by wingspan (`model_for`): an F/A-18 Hornet for `patrol`,
+`patrol_range_bearing` and `formation`, an A320 for the rest. A new airframe is
+one more builder in `MODEL_BUILDERS`, put together from the same part helpers. They used to reach into each other — `patrol` imported eleven
 private names out of `plane3d` — so a palette change in one environment
 silently restyled another.
 
@@ -125,3 +128,11 @@ visual language — the suite reading as one instrument suite is the point.
 Mark every gauge the observation does not expose with `hidden=True`. It costs
 one keyword and it is the difference between a viewer understanding the task
 and assuming the agent can see what the picture shows.
+
+Draw a plant in 3D, as the glass furnace and the kiln are, with `rk.Iso`: a
+parallel projection fitted to your scene, with shaded boxes and solids of
+revolution. Pass `deferred=True` and call `iso.flush(ax)` at the end when walls
+must hide only what is behind them; it draws far to near.
+
+Keep text at or above `rk.MIN_TEXT` (8.5 pt). Gallery frames are often shown
+at half size, and `rk.label` raises anything smaller to that floor.

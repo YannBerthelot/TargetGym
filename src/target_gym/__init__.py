@@ -24,8 +24,8 @@ from target_gym.formation.marl import FormationMARL
 from target_gym.glass_furnace.env_jax import GlassFurnace, GlassFurnaceParams
 from target_gym.hvac.env import HVACParams
 from target_gym.hvac.env_jax import BuildingHVAC
-from target_gym.patrol.env import PatrolParams
-from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolRangeBearing
+from target_gym.patrol.env import PatrolParams, WakeSurfParams
+from target_gym.patrol.env_jax import PlanePatrol, PlanePatrolRangeBearing, WakeSurf
 from target_gym.pc_gym.cstr.env_jax import CSTR, CSTRParams
 from target_gym.pc_gym.distillation.env import DistillationParams
 from target_gym.pc_gym.distillation.env_jax import DistillationColumn
@@ -106,6 +106,9 @@ __all__ = (
     "PlanePatrol",
     "PlanePatrolRangeBearing",
     "PatrolParams",
+    # Wake surfing: an A320 in an A320's upwash, 3 km in trail
+    "WakeSurf",
+    "WakeSurfParams",
     # Formation: a lead and its wingmen, every aircraft a learner
     "Formation",
     "FormationMARL",

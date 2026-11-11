@@ -95,6 +95,7 @@ CAPABILITIES = {
     "plane3d_figure8": ("moving_target",),
     "patrol": ("moving_target",),
     "patrol_range_bearing": ("moving_target", "partial_observability"),
+    "wake_surf": ("economic", "safety"),
     "formation": ("multi_agent", "moving_target"),
 }
 
@@ -119,7 +120,12 @@ def _reach_score(m: dict) -> float:
     best = m.get("oracle_transient_ratio", _NAN)
     if not best >= MIN_REACH_ROOM:
         return _NAN
-    return math.log(max(m["transient_ratio"], 1e-300)) / math.log(best)
+    ratio = m["transient_ratio"]
+    if math.isinf(best):
+        # The best known's moves cost nothing: only a policy that matches it
+        # reaches the edge (inf / inf would be NaN, and hide the point).
+        return 1.0 if ratio == best else 0.0
+    return math.log(max(ratio, 1e-300)) / math.log(best)
 
 
 def profile(results: dict, tags: dict | None = None) -> dict:
@@ -148,15 +154,22 @@ def profile(results: dict, tags: dict | None = None) -> dict:
 def references(rows: dict | None = None, tags: dict | None = None) -> dict:
     """The expert's and the oracle's profiles from the recorded protocol rows
     (``scoring.recorded()``): the expert is the 0.5 ring wherever a task has
-    room, and the oracle sits where its recorded hold and moves put it."""
+    room, and the oracle sits where its recorded hold and moves put it. A task
+    no oracle ships for (``wake_surf``) counts for the expert only, and one
+    charged in money (``scoring.held``) is not measured here."""
     rows = scoring.recorded() if rows is None else rows
     expert, oracle = {}, {}
     for name, row in rows.items():
-        b, o = row["pid"]["hold_tracking"], row["mpc"]["hold_tracking"]
+        if not scoring.held(row):
+            continue
+        b = row["pid"]["hold_tracking"]
         best = scoring.best_known(row)["oracle_transient_ratio"]
         known = {"oracle_transient_ratio": best}
         expert[name] = {"score": scoring.score(b, b, row["ceiling"])}
         expert[name] |= {"transient_ratio": 1.0, **known}
+        if "mpc" not in row:
+            continue
+        o = row["mpc"]["hold_tracking"]
         oracle[name] = {"score": scoring.score(o, b, row["ceiling"])}
         oracle[name] |= {"transient_ratio": best, **known}
     return {"expert": profile(expert, tags), "oracle": profile(oracle, tags)}

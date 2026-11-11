@@ -27,8 +27,11 @@ from target_gym.reactor.env import (
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    flux_tilt,
     get_obs,
+    moderator_tilt,
     rod_balance,
+    rod_tilt,
     rod_worth,
     scheduled_load,
     steady_state_precursors,
@@ -52,7 +55,8 @@ class Reactor(
     """
     Nuclear reactor: a two-point core with rods and boron.
 
-    Observation (8,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron]
+    Observation (11,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
+    (20 min late), hours to the ramp down, hours to the ramp up, xenon's power]
     Action      (2,): [rod demand, boron flow] in [-1, 1]
     """
 
@@ -102,7 +106,7 @@ class Reactor(
     @property
     def default_params(self) -> ReactorParams:
         # The scored configuration: env steps of 30 s (``control_period``
-        # physics sub-steps each) over the 12 h of a load cycle.
+        # physics sub-steps each) over the 24 h of a load-follow day.
         return ReactorParams()
 
     def compute_reward(self, state, params):
@@ -196,8 +200,11 @@ class Reactor(
         )
         restart = jnp.where(standby, params.standby_steps, params.restart_steps)
         trip = restart * params.failure_cost
-        reward = jnp.where(tripped, -trip, reward)
-        measured = jnp.where(tripped, -trip, measured)
+        # The trip's dollars are version 2's. Version 1 has no trip cost, as in the
+        # shared step (``base``): its reward stays the legacy score of the state.
+        charged = jnp.logical_and(tripped, params.reward_version != 1)
+        reward = jnp.where(charged, -trip, reward)
+        measured = jnp.where(charged, -trip, measured)
         terms = {k: jnp.where(tripped, 0.0, v) for k, v in terms.items()}
         terms["failure"] = jnp.where(tripped, trip, terms["failure"])
 
@@ -277,7 +284,34 @@ class Reactor(
             maxval=params.initial_xenon_power_range[1],
         )
         I_hat, Xe_hat = steady_state_xenon(n_recent, params)
-        T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, params)
+        # Burnup: today's rate, and the dilution earlier days left undone, which
+        # lines the day out that far below its program (D9). Folded keys keep the
+        # other draws as they were.
+        rate = jax.random.uniform(
+            jax.random.fold_in(key, 7),
+            minval=params.burnup_range[0],
+            maxval=params.burnup_range[1],
+        )
+        carried = rate * jax.random.uniform(
+            jax.random.fold_in(key, 8),
+            minval=params.carried_days_range[0],
+            maxval=params.carried_days_range[1],
+        )
+        # Yesterday's axial xenon: one end-of-day pair from the table (finding 3).
+        tilts = jnp.asarray(params.initial_tilts, dtype=jnp.float32)
+        row = jax.random.randint(jax.random.fold_in(key, 9), (), 0, tilts.shape[0])
+        follow = (
+            jax.random.uniform(jax.random.fold_in(key, 10)) < params.initial_tilt_share
+        )
+        I_tilt0 = jnp.where(follow, tilts[row, 0], 0.0)
+        Xe_tilt0 = jnp.where(follow, tilts[row, 1], 0.0)
+        # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
+        shift = (
+            carried * params.boron_worth / (params.alpha_coolant + params.alpha_fuel)
+        )
+        T_fuel, T_hot, T_cold, T_sg = (
+            T - shift for T in steady_state_temperatures(load, params)
+        )
         # Critical on boron: the rods stay parked, whatever xenon asks for.
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
         boron = params.boron_ref + needed / params.boron_worth
@@ -302,8 +336,8 @@ class Reactor(
             T_sg=as_state(T_sg),
             I_hat=as_state(I_hat),
             Xe_hat=as_state(Xe_hat),
-            I_tilt=as_state(0.0),
-            Xe_tilt=as_state(0.0),
+            I_tilt=as_state(I_tilt0),
+            Xe_tilt=as_state(Xe_tilt0),
             target_n=as_state(load),
             T_ref=as_state(tavg_program(load, params)),
             load_wobble=as_state(0.0),
@@ -314,12 +348,23 @@ class Reactor(
             rho_ext=as_state(rod_worth(params.rod_park, params)),
             rho_ext_cmd=as_state(0.0),
             boron=as_state(boron),
-            delta_I=as_state(0.0),
+            delta_I=as_state(
+                load
+                * flux_tilt(
+                    Xe_tilt0,
+                    Xe_hat,
+                    load,
+                    rod_tilt(params.rod_park, params)
+                    + moderator_tilt(T_hot, T_cold, params),
+                    params,
+                )
+            ),
             boron_queue=jnp.zeros(BORON_QUEUE, dtype),
             boron_delay=delay,
             rod_moved=as_state(0.0),
             effluent=as_state(0.0),
             xenon_power=as_state(n_recent),
+            burn_rate=as_state(rate / 86400.0),
             boron_meter=jnp.full(BORON_METER_STEPS + 1, boron, dtype),
         )
 

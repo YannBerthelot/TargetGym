@@ -140,11 +140,14 @@ def test_a_tripping_run_is_held_over_the_schedule():
 
     # Full nose-down at idle dives into the ground, the 2D aircraft's one trip
     # since Amendment 2 (its expert no longer trips), and restarts, over and over.
+    # The autopilot's +-0.2 g incremental limit (owner, 2026-11-10) slows each
+    # dive, so the 30 min episode holds fewer of them: at least 5 still restart
+    # inside most of the schedule's six 300 s blocks.
     def dive(obs):
         return np.array([-1.0, -1.0], np.float32)
 
     ep = E.run_episode(spec, params, dive, seed=100)
-    assert ep.failed.sum() > 8
+    assert ep.failed.sum() >= 5
     assert set(np.flatnonzero(ep.target_change)) <= set(300 * np.arange(1, 6) - 1)
 
 

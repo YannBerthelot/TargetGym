@@ -43,6 +43,7 @@ from target_gym.base import (
 from target_gym.expert_access import RegistryExperts
 from target_gym.glass_furnace import physical as P
 from target_gym.glass_furnace.rendering import _render
+from target_gym.video import SavesVideo
 
 WALKS = ("gas", "pull", "cullet", "thickness", "sulfate")
 OBS_NAMES = (
@@ -63,7 +64,7 @@ OBS_NAMES = (
 #: (``scripts/glass_slow_settle.py``).
 DESIGN_STATE = pathlib.Path(__file__).with_name("design_state.npz")
 #: The file's digest, here so that the version stamp, which reads code, changes with it.
-DESIGN_STATE_SHA256 = "55a6ac2ffb53d5d1b142758399532af3428263585290ab5b40f1ed2a2484bba6"
+DESIGN_STATE_SHA256 = "de473f2a174d7508e4baa213ee6ed68effd2b1116c82927021a2fe05674b2d35"
 #: The fining share's reading scatter (ours), and the tolerance a controller is told.
 FINING_SCATTER = 0.005
 
@@ -281,7 +282,9 @@ def compute_reward(state, params):
 
 
 class GlassFurnace(
-    RegistryExperts, environment.Environment[GlassFurnaceState, GlassFurnaceParams]
+    RegistryExperts,
+    SavesVideo,
+    environment.Environment[GlassFurnaceState, GlassFurnaceParams],
 ):
     """A regenerative float glass furnace, its melt in two dimensions.
 

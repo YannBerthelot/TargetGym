@@ -1,5 +1,15 @@
 # Formation: physics model, provenance and validation
 
+> **Amendment 4 (2026-11-10): the formation flies F/A-18 Hornets**, as the patrol
+> does (patrol/PHYSICS.md, Amendment 4): its V's ranks are 22 to 45 m out, the
+> separation one Hornet length, and the wingmen's objective AFF's 10 ft one sigma.
+> The expert's lead eases onto each new turn rate over 2 s: taken at once, a
+> reversal rolled it 60 deg in a second, its wingmen fell a step behind and two of
+> them collided. On held-out seeds 200-209 (2026-11-10) the wingmen hold a median
+> 3.9 m and at worst 6.7 m, no seed trips, and the lead stays within 0.7 m of its
+> altitude on average and 1.7 deg of its heading, the easing's cost. The expert is
+> a reference and need not meet the objectives (the owner, 2026-11-10).
+
 A lead and two wingmen in a V, every aircraft flown by the learner. The lead
 flies a patrol route, an altitude and a heading that turns onto a new rate
 every leg; each wingman holds a slot fixed in the lead's body frame. The team
@@ -71,8 +81,7 @@ aircraft, in the JaxMARL style; every agent receives the team reward and
 | Each wingman meets the lead's wake on its own side | one upwash in still air | `test_each_wingman_meets_the_wake_on_its_own_side` |
 | The expert's lead seat flies the schedule | 2 m/s of it at 3000 m, no trip | `test_the_formation_lead_seat_flies_the_schedule` |
 | The multi-agent view is the joint task split by seat | same observations, same reward | `tests/formation/test_formation_marl.py` |
-| The expert's lead holds the route on held-out seeds | mean altitude error at most 2 m, heading at most 0.5 deg, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_the_formation_lead_holds_altitude_and_heading` |
-| The expert's wingmen hold their slots on held-out seeds | RMS slot error after the burn-in at most 8.5 m, no trip, seeds 200-209 (all strict expected failures until PR 9, D3) | `test_every_formation_wingman_holds_its_slot` |
+| The expert flies every held-out seed | no trip on seeds 200-209, and the lead's altitude within 2 m on average; the slot and heading objectives are reported, not required of a reference (owner, 2026-11-10) | `test_the_expert_never_trips`, `test_the_formation_lead_holds_its_altitude` |
 
 The environment also passes every shared contract in
 `tests/test_env_conformance.py`, including that its PID beats the best
@@ -204,7 +213,7 @@ was already the expert's weakness on the old plant.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 81 |
+| `formation` | 200 | 1 | 3 min | 9 in [-1, 1] | 74 | 231 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

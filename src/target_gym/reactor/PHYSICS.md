@@ -76,7 +76,7 @@ tilt of 0.19 once it ends, which is the plant's reading. Two sources feed `eps`:
 
 ```
 eps = -0.5 rho_ext_min nu_Sigma_f sin(pi y)^3                     rods from the top
-    + alpha_coolant nu_Sigma_f (rise_full - (T_hot - T_cold)) / 4  moderator
+    + alpha_tilt nu_Sigma_f (rise_full - (T_hot - T_cold)) / 4     part-power shift
 ```
 
 The rods' weight is their overlap with the harmonic: nothing when out, and nothing
@@ -132,13 +132,14 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `beta_i`, `lambda_i` | 6-group | | Keepin (1965) | earlier |
 | `Lambda_gen` | 1e-4 | s | PWR range | earlier |
 | `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | earlier |
-| `alpha_coolant` | -30e-5 | 1/K | Inside -10 to -50 pcm/K, no figure opened | ours |
+| `alpha_coolant` | -12e-5 | 1/K | The start-of-cycle MTC, where the core sits (1690 ppm, OAPS's start-of-cycle ramps). It is near zero there and grows more negative as boron falls (NRC GFE PWR 192004, nuclear-power.com): BEAVRS measures the isothermal coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power and 975 and 1405 ppm, and specifications keep it at or below 0 above 50 % power. No hot-full-power start-of-cycle figure was found; the reviewer's judgment is -9 to -18 pcm/K (physics review, finding 2). The range was 0 to -20 until the family sweep (2026-11-10): at -2.9 to -7 the rods cannot carry a 5 %/min return, so the owner took the reviewer's range. The sweep draws it with `boron_worth`, the most negative MTC with the largest worth | ours, range -9 to -18 pcm/K |
+| `alpha_tilt` | -30e-5 | 1/K | The part-power axial shift's lumped coefficient (moderator and Doppler redistribution), kept at the value that reproduces Krsko's +5 % delta I at half power when the MTC moved | ours |
 | `T_fuel_ref` | 1051.4 | K | Zero feedback at full power on program | derived |
 | `rho_ext_min` | -0.015 | | A 1500 pcm bank, kept from the earlier plant, no figure opened | ours |
 | `rod_speed` | 72 / 60 / 228 | 1/s | 72 steps/min over 228 steps, NRC HRTD 8.1, read by an earlier session | earlier |
 | `rod_park` | 3 / 228 | | D bank at 225 steps, Krsko fig. 3 | read |
 | `boron_ref` | 1690 | ppm | Krsko fig. 3 | read |
-| `boron_worth` | -8e-5 | 1/ppm | Two NRC papers gave -6.73 and -8.15 pcm/ppm in search summaries, neither would open | ours |
+| `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
 | `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
 | `boric_acid_ppm` | 7800 | ppm | A vendor's recycling concentrate, seen in a search summary, the PDF would not open | ours |
@@ -164,6 +165,9 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `load_min`, `hold_range` | 0.5, 3 to 8 h | | The URD's cycle, Chari and Rohr (1997) | earlier |
 | `ramp_down_range` | 0.5 to 2 h | s | | ours |
 | `demand_theta`, `demand_sigma` | 300 s, 0.5 % | | A small frequency-control wobble | ours |
+| `burnup_range` | 2.3 to 3.3 | ppm/day | BEAVRS (MIT), Table 24: letdown 623 to 0 ppm over 52 to 326 EFPD in cycle 1 (2.27 a day), 918 to 104 ppm over 13 to 257 EFPD in cycle 2 (3.34 a day) | read |
+| `initial_tilts`, `initial_tilt_share` | ten pairs, 0.108 | | Yesterday's end-of-day iodine and xenon tilts, from the reference on training seeds, drawn on load following's share of days | derived |
+| `carried_days_range` | 0 to 1 | day | Burnup not yet diluted at reset: the operator dilutes at least once a day | ours |
 | `max_steps_in_episode` | 2880 | steps | A day, so the xenon's swing shows after the return | design |
 
 **`nu_Sigma_f`.** Table I-1 prints Sigma_a 1.53 and nu Sigma_f 1.56, and with those
@@ -177,12 +181,25 @@ chosen on the thesis's printed results, not on anything of this task's.
 
 ## 4. Task design
 
-Run a 100-50-100 day as EDF runs Mode A (docs/proposals/reactor-plant-check.md): hold
-Tavg within the rods' dead band of its program and the axial offset within 0.05 of
-its reference, with rods and boron, knowing the day's plan. Each episode starts at full
-load, rods parked, boron critical, xenon at the balance of a recent power of 0.9 to
-1.0 and no tilt. The load starts down in 0.5 to 2 h, holds at 50 % for 3 to 8 h and
-comes back, at 2 %/min with a small wobble.
+### Task: `reactor`
+
+Run a day of a pressurized water reactor at the start of its fuel cycle, with control
+rods and soluble boron, knowing the day's load plan: hold the average coolant
+temperature within 1.6 K of its program on either side and the axial offset within
+0.05 of its reference, keep the rods above their insertion limit, and dilute for the
+fuel's burnup, at the least cost in lost output, rod wear and effluent. Six scenarios
+weigh baseload days against five kinds of load-follow day (REALITY.md sections 6
+and 7).
+
+Each episode starts at full load, rods parked, xenon at the balance of a recent power
+of 0.9 to 1.0, and Tavg lined out below its program by 0 to 1 day of burnup not yet
+diluted. Yesterday's axial xenon carries over (the physics review's finding 3): on
+10.8 % of days, load following's share (REALITY.md section 7), yesterday was a
+load-follow day and the iodine and xenon tilts start as one of ten end-of-day pairs
+the reference left on training seeds 0 to 9 (`scripts/reactor_tilt_table.py`,
+xenon tilts -0.0067 to +0.0085); otherwise yesterday was baseload, whose days end
+with tilts under 3.1e-4, and the tilts start at 0. On a load-follow day the load starts down in 0.5 to 2 h,
+holds at 50 % and comes back, at the scenario's rate, with a small wobble.
 
 | obs | meaning |
 |---|---|
@@ -207,8 +224,8 @@ operator's xenon tool starts from.
 
 | limit | kind | form | source |
 |---|---|---|---|
-| power, fuel temperature, hot leg | trip | the envelope; a scram, 48 h of lost output | ours, family 24 to 70 h (Doel-3, INIS 1ypr9-dk595; APR1400, KNS 20A-065) |
-| Tavg under 556 C | timed | 900 s allowed, then hot standby, 15 h of lost output | ours, inside the family's 15 to 30 min to restore; 15 h from Doel-3's 6 h down and 18 h reduced |
+| power, fuel temperature, hot leg (610 K, ours: under the 618.0 K saturation at 2250 psia, IAPWS-IF97) | trip | the envelope; a scram, 48 h of lost output | ours, family 24 to 70 h (Doel-3, INIS 1ypr9-dk595; APR1400, KNS 20A-065) |
+| Tavg under 556 K | timed | 900 s allowed, then hot standby, 15 h of lost output | ours, inside the family's 15 to 30 min to restore; 15 h from Doel-3's 6 h down and 18 h reduced |
 | axial offset outside +-0.05 | penalty clock | time outside counts at every power; 1 h in 24 h is free; past it, the lost output of a derate to 50 % | EDF's band (IAEA NP-T-3.23, annex II-4.3); the 1 h in 24 h and the derate from Westinghouse specifications (D.C. Cook, RAOC), pooled in since EDF's was not found |
 | Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, so hot standby | STS LCO 3.4.1 (US EPR GTS and AP1000 bases, from search summaries); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
 | rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
@@ -255,8 +272,25 @@ none of the patent's 7 % noise.
 
 **D5: no decay heat.** A scram removes all heat at once.
 
+**D10: no steam relief.** At part power the hot side of a PWR is bounded by its steam
+side: a Tavg high enough to lift the steam relief and safety valves (1176 psig, 570.0 K
+of steam at V.C. Summer, a search summary) relieves heat and then trips. The model
+has no relief and no steam trip. The two-sided dead band prices any time past 1.6 K
+over the program, which at the 50 % hold is about 1065 psig of steam (interpolated in the review's IAPWS-IF97 table), so a hot
+excursion costs output long before it would lift a valve, and the DNB limit stays as
+the timed bound (physics review, finding 1, option B not taken).
+
+**D9: burnup by the clock.** The fuel's burnup is worth boron at the day's drawn rate
+for every second since reset, as if at full power. Real burnup follows the energy
+made, so on a day with a 50 % hold it is overstated by at most half the hold's share
+of the day: under 0.1 ppm at 3.3 ppm a day, 0.02 K of Tavg. It keeps the oracle's
+model exact without a new state. The day starts lined out below its program by the
+burnup earlier days left undiluted, 0 to 1 day of it, 0 to 0.8 K. Burnup's bite is
+small within a day (0.56 to 0.8 K of Tavg at the BEAVRS rates), so it matters mostly
+together with that carried debt.
+
 **Retired tests (owner, 2026-11-08, TESTING.md section 10).**
-`test_peak_xenon_worth_is_in_the_published_band` (the task has no scram; the load cut's
+The scram's peak xenon worth test (the task has no scram; the load cut's
 swing is tested against Krsko instead), `test_the_reactors_winning_null_has_a_written_exception`
 (the old plant's written exception is gone; acceptance, J2, still checks the nulls) and
 `test_a_day_has_two_moves_for_the_scorer` (the old scorer's move detector, which the
@@ -293,6 +327,41 @@ narrows with power as the target band does; read as 2.5 % of delta I at every po
 it would equal the whole band at the half-power hold. **ours,** family range 0 to
 0.05, chosen at half, and not to be adjusted after results (J1).
 
+**Rods on Tavg through a fast ramp (owner, 2026-11-10), fixed before any rerun.** On
+the start-of-cycle core (reactor-v8) a load cut releases about 820 pcm of Doppler and
+moderator feedback per 50 % of load, and boron moves at most 32 to 35 pcm a minute,
+so a 5 %/min ramp outruns it: with the rods on the offset, Tavg ran 20 to 29 K hot
+and the hot leg tripped. In the family, fast ramps are carried by rods on Tavg
+(Westinghouse's automatic rod control, NRC HRTD 8.1; EDF's grey rods), while Krsko's
+procedure, rods on the offset and boron on Tavg, is a slow-ramp one (8 %/h). So the
+reference switches by one test: while the day's plan ramps faster than boron can
+follow, the rods run Westinghouse's rod program on Tavg; otherwise bank D holds the
+offset. Boron can follow when the ppm a second the ramp needs, the plant's power
+defect per unit of load (from `rod_balance` on the program) times the planned load
+rate, is within the line's full dilution (`dilution_flow / primary_mass * boron`) or
+full boration (`boration_flow / primary_mass * (acid - boron)`), at the boronmeter's
+reading. The handback is bumpless: the offset loop starts from where the rods are.
+The rod insertion limit holds in both modes. No new number.
+
+**The xenon tool's play (owner, 2026-11-10), fixed before any rerun.** The rule: a
+controller acts on what the cost charges and on what predicts a charge, never on a
+deviation that is free. The xenon tool broke it on baseload: it moved 13.6 ppm of
+boron, $90 of effluent a day, to cancel a xenon drift that left alone costs $0.80
+(diagnostic, `docs/proposals/reactor-axial.md`). So the tool now has play. It keeps
+the boron it did not move as a debt in ppm, and reads the debt as the Tavg shift it
+would leave at steady power, `debt * boron_worth / (alpha_coolant + alpha_fuel)`
+(at a fixed power the fuel sits a fixed step above the coolant, so it cools with it
+and both feedbacks absorb the reactivity; 0.53 K per ppm). While that
+shift stays inside Tavg's free zone, the tool does nothing; past it, it moves only
+the excess. The free zone is what the cost leaves free: the 1.6 K dead band on
+either side of the program (on the hot side up to the DNB limit until the physics
+review's finding 1, 2026-11-10). Each edge is pulled in by the
+shift xenon causes over the boron line's lead (600 s, the same lead as the plan's
+feedforward), so the tool acts before the edge, not after it. No new number: the
+dead band, the lead and the plant's two worths are all set elsewhere.
+The rods and the Tavg PI are unchanged. Every rung of the ladder uses the same tool,
+so the comparison between rungs stays fair.
+
 ---
 
 <!-- BEGIN GENERATED FACTS -->
@@ -305,7 +374,7 @@ it would equal the whole band at the half-power hold. **ours,** family range 0 t
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 106 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 107 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -316,14 +385,14 @@ which is what the recorded baselines use.
 
 ## Reward (version 2), in dollars per 30 s control step
 
-`compute_reward = -(tracking + running + failure)`, with Tavg under its program past the dead band and the offset clock's derate in `tracking`, and rod travel and effluent in `running`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
+`compute_reward = -(tracking + running + failure)`, with Tavg past the dead band on either side of its program and the offset clock's derate in `tracking`, and rod travel and effluent in `running`; each physics sub-step charges its 5 s and `step_env` sums the six, see docs/reward-shaping.md.
 
 | parameter | value | source |
 | --- | --- | --- |
 | `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
 | `e_tol` | 1.6 K | the black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA NP-T-3.23, annex II-5.1). CEA's papers on Mode G's R group give 0.8 C with slow motion up to 1.7 C |
 | `tracking_exponent` | 1 | linear, as lost output is |
-| `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say |
+| `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say: the band is a procedure band both cited procedures keep on either side (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), priced like the offset band by the output it costs (physics review, finding 1, owner 2026-11-10, reversing Amendment 3 decision 7) |
 | `rod_step_price` | $1 per step | **ours,** kept by the owner on 2026-11-07. Rod travel, as the steps the rods actually moved |
 | `ao_band`, `ao_ref` | 0.05, 0 | EDF: during load follow the axial offset stays within 0.05 of its reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full power, xenon balanced, rods out: 0 in this core. In delta I the band is 0.05 times the power |
 | `ao_allowed`, `derate_to`, `derate_price_per_MWh` | 3600 s, 0.5, $80/MWh | the penalty clock: 1 h in 24 h, then a derate to 50 %, its lost output priced at $80/MWh (inside the family's $80 to $100) on `P_electric_GW` (Westinghouse specifications, D.C. Cook and RAOC, pooled in) |

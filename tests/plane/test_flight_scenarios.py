@@ -54,6 +54,7 @@ def params():
         mmo=5.0,
         load_factor_max=100.0,
         load_factor_min=-100.0,
+        ap_load_increment=100.0,
     )
 
 
