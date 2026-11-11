@@ -119,12 +119,7 @@ def render_first_order(state, params, step, history):
             bipolar=True,
             neg_color=rk.PURPLE,
         ),
-        rk.Gauge(
-            "REWARD",
-            f"{history['reward'][-1]:.3f}",
-            rk.clamp01(history["reward"][-1]),
-            rk.GREEN,
-        ),
+        rk.cost_gauge(history["reward"], params),
     ]
 
     strip = rk.Strip(

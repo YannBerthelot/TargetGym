@@ -114,12 +114,13 @@ def _draw_loop(ax, state, params):
     rk.label(ax, dx - 0.02, dy + dh * 0.5, "NWL", color=rk.TEXT, size=6.5, ha="right")
     rk.label(
         ax,
-        dx + dw / 2,
+        dx - 0.04,  # left of the steam line at 0.72 of the drum
         dy + dh + 0.030,
-        f"LEVEL {level * 100:+.1f} cm   ·   {p_bar:.2f} bar",
+        f"LEVEL {level * 100:+.1f} cm  ·  {p_bar:.2f} bar",
         color=rk.TEXT,
-        size=9.5,
+        size=9,
         weight="bold",
+        ha="left",
     )
 
     # Steam out.

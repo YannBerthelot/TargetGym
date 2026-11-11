@@ -146,7 +146,7 @@ def _draw_reactor(ax, state, params):
         )
     text, c = _event_text(state, params)
     if text:
-        rk.label(ax, 0.94, 0.985, text, color=c, size=7, weight="bold", ha="right")
+        rk.label(ax, 0.02, 0.02, text, color=c, size=9, weight="bold", ha="left")
 
     rk.label(
         ax, cx, vy + vh + 0.14, f"T = {T:.1f} K", color=rk.TEXT, size=11, weight="bold"

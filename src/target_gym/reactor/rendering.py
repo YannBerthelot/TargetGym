@@ -258,7 +258,7 @@ def _draw_vessel(ax, state, params):
         "IN",
         ha="center",
         va="top",
-        fontsize=6,
+        fontsize=8.5,
         color=_DIM,
         family="monospace",
     )
@@ -268,7 +268,7 @@ def _draw_vessel(ax, state, params):
         "OUT",
         ha="center",
         va="bottom",
-        fontsize=6,
+        fontsize=8.5,
         color=_DIM,
         family="monospace",
     )
@@ -299,13 +299,12 @@ def _draw_vessel(ax, state, params):
     rk.label(ax, cx - 0.035, ril_y, "RIL", color=_RED, size=6.5, ha="right")
     rk.label(
         ax,
-        cx - 0.035,
-        tip_y,
-        f"rods\n{rod_in * 100:.0f}% in",
+        cx,
+        cy + ch + 0.035,
+        f"rods {rod_in * 100:.0f}% in",
         color=_TEXT,
-        size=6.5,
-        ha="right",
-        va="top",
+        ha="left",
+        va="bottom",
     )
 
     _draw_offset(ax, state, params, cx + cw + 0.035, cy, ch)

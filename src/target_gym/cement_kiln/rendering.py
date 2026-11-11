@@ -67,7 +67,7 @@ def _draw_preheater(ax, iso, state, R):
         zorder=2,
         cap=True,
     )
-    iso.text(ax, x1 + 1.0, -3.0, top - 2.0, "PRECALCINER", color=rk.DIM, size=5.5)
+    iso.text(ax, x1 + 6.0, -3.0, top - 3.0, "PRECALCINER", color=rk.DIM, ha="left")
     # Four stages, gas cooling upward from the kiln inlet's exhaust to the top
     # stage (the top's 350 C is decor).
     for k, (zb, yy) in enumerate(
@@ -303,7 +303,7 @@ def _draw_kiln(ax, state, params):
     rk.label(
         ax,
         0.98,
-        0.07,
+        0.0,
         f"CLINKER  lime {float(discharge_lime(state)) * 100:.2f} %",
         color=rk.ORANGE,
         size=7,

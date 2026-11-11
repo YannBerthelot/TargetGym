@@ -41,7 +41,17 @@ def _draw_pack(ax, state, params, lost):
     P = float(state.power) / 1e6
 
     # Grid tie.
-    rk.label(ax, 0.5, 0.975, "GRID", color=rk.DIM, size=8, weight="bold")
+    discharging = P >= 0
+    col = rk.AMBER if discharging else rk.GREEN
+    rk.label(
+        ax,
+        0.5,
+        0.985,
+        f"GRID  ·  {'EXPORT' if discharging else 'IMPORT'} {abs(P):.2f} MW",
+        color=col,
+        size=9,
+        weight="bold",
+    )
     ax.plot([0.18, 0.82], [0.945, 0.945], color=rk.FRAME, lw=3, zorder=1)
     for x in (0.30, 0.50, 0.70):
         ax.plot([x, x], [0.945, 0.905], color=rk.FRAME, lw=2, zorder=1)
@@ -54,15 +64,6 @@ def _draw_pack(ax, state, params, lost):
             rk.flow_arrow(
                 ax, x, y0, x, y1, color=col, lw=1.0 + 2.4 * mag, mutation=9 + 9 * mag
             )
-    rk.label(
-        ax,
-        0.5,
-        0.84,
-        f"{'EXPORT' if discharging else 'IMPORT'}  {abs(P):.2f} MW",
-        color=col,
-        size=8.5,
-        weight="bold",
-    )
 
     # Cell stack, filled to the true charge.
     n_mod = 8

@@ -80,7 +80,7 @@ def _feed(ax, x, y_in, name, val, vmax, c, hidden=False, note=None):
     rk.label(
         ax, x, 0.965, name, color=c, size=6.5, weight="normal" if hidden else "bold"
     )
-    rk.label(ax, x, 0.93, f"{val:.2f} mL/s", color=rk.TEXT, size=6.5)
+    rk.label(ax, x, 0.93, f"{val:.1f} mL/s", color=rk.TEXT, size=6.5)
     if note is not None:
         rk.label(ax, x, 0.895, note, color=rk.PURPLE, size=6)
 

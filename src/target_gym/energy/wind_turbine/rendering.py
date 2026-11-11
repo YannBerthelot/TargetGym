@@ -110,12 +110,12 @@ def _draw_side(ax, state, params, x_scale):
         mutation=9,
     )
     rk.label(
-        ax, bx, top + 0.29, f"TOWER TOP {x:+.2f} m", color=col, size=7, weight="bold"
+        ax, bx, top + 0.315, f"TOWER TOP {x:+.2f} m", color=col, size=7, weight="bold"
     )
     rk.label(
         ax,
         bx,
-        top + 0.265,
+        top + 0.27,
         "side view, sway ×" f"{0.06 / x_scale * 100:.0f}",
         color=rk.DIM,
         size=5.5,

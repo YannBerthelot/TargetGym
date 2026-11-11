@@ -233,6 +233,11 @@ def flow_arrow(
     )
 
 
+#: The smallest text a frame carries, pt. Frames are 1400 x 750 and are often
+#: shown at half that, where anything smaller cannot be read.
+MIN_TEXT = 8.5
+
+
 def label(
     ax,
     x,
@@ -240,20 +245,21 @@ def label(
     text,
     *,
     color=DIM,
-    size=7.5,
+    size=MIN_TEXT,
     ha="center",
     va="center",
     weight="normal",
     zorder=6,
     **kw,
 ):
-    """Monospaced annotation, the schematic's only typography."""
+    """Monospaced annotation, the schematic's only typography. ``size`` is
+    raised to :data:`MIN_TEXT` at least."""
     return ax.text(
         x,
         y,
         text,
         color=color,
-        fontsize=size,
+        fontsize=max(size, MIN_TEXT),
         ha=ha,
         va=va,
         family=MONO,
@@ -263,7 +269,7 @@ def label(
     )
 
 
-def caption(ax, text, *, color=DIM, size=7.5):
+def caption(ax, text, *, color=DIM, size=9.0):
     """A single caption under a schematic."""
     ax.text(
         0.5,
@@ -691,7 +697,7 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
         g.label,
         ha="right",
         va="center",
-        fontsize=8,
+        fontsize=9.5,
         color=DIM,
         family=MONO,
         fontweight="bold",
@@ -702,7 +708,7 @@ def hbar(ax, y, g: Gauge, *, bar_h=0.062, x0=0.30, bw=0.46):
         g.value,
         ha="left",
         va="center",
-        fontsize=8.5,
+        fontsize=10,
         color=TEXT,
         family=MONO,
     )
@@ -740,7 +746,7 @@ def gauge_panel(
         title,
         ha="center",
         va="top",
-        fontsize=9.5,
+        fontsize=10.5,
         color=DIM,
         family=MONO,
         fontweight="bold",
@@ -767,7 +773,7 @@ def gauge_panel(
             txt,
             ha="left",
             va="center",
-            fontsize=9,
+            fontsize=10,
             color=c,
             family=MONO,
             fontweight="bold",
@@ -780,7 +786,7 @@ def gauge_panel(
             footnote,
             ha="center",
             va="top",
-            fontsize=7,
+            fontsize=8.5,
             color=DIM,
             family=MONO,
             alpha=0.85,
@@ -794,7 +800,7 @@ def gauge_panel(
             "● HIDDEN from the controller",
             ha="center",
             va="top",
-            fontsize=6.5,
+            fontsize=8.5,
             color=PURPLE,
             family=MONO,
             alpha=0.8,
@@ -836,7 +842,7 @@ def draw_strip(ax, s: Strip, *, legend=True):
     ax.set_facecolor(PANEL)
     for sp in ax.spines.values():
         sp.set_color(FRAME)
-    ax.tick_params(colors=DIM, labelsize=7)
+    ax.tick_params(colors=DIM, labelsize=8.5)
     ax.grid(color=FRAME, alpha=0.5, lw=0.5)
 
     if len(s.t) < 2:
@@ -847,16 +853,19 @@ def draw_strip(ax, s: Strip, *, legend=True):
     for y, c, lbl in s.lines:
         ax.axhline(y, color=c, lw=1.0, ls="--", alpha=0.65, zorder=1)
         if lbl:
+            # Inside the plot, at its right edge, just above the line: past
+            # the last sample it ran off the frame.
             ax.text(
-                s.t[-1],
+                0.995,
                 y,
-                f" {lbl}",
+                f"{lbl} ",
                 color=c,
-                fontsize=6,
+                fontsize=8.5,
                 family=MONO,
-                va="center",
-                ha="left",
+                va="bottom",
+                ha="right",
                 alpha=0.85,
+                transform=ax.get_yaxis_transform(),
             )
 
     for ser in s.series:
@@ -876,20 +885,24 @@ def draw_strip(ax, s: Strip, *, legend=True):
             )
 
     if s.ylabel:
-        ax.set_ylabel(s.ylabel, fontsize=7, color=DIM, family=MONO)
+        ax.set_ylabel(s.ylabel, fontsize=8.5, color=DIM, family=MONO)
     if s.xlabel:
-        ax.set_xlabel(s.xlabel, fontsize=7, color=DIM, family=MONO)
+        ax.set_xlabel(s.xlabel, fontsize=8.5, color=DIM, family=MONO)
     if s.ylim:
         ax.set_ylim(*s.ylim)
-    if legend and any(ser.label for ser in s.series):
+    labelled = [ser for ser in s.series if ser.label and not ser.label.startswith("_")]
+    if legend and labelled:
+        # One row over the plot's top right, clear of the traces it names.
         ax.legend(
-            loc="upper right",
-            fontsize=6,
-            framealpha=0.4,
-            facecolor=PANEL,
-            edgecolor=FRAME,
+            loc="lower right",
+            bbox_to_anchor=(1.0, 1.0),
+            fontsize=8.5,
+            frameon=False,
             labelcolor=TEXT,
-            ncol=2,
+            ncol=len(labelled),
+            borderaxespad=0.1,
+            handlelength=1.6,
+            columnspacing=1.2,
         )
 
 
@@ -953,7 +966,7 @@ def frame(
         title,
         ha="center",
         va="top",
-        fontsize=14,
+        fontsize=15,
         color=TEXT,
         fontweight="bold",
         family=MONO,
@@ -964,7 +977,7 @@ def frame(
         f"STEP {int(step)}",
         ha="left",
         va="top",
-        fontsize=10,
+        fontsize=11,
         color=DIM,
         family=MONO,
     )
@@ -974,7 +987,7 @@ def frame(
         format_clock(elapsed_s),
         ha="right",
         va="top",
-        fontsize=10,
+        fontsize=11,
         color=DIM,
         family=MONO,
     )
@@ -985,7 +998,7 @@ def frame(
             subtitle,
             ha="center",
             va="top",
-            fontsize=8,
+            fontsize=9.5,
             color=DIM,
             family=MONO,
         )
@@ -996,9 +1009,9 @@ def frame(
         2,
         width_ratios=list(width_ratios),
         height_ratios=[2.8] + [1.0 / n_strips * 1.0] * n_strips,
-        hspace=0.30 if n_strips > 1 else 0.22,
+        hspace=0.42 if n_strips > 1 else 0.24,  # room for each strip's legend
         wspace=0.08,
-        left=0.03,
+        left=0.055,
         right=0.97,
         top=0.915 if subtitle else 0.93,
         bottom=0.065,
@@ -1008,13 +1021,13 @@ def frame(
     schematic_axes(ax_s)
     if schematic_title:
         ax_s.text(
-            0.5,
+            0.0,
             1.045,
             schematic_title,
             transform=ax_s.transAxes,
-            ha="center",
+            ha="left",
             va="top",
-            fontsize=9.5,
+            fontsize=10.5,
             color=DIM,
             family=MONO,
             fontweight="bold",

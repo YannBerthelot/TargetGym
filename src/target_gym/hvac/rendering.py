@@ -159,30 +159,33 @@ def _draw_zone(ax, state, params):
     frost = float(state.frost) > 0.5
     rk.label(
         ax,
-        0.10,
+        0.015,
         sy + sh + 0.10,
         f"SUPPLY {float(state.T_supply):.1f} C",
         color=rk.RED if frost else sup_c,
         size=7,
         weight="bold",
+        ha="left",
     )
     rk.label(
         ax,
-        0.10,
+        0.015,
         sy + sh + 0.065,
         f"return {float(state.T_return):.1f} C",
         color=rk.BLUE,
         size=6.5,
+        ha="left",
     )
     if frost:
         rk.label(
             ax,
-            0.10,
+            0.015,
             sy + sh + 0.145,
             "FROST PROTECT",
             color=rk.RED,
             size=7,
             weight="bold",
+            ha="left",
         )
 
     # Occupancy.
