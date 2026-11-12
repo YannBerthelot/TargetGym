@@ -113,7 +113,9 @@ until its return has ramped, is absorbed (ours). So the stream draws faster than
 these rates, at the rate that delivers them (owner, 2026-11-11;
 `physical_scenarios.draws_per_h`): gas swings at 9.3 a day, each keeping its kind
 busy 14 h, and pull changes at 0.0097 an hour, each busy 82 h. Drawn at the rates
-themselves they came 0.82 a day and 0.72 a visit. A
+themselves they came 0.82 a day and 0.72 a visit. A scoring run pinned to a regime
+is one long visit and draws at its own rate, 0.500 swings and 0.0116 pull changes an
+hour, which deliver the same rates there (`pinned_events_per_h`; owner, 2026-11-12). A
 stream starts with no change of its own window, the walks already at their
 stationary spread. The dwells, the pull rate and the pull hold are ours, set once
 without tuning (REALITY.md section 9).

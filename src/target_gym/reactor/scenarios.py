@@ -78,12 +78,23 @@ def _one_day_a_visit(row):
     draw before it ends with chance p = lam / (lam + 1/dwell) and outlasts a day's
     program with chance q, so it delivers p / (1 - p q) days; one a visit needs
     lam = 1 / (dwell q). q multiplies the chances the visit outlasts the notice,
-    the two ramps and the hold."""
+    the two ramps and the hold.
+
+    A scoring run pinned to the row (R2) is one endless visit, where a draw rate
+    lam delivers lam / (1 + lam busy) days an hour, busy the program's mean
+    length; it draws at r / (1 - r busy), r one a 24 h visit, to see the stream's
+    days per load-follow hour (owner, 2026-11-12)."""
     day = {**DEFAULT_DAY, **row["overrides"]}
     ramp = (1.0 - day["load_min"]) / day["load_ramp_rate"]
     q = _outlasts(*NOTICE_RANGE) * _outlasts(2 * ramp, 2 * ramp)
     q *= _outlasts(*day["hold_range"])
-    return {**row, "events_per_h": 1.0 / (LOAD_FOLLOW_DWELL_H * q)}
+    busy_h = (sum(NOTICE_RANGE) / 2 + 2 * ramp + sum(day["hold_range"]) / 2) / HOUR
+    r = 1.0 / LOAD_FOLLOW_DWELL_H
+    return {
+        **row,
+        "events_per_h": 1.0 / (LOAD_FOLLOW_DWELL_H * q),
+        "pinned_events_per_h": r / (1.0 - r * busy_h),
+    }
 
 
 def suite():

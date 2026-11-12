@@ -45,6 +45,10 @@ _UPSET_BUSY_H = _UPSET_H + 37.5 * math.log(6.0) / 5.0 / 60.0
 #: form, r / (1 - r busy), has no solution here (r busy = 1.08), but a visit starts
 #: free: a quarter of the visits bring no upset and a fifth bring two or more.
 _UPSETS_PER_H = 1.0 / (_UPSET_H * math.exp(-_UPSET_BUSY_H / _UPSET_H))
+#: A scoring run pinned to an upset row (R2) keeps these draws, with no rate of its
+#: own: it is one endless visit, which hosts at most one upset per 3 h busy, 0.33 an
+#: hour against the stream's 0.36. It delivers 0.25, 0.71 of the stream's, a known
+#: gap the owner kept on 2026-11-12 (the rows are 0.05 % of operating time).
 _UPSET = dict(
     dwell_h=_UPSET_H,
     events_per_h=_UPSETS_PER_H,

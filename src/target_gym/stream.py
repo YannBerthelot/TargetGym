@@ -14,8 +14,10 @@ Between those, the world keeps time on its own:
 
 A scoring run (R2) pins one scenario, burns in for a hidden ``B`` drawn in
 ``[b_min, 2 b_min)`` with the scenario's events at their rate, then places exactly
-``count`` events at distinct uniform steps of the scored part ``S``. ``info["scored"]``
-marks the scored steps.
+``count`` events at distinct uniform steps of the scored part ``S``. Its rate is the
+scenario's ``pinned_events_per_h`` where it has one, else ``events_per_h``: a pinned
+run is one long visit, and where draws are absorbed it needs its own rate to see the
+stream's events per scenario hour. ``info["scored"]`` marks the scored steps.
 
 Draws and keys::
 
@@ -54,6 +56,13 @@ class StreamState:
 def _per_step(rate_per_h: float, dt_h: float) -> float:
     """The chance that a memoryless clock of ``rate_per_h`` rings within one step."""
     return float(1.0 - np.exp(-rate_per_h * dt_h))
+
+
+def _event_rate(scenario, pinned: bool) -> float:
+    """A scenario's event draws an hour: its ``pinned_events_per_h`` in a scoring
+    run pinned to it, where it has one, else its ``events_per_h``."""
+    rate = getattr(scenario, "pinned_events_per_h", None) if pinned else None
+    return scenario.events_per_h if rate is None else rate
 
 
 def make_stream(name: str, **kwargs) -> "StreamEnv":
@@ -114,7 +123,8 @@ class StreamEnv(environment.Environment):
                 for s in scenarios
             ]
         )
-        rates = np.array([_per_step(s.events_per_h, dt_h) for s in scenarios])
+        pinned = pin is not None
+        rates = np.array([_per_step(_event_rate(s, pinned), dt_h) for s in scenarios])
         self._hook = getattr(env, "start_event", None)
         if rates.any() and not callable(self._hook):
             raise ValueError(f"{type(env).__name__} has events but no start_event hook")

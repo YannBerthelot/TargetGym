@@ -187,6 +187,11 @@ window's events, and the scenario's event starts through `start_event`:
   starts with none under way delivers one on average (owner, 2026-11-11;
   `scenarios.py`); one draw a visit delivered 0.6. A quarter of the visits
   then bring no upset and a fifth bring two or more.
+- A scoring run pinned to an upset row keeps these draws and delivers 0.25
+  upsets an hour, 0.71 of the stream's 0.36. A long upset regime hosts at most
+  one upset per 3 h busy, so the stream's rate cannot be reached there. The
+  owner kept this known gap on 2026-11-12; the rows are 0.05 % of operating
+  time.
 - Plan times count from `plan_t0`, the step the plan was last rebased at
   (each event), so float32 keeps them exact however long the plant runs.
 

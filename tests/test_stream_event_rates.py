@@ -14,7 +14,12 @@ the code:
   year off full power at 6.33 h a day, 39.5 days a year, over the load-follow share's
   39.5 visits a year (REALITY.md sections 7 and 8);
 - boiler_drum: one ID fan runback or feed pump trip a 2.775 h upset visit, so 0.5
-  runbacks and one feed pump trip a unit-year at the rows' weights ([ST1, ST2]).
+  runbacks and one feed pump trip a unit-year at the rows' weights ([ST1, ST2]);
+- a scoring run pinned to a scenario (R2) sees its events at the stream's density in
+  that scenario, per scored hour, so that J's per-scenario gains see the stream's
+  events (owner, 2026-11-12). Boiler upsets are the known exception: a pinned upset
+  regime hosts at most one upset per 3 h busy, 0.33 an hour against the stream's
+  0.36, and keeps the stream's draws, 0.71 of it (owner, 2026-11-12).
 
 Oracle: the sourced rates above. A stream's events are the world's and do not depend
 on the policy (``OUTSIDE_WORLD``, tests/test_stream_tasks.py), so a held action drives
@@ -28,12 +33,15 @@ for what the correction leaves out: it takes each visit to start with nothing of
 kind under way, and an event that runs on into the next visit of its kind absorbs a
 little more (1 to 2 % on these suites, from an event-only simulation). Each run is
 long enough that the tolerance stays under 20 % of the rate, so the shortfall the
-correction removed (24 % for the reactor to 46 % for the gas swings) cannot pass.
+correction removed (24 % for the reactor to 46 % for the gas swings) cannot pass. A
+pinned run has no next visit, so its allowance is 1 %, for its fixed count at uniform
+times against Poisson draws (0.6 % on the glass gas run).
 """
 
 from __future__ import annotations
 
 import dataclasses
+import math
 
 import jax
 import jax.numpy as jnp
@@ -89,7 +97,9 @@ def _measure(stream, onset, seeds, steps, first_visit=False, seed=20261112):
             start = onset(new.env, params)
             moved = jnp.abs(start - onset(state.env, params)) > MOVED_H
             got = info["event"] & jnp.any(moved & (start < NONE_H))
-            hot = jax.nn.one_hot(info["scenario"], n) * alive
+            # A scoring run counts its scored part only; a free stream, every step.
+            live = info["scored"] & ~stream.is_truncated(state, params)
+            hot = jax.nn.one_hot(info["scenario"], n) * alive * live
             if first_visit:
                 alive = alive & (new.scenario == state.scenario)
             return (new, alive, hours + hot * dt_h, started + hot * got), None
@@ -103,25 +113,30 @@ def _measure(stream, onset, seeds, steps, first_visit=False, seed=20261112):
     return np.asarray(hours, np.float64), np.asarray(started, np.float64)
 
 
-def _shortfalls(stream, hours, started, groups):
+def _miss(label, n, h, rate, allowance):
+    """The pooled rate of ``n`` events in ``h`` hours, one each a seed, against
+    ``rate``: the miss as text, or None."""
+    est = n.sum() / h.sum()
+    se = np.sqrt(((n - est * h) ** 2).sum()) / h.sum()
+    tol = 4.0 * se + allowance * rate
+    line = (
+        f"{label}: {n.sum():.0f} events in {h.sum():.0f} h, {est:.5f}/h, "
+        f"sourced {rate:.5f}/h, tolerance {tol:.5f}"
+    )
+    if tol >= 0.2 * rate:
+        return f"{line}: the run is too short to tell"
+    return line if abs(est - rate) > tol else None
+
+
+def _shortfalls(stream, hours, started, groups, allowance=0.02):
     """Each group's pooled rate against its sourced rate; the misses, as text."""
     names = [s.name for s in stream.scenarios]
     misses = []
     for label, (rows, rate) in groups.items():
         cols = [names.index(r) for r in rows]
         n, h = started[:, cols].sum(1), hours[:, cols].sum(1)
-        est = n.sum() / h.sum()
-        se = np.sqrt(((n - est * h) ** 2).sum()) / h.sum()
-        tol = 4.0 * se + 0.02 * rate
-        line = (
-            f"{label}: {n.sum():.0f} events in {h.sum():.0f} h, {est:.5f}/h, "
-            f"sourced {rate:.5f}/h, tolerance {tol:.5f}"
-        )
-        if tol >= 0.2 * rate:
-            misses.append(f"{line}: the run is too short to tell")
-        elif abs(est - rate) > tol:
-            misses.append(line)
-    return misses
+        misses.append(_miss(label, n, h, rate, allowance))
+    return [m for m in misses if m]
 
 
 def test_glass_gas_swings_and_pull_changes_arrive_at_their_rates():
@@ -168,3 +183,63 @@ def test_boiler_upsets_arrive_one_a_visit():
     )
     groups = {"upsets": (("id_fan_runback", "feed_pump_trip"), 1.0 / 2.775)}
     assert not _shortfalls(stream, hours, started, groups)
+
+
+def _pinned(task, name, onset, seeds, b_min_h, scored_h):
+    """Scoring runs pinned to scenario ``name`` (R2), the scored part long enough to
+    read the pinned gain's event density; their hours and events, per seed and
+    scenario, scored part only."""
+    spec = REGISTRY[task]
+    env, params = spec.make_env(), spec.make_test_params()
+    rows = scenarios.suite(spec)
+    pin = [s.name for s in rows].index(name)
+    dt_h = control_step_seconds(env, params) / 3600.0
+    b_min, scored = round(b_min_h / dt_h), round(scored_h / dt_h)
+    # Room for the planned count, whichever of the row's rates the run plans from.
+    pinned = getattr(rows[pin], "pinned_events_per_h", None) or 0.0
+    fastest = max(rows[pin].events_per_h, pinned)
+    stream = StreamEnv(
+        env,
+        params,
+        rows,
+        pin=pin,
+        b_min=b_min,
+        scored=scored,
+        max_events=math.ceil(fastest * scored_h) + 1,
+    )
+    return stream, _measure(stream, onset, seeds, 2 * b_min + scored)
+
+
+def _pinned_miss(task, name, onset, burn_h, scored_h, rate):
+    """``name``'s pinned runs against ``rate``: the miss or None, and per seed the
+    events and scored hours."""
+    stream, (hours, started) = _pinned(task, name, onset, 32, burn_h, scored_h)
+    col = [s.name for s in stream.scenarios].index(name)
+    n, h = started[:, col], hours[:, col]
+    return _miss(f"pinned {name}", n, h, rate, 0.01), n, h
+
+
+def test_glass_pinned_runs_see_the_stream_s_gas_swings_and_pull_changes():
+    # gas_lean and pull_down share these rows' rates and busy times.
+    misses = [
+        _pinned_miss(
+            "glass_furnace", "gas_rich", _glass_onset, 50.0, 2_000.0, 1.5 / 24
+        )[0],
+        _pinned_miss(
+            "glass_furnace", "pull_up", _glass_onset, 200.0, 10_000.0, 1 / 168
+        )[0],
+    ]
+    assert not [m for m in misses if m]
+
+
+def test_reactor_pinned_runs_see_the_stream_s_load_follow_days():
+    # krsko_shallow shares krsko_slow's rate and busy time.
+    rows = ("edf_daily", "edf_short_hold", "krsko_slow", "fast_return")
+    runs = [
+        _pinned_miss("reactor", r, _reactor_onset, 30.0, 1_000.0, 1 / 24) for r in rows
+    ]
+    # Pooled over the rows, the runs resolve a few percent.
+    n = np.concatenate([run[1] for run in runs])
+    h = np.concatenate([run[2] for run in runs])
+    misses = [run[0] for run in runs] + [_miss("pinned days", n, h, 1 / 24, 0.01)]
+    assert not [m for m in misses if m]

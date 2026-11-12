@@ -253,7 +253,9 @@ delivers one on average by the day's own shape (owner, 2026-11-11; `scenarios.py
 1.21 a day for `edf_short_hold` to 1.77 for the Krško days, whose ramps keep the
 dispatch busy 13.75 h. One draw a visit delivered 0.70 to 0.86 days a visit, 30 a
 year. Draws are memoryless, so about two visits in five bring no day and a quarter
-bring two or more. A stream starts with no day planned: nothing ahead and full load.
+bring two or more. A scoring run pinned to a load-follow row is one long visit and
+draws at its own rate, 0.051 to 0.098 an hour, which delivers one day per 24 h there
+(`pinned_events_per_h`; owner, 2026-11-12). A stream starts with no day planned: nothing ahead and full load.
 
 Burnup runs as in a window, and every 30 days (`renewal_days`, ours; owner,
 2026-11-11) the stream refuels the core: it is renewed at its cycle point as at

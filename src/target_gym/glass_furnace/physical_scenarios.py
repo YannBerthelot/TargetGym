@@ -69,22 +69,37 @@ def draws_per_h(per_visit, dwell_h, busy_h):
     return p / (1.0 - p) / dwell_h
 
 
+def long_visit_draws_per_h(rate, busy_h):
+    """The draw rate that delivers ``rate`` changes an hour in a scoring run pinned
+    to the regime (R2), one endless visit: a draw rate lam then delivers
+    lam / (1 + lam busy) an hour (owner, 2026-11-12)."""
+    if rate * busy_h >= 1.0:
+        raise ValueError(f"{rate} an hour cannot be delivered with {busy_h} h busy")
+    return rate / (1.0 - rate * busy_h)
+
+
 #: Gas swings drawn an hour: 0.389 (10.5 a visit at 1.5 a day, each busy 14 h), where
 #: drawing at the sourced 1.5 a day delivered 0.82 a day.
 GAS_EVENTS_PER_H = draws_per_h(GAS_PER_H * GAS_DWELL_H, GAS_DWELL_H, GAS_BUSY_H)
 #: Pull changes drawn an hour: 0.0097 (one a visit, each busy 82 h), where drawing one
 #: a visit's mean dwell delivered 0.72 a visit.
 PULL_EVENTS_PER_H = draws_per_h(1.0, PULL_DWELL_H, PULL_BUSY_H)
+#: The same, in a scoring run pinned to the regime: gas swings 0.500 an hour and pull
+#: changes 0.0116, where the stream's rates would deliver 0.96 and 0.90 of theirs.
+GAS_PINNED_PER_H = long_visit_draws_per_h(GAS_PER_H, GAS_BUSY_H)
+PULL_PINNED_PER_H = long_visit_draws_per_h(1.0 / PULL_DWELL_H, PULL_BUSY_H)
 #: A stream starts no event of its own window: only the stream starts events.
 _NO_WINDOW_EVENT = {"pull_change_window_h": (1.0e9, 1.0e9)}
 
 
-def _stream(dwell_h, events_per_h=0.0, hold_h=None):
-    """A regime's stream fields: its dwell, its event rate and its event's hold."""
+def _stream(dwell_h, events_per_h=0.0, hold_h=None, pinned_per_h=None):
+    """A regime's stream fields: its dwell, its event rate, its rate when a scoring
+    run pins it, and its event's hold."""
     held = {} if hold_h is None else {"event_hold_h": hold_h}
     return dict(
         dwell_h=dwell_h,
         events_per_h=events_per_h,
+        pinned_events_per_h=pinned_per_h,
         stream_overrides={**_NO_WINDOW_EVENT, **held},
     )
 
@@ -106,7 +121,7 @@ def suite() -> tuple:
             "[S1, slide 10] pull change in float control; [S3, slide 8]; [S4]",
             "a planned 10 % rise in pull, shown ahead by its notice",
             weight=WEIGHTS["pull_up"],
-            **_stream(PULL_DWELL_H, PULL_EVENTS_PER_H, PULL_HOLD_H),
+            **_stream(PULL_DWELL_H, PULL_EVENTS_PER_H, PULL_HOLD_H, PULL_PINNED_PER_H),
         ),
         Scenario(
             "pull_down",
@@ -114,7 +129,7 @@ def suite() -> tuple:
             "[S1, slide 10]; [S3, slide 8]; [S4]",
             "a planned 10 % fall in pull, shown ahead by its notice",
             weight=WEIGHTS["pull_down"],
-            **_stream(PULL_DWELL_H, PULL_EVENTS_PER_H, PULL_HOLD_H),
+            **_stream(PULL_DWELL_H, PULL_EVENTS_PER_H, PULL_HOLD_H, PULL_PINNED_PER_H),
         ),
         Scenario(
             "gas_rich",
@@ -122,7 +137,7 @@ def suite() -> tuple:
             "[S20] LNG and biomethane move the Wobbe index over 3 MJ/m3 within a day",
             "an unannounced 6 % rise in the gas's heating value",
             weight=WEIGHTS["gas_rich"],
-            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H),
+            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H, GAS_PINNED_PER_H),
         ),
         Scenario(
             "gas_lean",
@@ -130,6 +145,6 @@ def suite() -> tuple:
             "[S20]",
             "an unannounced 6 % fall in the gas's heating value",
             weight=WEIGHTS["gas_lean"],
-            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H),
+            **_stream(GAS_DWELL_H, GAS_EVENTS_PER_H, GAS_HOLD_H, GAS_PINNED_PER_H),
         ),
     )
