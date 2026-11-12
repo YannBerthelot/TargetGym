@@ -61,9 +61,12 @@ class TaskModel(NamedTuple):
     units. A plant with a spare move (G12) gives ``rest(x)``, the state's
     distance from its resting target, 1 at the edge of its limit: its square
     costs the plan the budget over an episode spent there, and K8's replay
-    never sees it. ``action(state, u)`` is what the env is sent, each task step,
-    for a move that is not a raw command, such as a rate (``oracles.rates``):
-    the raw move itself if not given, and K8's replay sends the same."""
+    never sees it. Nor does it see a hinge marked ``surrogate``
+    (``Hinge.surrogate``), which the plan pays in place of a cost the env
+    charges another way. ``action(state, u)`` is what the env is sent, each
+    task step, for a move that is not a raw command, such as a rate
+    (``oracles.rates``): the raw move itself if not given, and K8's replay
+    sends the same."""
 
     nx: int
     nu: int
@@ -127,10 +130,13 @@ def softplus_clip(z, lo, hi, w):
     return jnp.where(w > 0.0, smooth, jnp.clip(z, lo, hi))
 
 
-def hinge_costs(hinges, y):
-    """The reward's value of the epigraph terms at hinge arguments ``y``."""
+def hinge_costs(hinges, y, surrogates: bool = True):
+    """The reward's value of the epigraph terms at hinge arguments ``y``: what
+    the plan pays, or with ``surrogates`` False what the env charges."""
     out = jnp.zeros((), y.dtype)
     for i, h in enumerate(hinges):
+        if h.surrogate and not surrogates:
+            continue
         r = jnp.abs(y[i]) if h.absolute else y[i]
         out = out + h.weight * jnp.maximum(r - h.tol, 0.0) ** h.power
     return out
@@ -274,7 +280,8 @@ class Oracle:
 
     def _replay(self, d, st, x0, moves, active):
         """K8 for the planned ``moves``, each held one T_c: the planner's model
-        and ``step_env`` run from the same start, over the planned steps."""
+        and ``step_env`` run from the same start, over the planned steps. The
+        planned reward is what the model says the env charges: no surrogate."""
         m, b, n = self.model, self.tc, self.P * self.tc
         ts = jnp.arange(n)
         live, us = ts < active * b, moves[ts // b]
@@ -282,7 +289,8 @@ class Oracle:
         def planned(x, t):
             x1, cost, y, tracked, guards = m.step(d, x, us[t], t)
             low = jnp.min(jnp.asarray(guards, x.dtype), initial=jnp.inf)
-            return x1, (cost + hinge_costs(m.hinges, y), jnp.asarray(tracked), low)
+            paid = cost + hinge_costs(m.hinges, y, surrogates=False)
+            return x1, (paid, jnp.asarray(tracked), low)
 
         key = jax.random.PRNGKey(0)  # the noise is zeroed; only a trip draws
 

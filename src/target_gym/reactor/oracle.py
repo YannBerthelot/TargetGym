@@ -12,8 +12,9 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   ``data/oracle_widths/reactor.json``); the load on the day's schedule, with its
   wobble on its noise-free mean path;
 - objective: |Tref - Tavg| past the rods' dead band, and delta I past the offset's
-  band on either side, through epigraph rows on every sub-step, and the rods' travel
-  and the effluent through rows a step (T2);
+  band on either side (a surrogate for the env's offset clock, which K8's replay
+  leaves out), through epigraph rows on every sub-step, and the rods' travel and the
+  effluent through rows a step (T2);
 - limits: power, fuel temperature and the hot leg on every sub-step's state; Tavg's
   floor has time to act, so only the replay charges it;
   elastic at the trip cost per unit (T3), backed off by the planner's error on
@@ -134,7 +135,8 @@ def reactor_model(env, p) -> TaskModel:
     period = env.control_period
     # The plan's surrogate for the offset's penalty clock, which has no gradient:
     # past the band, each 1 % of rated delta I weighs as 1 % of 1 GWe at $100/MWh.
-    # Plans are scored on replay, against the clock itself.
+    # Plans are scored on replay, against the clock itself, so K8's replay leaves
+    # the surrogate out of the planned reward.
     per_delta_I = float(PLAN_BAND_WEIGHT * 100.0 * p.delta_t / 3600.0)
     flow_step = float(p.effluent_price * p.delta_t * period)
 
@@ -181,7 +183,7 @@ def reactor_model(env, p) -> TaskModel:
         resolution=(float(p.precision_floor),),
         hinges=(Hinge(weight=per_K * float(p.e_floor), absolute=True,
                       tol=float(p.e_tol / p.e_floor)),) * period
-        + (Hinge(weight=per_delta_I),) * (2 * period)
+        + (Hinge(weight=per_delta_I, surrogate=True),) * (2 * period)
         + (
             Hinge(weight=float(p.rod_step_price * p.rod_stroke_steps), absolute=True),
             Hinge(weight=flow_step * float(p.dilution_flow)),
