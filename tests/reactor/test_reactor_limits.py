@@ -138,7 +138,7 @@ def test_a_scram_costs_two_days_of_output():
 def test_a_timed_limits_overrun_costs_hot_standby(field, value):
     env, p, obs, s = reset()
     terms = compute_reward_terms(at(s, **{field: value}), p)
-    assert float(terms["failure"]) == pytest.approx(1.2e6, rel=1e-4)
+    assert float(terms["failure"]) == pytest.approx(4.8e5, rel=1e-4)
 
 
 # --- Tavg above program ---
@@ -166,7 +166,7 @@ def test_tavg_above_its_program_is_charged_past_the_band(hot, expected):
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_the_observation_carries_the_power_the_xenon_is_balanced_with(seed):
     env, p, obs, s = reset(seed)
-    assert obs.shape == (11,)
+    assert obs.shape == (13,)
     lo, hi = p.initial_xenon_power_range
     assert lo <= float(obs[10]) <= hi
     assert float(obs[10]) == pytest.approx(float(s.xenon_power))
@@ -228,7 +228,7 @@ def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
     assert bool(terminated) is ends
     if ends:
         assert float(compute_reward_terms(s, p)["failure"]) == pytest.approx(
-            1.2e6, rel=1e-4
+            4.8e5, rel=1e-4
         )
 
 

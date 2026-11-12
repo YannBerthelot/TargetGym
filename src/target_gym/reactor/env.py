@@ -321,13 +321,28 @@ class ReactorParams(EnvParams):
     # A trip is lost production: 1 GWe at spot ($80/MWh, inside the family's $80 to
     # $100) over the restart, $666.67 per 30 s step down.
     failure_cost: float = 1000.0 * 80.0 * 30.0 / 3600.0
-    #: A scram's restart, 48 h (ours, family 24 to 70 h: Doel-3 ran 18 h at reduced
-    #: power after a 6 h scram, INIS 1ypr9-dk595; APR1400's restart windows are
-    #: 22 to 70 h, KNS 20A-065).
+    #: The trip's lump prices only the dead time before the restart (long-strata R8;
+    #: owner, 2026-11-12): the turbine's reload after it is played out and charged
+    #: as lost output by ``compute_reward_terms``. A scram's dead time, 48 h: ours,
+    #: inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the
+    #: restart (KNS 20A-065).
     restart_steps: int = 5760
-    #: Hot standby after a timed limit's overrun: 15 h (ours, Doel-3's 6 h down and
-    #: 18 h reduced, about 15 h of full output lost; no scram review).
-    standby_steps: int = 1800
+    #: Hot standby after a timed limit's overrun: 6 h, Doel-3's time down before its
+    #: return (INIS 1ypr9-dk595). It was 15 h, Doel-3's 6 h down and its 18 h
+    #: reduced, until the reload was played out.
+    standby_steps: int = 720
+    #: After a trip's restart the turbine reloads (re-record pass, step 2; owner,
+    #: 2026-11-12): it takes at most ``pickup``, which starts at ``restart_load`` and
+    #: rises at ``reload_fast_rate`` below ``reload_knee`` and ``reload_rate`` above,
+    #: until it meets the plan. Doel-3 held its return at 15 % after a 6 h scram
+    #: (INIS 1ypr9-dk595). KEPCO NF's fuel conditioning guideline ramps at 3 %/h
+    #: above 50 % of rated power and finds the rate below it does not matter to the
+    #: fuel (KNS 15A-200, 5 to 50 %/h tested); below it, Exelon's practice of about
+    #: 15 %/h (REALITY.md [ST3]). From 15 % that is 19 h, Doel-3's 18 h.
+    restart_load: float = 0.15
+    reload_knee: float = 0.5
+    reload_fast_rate: float = 0.15 / 3600.0  # 1/s
+    reload_rate: float = 0.03 / 3600.0  # 1/s
     #: Tracking cost per step at the floor, in the reward's units.
     rho_floor_tracking: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
     rho_floor: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
@@ -418,6 +433,10 @@ PARAM_UNITS = {
     "failure_cost": "reward",
     "restart_steps": "steps",
     "standby_steps": "steps",
+    "restart_load": "fraction of rated load",
+    "reload_knee": "fraction of rated load",
+    "reload_fast_rate": "1/s",
+    "reload_rate": "1/s",
     "rho_floor_tracking": "reward",
     "rho_floor": "reward",
 }
@@ -501,7 +520,14 @@ class ReactorState(EnvState):
     burn_t0: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
     )
+    #: After a trip's restart the turbine reloads: the most it takes, a fraction of
+    #: rated load, rising at the conditioning ramps until it meets the plan
+    #: (``restart_load``). ``NOT_RELOADING`` otherwise, as in every window.
+    pickup: float = struct.field(default=1.0e9, kw_only=True)
 
+
+#: ``ReactorState.pickup`` when the turbine is not reloading.
+NOT_RELOADING = 1.0e9
 
 #: Hours the offset's allowance looks back over: "1 hour during the previous 24
 #: hours" (REALITY.md section 4).
@@ -964,7 +990,12 @@ def compute_next_state(
         + p.demand_sigma * jnp.sqrt(p.delta_t) * noise
     )
     day = planned_load(plan_seconds(new_physics_time, state, p), state)
-    new_load = day + wobble
+    # After a restart the turbine takes at most ``pickup``, which climbs at the
+    # conditioning ramps until it meets the plan (``ReactorParams.restart_load``).
+    climb = jnp.where(state.pickup < p.reload_knee, p.reload_fast_rate, p.reload_rate)
+    pickup = state.pickup + climb * p.delta_t
+    pickup = jnp.where(pickup >= day, NOT_RELOADING, pickup)
+    new_load = jnp.minimum(day, pickup) + wobble
 
     return (
         state.replace(
@@ -1004,6 +1035,7 @@ def compute_next_state(
                 0.0,
             ),
             physics_time=new_physics_time,
+            pickup=pickup,
         ),
         metrics,
     )
@@ -1020,10 +1052,11 @@ def get_obs(state: ReactorState, params: ReactorParams):
     Partially observable: the agent sees only measurable quantities.
 
     ``obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron, to_down,
-    to_up]``, the rod position in [-1, 1] with +1 fully out, as the demand is.
-    ``to_down`` and ``to_up`` are the hours until the planned ramps start, 0 once
-    they have: the dispatch an operator gets in advance (OAPS, section 1), so boron
-    can lead its delay.
+    to_up, xenon's power, ramp rate, minimum load]``, the rod position in [-1, 1]
+    with +1 fully out, as the demand is. ``to_down`` and ``to_up`` are the hours
+    until the planned ramps start, 0 once they have, and the day's ramp rate (% of
+    rated load a minute) and minimum load are its program's: the dispatch an
+    operator gets in advance (OAPS, section 1), so boron can lead its delay.
 
     Hidden: C_i, T_fuel, T_sg, iodine, xenon, and the boron on its way.
     """
@@ -1042,6 +1075,8 @@ def get_obs(state: ReactorState, params: ReactorParams):
             jnp.maximum(state.ramp_down_at - now, 0.0) / 3600.0,
             jnp.maximum(state.ramp_up_at - now, 0.0) / 3600.0,
             state.xenon_power,
+            state.plan_rate * 6000.0,
+            1.0 - state.plan_depth,
         ]
     )
 
@@ -1106,6 +1141,13 @@ def compute_reward_terms(
         state.ao_outside >= p.ao_allowed, xp.maximum(state.n - p.derate_to, 0.0), 0.0
     )
     tracking = tracking + per_GW_s * derated * p.delta_t
+    # While the turbine reloads after a restart, the plan it does not take is lost
+    # output, priced as the derate's and the trip's are. The trip's lump prices only
+    # the dead time before the restart (long-strata R8), so the reload the dynamics
+    # play out is paid here, once. 0 before any trip, as the plan is the load.
+    plan = planned_load(plan_seconds(state.physics_time, state, p), state, xp)
+    short = xp.maximum(plan - state.pickup, 0.0)
+    tracking = tracking + per_GW_s * short * p.delta_t
     rod_wear = p.rod_step_price * p.rod_stroke_steps * state.rod_moved
     treatment = p.effluent_price * state.effluent * p.delta_t
     if tripped is None:

@@ -33,6 +33,16 @@ LOAD, TO_DOWN, TO_UP = 3, 8, 9
 HOUR_STEPS = 120  # 30 s control steps
 #: Rods parked (3 of 228 steps in), no boron flow: the reset's own line-out.
 PARKED = jnp.array([1.0 - 2.0 * 3.0 / 228.0, 0.0])
+#: An envelope nothing reaches, so no trip restarts the plant (a restart reloads
+#: the turbine, which moves the load off the plan).
+WIDE = dict(
+    n_max=50.0,
+    T_coolant_max=5000.0,
+    T_fuel_max=1.0e5,
+    floor_allowed=1.0e9,
+    ril_allowed=1.0e9,
+    dnb_allowed=1.0e9,
+)
 
 
 @pytest.fixture(scope="module")
@@ -101,7 +111,9 @@ def test_a_load_follow_day_is_announced_and_runs_its_shape_on_another_scenario(
     notice = float(stream.env.get_obs(s, base)[TO_DOWN])
     lo, hi = (x / 3600.0 for x in slow.day_notice_range)
     assert lo <= notice <= hi
-    out = run(stream, s, base, 15 * HOUR_STEPS)  # stepped on baseload's params
+    # Stepped on baseload's params, with the envelope lifted so the parked rods
+    # cannot trip the plant (owner's approval, 2026-11-12).
+    out = run(stream, s, base.replace(**WIDE), 15 * HOUR_STEPS)
     load, t = out[:, 0], (np.arange(len(out)) + 1) / HOUR_STEPS  # h after onset
     # No hold: the 30 s samples straddle the bottom, one step's ramp at most.
     assert load.min() == pytest.approx(0.5, abs=0.08 / HOUR_STEPS)
@@ -155,6 +167,10 @@ def test_the_plan_after_an_onset_is_the_same_however_long_the_plant_has_run(
     seen = []
     for onset in (40, 40 + 2**22):
         s, base = _reset(stream, onset)
+        # Burnup counts from the jumped clock, as a refuelling there would leave
+        # it, so the core is not tripped by years of it (owner's approval,
+        # 2026-11-12).
+        s = s.replace(burn_t0=s.physics_time)
         s = stream.env.start_event(s, jax.random.PRNGKey(1), daily)
         seen.append(run(stream, s, base, 3 * HOUR_STEPS))
     np.testing.assert_array_equal(seen[0], seen[1])
@@ -218,11 +234,12 @@ def test_time_outside_the_offset_band_a_day_ago_stops_counting(stream):
 # Restarts and refuelling (long-strata R8; owner, 2026-11-11).
 #
 # Contract:
-# - a trip restarts the plant back on its plan once the lump's time has passed:
-#   at the plan's load, lined out on its program, rods parked, critical on boron
-#   with the burnup since the last refuelling diluted, and with iodine and xenon
-#   (means and tilts) as that time at zero power leaves them: 48 h after a scram
-#   (``restart_steps``), 15 h after a timed limit's hot standby (``standby_steps``);
+# - a trip restarts the plant once the lump's dead time has passed: at the restart
+#   load (the turbine's reload, below), lined out on its program, rods parked,
+#   critical on boron with the burnup since the last refuelling diluted, and with
+#   iodine and xenon (means and tilts) as that time at zero power leaves them: 48 h
+#   after a scram (``restart_steps``), 6 h after a timed limit's hot standby
+#   (``standby_steps``; owner, 2026-11-12);
 # - a stream refuels the core every ``renewal_days``: renewed at its cycle point
 #   as at reset, uncharged, the outside world carrying on; a window never does.
 #
@@ -286,27 +303,8 @@ def test_a_trip_restarts_with_the_xenon_its_dead_time_leaves(stream, standby):
     np.testing.assert_allclose(float(restarted.I_tilt), It, rtol=1e-3, atol=1e-7)
     np.testing.assert_allclose(float(restarted.Xe_tilt), Xt, rtol=1e-3, atol=1e-7)
     # From balance at full power: 48 h out, xenon is about a fifth of balance and
-    # builds back; 15 h out, it is still above balance and burns out.
+    # builds back; 6 h out, it is near its peak, above balance, and burns out.
     assert (Xe < 0.3) if not standby else (Xe > 1.2)
-
-
-def test_a_restarted_plant_is_on_its_plan_lined_out_and_critical(stream):
-    tripped, base = _tripped(stream, days=12.0)
-    restarted = _restart(stream, tripped, base)
-    obs = np.asarray(stream.env.get_obs(restarted, base))
-    # At the plan's load where the day stands, carried over the trip.
-    assert float(restarted.n) == pytest.approx(float(tripped.target_n), abs=0.02)
-    assert obs[4] == pytest.approx(obs[5], abs=0.05)  # Tavg on its program
-    assert obs[2] == pytest.approx(float(PARKED[0]), abs=1e-6)  # rods parked
-    # Critical: with the rods parked and no boron flow, the power holds over a
-    # minute, the burnup of 12 days diluted in its boron. Uncompensated, those
-    # 12 days are about 270 pcm, which moves the power by percents in a minute.
-    step = jax.jit(stream.env.step_env)
-    s = restarted.replace(target_n=jnp.asarray(float(restarted.n), jnp.float32))
-    for k in range(2):
-        obs, s, _, _, info = step(jax.random.PRNGKey(k), s, PARKED, base)
-        assert not bool(info["tripped"])
-    assert float(s.n) == pytest.approx(float(restarted.n), abs=2e-3)
 
 
 def test_the_kernel_restarts_a_trip_through_the_restart(stream):
@@ -341,3 +339,182 @@ def test_a_stream_refuels_the_core_at_its_cycle_point_and_a_window_never(stream)
     assert window.renewal_days == 0.0
     _, kept, *_ = step(jax.random.PRNGKey(0), s, PARKED, window)
     assert float(burnt(kept, window)) > 10.0
+
+
+# ---------------------------------------------------------------------------
+# The turbine's reload after a restart (re-record pass, step 2; owner,
+# 2026-11-11).
+#
+# Contract:
+# - a trip's restart brings the plant back at reduced power, lined out on its
+#   program at that load and critical with the rods parked, and the turbine
+#   reloads: it takes at most a pickup that starts at the restart load and climbs
+#   at the fuel's conditioning ramps until it meets the plan, then follows it;
+# - the plan the turbine does not take while it reloads is lost output, charged
+#   by the dynamics at spot, as the trip's lump is (R8: the lump prices the dead
+#   time, the simulation the reload, once).
+#
+# Oracles: Doel-3 held its return at 15 % after a 6 h scram (INIS 1ypr9-dk595);
+# conditioning ramps of 3 %/h above 50 % of rated power (KNS 15A-200) and Exelon's
+# practice of about 15 %/h below (REALITY.md [ST3]); 1 GWe at $80/MWh; the hand
+# arithmetic in each test.
+# ---------------------------------------------------------------------------
+
+RESTART_LOAD = 0.15
+KNEE = 0.5
+FAST, SLOW = 0.15, 0.03  # per hour
+
+
+def _restarted_on_baseload(stream, standby, days=12.0):
+    """A baseload plant with no day planned, tripped ``days`` into its cycle and
+    restarted: the plan stays at full load."""
+    s, base = _reset(stream, int(days * 24 * HOUR_STEPS))
+    if standby:
+        s = s.replace(below_floor=jnp.float32(base.floor_allowed + 5.0))
+    else:
+        s = s.replace(n=jnp.float32(1.2))
+    return _restart(stream, s, base), base
+
+
+@pytest.mark.parametrize("standby", [False, True])
+def test_a_restart_comes_back_at_the_restart_load_lined_out_and_critical(
+    stream, standby
+):
+    restarted, base = _restarted_on_baseload(stream, standby)
+    obs = np.asarray(stream.env.get_obs(restarted, base))
+    assert float(restarted.n) == pytest.approx(RESTART_LOAD, abs=0.005)
+    assert obs[LOAD] == pytest.approx(RESTART_LOAD, abs=1e-6)  # the turbine's load
+    assert obs[4] == pytest.approx(obs[5], abs=0.05)  # Tavg on its program there
+    assert obs[2] == pytest.approx(float(PARKED[0]), abs=1e-6)  # rods parked
+    # Critical: the pickup held, rods parked and no boron flow, the power holds
+    # over a minute, the burnup of 12 days diluted in its boron. Uncompensated,
+    # those 12 days are about 270 pcm, which moves the power by percents.
+    held = base.replace(reload_fast_rate=0.0, reload_rate=0.0)
+    step = jax.jit(stream.env.step_env)
+    s = restarted
+    for k in range(2):
+        obs, s, _, _, info = step(jax.random.PRNGKey(k), s, PARKED, held)
+        assert not bool(info["tripped"])
+    assert float(s.n) == pytest.approx(float(restarted.n), abs=2e-3)
+
+
+def test_the_turbine_reloads_at_the_conditioning_ramps_until_it_meets_the_plan(
+    stream, run
+):
+    restarted, base = _restarted_on_baseload(stream, standby=True)
+    out = run(stream, restarted, base.replace(**WIDE), 20 * HOUR_STEPS)
+    load, t = out[:, 0], (np.arange(len(out)) + 1) / HOUR_STEPS  # h after restart
+    # 15 % to the 50 % knee at 15 %/h: 2.33 h; then 3 %/h to full load: 16.67 h.
+    knee_h = (KNEE - RESTART_LOAD) / FAST
+    full_h = knee_h + (1.0 - KNEE) / SLOW
+    fast = (t > 0.05) & (t < knee_h - 0.05)
+    slow = (t > knee_h + 0.5) & (t < full_h - 0.5)
+    assert np.polyfit(t[fast], load[fast], 1)[0] == pytest.approx(FAST, rel=1e-3)
+    assert np.polyfit(t[slow], load[slow], 1)[0] == pytest.approx(SLOW, rel=1e-3)
+    met = t[np.argmax(load >= 1.0)]
+    assert met == pytest.approx(full_h, abs=2.0 / HOUR_STEPS)
+    np.testing.assert_array_equal(load[t >= met], 1.0)  # on the plan from there
+
+
+def test_a_reload_that_meets_the_plan_follows_it(stream, run):
+    """Tripped in a load-follow day's 50 % hold: the pickup meets the plan at the
+    knee, and the plan's own ramp back up then runs at the day's 2 %/min."""
+    s, base = _reset(stream, int(12 * 24 * HOUR_STEPS))
+    daily = _params(stream, "edf_daily")
+    s = stream.env.start_event(s, jax.random.PRNGKey(1), daily)
+    obs = stream.env.get_obs(s, base)
+    to_down, to_up = float(obs[TO_DOWN]), float(obs[TO_UP])
+    held = int((to_down + 0.5) * HOUR_STEPS)  # in the hold: past the 25 min ramp
+    s = _later(s, held, stream.env).replace(n=jnp.float32(1.2))
+    restarted = _restart(stream, s, base)
+    hours = to_up - held / HOUR_STEPS + 1.0  # through the plan's ramp back up
+    out = run(stream, restarted, base.replace(**WIDE), int(hours * HOUR_STEPS))
+    load, t = out[:, 0], (np.arange(len(out)) + 1) / HOUR_STEPS
+    knee_h = (KNEE - RESTART_LOAD) / FAST
+    up_h = to_up - held / HOUR_STEPS  # the plan's ramp up, from the restart
+    assert float(load[0]) < 0.2
+    hold = (t > knee_h + 2.0 / HOUR_STEPS) & (t < up_h)
+    np.testing.assert_allclose(load[hold], 0.5, atol=1e-6)
+    rising = (t > up_h + 0.05) & (t < up_h + 0.35)
+    slope = np.polyfit(t[rising], load[rising], 1)[0]
+    assert slope == pytest.approx(0.02 * 60.0, rel=1e-3)  # 2 %/min, per hour
+    assert float(load[-1]) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_the_reload_s_lost_output_is_charged_once(stream):
+    """In tracking, as the offset's derate is (owner, 2026-11-12)."""
+    from target_gym.reactor.env import NOT_RELOADING
+
+    restarted, base = _restarted_on_baseload(stream, standby=True)
+    wide = base.replace(**WIDE)
+
+    @jax.jit
+    def roll(state, keys):
+        def body(s, k):
+            obs, s, _, _, info = stream.env.step_env(k, s, PARKED, wide)
+            off = stream.env.reward_terms(s.replace(pickup=NOT_RELOADING), wide)
+            reload = stream.env.reward_terms(s, wide)["tracking"] - off["tracking"]
+            out = (info["reward_terms"]["tracking"], reload, obs[LOAD], info["tripped"])
+            return s, out
+
+        return jax.lax.scan(body, state, keys)[1]
+
+    keys = jax.random.split(jax.random.PRNGKey(2), 20 * HOUR_STEPS)
+    step_cost, reload, load, tripped = (
+        np.asarray(x, np.float64) for x in roll(restarted, keys)
+    )
+    assert not tripped.any()
+    per_sub = 1000.0 * 80.0 / 3600.0 * 5.0  # $ per 5 s sub-step at full shortfall
+    # The first step, Tavg still inside its dead band: the pickup climbs
+    # 0.15/3600 x 5 s a sub-step from 0.15, and each of the 6 sub-steps charges
+    # 1 - pickup: 6 x 0.85 - 21 x 2.083e-4.
+    climb = FAST / 3600.0 * 5.0
+    assert step_cost[0] == pytest.approx(per_sub * (6 * 0.85 - 21 * climb), rel=1e-4)
+    # At every step's end, what the reload adds to a sub-step is the plan (full
+    # load) the turbine does not take, and nothing once it has met the plan.
+    np.testing.assert_allclose(reload, per_sub * (1.0 - load), rtol=1e-4, atol=1e-3)
+    assert reload[-HOUR_STEPS:].max() == 0.0
+    # The whole reload: 2.33 h at a mean shortfall of 0.675 and 16.67 h at 0.25,
+    # 5.742 h of full output at $80,000 an hour. Summed at the steps' ends, the
+    # pickup leads each step's mean by 2.5 sub-steps: under 1e-3 of the total.
+    lost_h = (0.35 / FAST) * 0.675 + (0.5 / SLOW) * 0.25
+    assert 6.0 * reload.sum() == pytest.approx(lost_h * 80000.0, rel=2e-3)
+
+
+# ---------------------------------------------------------------------------
+# The dispatch's rate and depth (re-record pass, step 2; owner, 2026-11-12).
+#
+# Contract: the observation carries the day's program as a dispatch gives it to
+# an operator: the hours to each ramp (obs 8, 9), the ramp's rate in % of rated
+# load a minute (obs 11) and the day's minimum load (obs 12), the day's own,
+# whatever scenario the stream has moved to. Oracles: the scenarios' declared
+# rates and minima (REALITY.md section 6).
+# ---------------------------------------------------------------------------
+
+RATE, LOW = 11, 12
+
+
+@pytest.mark.parametrize(
+    "scenario, per_min, low",
+    [
+        ("edf_daily", 2.0, 0.5),
+        ("krsko_slow", 8.0 / 60.0, 0.5),
+        ("krsko_shallow", 4.0 / 60.0, 0.75),
+        ("fast_return", 5.0, 0.5),
+    ],
+)
+def test_the_observation_carries_the_day_s_rate_and_minimum(
+    stream, scenario, per_min, low
+):
+    s, base = _reset(stream)
+    s = stream.env.start_event(s, jax.random.PRNGKey(1), _params(stream, scenario))
+    obs = np.asarray(stream.env.get_obs(s, base))  # read on baseload's params
+    assert obs.shape == (13,)
+    assert obs[RATE] == pytest.approx(per_min, rel=1e-5)
+    assert obs[LOW] == pytest.approx(low, abs=1e-6)
+    # Plan values, not sensors: the instruments' noise leaves them exact.
+    names = [sc.name for sc in stream.scenarios]
+    noisy = stream.scenario_params(stream.default_params, names.index("baseload"))
+    read = np.asarray(stream.env.get_obs(s, noisy))
+    assert read[0] != obs[0]  # the power reading scatters
+    np.testing.assert_array_equal(read[RATE:], obs[RATE:])

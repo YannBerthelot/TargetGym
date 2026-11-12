@@ -206,7 +206,7 @@ holds at 50 % and comes back, at the scenario's rate, with a small wobble.
 | 0 | `n`, power relative to rated |
 | 1 | hot-leg temperature (K) |
 | 2 | rod position, +1 fully out, -1 fully in |
-| 3 | turbine load |
+| 3 | turbine load: the plan's, or while the turbine reloads after a trip's restart, the reload's |
 | 4 | `T_avg` (K) |
 | 5 | `T_ref` (K) |
 | 6 | `delta_I`, top minus bottom, a fraction of rated |
@@ -214,6 +214,12 @@ holds at 50 % and comes back, at the scenario's rate, with a small wobble.
 | 8 | hours until the planned ramp down starts, 0 once it has |
 | 9 | hours until the planned ramp up starts, 0 once it has |
 | 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history); after a trip's restart, the power whose balance is the restart's xenon, 1 when it is above full power's |
+| 11 | the day's ramp rate, % of rated load a minute, as the dispatch gives it (owner, 2026-11-12) |
+| 12 | the day's minimum load, a fraction of rated, as the dispatch gives it |
+
+Observations 11 and 12 joined on 2026-11-12, so the observation grew from 11 to
+13 channels: a learner sized for 11 inputs must be rebuilt. The first 11 are as
+they were. The task's version goes up with the re-record pass (step 4), not before.
 
 Actions: `[rod demand, boron flow]` in [-1, 1]. Rod demand reads as obs 2. Boron flow
 is -1 for full dilution, +1 for full boration. Xenon, iodine, their tilts, the boron
@@ -224,8 +230,8 @@ operator's xenon tool starts from.
 
 | limit | kind | form | source |
 |---|---|---|---|
-| power, fuel temperature, hot leg (610 K, ours: under the 618.0 K saturation at 2250 psia, IAPWS-IF97) | trip | the envelope; a scram, 48 h of lost output | ours, family 24 to 70 h (Doel-3, INIS 1ypr9-dk595; APR1400, KNS 20A-065) |
-| Tavg under 556 K | timed | 900 s allowed, then hot standby, 15 h of lost output | ours, inside the family's 15 to 30 min to restore; 15 h from Doel-3's 6 h down and 18 h reduced |
+| power, fuel temperature, hot leg (610 K, ours: under the 618.0 K saturation at 2250 psia, IAPWS-IF97) | trip | the envelope; a scram, 48 h of dead time, then the turbine's reload | ours, inside APR1400's 22 to 70 h from the scram to the rods' withdrawal (KNS 20A-065) |
+| Tavg under 556 K | timed | 900 s allowed, then hot standby, 6 h of dead time, then the turbine's reload | ours, inside the family's 15 to 30 min to restore; 6 h, Doel-3's time down (INIS 1ypr9-dk595) |
 | axial offset outside +-0.05 | penalty clock | time outside counts at every power; 1 h in 24 h is free; past it, the lost output of a derate to 50 % | EDF's band (IAEA NP-T-3.23, annex II-4.3); the 1 h in 24 h and the derate from Westinghouse specifications (D.C. Cook, RAOC), pooled in since EDF's was not found |
 | Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, so hot standby | STS LCO 3.4.1 (US EPR GTS and AP1000 bases, from search summaries); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
 | rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
@@ -257,21 +263,41 @@ there. At 2.3 to 3.3 ppm a day this keeps the boron within about 100 ppm of the
 start of cycle the coefficients describe; without it a year's stream would end
 near 700 ppm. A window never refuels.
 
-**The restart after a trip** (long-strata R8; owner, 2026-11-11). The trip's
-lump prices the whole return to power, 48 h after a scram (`restart_steps`) and
-15 h after a timed limit's hot standby (`standby_steps`), both ours inside the
-family's 24 to 70 h. The plant then restarts back on its plan: at the plan's load
-where the day stands, lined out on its program with the rods parked, critical on
-boron with the burnup since the last refuelling diluted, as operators line out a
-restart. Iodine and xenon, means and tilts, are what that time at zero power
-left (`env.xenon_after_shutdown`, the plant's own rates at n = 0 solved
-exactly): from balance at full power, xenon is about 0.19 of balance after 48 h
-and builds back over the next two days, which asks about 250 ppm of dilution, and
-it is about 1.34 after 15 h, still above balance, and burns out. The policy rides
-that xenon transient and the dynamics charge it, so nothing is paid twice. The
-core's burn rate, boron delay and point in its cycle stay. Before, a trip
-restarted at once in established operation, as `reset_env` would, and its load
-plan and frequency wobble started again from the day's beginning.
+**The restart after a trip** (long-strata R8; owner, 2026-11-11 and 2026-11-12).
+The trip's lump prices the dead time before the restart: 48 h after a scram
+(`restart_steps`, ours, inside APR1400's 22 to 70 h from the scram to the rods'
+withdrawal) and 6 h after a timed limit's hot standby (`standby_steps`, Doel-3's
+time down). Iodine and xenon, means and tilts, are what that time at zero power
+left (`env.xenon_after_shutdown`, the plant's own rates at n = 0 solved exactly):
+from balance at full power, xenon is about 0.20 of balance after 48 h and builds
+back over the next two days, and about 1.55 after 6 h, near its peak, and burns
+out. The plant restarts at 15 % of rated power (`restart_load`, Doel-3's return),
+or the plan's load if it is lower, lined out on its program with the rods parked
+and critical on boron with the burnup since the last refuelling diluted, as
+operators line out a restart. The core's burn rate, boron delay and point in its
+cycle stay.
+
+The turbine then reloads: it takes at most `pickup`, which starts at the restart
+load and climbs at 15 %/h to 50 % of rated power and at 3 %/h above (the fuel's
+conditioning ramps: Exelon's practice below the threshold, KEPCO NF's guideline
+above it), until it meets the plan, which it then follows. From 15 % to full load
+that is 19 h, close to Doel-3's 18 h at reduced power. The plan the turbine does
+not take meanwhile is lost output, charged in tracking at the trip's own price
+($666.67 a step at full shortfall), as the offset's derate is, so the lump and the
+dynamics each pay their part once. Before any trip the plan is the load and the
+charge is 0, so every window is unchanged up to its first trip.
+
+Observation 3 is the turbine's load, the reload's while it lasts; the dispatch's
+timing stays in observations 8 and 9. This differs from `boiler_drum`, whose
+load-now stays the plan's and whose steam flow shows the reload: here Tref is
+programmed on the turbine's load and the rod program reads it, so the turbine's
+load is the one a control room reads. The turbine's load and Tref therefore left
+the task's outside world: they follow the plant's own history.
+
+Before, the plant restarted at the plan's full load with the xenon 15 h of standby
+left, about 1.34 of balance, and the expert re-tripped 5 of 5 times about 18 min
+in, the burnout driving the hot leg past 610 K. Earlier still, a trip restarted at
+once in established operation, as `reset_env` would.
 
 ---
 
@@ -403,6 +429,33 @@ dead band, the lead and the plant's two worths are all set elsewhere.
 The rods and the Tavg PI are unchanged. Every rung of the ladder uses the same tool,
 so the comparison between rungs stays fair.
 
+**Each day's dispatch (re-record pass, step 2; owner, 2026-11-11 and 2026-11-12).**
+The reference read the plan's hours to the ramps on its first step only, and planned
+every day at the default 2 %/min down to 50 %. So in a stream it never saw a later
+load-follow day, and on Krsko's days (8 %/h, and 4 %/h to 75 %) and the EUR's
+5 %/min it fed forward a ramp the plant did not run: it tripped 3 times in every
+krsko_slow and krsko_shallow window and up to twice in fast_return's. It now reads
+the dispatch on its first step and again whenever the hours ahead show a new day
+once the day it holds has ended, as an operator reads each day's program when it
+comes, and plans with the day's own rate and minimum, which the dispatch now gives
+(observations 11 and 12). A ramp the dispatch reads 0 for has already run, so a
+reference started mid-day takes it as done rather than starting now.
+
+**The load the turbine takes (owner, 2026-11-12).** After a trip's restart the
+turbine reloads (section 4, the stream) and does not follow the plan until it meets
+it. The reference fed the plan forward all the same: a day announced just before a
+trip made it borate for a ramp down the reloading turbine never made, and Tavg fell
+21 K under its program and tripped on its floor. It now feeds forward the load the
+turbine will take. When the turbine's load reads more than `reload_band` under the
+plan, it is reloading, and the reference predicts it climbing from where it reads at
+the plant's conditioning ramps, which the operators run and so know, until it meets
+the plan. `reload_band` is 0.05, **ours:** ten times the frequency wobble's 0.5 %
+spread, which a turbine on its plan never leaves.
+
+Both are structural; no gain moved. Windows on edf_daily, edf_short_hold and
+baseload are unchanged, bit for bit. The Krsko and fast_return windows move and stop
+tripping (the re-record pass, step 5, records them again).
+
 ---
 
 <!-- BEGIN GENERATED FACTS -->
@@ -415,7 +468,7 @@ so the comparison between rungs stays fair.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 11 | 134 |
+| `reactor` | 2880 | 30 | 24.0 h | 2 in [-1, 1] | 13 | 135 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -440,8 +493,11 @@ which is what the recorded baselines use.
 | `ril_full`, `ril_half`, `ril_allowed` | 0.22, 0.78, 7200 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore (STS 3.1.6) |
 | `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
 | `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
-| `restart_steps` | 5760 (48 h) | a scram's restart, **ours,** family 24 to 70 h: Doel-3 ran 18 h at reduced power after a 6 h scram (INIS 1ypr9-dk595), APR1400's restart windows are 22 to 70 h (KNS 20A-065) |
-| `standby_steps` | 1800 (15 h) | hot standby after a timed limit's overrun, **ours:** Doel-3's 6 h down and 18 h reduced, about 15 h of full output lost |
+| `restart_steps` | 5760 (48 h) | a scram's dead time, **ours,** inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the restart (KNS 20A-065). The reload after it is played out and charged in tracking |
+| `standby_steps` | 720 (6 h) | hot standby's dead time after a timed limit's overrun: Doel-3's time down (INIS 1ypr9-dk595). It was 15 h, Doel-3's 6 h down and its 18 h reduced, until the reload was played out (owner, 2026-11-12) |
+| `restart_load` | 0.15 | the load a restart comes back at: Doel-3 held its return at 15 % after a 6 h scram, its offset off band from the xenon the shutdown built (INIS 1ypr9-dk595) |
+| `reload_knee`, `reload_rate` | 0.5, 3 %/h | the turbine's reload above 50 % of rated power: KEPCO NF's fuel conditioning guideline, 3 %/h above a 50 % threshold, 2 to 4 %/h tested (KNS 15A-200); 3 %/h above the threshold at most plants (EPRI, REALITY.md [ST2], [ST3]) |
+| `reload_fast_rate` | 15 %/h | the reload below the knee: Exelon's practice of about 15 %/h below its threshold (REALITY.md [ST3]); KNS 15A-200 finds the rate there does not matter to the fuel (5 to 50 %/h tested). From 15 % the reload takes 19 h, Doel-3's 18 h. It was first 50 %/h, **ours,** the "no limit" KNS 15A-200 simulates; the expert then re-tripped on Tavg's floor after every scram, the turbine loading faster than boron can follow, so the owner took the practice rate (2026-11-12) |
 
 A step at the floor costs `rho_floor_tracking`, $0.0958: the price per K over the 30
 s step, times `e_floor`.
@@ -459,7 +515,7 @@ cost the envelope can produce, and `restart_steps` the time a restart would take
 so a trip costs `restart_steps x failure_cost` (`reward.trip_cost`). A trip never
 ends the window (`base.failure_kernel`): the step that leaves the envelope is
 charged the trip cost, with tracking and running cost zeroed, and the plant
-restarts back on its plan with the xenon its dead time left (`restart_plant`,
+restarts at the restart load with the xenon its dead time left, and the turbine reloads (`restart_plant`,
 section 4, "The stream"), on the same clock. `terminated` stays
 false unless `continuing = False`, which ends the episode on that step instead; `info["tripped"]` marks the event for the evaluator. `reward_version = 1` reconstructs the
 capped log-scaled reward of the previous version (`precision_floor` and the
@@ -468,7 +524,7 @@ old weights are read only by it).
 ## Readings
 
 The observation reports power and the coolant temperatures through their instruments
-(`docs/proposals/measurement-noise.md`). Rod position, the load and Tref stay exact, and boron reads 20 min late:
+(`docs/proposals/measurement-noise.md`). Rod position, the load and Tref stay exact, as do the dispatch's hours, rate and minimum (plan values, not sensors), and boron reads 20 min late:
 the rods are the controller's own rate-limited command, known by counting steps.
 `sensor_noise_scale = 0` gives the noise-free task. Tavg is the mean of the two RTDs,
 so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg channel.

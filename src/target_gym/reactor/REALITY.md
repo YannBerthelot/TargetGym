@@ -120,6 +120,19 @@ rest.
   was, so a mid-cycle trip does not restart the conditioning (IRSN 2023-00018). The
   post-trip state operators restart from: not found. The restart's xenon is the
   plant's own zero-power decay over the lump's time (PHYSICS.md section 4).
+- **The return to power after a trip** (re-record pass, step 2, 2026-11-11). Doel-3's
+  return after its 6 h scram was held at 15 % of rated power, because the xenon
+  built while it was down put the axial offset off its band, and the unit ran 18 h
+  at reduced power before it reached full power again [S15]. APR1400's restart time
+  of 22 to 70 h runs from the scram to the withdrawal of the rods for the restart:
+  the earliest restart that keeps the core critical over the next five days at a
+  given dilution rate, 69.6 h at 0.1 ppm/h [S16]. KEPCO NF's fuel conditioning
+  guideline ramps at 3 %/h above a 50 % threshold (2 to 4 %/h tested) and finds
+  that the rate below the threshold does not matter to the fuel (5 to 50 %/h
+  tested) [ST4]. All three were read twice. Seen once: typical limits of 3 to 4 %/h
+  above a threshold of 20 to 40 % (EPRI TR-112140-V2, a search summary). Ramp
+  limits written for a trip rather than a startup: still not found, so the task
+  uses the startup limits.
 - **Not found.** EDF's critical boron at the start and end of a cycle; post-trip
   ramp limits specific to a trip. NRC, OECD-NEA, IAEA and some EDF documents could
   not be opened by an automated reader.
@@ -132,6 +145,9 @@ rest.
 - [ST2] EPRI 1000847 (2001), report summary: power ascension after refuelling.
 - [ST3] EPRI 1012915 (2006), summary and section 1: fuel reliability and power
   ascension rates.
+- [ST4] Lee et al. (KEPCO Nuclear Fuel), *FALCON code simulation for verification of
+  fuel preconditioning guideline*, KNS Autumn 2015, 15A-200, Table 3 and section 2.6.
+  <http://www.kns.org/files/pre_paper/34/15A-200%ec%9d%b4%ed%9d%ac%ed%9b%88.pdf>
 
 ## Sources
 

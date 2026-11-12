@@ -222,3 +222,141 @@ def test_with_xenon_in_balance_a_baseload_day_moves_no_boron(seed):
 )
 def test_boron_follows_a_ramp_only_within_the_lines_rate(rate, follows):
     assert bool(boron_can_follow(rate, 1690.0, ReactorParams())) is follows
+
+
+# --- each day's dispatch (re-record pass, step 2; owner, 2026-11-11) ---
+# Contract: the reference feeds boron forward from the day's plan, which the
+# dispatch announces through the hours to the ramps (obs 8 and 9, OAPS section 1).
+# In a stream the plant meets a new load-follow day after the last one ended, and
+# the reference reads each day's dispatch as it read the first: its response to a
+# day's plan does not depend on which day it is. Oracle: that invariance, on a
+# plant held lined out at full power, where the plan's feedforward is the only
+# part that moves (Tavg on its program, offset on its reference, xenon balanced).
+
+HOUR_STEPS = 120
+
+
+def _dispatch(steps, onsets, notice_h, ramp_h, hold_h):
+    """The hours to the ramp down and the ramp up over ``steps`` 30 s control
+    steps, for days announced at the ``onsets`` steps: 0 once a ramp has started,
+    and 0 for both before the first day."""
+    out = np.zeros((steps, 2), np.float32)
+    for k in range(steps):
+        past = [o for o in onsets if o <= k]
+        if not past:
+            continue
+        since = (k - past[-1]) / HOUR_STEPS
+        out[k, 0] = max(notice_h - since, 0.0)
+        out[k, 1] = max(notice_h + ramp_h + hold_h - since, 0.0)
+    return out
+
+
+def test_the_reference_reads_each_day_s_dispatch():
+    p = ReactorParams()
+    expert = make_reactor_pid_controller()
+    ramp_h = (1.0 - p.load_min) / p.load_ramp_rate / 3600.0
+    second = 24 * HOUR_STEPS
+    steps = second + 8 * HOUR_STEPS
+    plan = _dispatch(steps, (0, second), 1.0, ramp_h, 3.0)
+    T_avg = p.T_avg_full_load  # on the program at full load
+    lined_out = np.array(
+        [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
+         0.0, 0.0, 1.0, 2.0, 0.5],
+        np.float32,
+    )  # fmt: skip
+    obs = np.tile(lined_out, (steps, 1))
+    obs[:, 8:10] = plan
+
+    def body(m, o):
+        a, m = expert.act(m, o)
+        return m, a[1]
+
+    flow = np.asarray(
+        jax.jit(lambda o: jax.lax.scan(body, expert.init_state, o)[1])(jnp.asarray(obs))
+    )
+    window = slice(0, 6 * HOUR_STEPS)
+    first, later = flow[window], flow[second : second + 6 * HOUR_STEPS]
+    # The first day's plan is fed forward: a ramp of 2 %/min asks for boron.
+    assert float(np.max(np.abs(first))) > 0.5
+    # The second day's, the same, step for step (float32 clocks a day apart).
+    np.testing.assert_allclose(later, first, atol=1e-4)
+
+
+# --- the load the turbine takes (re-record pass, step 2; owner, 2026-11-12) ---
+# Contract: the reference feeds forward the load the turbine will take. After a
+# trip's restart the turbine reloads from 15 % at the conditioning ramps (PHYSICS.md
+# section 4, the stream) and takes the plan only once it meets it, so a dispatch
+# ramp the reloading turbine stays under moves no boron. Oracle: the reference's
+# commands with a day announced equal those with none, while the turbine reloads
+# far below the day's 50 % minimum.
+
+
+def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
+    p = ReactorParams()
+    expert = make_reactor_pid_controller()
+    load = 0.15
+    T_avg = p.T_avg_no_load + (p.T_avg_full_load - p.T_avg_no_load) * load
+    reloading = np.array(
+        [load, T_avg + 2.5, 1.0 - 2.0 * 3.0 / 228.0, load, T_avg, T_avg, 0.0, 1000.0,
+         0.0, 0.0, load, 2.0, 0.5],
+        np.float32,
+    )  # fmt: skip
+    steps = 2 * HOUR_STEPS
+    quiet = np.tile(reloading, (steps, 1))
+    ramp_h = (1.0 - p.load_min) / p.load_ramp_rate / 3600.0
+    announced = quiet.copy()
+    announced[:, 8:10] = _dispatch(steps, (0,), 0.5, ramp_h, 3.0)
+
+    def flows(obs):
+        def body(m, o):
+            a, m = expert.act(m, o)
+            return m, a[1]
+
+        run = jax.jit(lambda o: jax.lax.scan(body, expert.init_state, o)[1])
+        return np.asarray(run(jnp.asarray(obs)))
+
+    np.testing.assert_array_equal(flows(announced), flows(quiet))
+
+
+# --- the day's own ramp (re-record pass, step 2; owner, 2026-11-12) ---
+# Contract: the reference plans with the day's own ramp rate and minimum, read
+# from the dispatch (obs 11, % of rated load a minute; obs 12, the day's minimum).
+# Oracle: on a plant held lined out at full power, through the ramp down the plan's
+# feedforward is ``ff`` times the load the ramp moves in a 30 s step, ``-rate *
+# 30 s``, from the boron line's lead before the ramp to the lead before its end,
+# and nothing through the 3 h hold after it: 97.256 x 0.08 / 3600 x 30 = 0.06484
+# at 8 %/h over 6.25 h, and 0.03242 at 4 %/h over the 6.25 h a 25 % depth takes.
+
+
+@pytest.mark.parametrize("per_h, low", [(0.08, 0.5), (0.04, 0.75)])
+def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
+    from target_gym.reactor.experts import ReferenceParams
+
+    p, ref = ReactorParams(), ReferenceParams()
+    expert = make_reactor_pid_controller()
+    ramp_h = (1.0 - low) / per_h
+    hold_h = 3.0
+    steps = int((1.0 + ramp_h + hold_h) * HOUR_STEPS)
+    T_avg = p.T_avg_full_load
+    lined_out = np.array(
+        [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
+         0.0, 0.0, 1.0, per_h * 100.0 / 60.0, low],
+        np.float32,
+    )  # fmt: skip
+    obs = np.tile(lined_out, (steps, 1))
+    obs[:, 8:10] = _dispatch(steps, (0,), 1.0, ramp_h, hold_h)
+
+    def body(m, o):
+        a, m = expert.act(m, o)
+        return m, a[1]
+
+    flow = np.asarray(
+        jax.jit(lambda o: jax.lax.scan(body, expert.init_state, o)[1])(jnp.asarray(obs))
+    )
+    t = np.arange(steps) / HOUR_STEPS  # h
+    lead_h = ref.lead / 3600.0
+    during = (t > 1.0 - lead_h + 0.1) & (t < 1.0 + ramp_h - lead_h - 0.1)
+    after = (t > 1.0 + ramp_h + 0.1) & (t < 1.0 + ramp_h + hold_h - lead_h - 0.1)
+    expected = -ref.ff * per_h / 3600.0 * 30.0
+    np.testing.assert_allclose(flow[during], expected, rtol=1e-3)
+    np.testing.assert_allclose(flow[after], 0.0, atol=1e-6)

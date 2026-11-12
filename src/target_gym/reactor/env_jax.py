@@ -66,16 +66,17 @@ class Reactor(
     """
     Nuclear reactor: a two-point core with rods and boron.
 
-    Observation (11,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
-    (20 min late), hours to the ramp down, hours to the ramp up, xenon's power]
+    Observation (13,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
+    (20 min late), hours to the ramp down, hours to the ramp up, xenon's power, the
+    day's ramp rate (%/min), the day's minimum load]
     Action      (2,): [rod demand, boron flow] in [-1, 1]
     """
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
     #: world and the records, never the plant (docs/proposals/long-strata.md, S2).
+    #: The turbine's load and its Tref are not: after a restart the turbine reloads
+    #: (``restart_plant``), so they follow the plant's own history.
     OUTSIDE_WORLD = (
-        "target_n",
-        "T_ref",
         "load_wobble",
         "ramp_down_at",
         "ramp_up_at",
@@ -118,7 +119,7 @@ class Reactor(
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (11,)
+        self.obs_shape = (13,)
         self.integration_method = integration_method
 
     @property
@@ -442,22 +443,24 @@ class Reactor(
     def restart_plant(
         self, key: chex.PRNGKey, state: ReactorState, params: ReactorParams
     ) -> ReactorState:
-        """A trip's restart (long-strata R8; owner, 2026-11-11): back on the plan
-        once the lump's time has passed, with the xenon that time left.
+        """A trip's restart (long-strata R8; owner, 2026-11-11 and 2026-11-12): the
+        plant comes back at reduced power once the lump's dead time has passed, and
+        the turbine reloads.
 
-        The trip's lump prices the whole return to power: ``restart_steps`` after
-        a scram, ``standby_steps`` after a timed limit's hot standby. The plant then
-        restarts at the plan's load where the day stands, lined out on its program
-        with the rods parked, and critical on boron with the burnup since the last
-        refuelling diluted, as operators line a restart out. Iodine and xenon,
-        means and tilts, are what that time at zero power left
-        (``xenon_after_shutdown``): after a scram from balance, xenon is about a
-        fifth of balance and builds back over the next two days; after a standby
-        it is still above balance and burns out. The policy rides that transient,
-        and the dynamics charge it. The core's burn rate, boron delay and cycle
-        point are the plant's own and stay. The xenon reading (obs 10) is the
-        power whose balance is that xenon, 1 above full power's (``balance_power``).
-        The rest is as at reset, and so is the xenon of a solve that overflowed.
+        The trip's lump prices the dead time only: ``restart_steps`` after a scram,
+        ``standby_steps`` after a timed limit's hot standby. The plant restarts at
+        ``restart_load``, or the plan's load if lower, lined out on its program with
+        the rods parked, and critical on boron with the burnup since the last
+        refuelling diluted, as operators line a restart out. Iodine and xenon, means
+        and tilts, are what the dead time at zero power left
+        (``xenon_after_shutdown``). The turbine then takes at most ``pickup``, which
+        climbs at the conditioning ramps until it meets the plan
+        (``env.compute_next_state``); the plan it does not take is charged as lost
+        output in tracking. The turbine's load and Tref start at the restart load.
+        The core's burn rate, boron delay and cycle point are the plant's own and
+        stay. The xenon reading (obs 10) is the power whose balance is that xenon,
+        1 above full power's (``balance_power``). The rest is as at reset, and so is
+        the xenon of a solve that overflowed.
         """
         p = params
         _, fresh = self.reset_env(key, p)
@@ -472,7 +475,8 @@ class Reactor(
         )
         I_hat, Xe_hat = xenon_after_shutdown(I_hat, Xe_hat, seconds, p)
         I_tilt, Xe_tilt = xenon_after_shutdown(I_tilt, Xe_tilt, seconds, p)
-        load = planned_load(plan_seconds(state.physics_time, state, p), state)
+        plan = planned_load(plan_seconds(state.physics_time, state, p), state)
+        load = jnp.minimum(plan, p.restart_load)
         T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, p)
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, p)
         boron = p.boron_ref + needed / p.boron_worth - burnt(state, p)
@@ -497,6 +501,9 @@ class Reactor(
             burn_rate=state.burn_rate,
             boron_delay=state.boron_delay,
             burn_t0=state.burn_t0,
+            pickup=as_state(load),
+            target_n=as_state(load + state.load_wobble),
+            T_ref=as_state(tavg_program(load + state.load_wobble, p)),
         )
         return canonical_dtypes(hot)
 
@@ -511,7 +518,9 @@ class Reactor(
         time = jnp.asarray(state.time, jnp.int32)
         due = (days > 0) & (time > 0) & (time % per.astype(jnp.int32) == 0)
         _, fresh = self.reset_env(jax.random.fold_in(key, _REFUEL), p)
-        world = {f: getattr(state, f) for f in self.OUTSIDE_WORLD}
+        # The core is renewed, not the turbine: its load, Tref and reload carry on.
+        turbine = ("target_n", "T_ref", "pickup")
+        world = {f: getattr(state, f) for f in (*self.OUTSIDE_WORLD, *turbine)}
         fresh = fresh.replace(
             time=state.time,
             sensor_key=state.sensor_key,
