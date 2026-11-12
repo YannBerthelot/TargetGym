@@ -262,8 +262,8 @@ plant:
 | 1. Swell on a medium-load steam step | S1 Figs. 12, 16 | Pass |
 | 2. Family: pressure ramps down through a dwell, 3 to 9 bar in 250 s, second half at least half the first | S1 Figs. 12, 15; S3 Figs. 3, 5 | Pass: 5.5 bar, ratio 0.69 |
 | 3. Swell per kg/s larger at medium load | S1 p. 26 | Pass |
-| 4. Swell for a 10 %-of-load step grows toward low load | S1 p. 20, S2, S11 | **Fails**: 20, 22, 24 mm at 50, 75, 100 % |
-| 5. Shrink smaller and shorter than swell | S14 | **Fails**: shrink 27 mm, swell 24 mm |
+| 4. Swell for the same step (10 % of nominal) grows toward low load | S1 p. 16, S2, S11 | Pass: 39, 29, 24 mm at 50, 75, 100 % |
+| 5. Shrink smaller and shorter than swell | S14 | **Finding** (strict xfail): shrink 27 mm, swell 24 mm |
 | 6. Family: feedwater steps show the inverse response within +-0.18 m | S1 Fig. 11; S3 Fig. 5 | Pass |
 | 7. Rapid swell on a fuel step | S1 Fig. 10 | Pass |
 | 8. Family: a ramp moves the level at most 0.7 of a step's | S2 sec. 5.2; [S10] | Pass: 0.31 |
@@ -273,16 +273,29 @@ the figures' ramps both ways require; the review's challenger found both
 moves sound. At the audit's 52 kg/s test 6's mean feed exceeds the steam by 8
 kg/s and any drum climbs 0.5 m in 1000 s.
 
-The two failures are known deviations (rule 13), on S1's own model:
+Test 4 was restated on 2026-11-12 with the owner's approval. S1's statement is
+on printed p. 16, not p. 20 as first cited: "a given change in input power
+gives a larger variation in average steam volume ratio at low power", and its
+figures compare equal steps (p. 26: "The steam valve changes were almost the
+same"). The test first stepped 10 % of the current load, which swells less at
+low load (20, 22, 24 mm at 50, 75, 100 %); with the same step at every load
+the plant passes unchanged.
 
-- Test 4 is a family property from three sources: per kg/s the swell is larger
-  at low load (test 3), but a step that scales with the load swells less at
-  low load. The review measured that sliding pressure [S2] would pass it only
-  narrowly (25.0, 24.6, 23.6 mm); it is not added. Effect on the score:
-  `low_load` ramps are milder than S11 reports.
-- Test 5 rests on one source [S14]: shrink is about 10 % larger than swell.
-  Effect: a load decrease or a feed pump trip brings the level nearer the low
-  trip than practice reports.
+Test 5 is a known deviation (rule 13), kept as a strict-xfail finding (owner,
+2026-11-12). It rests on one source [S14]: the level drop on a load decrease
+"is typically much smaller" and "of shorter duration" than swell, because
+shrink "does not disrupt the natural convection circulation of the boiler as
+completely". That circulation disruption on a pressure drop is not in S1's
+model, whose circulation is a static momentum balance (eq. 16), and no source
+gives its size. In the plant the shrink exceeds the swell at every load (26.6
+against 23.6 mm at nominal, 31.2 against 26.9 mm at 59.5 kg/s, 49.3 against
+39.0 mm at half load): S1 Appendix B's drum residence time `T_d = 600 / q_s`
+returns the drum's steam faster at the higher flow. S1's own open-loop data
+(Fig. 12, P16-G16 at medium load) show level jumps of similar size on steam
+steps up and down (about 0.04 to 0.08 m up, 0.045 to 0.065 m down, read from
+the figure), and of its high-load steps (Fig. 15) S1 says the model captures
+"the swell and shrink effect very well". Effect: a load decrease or a feed pump trip brings the level nearer the
+low trip than [S14] reports.
 
 ## 7. Deviations still in the model
 

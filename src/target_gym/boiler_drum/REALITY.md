@@ -201,8 +201,10 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   [S9].
 - **Bad day, swell at low load.** "most trips occur due to high-level trip
   events", because fixed setpoints at low flow and pressure leave too little
-  room for swell [S11]. Swell is larger at low load [S1, printed p. 20;
-  S2, sec. 5.2].
+  room for swell [S11]. Swell is larger at low load: "a given change in input
+  power gives a larger variation in average steam volume ratio at low power.
+  This explains why the shrink and swell effects are larger at low power than
+  at high power" [S1, printed p. 16], for equal changes; [S2, sec. 5.2].
 - **Bad day, nuclear steam generators.** Up to 13% of all reactor trips in
   France in 1983 were attributed to steam generator control problems
   [S1, printed p. 2, citing its ref. 45].

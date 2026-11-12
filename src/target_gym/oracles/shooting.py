@@ -65,12 +65,15 @@ SOLVER_SLACK = BOUND_RELAX + TOL
 
 class Hinge(NamedTuple):
     """An epigraph term (T2): ``weight * max(r - tol, 0) ** power``, of
-    ``abs(r)`` rather than r when ``absolute``."""
+    ``abs(r)`` rather than r when ``absolute``. A ``surrogate`` term is the
+    plan's stand-in for a cost the env charges another way, such as a clock
+    with no gradient: the plan pays it, K8's replay leaves it out."""
 
     weight: float = 1.0
     absolute: bool = False
     tol: float = 0.0
     power: int = 1
+    surrogate: bool = False
 
 
 class Limit(NamedTuple):

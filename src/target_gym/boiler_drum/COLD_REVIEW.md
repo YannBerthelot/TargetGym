@@ -14,7 +14,8 @@ Ranked by how much each changes what an agent learns or what the score says.
    `steady_state` at `q_steam_nominal`, `env.py:586-632`) and the steam demand
    reverts to nominal with 8 kg/s spread (`env.py:152`, `433-438`), so the plant
    stays near 100 % load. Plant: swell "is larger at medium load" [S1, printed
-   p. 26]; swell is larger at low load [S1, p. 20; S2, sec. 5.2]; "most trips
+   p. 26]; swell is larger at low load [S1, p. 16 (cited here as p. 20, corrected
+   2026-11-12); S2, sec. 5.2]; "most trips
    occur due to high-level trip events" at low load [S11]; below 20 to 30 % of
    flow the plant runs single-element because flows are unmeasurable [S5; S12];
    turndown can be 4:1 [S16] (REALITY sec. 2, 4, 5). Effect: the named property,
@@ -225,6 +226,9 @@ are fixed here before any run.
    S11 (most trips are high-level trips at low load). Measured: peak level
    rise for a steam step of 10 % of the load. Experiment: test 1 at 50, 75 and
    100 % of nominal steam. Tolerance: monotone decreasing with load; ordinal.
+   Restated 2026-11-12 with the owner's approval: S1's statement is on printed
+   p. 16 and compares equal changes, so the step is 10 % of nominal at every
+   load.
 
 5. **Shrink on a load decrease is smaller and shorter than swell.** Source:
    S14: level drop on a load decrease "is typically much smaller" and "of
