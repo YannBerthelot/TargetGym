@@ -87,6 +87,12 @@ def main():
     parser.add_argument(
         "--final-max-iter", type=int, default=None, help="the last rung's cap"
     )
+    parser.add_argument(
+        "--start", choices=["held", "simulated", "reference"], default="held",
+        help="the cold solve's start: every state at x0 under the held moves, the "
+        "held moves and the states they reach, or the reference plan's moves and "
+        "the states they reach",
+    )  # fmt: skip
     args = parser.parse_args()
 
     env, p = Reactor(), ReactorParams()
@@ -116,7 +122,13 @@ def main():
             data["widths"] = jnp.asarray([width])
             data["boron_width"] = jnp.asarray(boron_width)
             t0 = time.time()
-            if plans is None:
+            if plans is None and args.start != "held":
+                us = jnp.asarray(reference, float)[: args.steps : args.block]
+                us = jnp.concatenate([us, us[-1:]])[: shooting.N]
+                if args.start == "simulated":
+                    us = jnp.tile(hold, (shooting.N, 1))
+                plans = shooting.solve(data, x0, hold, start=us)
+            elif plans is None:
                 plans = shooting.solve(data, x0, hold)
             else:
                 plans = shooting.resolve(data, x0, hold, plans)

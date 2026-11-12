@@ -143,17 +143,23 @@ class Plan(NamedTuple):
 def stage_derivatives(stage, v, lam, weight):
     """``(F, l, dF, dl, H)`` of ``stage(v) = (F, l)``, H the exact Hessian
     of ``weight * l + lam'F`` (G1: Gauss-Newton did not converge on
-    plane3d_circle), taken forward over forward (G2): ``jax.hessian``, which
-    reverses through the integrators' scans, took 105 s and 10 GB to compile
-    one copy there, this 14 s and 2.4 GB."""
+    plane3d_circle). Each row is the gradient of a directional derivative,
+    reverse over forward, one forward and one reverse pass per input: forward
+    over forward pushed n^2 tangents through the integrator, 7 times the
+    time on the reactor (docs/proposals/ipopt-speed.md). Not forward over
+    reverse (``jax.hessian``): on the reactor's stage it doubles one diagonal
+    entry, and on plane3d_circle it took 105 s and 10 GB to compile."""
 
     def lagrangian(v):
         F, l = stage(v)
         return weight * l + lam @ F
 
+    def row(e):
+        return jax.grad(lambda v: jax.jvp(lagrangian, (v,), (e,))[1])(v)
+
     F, l = stage(v)
     dF, dl = jax.jacfwd(stage)(v)
-    return F, l, dF, dl, jax.jacfwd(jax.jacfwd(lagrangian))(v)
+    return F, l, dF, dl, jax.vmap(row)(jnp.eye(v.shape[0], dtype=v.dtype))
 
 
 class Shooting:
@@ -292,7 +298,9 @@ class Shooting:
             out = out + h.weight * jnp.sum(t[:, i] ** h.power)
         return out
 
-    def _solve(self, data, x0, u_hold, previous=None, active=None, shift=True):
+    def _solve(
+        self, data, x0, u_hold, previous=None, active=None, shift=True, start=None
+    ):
         N, nx, nxa, nu, n = self.N, self.nx, self.nxa, self.nu, self.n
         b, ui, ei, dyn, loc = self.model.block, self.ui, self.ei, self.dyn, self.loc
         cold = previous is None
@@ -330,7 +338,12 @@ class Shooting:
 
             return slacked(jax.lax.scan(advance, x0, ks)[1], us, es)
 
-        if cold:
+        if cold and start is not None:
+            # A cold solve from given moves (N, nu): the states they reach,
+            # simulated, so the start meets every shooting row.
+            z0 = feasible(start, jnp.zeros((N, self.ne)))
+            lam0 = jnp.zeros(N * nxa)
+        elif cold:
             # Every state at x0, each with the outputs of one stage from it.
             held = jnp.concatenate([x0, u_hold])
             xs = jax.vmap(lambda k: stage(held, k)[0])(ks).at[:, :nx].set(x0)

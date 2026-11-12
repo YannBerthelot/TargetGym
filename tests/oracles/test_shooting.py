@@ -10,7 +10,8 @@ returns the plan it started from, the previous plan shifted one stage.
 
 Oracles: a finite-horizon LQR by a NumPy Riccati recursion on the lifted
 (held-move) system, a tracking problem whose optimum is worked out by hand,
-and ``jax.hessian`` for the forward-over-forward Hessian.
+and central differences of the reverse gradient for the stage Hessian (not
+``jax.hessian``, which doubled one entry of the reactor's stage Hessian).
 """
 
 import jax
@@ -175,7 +176,7 @@ def _pendulum(v):
     return x, cost
 
 
-def test_the_forward_over_forward_hessian_is_the_exact_hessian():
+def test_stage_derivatives_give_the_exact_lagrangian_hessian():
     with enable_x64():
         v, lam = jnp.array([0.4, -0.9, 0.7]), jnp.array([0.3, -1.2])
 
@@ -183,10 +184,15 @@ def test_the_forward_over_forward_hessian_is_the_exact_hessian():
             x, cost = _pendulum(v)
             return 0.7 * cost + lam @ x
 
-        H = stage_derivatives(_pendulum, v, lam, 0.7)[4]
-        expected = jax.hessian(lagrangian)(v)
-    # Two AD orders of one float64 function: they differ by rounding only.
-    np.testing.assert_allclose(H, expected, rtol=1e-12, atol=1e-13)
+        H = np.asarray(stage_derivatives(_pendulum, v, lam, 0.7)[4])
+        grad, h = jax.grad(lagrangian), 1e-5
+        expected = np.stack(
+            [(grad(v + h * e) - grad(v - h * e)) / (2 * h) for e in jnp.eye(3)], 1
+        )
+    # Central differences in float64: truncation h^2 ~ 1e-10 times the third
+    # derivatives (order 1 here), rounding eps / h ~ 1e-11.
+    np.testing.assert_allclose(H, expected, rtol=1e-7, atol=1e-8)
+    np.testing.assert_allclose(H, H.T, atol=1e-13)
 
 
 def _brittle(data, x, u, t):
