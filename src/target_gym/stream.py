@@ -17,7 +17,9 @@ A scoring run (R2) pins one scenario, burns in for a hidden ``B`` drawn in
 ``count`` events at distinct uniform steps of the scored part ``S``. Its rate is the
 scenario's ``pinned_events_per_h`` where it has one, else ``events_per_h``: a pinned
 run is one long visit, and where draws are absorbed it needs its own rate to see the
-stream's events per scenario hour. ``info["scored"]`` marks the scored steps.
+stream's events per scenario hour. ``max_events`` must hold the ceiling of the
+expected count; a scoring run given fewer slots refuses to start. ``info["scored"]``
+marks the scored steps.
 
 Draws and keys::
 
@@ -143,6 +145,14 @@ class StreamEnv(environment.Environment):
         self._entry = jnp.log(jnp.asarray(entry / entry.sum()))
         self._event_p = jnp.asarray(rates)
         self._expected = float(rates[pin] * scored) if pin is not None else 0.0
+        # A scoring run plans the floor or the ceiling of its expected count: fewer
+        # slots would drop events without a word (owner, 2026-11-12).
+        most = int(np.ceil(self._expected))
+        if self._max_events < most:
+            raise ValueError(
+                f"max_events {max_events} is below the {most} events this scoring "
+                f"run can plan in S ({self._expected:.3f} expected)"
+            )
         self.scenarios = scenarios
         sets = [
             {**s.overrides, **getattr(s, "stream_overrides", {})} for s in scenarios
