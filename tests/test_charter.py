@@ -214,3 +214,72 @@ def test_the_log_only_grows(tmp_path):
     charter.append_log({"run": 1}, log)
     charter.append_log({"run": 2}, log)
     assert log.read_text().splitlines() == ['{"run": 1}', '{"run": 2}']
+
+
+# --- the ceiling's plant (J3) -------------------------------------------------
+# A ceiling file holds the stamp of the plant it ran on (provenance's
+# environment_fingerprint, as rl_results does). A ceiling measured on another
+# plant, or one that cannot say which, is stale and is not read as a J3 line.
+
+_STORED = {
+    "scenarios": {
+        "normal": {"ceiling_costs": [0.5], "ceiling_trips": 0, "solver": {"converged": 1}},
+        "storm": {"ceiling_costs": [1.0], "ceiling_trips": 0, "solver": {"converged": 1}},
+    }
+}  # fmt: skip
+
+
+def test_a_ceiling_measured_on_another_plant_is_stale():
+    now = _current() | {"ceiling_stamp": "old"}
+    assert charter.stale_parts(_record(), now) == ["ceiling"]
+
+
+def test_a_ceiling_that_carries_no_stamp_is_stale():
+    now = _current() | {"ceiling_stamp": None}
+    assert charter.stale_parts(_record(), now) == ["ceiling"]
+
+
+def test_a_ceiling_measured_on_this_plant_is_current():
+    assert charter.stale_parts(_record(), _current() | {"ceiling_stamp": "s"}) == []
+
+
+def test_a_ceiling_from_another_plant_is_not_read_as_a_line():
+    part = charter.ceiling_part({**_STORED, "stamp": "old"}, "s", W)
+    assert part["line"] == NM
+    assert "another plant" in part["why"]
+
+
+def test_a_written_ceiling_is_read_back_on_its_own_plant(tmp_path):
+    p = charter.write_ceiling("toy", _STORED, "s", tmp_path)
+    part = charter.ceiling_part(charter.load_ceiling("toy", tmp_path), "s", W)
+    # J = 0.75 * 0.5 + 0.25 * 1.0
+    assert part["line"]["J"] == pytest.approx(0.625)
+    assert p == tmp_path / "toy.json"
+
+
+def test_no_ceiling_file_is_not_measured():
+    assert charter.ceiling_part(None, "s", W)["line"] == NM
+
+
+# --- the sweep (B7) in J2 -----------------------------------------------------
+
+
+def test_a_task_without_a_sweep_fails_j2_on_it():
+    sweep = charter.sweep_result(None)
+    assert charter.verdict(30, 0, {"hold": 3}, sweep) == {
+        "accepted": False,
+        "reasons": ["sweep not measured"],
+    }
+
+
+def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
+    sweep = charter.sweep_result([{"holds": True}] * 8)
+    assert charter.verdict(30, 0, {"hold": 3}, sweep) == {
+        "accepted": True,
+        "reasons": [],
+    }
+
+
+def test_one_draw_that_fails_fails_the_sweep():
+    sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
+    assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]

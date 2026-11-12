@@ -1,0 +1,24 @@
+{
+ "member": "a C3-splitter-like binary column, Column A of [D1] with a real splitter's flow box (distillation/PHYSICS.md, env.py:115)",
+ "ranges": {},
+ "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "coupled": [],
+ "no_range": [
+  "yD_spec",
+  "xB_spec",
+  "L_min",
+  "L_max",
+  "V_min",
+  "V_max",
+  "D_min",
+  "D_max",
+  "delta_t",
+  "max_steps_in_episode",
+  "boilup_price",
+  "reprocess_price",
+  "failure_cost",
+  "restart_steps",
+  "precision_floor",
+  "event_hold"
+ ]
+}

@@ -1,0 +1,41 @@
+{
+ "member": "a drum boiler of P16-G16 type (160 MW heat input, 85 bar, 93.35 kg/s nominal steam) in boiler-following mode, planned load changes and ID fan / feed pump upsets; the task represents the drum boiler family (boiler_drum/PHYSICS.md:3-7)",
+ "ranges": {
+  "runback_load": {
+   "lo": 0.4,
+   "hi": 0.6,
+   "unit": "of nominal steam",
+   "why": "ours, family range 0.40 to 0.60: below the three-mill minimum [S10], minimum load 25 to 40 % [S17]; boiler_drum/PHYSICS.md:72, env.py:151-153"
+  },
+  "feed_trip_capacity": {
+   "lo": 0.5,
+   "hi": 0.6,
+   "unit": "of nominal steam",
+   "why": "ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps; boiler_drum/PHYSICS.md:74, env.py:158-161"
+  },
+  "steam_rate": {
+   "lo": 2.18,
+   "hi": 4.51,
+   "unit": "kg/kWh",
+   "why": "ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]); boiler_drum/PHYSICS.md:78, env.py:67-68"
+  },
+  "imbalance_price": {
+   "lo": 30.0,
+   "hi": 156.0,
+   "unit": "GBP/MWh",
+   "why": "ours, family range 30 to 156 ([S22] 2018 periods 30 to 60, mean 78.84; [S22b] annual means 44.61 and 156.20); boiler_drum/PHYSICS.md:79, env.py:70-74"
+  }
+ },
+ "coupled": [],
+ "coupled_why": "",
+ "derived": {
+  "failure_cost": "93.35 * 2.0 / steam_rate / 1000.0 * imbalance_price"
+ },
+ "derived_why": "failure_cost is the dollar value of the lost steam on a trip, env.py's default formula over steam_rate and imbalance_price, so it follows them",
+ "no_range": [
+  "restart_load",
+  "steam_resolution",
+  "h_feedwater",
+  "q_feed_max"
+ ]
+}

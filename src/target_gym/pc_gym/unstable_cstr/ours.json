@@ -1,0 +1,25 @@
+{
+ "member": "a member of the LDPE autoclave family: one zone at 513 K, 1600 atm, unstable steady state (unstable_cstr/PHYSICS.md:3)",
+ "ranges": {},
+ "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "coupled": [],
+ "no_range": [
+  "f_eff",
+  "cp",
+  "I_f_min",
+  "I_f_max",
+  "T_trip",
+  "feed_T_wander",
+  "feed_T_wander_period",
+  "feed_T_step",
+  "efficiency_drop",
+  "feed_flow_step",
+  "delta_t",
+  "max_steps_in_episode",
+  "e_floor",
+  "tracking_exponent",
+  "failure_cost",
+  "restart_steps",
+  "event_hold"
+ ]
+}

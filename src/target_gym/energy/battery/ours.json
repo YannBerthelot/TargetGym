@@ -1,0 +1,33 @@
+{
+ "member": "a Tesla Megapack 2 XL 2-hour LFP unit (1.927 MW, 3854 kWh) selling Dynamic Regulation under GB-style rules; the task represents grid LFP units selling a frequency service (energy/battery/PHYSICS.md:6-7)",
+ "ranges": {
+  "round_trip_efficiency": {
+   "lo": 0.85,
+   "hi": 0.937,
+   "unit": "-",
+   "why": "family range 85 % (NREL-ATB-2025, CAISO-SOC) to 93.7 % (TESLA-MP2XL), energy/battery/PHYSICS.md:73; sourced family range, not labelled ours"
+  },
+  "soc_error_std": {
+   "lo": 0.0,
+   "hi": 0.4,
+   "unit": "SoC fraction",
+   "why": "ours within the family's 0 to 40 %, MPS-ACCURE, energy/battery/PHYSICS.md:82; 0.075 is +-15 % read as 2 sigma (env.py:93)"
+  },
+  "signal_interval": {
+   "lo": 2.0,
+   "hi": 4.0,
+   "unit": "s",
+   "why": "family 2 to 4 s (AEMO-HPR, CAISO-SOC), PJM-M12 sec. 4.3.2 gives 2; energy/battery/PHYSICS.md:94; sourced family range, not labelled ours"
+  }
+ },
+ "coupled": [],
+ "coupled_why": "",
+ "no_range": [
+  "ocv_knee_width",
+  "signal_tau",
+  "signal_std",
+  "neutrality_tau",
+  "cell_resistance",
+  "shortfall_tolerance"
+ ]
+}
