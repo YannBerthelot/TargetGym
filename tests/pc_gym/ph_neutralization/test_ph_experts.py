@@ -55,6 +55,27 @@ def test_the_planners_pH_has_the_titration_curves_slope(q3):
     np.testing.assert_allclose([float(g) for g in grad], want, rtol=1e-3)
 
 
+@pytest.mark.parametrize("q3", [12.0, 15.6, 18.0])
+def test_the_planners_pH_is_the_root_to_rounding_in_float64(q3):
+    """The solver plans in float64 to IPOPT's 1e-8: a pH that moves in the
+    bisection's steps (14 / 2^20, 1.3e-5 pH) while its slope is the curve's
+    stalls it. In float64 the planner's pH is the documented balance's root to
+    1e-10 pH, against Brent's to 1e-14; the bisection alone is off by up to
+    its half-width, 6.7e-6."""
+    import jax.numpy as jnp
+
+    from target_gym.oracles.controller import enable_x64, float64
+    from target_gym.pc_gym.ph_neutralization.env import steady_state_invariants
+    from target_gym.pc_gym.ph_neutralization.oracle import planner_pH
+
+    p = registry.get("ph_neutralization").make_test_params()
+    Wa, Wb = (float(v) for v in steady_state_invariants(q3, p.q2_nominal, p))
+    with enable_x64():
+        q = float64(p)
+        value = float(planner_pH(jnp.float64(Wa), jnp.float64(Wb), q))
+    assert value == pytest.approx(_root(Wa, Wb, p), abs=1e-10)
+
+
 def test_the_oracle_plans_on_the_buffer_flow_it_reads():
     """The oracle reads the buffer flow, which the observation hides, and plans
     its mean path: the planner's copy of the params has the OU innovation

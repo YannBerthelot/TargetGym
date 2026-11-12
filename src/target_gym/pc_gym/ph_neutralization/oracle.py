@@ -55,6 +55,10 @@ from target_gym.pc_gym.ph_neutralization.env import (
 # ---------------------------------------------------------------------------
 
 
+#: Newton steps that polish the bisection's root (quadratic from 1e-5 pH).
+NEWTON_POLISH = 3
+
+
 @jax.custom_jvp
 def planner_pH(Wa, Wb, params):
     """``env.solve_pH``, with the derivative of the curve it solves.
@@ -64,8 +68,17 @@ def planner_pH(Wa, Wb, params):
     the env's; the derivative is the implicit function theorem's on the
     charge balance r(pH, Wa, Wb, params) = 0: dpH = -dr / r_pH, with dr the
     residual's change at fixed pH along every input's tangent.
+
+    The value is the env's bisection polished by Newton steps on the same
+    residual: 20 halvings of [0, 14] leave a staircase of 1.3e-5 pH, and an
+    exact slope on a staircase stalls the solver at that floor. The polished
+    root is within the bisection's half-width of the env's.
     """
-    return solve_pH(Wa, Wb, params)
+    pH = solve_pH(Wa, Wb, params)
+    slope = jax.grad(titration_residual)
+    for _ in range(NEWTON_POLISH):
+        pH = pH - titration_residual(pH, Wa, Wb, params) / slope(pH, Wa, Wb, params)
+    return pH
 
 
 @planner_pH.defjvp
