@@ -16,7 +16,7 @@ env, params = tg.make("glass_furnace")
 | Observation space | `Box((12,))` |
 | Tracked variable(s) | fining share read at the cold end |
 | Episode length | 5040 steps of 120 s (7 days) |
-| Cite as | `glass_furnace-v5` |
+| Cite as | `glass_furnace-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space

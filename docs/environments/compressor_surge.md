@@ -16,7 +16,7 @@ env, params = tg.make("compressor_surge")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | header pressure (kPa) |
 | Episode length | 1200 steps of 0.1 s (2 min) |
-| Cite as | `compressor_surge-v3` |
+| Cite as | `compressor_surge-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 ## Action space

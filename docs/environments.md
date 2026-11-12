@@ -39,17 +39,17 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `plane` | `plane-v6` | (12,) | (2,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane_energy` | `plane_energy-v9` | (12,) | (2,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane_sine` | `plane_sine-v5` | (12,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
-| `plane3d_heading` | `plane3d_heading-v8` | (19,) | (3,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `plane3d_circle` | `plane3d_circle-v5` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `plane3d_racetrack` | `plane3d_racetrack-v9` | (25,) | (3,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `plane3d_figure8` | `plane3d_figure8-v6` | (21,) | (3,) | distance to path (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
-| `patrol` | `patrol-v5` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
-| `patrol_range_bearing` | `patrol_range_bearing-v5` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
-| `formation` | `formation-v4` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
-| `wake_surf` | `wake_surf-v2` | (26,) | (3,) | slot error (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `plane` | `plane-v7` | (12,) | (2,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
+| `plane_energy` | `plane_energy-v10` | (12,) | (2,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
+| `plane_sine` | `plane_sine-v6` | (12,) | (2,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
+| `plane3d_heading` | `plane3d_heading-v9` | (19,) | (3,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_circle` | `plane3d_circle-v6` | (17,) | (3,) | altitude (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_racetrack` | `plane3d_racetrack-v10` | (25,) | (3,) | altitude (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `plane3d_figure8` | `plane3d_figure8-v7` | (21,) | (3,) | distance to path (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
+| `patrol` | `patrol-v6` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `patrol_range_bearing` | `patrol_range_bearing-v6` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `formation` | `formation-v5` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
+| `wake_surf` | `wake_surf-v3` | (26,) | (3,) | slot error (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 > `plane` -- No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).
 
@@ -71,12 +71,12 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `cstr` | `cstr-v6` | (4,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
-| `first_order` | `first_order-v4` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
-| `four_tank` | `four_tank-v6` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
-| `ph_neutralization` | `ph_neutralization-v5` | (8,) | (2,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
-| `distillation` | `distillation-v8` | (8,) | (2,) | yD (mole fraction), xB (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
-| `unstable_cstr` | `unstable_cstr-v6` | (3,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
+| `cstr` | `cstr-v7` | (4,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
+| `first_order` | `first_order-v5` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
+| `four_tank` | `four_tank-v7` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
+| `ph_neutralization` | `ph_neutralization-v6` | (8,) | (2,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
+| `distillation` | `distillation-v9` | (8,) | (2,) | yD (mole fraction), xB (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
+| `unstable_cstr` | `unstable_cstr-v7` | (3,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Industrial / Energy
 
@@ -84,12 +84,12 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `glass_furnace` | `glass_furnace-v5` | (12,) | (1,) | fining share read at the cold end | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
-| `reactor` | `reactor-v9` | (13,) | (2,) | Tavg (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
-| `hvac` | `hvac-v5` | (12,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
-| `cement_kiln` | `cement_kiln-v4` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
-| `boiler_drum` | `boiler_drum-v5` | (12,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
-| `compressor_surge` | `compressor_surge-v4` | (8,) | (2,) | header pressure (kPa) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
+| `glass_furnace` | `glass_furnace-v6` | (12,) | (1,) | fining share read at the cold end | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
+| `reactor` | `reactor-v10` | (13,) | (2,) | Tavg (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
+| `hvac` | `hvac-v6` | (12,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
+| `cement_kiln` | `cement_kiln-v5` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
+| `boiler_drum` | `boiler_drum-v6` | (12,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
+| `compressor_surge` | `compressor_surge-v5` | (8,) | (2,) | header pressure (kPa) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 > `glass_furnace` -- The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The oracle plans the valve on the env's own step and reward, with the episode's walks foreseen when given its seed, by SLSQP, which does not converge on this plant: its plans bound the ceiling from above (glass_furnace/oracle.py).
 
@@ -99,5 +99,5 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `wind_turbine` | `wind_turbine-v5` | (7,) | (2,) | electrical power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
-| `battery` | `battery-v5` | (17,) | (1,) | delivered power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
+| `wind_turbine` | `wind_turbine-v6` | (7,) | (2,) | electrical power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
+| `battery` | `battery-v6` | (17,) | (1,) | delivered power (MW) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |

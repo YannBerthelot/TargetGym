@@ -16,7 +16,7 @@ env, params = tg.make("distillation")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
 | Episode length | 400 steps of 60 s (6.67 h) |
-| Cite as | `distillation-v4` |
+| Cite as | `distillation-v9` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space

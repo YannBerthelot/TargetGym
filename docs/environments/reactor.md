@@ -16,7 +16,7 @@ env, params = tg.make("reactor")
 | Observation space | `Box((13,))` |
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
-| Cite as | `reactor-v9` |
+| Cite as | `reactor-v10` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space

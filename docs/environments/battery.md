@@ -16,7 +16,7 @@ env, params = tg.make("battery")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | delivered power (MW) |
 | Episode length | 2880 steps of 5 s (4 h) |
-| Cite as | `battery-v3` |
+| Cite as | `battery-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
 
 ## Action space

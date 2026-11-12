@@ -180,56 +180,56 @@
     }
   },
   "distillation": {
-    "Kp_T": 0.359929,
-    "Ti_T": 9.687682,
-    "Tf_T": 0.4,
-    "Kp_D": 16.116055,
-    "Ti_D": 4.876369,
-    "Kp_B": -36.010398,
-    "Ti_B": 3.370861,
-    "band_D": 0.002371,
-    "band_B": 0.002497,
+    "Kp_T": 0.140777,
+    "Ti_T": 23.167039,
+    "Tf_T": 1.287058,
+    "Kp_D": 34.561469,
+    "Ti_D": 15.378424,
+    "Kp_B": -61.836543,
+    "Ti_B": 8.141594,
+    "band_D": 0.002372,
+    "band_B": 0.00224,
     "every": 5.0,
-    "wait": 2.0,
-    "sp_rate": 0.695695,
+    "wait": 3.0,
+    "sp_rate": 0.983522,
     "model": {
       "T": {
-        "k": 1.147159,
+        "k": 1.22647,
         "tau1": 0.0,
-        "theta": 0.5,
-        "band": 0.25005,
-        "step": 0.095745,
-        "bands": 5.270999,
-        "spread": 1.262144,
+        "theta": 1.608822,
+        "band": 0.249859,
+        "step": 0.045424,
+        "bands": 3.679043,
+        "spread": 1.470315,
         "tests": 10.0,
-        "tau_c": 1.521921
+        "tau_c": 2.89588
       },
       "yD": {
-        "k": 0.014408,
-        "tau1": 1.376369,
-        "theta": 10.5,
-        "band": 0.002371,
+        "k": 0.014354,
+        "tau1": 10.211757,
+        "theta": 15.5,
+        "band": 0.002372,
         "step": 0.24755,
-        "bands": 1.504629,
-        "spread": 1.389802,
+        "bands": 1.498239,
+        "spread": 1.142384,
         "tests": 10.0,
-        "tau_c": 10.5
+        "tau_c": 15.5
       },
       "xB": {
-        "k": -0.006241,
-        "tau1": 0.870861,
-        "theta": 7.500001,
-        "band": 0.002497,
+        "k": -0.00627,
+        "tau1": 4.641594,
+        "theta": 10.500001,
+        "band": 0.00224,
         "step": -1.052993,
-        "bands": 2.632142,
-        "spread": 1.087406,
+        "bands": 2.946869,
+        "spread": 1.097902,
         "tests": 10.0,
-        "tau_c": 7.500001
+        "tau_c": 10.500001
       },
       "rga": {
-        "yD, xB on L, V": 35.94454039116139,
-        "yD, T on L, V": 43.341802692091996,
-        "yD, xB on L, T_sp": 0.8293273043236771
+        "yD, xB on L, V": 35.94450357360989,
+        "yD, T on L, V": 43.341758337015264,
+        "yD, xB on L, T_sp": 0.8293273035697816
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
@@ -266,51 +266,56 @@
   },
   "boiler_drum": {
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "Kp_pressure": 0.027686628500784665,
-    "Ki_pressure": 0.00018944124550042434,
+    "Kp_pressure": 0.029595254787058413,
+    "Ki_pressure": 0.00016084377601661686,
     "Kd_pressure": 0.0,
     "Tf_pressure": 0.0,
-    "Kp_level": 450.54793275891996,
-    "Ki_level": 7.179157770357165,
+    "Kp_level": 600.3668334883888,
+    "Ki_level": 10.817720639254336,
     "Tf_level": 0.0,
     "model_pressure": {
-      "k": 59.98501716782104,
-      "tau1": 146.14889396260145,
-      "theta": 22.000000000000018,
-      "band": 0.131974,
+      "k": 67.87483503739458,
+      "tau1": 184.80711936364085,
+      "theta": 23.000000000000707,
+      "band": 0.131881,
       "step": 0.02,
-      "bands": 9.09042,
-      "spread": 1.162325,
+      "bands": 10.293338,
+      "spread": 1.154426,
       "tests": 10.0,
-      "tau_c": 22.0,
-      "lam": 22.000000000000018
+      "tau_c": 23.0,
+      "lam": 23.000000000000707
     },
     "model_level": {
-      "k": 7.957451731501645e-05,
-      "tau1": 1.2931215868472192,
-      "theta": 20.919256695134823,
-      "band": 0.002954,
+      "k": 6.752815678914007e-05,
+      "tau1": 1.01712267694695,
+      "theta": 18.49948658345621,
+      "band": 0.002919,
       "step": 0.02,
-      "bands": 12.930666,
-      "spread": 1.268767,
+      "bands": 11.103592,
+      "spread": 1.17621,
       "tests": 10.0,
-      "tau_c": 20.919257,
-      "lam": 20.919256695134823
+      "tau_c": 18.499487,
+      "lam": 18.49948658345621
     }
   },
   "cstr": {
-    "Kp": 0.096823,
-    "Ti": 18.38,
-    "Tf": 0.0,
+    "Kp": 0.105366,
+    "Ti": 15.40763,
+    "Tf": 0.175803,
     "model": {
       "T": {
-        "k": -10.69,
-        "tau1": 18.38,
-        "theta": 8.88,
-        "tau_c": 8.88
+        "k": -9.683025,
+        "tau1": 15.40763,
+        "theta": 7.375,
+        "band": 0.242744,
+        "step": 0.125041,
+        "bands": 4.987852,
+        "spread": 1.022073,
+        "tests": 10.0,
+        "tau_c": 7.550803
       }
     },
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012), tau_c = theta, on one bump test of the cooling water (+0.2 raw) from the design steady state, noise and events off (cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "plane_cascaded": {
     "Kp_alt": 0.12,
@@ -361,55 +366,61 @@
     "note": "a copy of plane_cascaded, read by the plane_energy oracle (plane/oracle.py), whose oracle fingerprint covers it (oracle_gains_keys on its spec). tests/plane/test_plane_experts.py holds it equal to plane_cascaded, so a retune has to update it too."
   },
   "unstable_cstr": {
-    "Kp": -0.028326,
-    "Ti": 35.1,
+    "Kp": -0.042685,
+    "Ti": 25.21376,
     "Td": 0.0,
     "Tf": 0.0,
     "model": {
       "T": {
-        "k_slope": 4.028,
-        "theta": 4.39,
-        "tau_c": 4.39
+        "k": 3.716593,
+        "tau1": 0.0,
+        "theta": 3.15172,
+        "band": 2.970814,
+        "step": 0.093492,
+        "bands": 4.678495,
+        "spread": 1.128566,
+        "tests": 10.0,
+        "tau_c": 3.15172
       }
     },
-    "tuning_rule": "SIMC for an integrating process (Skogestad 2003), tau_c = theta, on one bump test of the initiator (+0.02 raw) from the 513 K steady state, noise and events off: the unstable mode's 175 s is slow against the test (unstable_cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "compressor_surge": {
-    "kp_speed": 0.028934,
-    "ki_speed": 0.016376,
+    "kp_speed": 2.091837,
+    "ki_speed": 5.229592,
     "kp_surge": 1.0,
-    "ki_surge": 4.676422,
-    "Tf_surge": 0.021384,
-    "surge_line": 0.1,
-    "override_line": 0.05,
+    "ki_surge": 3.209644,
+    "Tf_surge": 0.031156,
+    "surge_line": 0.15,
+    "override_line": 0.075,
     "override_hold": 2.0,
-    "reset_band": 0.01397,
+    "reset_band": 0.042511,
     "model": {
       "speed": {
-        "k": 46.972554,
-        "tau1": 1.766848,
-        "theta": 0.65,
-        "band": 0.382029,
-        "step": 0.267495,
-        "bands": 5.755731,
-        "spread": 1.409397,
-        "tests": 8.0,
-        "tau_c": 0.65
+        "k": 329631.664124,
+        "tau1": 68953.574126,
+        "theta": 0.05,
+        "band": 0.496826,
+        "step": 0.1,
+        "bands": 11610.825153,
+        "spread": 8522.563082,
+        "tests": 2.0,
+        "tau_c": 0.05
       },
       "valve": {
-        "k": 1.16437,
-        "tau1": 0.213839,
+        "k": 1.435411,
+        "tau1": 0.311561,
         "theta": 0.05,
-        "band": 0.03637,
-        "step": 0.264564,
-        "bands": 4.234913,
-        "spread": 1.312376,
-        "tests": 6.0,
-        "tau_c": 0.108266
+        "band": 0.032743,
+        "step": 0.229802,
+        "bands": 3.606606,
+        "spread": 2.31483,
+        "tests": 2.0,
+        "tau_c": 0.109989
       },
-      "rga": 0.9122689943866417,
+      "rga": NaN,
       "schedule": {
-        "least margin": 0.06097376346588135,
+        "least margin": 0.07652401924133301,
         "trips": 0
       }
     },
@@ -443,7 +454,7 @@
     "model": {
       "demand": {
         "k": 17.231106,
-        "tau1": 458.526735,
+        "tau1": 458.526732,
         "theta": 37.5,
         "band": 0.121989,
         "step": 0.009091,

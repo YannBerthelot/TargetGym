@@ -16,7 +16,7 @@ env, params = tg.make("cstr")
 | Observation space | `Box((3,))` |
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 150 steps of 15 s (37.5 min) |
-| Cite as | `cstr-v4` |
+| Cite as | `cstr-v7` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 
 ## Action space

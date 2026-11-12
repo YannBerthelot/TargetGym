@@ -178,7 +178,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 
 ### The reference ladder's row (rule 3, for `scripts/reference_ladder.py`)
 
-- **Registered** as `glass_furnace-v5`: `env_jax.GlassFurnace` with `GlassFurnaceParams`,
+- **Registered** as `glass_furnace-v6`: `env_jax.GlassFurnace` with `GlassFurnaceParams`,
   the scored configuration as `default_params`, starting from the packaged
   `design_state.npz`. Its scenarios are `EnvSpec.scenarios`, five, weighted
   (`physical_scenarios.suite`), and their overrides `pull_change` and `gas_swing` are

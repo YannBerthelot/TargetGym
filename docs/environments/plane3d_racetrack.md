@@ -16,7 +16,7 @@ env, params = tg.make("plane3d_racetrack")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 650 steps of 1 s (10.8 min) |
-| Cite as | `plane3d_racetrack-v5` |
+| Cite as | `plane3d_racetrack-v10` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space

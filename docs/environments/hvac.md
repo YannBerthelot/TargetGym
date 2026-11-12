@@ -16,7 +16,7 @@ env, params = tg.make("hvac")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | zone air temperature (deg C) |
 | Episode length | 720 steps of 900 s (7.5 days) |
-| Cite as | `hvac-v3` |
+| Cite as | `hvac-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 
 ## Action space

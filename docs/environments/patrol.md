@@ -16,7 +16,7 @@ env, params = tg.make("patrol")
 | Observation space | `Box((26,))` |
 | Tracked variable(s) | slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `patrol-v4` |
+| Cite as | `patrol-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
