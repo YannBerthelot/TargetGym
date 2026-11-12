@@ -76,10 +76,17 @@ def _planner_pH_jvp(primals, tangents):
     return pH, -dr / jax.grad(titration_residual)(pH, Wa, Wb, params)
 
 
+#: The plan states the invariants in mM: the solver scales a state by its size
+#: floored at 1, and in M they sit near 1e-3 with the pH steep in them.
+MM = 1000.0
+#: Where the invariants sit in ``x``: both stages', then the basin's.
+INVARIANTS = (0, 1, 2, 3, 5, 6)
+
+
 def ph_step(env, p, x, u, t, task):
     """One step of the planner's model from ``x`` = (stage 1's and stage 2's
-    invariants, the basin's litres and invariants, the trim's flow) under the raw
-    moves ``u``:
+    invariants, the basin's litres and invariants, the trim's flow; invariants in
+    mM) under the raw moves ``u``:
     ``(x_next, q3 + q3_trim, the discharge's pH)``, as ``compute_next_state``
     steps the plant with the noise zeroed. ``t`` steps into the plan, the buffer
     is on its mean path from the solve's ``q2``."""
@@ -88,6 +95,7 @@ def ph_step(env, p, x, u, t, task):
     q3t = 0.5 * (u[1] + 1.0) * p.q3_trim_max
     decay = 1.0 - BUFFER_OU_THETA * p.delta_t
     q2 = p.q2_nominal + (q2_0 - p.q2_nominal) * decay ** (t + 1)
+    x = x.at[INVARIANTS,].divide(MM)
     Wa_1, Wb_1, Wa, Wb, basin, Wa_b, Wb_b = x[:7]
     # T4: the interlock reads the discharge at the step's start.
     diverting = planner_pH(Wa, Wb, p) < p.sewer_floor
@@ -107,7 +115,7 @@ def ph_step(env, p, x, u, t, task):
     Wb_b = Wb_b + weight * (Wb - Wb_b)
     basin = jnp.maximum(held - qp * p.delta_t / 1000.0, 0.0)
     x1 = jnp.concatenate([tanks, jnp.stack([basin, Wa_b, Wb_b, q3t])])
-    return x1, q3 + q3t, planner_pH(tanks[2], tanks[3], p)
+    return x1.at[INVARIANTS,].multiply(MM), q3 + q3t, planner_pH(tanks[2], tanks[3], p)
 
 
 def ph_model(env, p) -> TaskModel:
@@ -127,7 +135,7 @@ def ph_model(env, p) -> TaskModel:
         nx=8, nu=2, step=step,
         state_x=lambda s: jnp.stack([
             s.Wa_s1, s.Wb_s1, s.Wa, s.Wb, s.basin, s.Wa_basin, s.Wb_basin, s.q3_trim,
-        ]),
+        ]).at[INVARIANTS,].multiply(MM),
         data=lambda s: (influent_flow(s, p), p.Wa1 * acid_scale(s, p), s.q2),
         hold=lambda s: jnp.stack(
             [raw_of(s.q3, p.q3_min, p.q3_max), raw_of(s.q3_trim, 0.0, p.q3_trim_max)]
