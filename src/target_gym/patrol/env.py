@@ -147,6 +147,16 @@ def lead_autopilot(params):
     )
 
 
+def lead_autopilot_step(params, memory, obs):
+    """One step of the scripted lead's autopilot: ``(action, memory)`` from its
+    3D heading observation. Its TECS is the 4.0.9 port it shipped with
+    (``experts_tecs.tecs_step_409``): the lead is part of the plant, so the
+    experts' move to master's pitch loop (2026-11-12) does not reach it."""
+    return plane3d_heading_step(
+        lead_autopilot(params), memory, obs, tecs_fn=tecs_step_409
+    )
+
+
 #: Samples of the lead's gust and wake the air keeps, newest first: 20 s, so a
 #: wake-surfing follower 3.7 km behind an airliner at 230 m/s (16 s) still finds
 #: the air its lead left.
@@ -1053,13 +1063,8 @@ def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
     """
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
-    # The lead's TECS is the 4.0.9 port it shipped with: part of the plant,
-    # so the experts' move to master's pitch loop (2026-11-12) does not reach it.
-    lead_action, memory = plane3d_heading_step(
-        lead_autopilot(params),
-        state.lead_memory,
-        get_obs_heading(lead_cmd),
-        tecs_fn=tecs_step_409,
+    lead_action, memory = lead_autopilot_step(
+        params, state.lead_memory, get_obs_heading(lead_cmd)
     )
     power, pitch, bank = decode_action(lead_action)
     new_lead, metrics = compute_next_state_3d(
