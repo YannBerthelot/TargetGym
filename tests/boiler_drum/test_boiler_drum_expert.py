@@ -13,8 +13,10 @@ Contract, from boiler-control practice and the tuning recipe (not the code):
 * Level integrates, so it is lambda-tuned from the stored model ``k' e^(-theta
   s) / s``: ``Kc = (2 lam + theta) / (k' (lam + theta)^2)``, ``Ti = 2 lam + theta``.
 * Steam follows pressure, so pressure regulates itself, and is lambda-tuned from
-  its stored first-order model: ``Kc = tau1 / (k (lam + theta))``, ``Ti = tau1``,
-  on the action (the firing PI's gain on the [-1, 1] action is twice its gain on
+  its stored first-order model: ``Kc = tau1 / (k (lam + theta))``,
+  ``Ti = min(tau1, 4 (lam + theta))``, C7's capped integral time on a long lag,
+  which D7's lambda rule applies (docs/proposals/expert-protocols-process.md), on
+  the action (the firing PI's gain on the [-1, 1] action is twice its gain on
   the heat fraction).
 * The level trim has no limit of its own. Its integral stops at the feedwater's
   limits, while the error would push past them (Astrom and Hagglund 3.5).
@@ -81,9 +83,10 @@ def test_pressure_follows_the_lambda_rule_for_a_first_order_loop():
     m = _stored()["model_pressure"]
     k, tau1, theta, lam = m["k"], m["tau1"], m["theta"], m["lam"]
     Kc = tau1 / (k * (lam + theta))
+    Ti = min(tau1, 4 * (lam + theta))  # C7's cap on a long lag (D7)
     params = tg.make_expert("boiler_drum").params
     assert 2.0 * params.Kp_pressure == pytest.approx(Kc, rel=1e-9)
-    assert 2.0 * params.Ki_pressure == pytest.approx(Kc / tau1, rel=1e-9)
+    assert 2.0 * params.Ki_pressure == pytest.approx(Kc / Ti, rel=1e-9)
 
 
 def _feed(expert, obs):
