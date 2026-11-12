@@ -132,9 +132,14 @@ prints a trace, so never copy it back). Option 4 was not in this run.
 | rung (rod width, boron width) | old code (#174 runs) | options 1 to 3 |
 | --- | --- | --- |
 | 1 (0.0105, 0.1) | 300 iterations, capped, KKT 1.4, 4.25 h, planned cost 1 903.4 | **372 iterations, converged, KKT 9.9e-9**, 1.37 h, planned cost 1 896.2 |
-| 2 (0.00105, 0.01) | 300, capped, KKT 0.71, 4.6 h | running |
+| 2 (0.00105, 0.01) | 300, capped, KKT 0.71, 4.6 h | 600, capped, KKT 2.2, 2.61 h, planned cost 1 796.5 (violation 1.1e-5) |
 
-The later rungs' results will be added when the run ends.
+Rung 3 never finished: the run was stopped at about 18:05 on 2026-11-12, when the
+owner cleared every job on bob for a clean start. So the full day still has no
+converged plan at the narrow rungs. Rung 1 converges now; rung 2 runs twice as
+many iterations in about half the old time, but stays capped with KKT 2.2. The
+narrow widths are the open problem, and a rerun of rungs 2 and 3 (with option 4)
+belongs on smithers or flanders, not on a shared bob.
 
 ## pH oracle (second job, from the owner)
 
