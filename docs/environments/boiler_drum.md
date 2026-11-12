@@ -16,7 +16,7 @@ env, params = tg.make("boiler_drum")
 | Observation space | `Box((7,))` |
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
 | Episode length | 400 steps of 2 s (13.3 min) |
-| Cite as | `boiler_drum-v3` |
+| Cite as | `boiler_drum-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
 
 ## Action space

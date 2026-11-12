@@ -21,18 +21,23 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "cstr": {
-    "Kp": 0.096823,
-    "Ti": 18.38,
+    "Kp": 0.163494,
+    "Ti": 17.594927,
     "Tf": 0.0,
     "model": {
       "T": {
-        "k": -10.69,
-        "tau1": 18.38,
-        "theta": 8.88,
-        "tau_c": 8.88
+        "k": -9.783495,
+        "tau1": 17.594927,
+        "theta": 5.5,
+        "band": 0.121377,
+        "step": 0.1,
+        "bands": 8.060401,
+        "spread": 1.013892,
+        "tests": 10.0,
+        "tau_c": 5.5
       }
     },
-    "tuning_rule": "SIMC (Skogestad and Grimholt 2012), tau_c = theta, on one bump test of the cooling water (+0.2 raw) from the design steady state, noise and events off (cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it; the bump test is noise-free, so every level shares it"
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "ph_neutralization": {
     "Kp": 0.654774,
@@ -41,7 +46,7 @@
     "model": {
       "demand": {
         "k": 19.212721,
-        "tau1": 566.099537,
+        "tau1": 566.099541,
         "theta": 22.5,
         "band": 0.067522,
         "step": 0.009091,
@@ -54,146 +59,152 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "four_tank": {
-    "Kp_1": 30.719665,
-    "Ti_1": 120.877691,
-    "Kp_2": 31.241291,
-    "Ti_2": 113.445389,
-    "D11": -0.304525,
-    "D12": 1.066902,
-    "D21": 1.066902,
-    "D22": -0.234389,
+    "Kp_1": 16.832007,
+    "Ti_1": 85.358571,
+    "Kp_2": 59.54567,
+    "Ti_2": 176.186119,
+    "D11": -1.00127,
+    "D12": 1.625122,
+    "D21": 1.625122,
+    "D22": -1.014611,
     "model": {
       "h1": {
-        "k": 0.036774,
-        "tau1": 120.877691,
-        "theta": 53.5,
-        "band": 0.002159,
+        "k": 0.050712,
+        "tau1": 85.358571,
+        "theta": 50.0,
+        "band": 0.002854,
         "step": 0.06,
-        "bands": 5.108858,
-        "spread": 1.289652,
+        "bands": 5.330823,
+        "spread": 1.012033,
         "tests": 10.0,
-        "tau_c": 53.5
+        "tau_c": 50.0
       },
       "h2": {
-        "k": 0.04483,
-        "tau1": 113.445389,
-        "theta": 40.5,
-        "band": 0.00236,
+        "k": 0.052836,
+        "tau1": 176.186119,
+        "theta": 28.000001,
+        "band": 0.002692,
         "step": 0.06,
-        "bands": 5.698034,
-        "spread": 1.379602,
+        "bands": 5.888852,
+        "spread": 1.026038,
         "tests": 10.0,
-        "tau_c": 40.5
+        "tau_c": 28.000001
       },
-      "rga": -0.0669
+      "rga": -0.6251
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "distillation": {
-    "Kp_T": 0.472612,
-    "Ti_T": 7.314076,
-    "Tf_T": 0.406338,
-    "Kp_D": 31.87136,
-    "Ti_D": 6.917956,
-    "Kp_B": -31.764781,
-    "Ti_B": 2.97356,
-    "band_D": 0.001188,
-    "band_B": 0.001316,
+    "Kp_T": 0.234915,
+    "Ti_T": 14.092574,
+    "Tf_T": 0.782921,
+    "Kp_D": 61.685146,
+    "Ti_D": 23.02224,
+    "Kp_B": -49.535873,
+    "Ti_B": 6.460257,
+    "band_D": 0.001185,
+    "band_B": 0.001122,
     "every": 5.0,
-    "wait": 2.0,
-    "sp_rate": 0.753251,
+    "wait": 3.0,
+    "sp_rate": 0.968915,
     "model": {
       "T": {
-        "k": 1.157167,
+        "k": 1.208254,
         "tau1": 0.0,
-        "theta": 0.507922,
-        "band": 0.125025,
-        "step": 0.047699,
-        "bands": 5.297748,
-        "spread": 1.254543,
+        "theta": 0.978651,
+        "band": 0.12492,
+        "step": 0.025183,
+        "bands": 4.019032,
+        "spread": 1.439202,
         "tests": 10.0,
-        "tau_c": 0.914259
+        "tau_c": 1.761572
       },
       "yD": {
-        "k": 0.014471,
-        "tau1": 4.417956,
-        "theta": 7.5,
-        "band": 0.001188,
+        "k": 0.014355,
+        "tau1": 23.02224,
+        "theta": 13.0,
+        "band": 0.001185,
         "step": 0.24755,
-        "bands": 3.014056,
-        "spread": 1.335908,
+        "bands": 2.997699,
+        "spread": 1.072368,
         "tests": 10.0,
-        "tau_c": 7.5
+        "tau_c": 13.0
       },
       "xB": {
-        "k": -0.006241,
-        "tau1": 0.47356,
-        "theta": 7.5,
-        "band": 0.001316,
+        "k": -0.00621,
+        "tau1": 2.960257,
+        "theta": 10.5,
+        "band": 0.001122,
         "step": -1.052993,
-        "bands": 4.993522,
-        "spread": 1.061879,
+        "bands": 5.82943,
+        "spread": 1.048794,
         "tests": 10.0,
-        "tau_c": 7.5
+        "tau_c": 10.5
       },
       "rga": {
-        "yD, xB on L, V": 35.94454039116139,
-        "yD, T on L, V": 43.341802692091996,
-        "yD, xB on L, T_sp": 0.8293273043236771
+        "yD, xB on L, V": 35.94450357360989,
+        "yD, T on L, V": 43.341758337015264,
+        "yD, xB on L, T_sp": 0.8293273035697816
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "unstable_cstr": {
-    "Kp": -0.028326,
-    "Ti": 35.1,
+    "Kp": -0.042077,
+    "Ti": 24.886491,
     "Td": 0.0,
     "Tf": 0.0,
     "model": {
       "T": {
-        "k_slope": 4.028,
-        "theta": 4.39,
-        "tau_c": 4.39
+        "k": 3.819941,
+        "tau1": 0.0,
+        "theta": 3.110811,
+        "band": 1.485407,
+        "step": 0.044505,
+        "bands": 4.578096,
+        "spread": 1.130085,
+        "tests": 10.0,
+        "tau_c": 3.110811
       }
     },
-    "tuning_rule": "SIMC for an integrating process (Skogestad 2003), tau_c = theta, on one bump test of the initiator (+0.02 raw) from the 513 K steady state, noise and events off: the unstable mode's 175 s is slow against the test (unstable_cstr version 5, PHYSICS.md 'Expert'); the reference ladder replaces it"
+    "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "compressor_surge": {
-    "kp_speed": 0.027575,
-    "ki_speed": 0.016393,
+    "kp_speed": 2.092832,
+    "ki_speed": 5.23208,
     "kp_surge": 1.0,
-    "ki_surge": 4.784078,
-    "Tf_surge": 0.020903,
-    "surge_line": 0.1,
-    "override_line": 0.05,
+    "ki_surge": 3.275671,
+    "Tf_surge": 0.030528,
+    "surge_line": 0.15,
+    "override_line": 0.075,
     "override_hold": 2.0,
-    "reset_band": 0.016473,
+    "reset_band": 0.046369,
     "model": {
       "speed": {
-        "k": 46.924354,
-        "tau1": 1.682121,
-        "theta": 0.65,
-        "band": 0.379132,
-        "step": 0.265321,
-        "bands": 5.746673,
-        "spread": 1.346047,
-        "tests": 8.0,
-        "tau_c": 0.65
+        "k": 218969.646356,
+        "tau1": 45826.674493,
+        "theta": 0.05,
+        "band": 0.494242,
+        "step": 0.1,
+        "bands": 7753.219153,
+        "spread": 5660.911546,
+        "tests": 2.0,
+        "tau_c": 0.05
       },
       "valve": {
-        "k": 1.176016,
-        "tau1": 0.209027,
+        "k": 1.46203,
+        "tau1": 0.305281,
         "theta": 0.05,
-        "band": 0.034878,
-        "step": 0.253843,
-        "bands": 4.279516,
-        "spread": 1.324266,
-        "tests": 6.0,
-        "tau_c": 0.095831
+        "band": 0.031382,
+        "step": 0.219925,
+        "bands": 3.652943,
+        "spread": 2.346812,
+        "tests": 2.0,
+        "tau_c": 0.095713
       },
-      "rga": 0.9122689943866417,
+      "rga": NaN,
       "schedule": {
-        "least margin": 0.057349562644958496,
+        "least margin": 0.07413351535797119,
         "trips": 0
       }
     },
@@ -235,36 +246,36 @@
   },
   "boiler_drum": {
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 10: single-run bump tests, seeds 100-109",
-    "Kp_pressure": 0.04988524400719868,
-    "Ki_pressure": 0.0004454039605321072,
+    "Kp_pressure": 0.047555979490629126,
+    "Ki_pressure": 0.00037153108698406235,
     "Kd_pressure": 0.0,
     "Tf_pressure": 0.0,
-    "Kp_level": 449.36686113706367,
-    "Ki_level": 7.114663869649483,
+    "Kp_level": 575.1723227076054,
+    "Ki_level": 9.931826783941776,
     "Tf_level": 0.0,
     "model_pressure": {
-      "k": 67.61818462941397,
-      "tau1": 188.89638143464728,
-      "theta": 14.000000120004174,
-      "band": 0.065988,
+      "k": 77.12703162253234,
+      "tau1": 234.74249993747742,
+      "theta": 16.000000119999765,
+      "band": 0.065939,
       "step": 0.02,
-      "bands": 20.494135,
-      "spread": 1.084854,
+      "bands": 23.393438,
+      "spread": 1.089293,
       "tests": 10.0,
-      "tau_c": 14.0,
-      "lam": 14.000000120004174
+      "tau_c": 16.0,
+      "lam": 16.000000119999765
     },
     "model_level": {
-      "k": 7.927473903494472e-05,
-      "tau1": 1.86181478396403,
-      "theta": 21.053553120245184,
-      "band": 0.001477,
+      "k": 6.754849783579749e-05,
+      "tau1": 2.619162798931109,
+      "theta": 19.30401241785549,
+      "band": 0.00146,
       "step": 0.02,
-      "bands": 25.763846,
-      "spread": 1.13205,
+      "bands": 22.214285,
+      "spread": 1.083837,
       "tests": 10.0,
-      "tau_c": 21.053553,
-      "lam": 21.053553120245184
+      "tau_c": 19.304012,
+      "lam": 19.30401241785549
     }
   },
   "glass_furnace": {

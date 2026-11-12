@@ -16,7 +16,7 @@ env, params = tg.make("plane_sine")
 | Observation space | `Box((10,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 480 steps of 1 s (8 min) |
-| Cite as | `plane_sine-v3` |
+| Cite as | `plane_sine-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space

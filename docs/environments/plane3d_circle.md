@@ -16,7 +16,7 @@ env, params = tg.make("plane3d_circle")
 | Observation space | `Box((17,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 300 steps of 1 s (5 min) |
-| Cite as | `plane3d_circle-v4` |
+| Cite as | `plane3d_circle-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space

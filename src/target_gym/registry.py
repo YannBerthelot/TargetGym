@@ -597,7 +597,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios("suite", module="target_gym.plane.scenarios"),
         # v5: Amendment 3 (plane/PHYSICS.md): cruise at FL290 to 370, the light
         # zone's sigma re-derived there, and a scenario suite.
-        version=6,
+        # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=7,
     ),
     # The same aircraft on ATC's level and speed clearances (plane_energy, Extra
     # under rule 18: thrust never runs out, plane/EXTRA.md), and on a sinusoid
@@ -633,7 +634,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 500 fpm profile instead of starting where it ends.
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("energy_suite", module="target_gym.plane.scenarios"),
-        version=9,
+        # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=10,
     ),
     EnvSpec(
         name="plane_sine",
@@ -655,7 +657,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v4: the 2D plant's Amendment 2 changes (plane/PHYSICS.md)
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("sine_suite", module="target_gym.plane.scenarios"),
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="plane3d_heading",
@@ -694,7 +697,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios("heading_suite", module="target_gym.plane3d.scenarios"),
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
         # vectors every 150 s, and a scenario suite.
-        version=8,
+        # v9: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=9,
     ),
     EnvSpec(
         name="plane3d_circle",
@@ -723,7 +727,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("circle_suite", module="target_gym.plane3d.scenarios"),
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="plane3d_racetrack",
@@ -763,7 +768,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # a scenario suite with steady winds.
         # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
         # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
-        version=9,
+        # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=10,
     ),
     EnvSpec(
         name="plane3d_figure8",
@@ -793,7 +799,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v4: the distance to the curve observed as the tracked output.
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("figure8_suite", module="target_gym.plane3d.scenarios"),
-        version=6,
+        # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=7,
     ),
     EnvSpec(
         name="patrol",
@@ -824,7 +831,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="patrol_range_bearing",
@@ -871,7 +879,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("patrol_suite", module="target_gym.patrol.scenarios"),
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     # -- Process control ----------------------------------------------------
     EnvSpec(
@@ -892,7 +901,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # point takes S1's 120 g/s [S1, p. 6, Fig. 2]; catalyst_loss is S1's
         # 40 % as a 90 min decay, not a step [S1, p. 6]; the feed follows the
         # room through the day across S1's 23.1 to 24.9 C [S1, Tables 3, 4].
-        version=6,
+        # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=7,
         scenarios=_scenarios(
             "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
         ),
@@ -913,7 +923,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # the level it holds. At 100 the scored hold was the last 37 steps.
         tuned_gains_key="first_order",
         oracle_data=_shared_oracle("first_order"),
-        version=4,
+        # v5: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=5,
         # One scenario, the window as scored, declared for the stream's target
         # changes (long-strata draft 4, S1).
         scenarios=_scenarios(
@@ -944,7 +955,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # overflowing rim, and an episode of setpoint steps from the operating
         # point with an extra upper outlet and a cup. 6: failure_cost 0, as
         # for every plant with no trip (charter B5).
-        version=6,
+        # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=7,
         # One scenario, the window as scored, declared for the stream's event
         # rate (long-strata draft 4, S1).
         scenarios=_scenarios(
@@ -973,7 +985,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # established operation, and a job score in reagent litres. v5
         # (Amendment 3): two 10 min stages with a valve each, a finite
         # diversion basin pumped back, influent flow swings, scenarios.
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
         scenarios=_scenarios(
             "ph_neutralization_scenarios",
             module="target_gym.pc_gym.ph_neutralization.scenarios",
@@ -1007,7 +1020,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # failure_cost 0, as for every plant with no trip (charter B5).
         # v8: light key lost to the bottoms is priced at 100 kmol of boilup a
         # kmol, Column A's distillate over bottoms price and energy [D8].
-        version=8,
+        # v9: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=9,
         scenarios=_scenarios(
             "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"
         ),
@@ -1042,7 +1056,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         disturbance_fields=("walk",),
         scenarios=_glass_furnace_scenarios,
         # v5: fining is a time-temperature integral, not the peak (PHYSICS.md).
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="reactor",
@@ -1055,7 +1070,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
         oracle_data=_shared_oracle("reactor"),
-        version=9,
+        # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=10,
         noise_fields=("demand_sigma",),
         scenarios=_scenarios("suite", module="target_gym.reactor.scenarios"),
     ),
@@ -1080,12 +1096,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         # priced as lost office work, a day-ahead forecast in the observation,
         # and a scenario suite.
         scenarios=_hvac_scenarios,
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="cement_kiln",
         group="industrial",
-        version=4,
+        # v5: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=5,
         env_factory=_cement_kiln,
         params_cls=_LazyParams("target_gym.cement_kiln.env", "CementKilnParams"),
         make_pid=_pid(
@@ -1128,7 +1146,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # trip, ramps over the family's 1 to 6 %/min, a score in GBP at the
         # imbalance price past the steam meter's resolution.
         scenarios=_boiler_drum_scenarios,
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="wind_turbine",
@@ -1156,7 +1175,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios(
             "wind_turbine_scenarios", module="target_gym.energy.wind_turbine.scenarios"
         ),
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     EnvSpec(
         name="battery",
@@ -1178,7 +1198,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v5 (Amendment 3): the named property is the 60 to 90 min gate-closure
         # delay; energy priced at the GB wholesale price; six scenarios.
         scenarios=_battery_scenarios,
-        version=5,
+        # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=6,
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
@@ -1203,7 +1224,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # high-temperature trip, temperature as the job, scenarios.
         # v6: the cold monomer feed wanders 1 K around its 353 K over 10 min
         # (size and period ours), so the normal day moves the unstable point.
-        version=6,
+        # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=7,
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
         scenarios=_scenarios(
@@ -1237,7 +1259,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # shared plumbing. v4 (charter Amendment 3): the counted-surge trip,
         # the valve's positioner lag, a constant header setpoint, a recycle
         # energy score inside a header zone, scenarios.
-        version=4,
+        # v5: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=5,
         scenarios=_scenarios(
             "compressor_surge_scenarios", module="target_gym.compressor_surge.scenarios"
         ),
@@ -1289,7 +1312,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_scenarios(
             "formation_suite", module="target_gym.formation.scenarios"
         ),
-        version=4,
+        # v5: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=5,
     ),
     EnvSpec(
         name="wake_surf",
@@ -1317,7 +1341,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         ),
         # One scenario, declared to carry the stream's numbers.
         scenarios=_scenarios("wake_surf_suite", module="target_gym.patrol.scenarios"),
-        version=2,
+        # v3: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        version=3,
     ),
 )
 

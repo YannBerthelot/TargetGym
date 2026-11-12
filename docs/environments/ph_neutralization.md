@@ -16,7 +16,7 @@ env, params = tg.make("ph_neutralization")
 | Observation space | `Box((3,))` |
 | Tracked variable(s) | pH |
 | Episode length | 300 steps of 5 s (25 min) |
-| Cite as | `ph_neutralization-v3` |
+| Cite as | `ph_neutralization-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 
 ## Action space

@@ -16,7 +16,7 @@ env, params = tg.make("unstable_cstr")
 | Observation space | `Box((4,))` |
 | Tracked variable(s) | C_a (mol/L) |
 | Episode length | 1200 steps of 3 s (60 min) |
-| Cite as | `unstable_cstr-v4` |
+| Cite as | `unstable_cstr-v7` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space

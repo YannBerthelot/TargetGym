@@ -16,7 +16,7 @@ env, params = tg.make("wake_surf")
 | Observation space | `Box((26,))` |
 | Tracked variable(s) | slot error (m) |
 | Episode length | 1800 steps of 1 s (30 min) |
-| Cite as | `wake_surf-v2` |
+| Cite as | `wake_surf-v3` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space

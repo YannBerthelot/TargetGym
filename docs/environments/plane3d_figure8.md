@@ -16,7 +16,7 @@ env, params = tg.make("plane3d_figure8")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | distance to path (m) |
 | Episode length | 1000 steps of 1 s (16.7 min) |
-| Cite as | `plane3d_figure8-v5` |
+| Cite as | `plane3d_figure8-v7` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space

@@ -16,7 +16,7 @@ env, params = tg.make("cement_kiln")
 | Observation space | `Box((8,))` |
 | Tracked variable(s) | discharge free lime (%) |
 | Episode length | 700 steps of 30 s (5.83 h) |
-| Cite as | `cement_kiln-v4` |
+| Cite as | `cement_kiln-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 
 ## Action space

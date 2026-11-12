@@ -16,7 +16,7 @@ env, params = tg.make("patrol_range_bearing")
 | Observation space | `Box((21,))` |
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `patrol_range_bearing-v4` |
+| Cite as | `patrol_range_bearing-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space

@@ -16,7 +16,7 @@ env, params = tg.make("first_order")
 | Observation space | `Box((2,))` |
 | Tracked variable(s) | x |
 | Episode length | 150 steps of 0.05 s (7.5 s) |
-| Cite as | `first_order-v4` |
+| Cite as | `first_order-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space

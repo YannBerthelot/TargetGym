@@ -16,7 +16,7 @@ env, params = tg.make("formation")
 | Observation space | `Box((74,))` |
 | Tracked variable(s) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
-| Cite as | `formation-v3` |
+| Cite as | `formation-v5` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
 ## Action space

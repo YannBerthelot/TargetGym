@@ -16,7 +16,7 @@ env, params = tg.make("four_tank")
 | Observation space | `Box((6,))` |
 | Tracked variable(s) | h1 (m), h2 (m) |
 | Episode length | 1200 steps of 1 s (20 min) |
-| Cite as | `four_tank-v4` |
+| Cite as | `four_tank-v7` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 
 ## Action space

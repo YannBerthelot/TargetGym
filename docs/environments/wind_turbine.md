@@ -16,7 +16,7 @@ env, params = tg.make("wind_turbine")
 | Observation space | `Box((5,))` |
 | Tracked variable(s) | electrical power (MW) |
 | Episode length | 400 steps of 0.25 s (100 s) |
-| Cite as | `wind_turbine-v3` |
+| Cite as | `wind_turbine-v6` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
 
 ## Action space
