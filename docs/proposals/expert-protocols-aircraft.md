@@ -34,6 +34,7 @@ rad/s, per rad s). Values below give ArduPilot units, ours in brackets.
 | G-AT | ArduPilot, [AUTOTUNE](https://ardupilot.org/plane/docs/automatic-tuning-with-autotune.html) | why not AUTOTUNE |
 | G-NAV | ArduPilot, [Navigation tuning](https://ardupilot.org/plane/docs/navigation-tuning.html) | L1 period |
 | SRC | [ArduPlane-4.0.9 source](https://github.com/ArduPilot/ardupilot/tree/ArduPlane-4.0.9): `AP_RollController`, `AP_PitchController`, `AP_AutoTune`, `AP_TECS`, `AP_L1_Control`, `ArduPlane/Attitude.cpp`; master's `AP_AutoTune` and `AP_TECS` | laws, defaults, ranges |
+| SRC-M | ArduPilot master `AP_TECS.cpp` at [546cf152](https://github.com/ArduPilot/ardupilot/blob/546cf152a8c868acbac82dd326f9649da66d6ba1/libraries/AP_TECS/AP_TECS.cpp) (fetched twice on 2026-11-12); its pitch loop from commit 0840bf5a21 (2022-11-17) | TECS pitch loop since 2026-11-12 (D1 note) |
 | FAR | [14 CFR 25.207(c)](https://www.law.cornell.edu/cfr/text/14/25.207), stall warning margin | angle-of-attack limit |
 | ICAO | ICAO Doc 8168 (PANS-OPS): holding turns at 25 deg of bank or 3 deg/s, whichever needs less bank; read through [Wikipedia](https://en.wikipedia.org/wiki/Standard_rate_turn), primary not fetched | nominal turn bank |
 | SIMC | Skogestad, J. Process Control 13 (2003) 291-309; Skogestad and Grimholt 2012, as `tune_process_experts.py` cites; [NTNU lecture](https://skoge.folk.ntnu.no/prosessregulering/lectures/2024/SiS6SIMC_tuning.pdf), fetched once | follower slot loops |
@@ -300,7 +301,11 @@ value. Whatever it ends on ships.
 
 ## 6. Open decisions (recommendation first)
 
-- **D1** Pin ArduPlane 4.0.9, whose controllers we fly; or master.
+- **D1** Pin ArduPlane 4.0.9, whose controllers we fly; or master. *Amended
+  2026-11-12 (owner): TECS's pitch loop is master's (SRC-M), weights capped at 1 "to
+  prevent instability", the demanded climb clipped to the climb and sink limits, the
+  integral on the rate error; 4.0.9's lasting height cycles on long streams
+  (plane/PHYSICS.md, the expert). Everything else stays 4.0.9.*
 - **D2** Add the roll integrator ArduPilot flies (default I 0.3) so 3.2 step 4 runs on roll; or keep
   the roll loop PD.
 - **D3** Add ArduPilot's airspeed scaler, s = SCALING_SPEED / EAS with SCALING_SPEED the test's EAS,

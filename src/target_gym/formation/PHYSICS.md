@@ -143,6 +143,60 @@ TECS on height and the 3D tasks' speed schedule. With the engine's 1.7 s lag
 TECS's throttle flies as smooth and predictable as a formation lead should, so
 the set power the old 20 s lag called for is gone.
 
+It rolls at the parade rate of roll (owner's decision of 2026-11-12): its bank
+demand moves at no more than 10 deg/s, 30 deg of bank in 3 s. The source is
+VT-6's Formation Supplement (CNATRA TW-5, June 2022, T-6B): "A smooth,
+continuous roll rate of 3-5 seconds to reach 30 degrees AOB (or roll level out
+of turn) is a good benchmark", of which the owner took the fast end; it adds
+"Lead should allow wing time to stabilize in position before reversing turns",
+with no number [VT-6]. Two other sources were weighed. A draft Navy manual
+(P-1213) puts the parade rate at about 10 deg/s, but its page could not be
+opened (its mirror's certificate does not match its host), so it is not used.
+CNATRA TW-4's *Primary Formation* (T-34C) defines the parade rate as "rolling at
+a rate that achieves 30º angle of bank after 30º of turn" [TW-4]. That rule
+depends on speed: rolling at p, the turn made by 30 deg of bank is
+(g / (V p)) ln(1 / cos 30 deg), which gives about 2 deg/s at a T-34C's 77 m/s
+and 0.8 deg/s at the Hornet's 200 m/s, a 40 s roll, so it is a trainer's rule,
+not a rate for this lead. The parade rate replaced a 2 s ease onto each leg's
+turn rate, the shortest of 2, 4 and 8 s that tripped no training seed.
+
+- **[VT-6]** VT-6 Formation Supplement (FORMSUP), CNATRA TW-5, June 2022, section
+  on parade turns. <https://www.cnatra.navy.mil/tw5/vt6/assets/docs/university/formsup.pdf>,
+  downloaded twice on 2026-11-12, both copies SHA-256
+  3760e2a74d469785580881bd503d707b2b53eb4fccc1d6f940f954def58e98a2.
+- **[TW-4]** CNATRA TW-4, *Primary Formation*, the parade turns and the lead's
+  duties in them. <https://www.cnatra.navy.mil/tw4/fitu/assets/docs/syllabus-primary/Form.docx>,
+  downloaded twice on 2026-11-12, both copies SHA-256
+  a692782d7efaf6dd9ea211cf5c57df4b6a7a1b0986f99c617014088e8f49c138.
+
+It banks at most the parade turn's 30 deg (owner, 2026-11-12): parade turns are
+trained at "30º angle of bank" [TW-4] ("Focus on 30 degree VMC turns" [VT-6]), and
+the route's fastest leg is that turn. Both documents were downloaded twice with
+identical SHA-256 (TW-4's file:
+a692782d7efaf6dd9ea211cf5c57df4b6a7a1b0986f99c617014088e8f49c138).
+
+Why the cap: in a stream a sortie flies its route for 7.8 h on average, so a route
+whose adjacent legs reverse at nearly the full parade-turn rate is flown again every
+8 min, and its wingmen collided at those reversals (387 times per 1 000 plant hours
+on #190's long-stream run). Traced: rolling at the parade rate left the lead behind
+its commanded heading, its course hold then banked it to the autopilot's 45 deg,
+the wingmen's own limit, and the wingmen, already at 45 deg on the lead's fed-forward
+turn, fell about 15 m behind their slots across track; the one pushed toward the
+lead's track met its wake, lost its bank and slid into the other. Neither the slot
+geometry nor the wingmen's masses are the cause, and letting the wingmen bank to
+60 deg did not cure it. With the lead at 30 deg the hold is unchanged.
+
+| formation expert | long stream (E1): collisions per 1 000 h, cost per step | scored windows, seeds 0-9: trips, cost per step |
+| --- | --- | --- |
+| before 2026-11-12 | 387, 12.6 | 0, 28.6 |
+| master's TECS pitch loop | 387, 12.5 | 0, 30.8 |
+| and the parade rate of roll | 369, 16.5 | 2 (seeds 2 and 8), 39.9 on the other 8 |
+| and at most 30 deg of bank | 0, 19.0 | 0, 42.7 |
+
+The cost per step rises because the lead now lags its commanded heading: rolling
+slower and banking less, it reaches each leg's heading later (in the replay of the
+worst sortie its mean heading error went from 1.3 to 2.4 deg).
+
 The lead and the hold were tuned on training seeds 100-109 and checked once
 on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
 `tests/patrol/test_formation_hold.py`), against the 3D heading task's limits

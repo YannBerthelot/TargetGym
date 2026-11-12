@@ -184,7 +184,7 @@ def test_the_heading_expert_holds_altitude_and_heading(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("seed", _seeds(200, 201))
+@pytest.mark.parametrize("seed", _seeds())
 def test_the_circle_expert_holds_altitude_and_path(seed):
     _, seen, tripped, _ = _fly("plane3d_circle", seed)
     assert not tripped
@@ -203,7 +203,7 @@ def test_the_racetrack_expert_holds_altitude_and_path(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("seed", _seeds(*HELD_OUT))
+@pytest.mark.parametrize("seed", _seeds())
 def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
     """Stall prevention gives up path, not height, where the lobes are too
     tight for the airliner."""
@@ -213,7 +213,7 @@ def test_the_figure8_expert_keeps_its_height_on_every_pattern(seed):
 
 
 @pytest.mark.large
-@pytest.mark.parametrize("seed", _seeds(*range(200, 210), seeds=range(200, 210)))
+@pytest.mark.parametrize("seed", _seeds(seeds=range(200, 210)))
 def test_the_figure8_expert_holds_its_path_where_the_lobes_are_flyable(seed):
     first, seen, _, params = _fly("plane3d_figure8", seed)
     if not _lobes_flyable(params, first):

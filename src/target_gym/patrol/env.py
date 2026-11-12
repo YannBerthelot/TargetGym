@@ -46,7 +46,7 @@ from target_gym.plane.dynamics import (
     total_wind_3d,
     trim_level,
 )
-from target_gym.plane.experts_tecs import TECSParams
+from target_gym.plane.experts_tecs import TECSParams, tecs_step_409
 from target_gym.plane3d import hornet
 from target_gym.plane3d.dynamics import compute_velocity_3d, rolling_gust
 from target_gym.plane3d.env import (
@@ -144,6 +144,16 @@ def lead_autopilot(params):
     airliner = getattr(params, "airliner_lead", False)
     return jax.tree.map(
         lambda a, h: jnp.where(airliner, a, h), AIRLINER_LEAD, LEAD_AUTOPILOT
+    )
+
+
+def lead_autopilot_step(params, memory, obs):
+    """One step of the scripted lead's autopilot: ``(action, memory)`` from its
+    3D heading observation. Its TECS is the 4.0.9 port it shipped with
+    (``experts_tecs.tecs_step_409``): the lead is part of the plant, so the
+    experts' move to master's pitch loop (2026-11-12) does not reach it."""
+    return plane3d_heading_step(
+        lead_autopilot(params), memory, obs, tecs_fn=tecs_step_409
     )
 
 
@@ -1053,8 +1063,8 @@ def step_lead(state: PatrolState, params: PatrolParams, method: str = "rk4_1"):
     """
     commanded_heading = wrap_angle(state.lead.target_heading + state.lead_turn_rate)
     lead_cmd = state.lead.replace(target_heading=commanded_heading)
-    lead_action, memory = plane3d_heading_step(
-        lead_autopilot(params), state.lead_memory, get_obs_heading(lead_cmd)
+    lead_action, memory = lead_autopilot_step(
+        params, state.lead_memory, get_obs_heading(lead_cmd)
     )
     power, pitch, bank = decode_action(lead_action)
     new_lead, metrics = compute_next_state_3d(

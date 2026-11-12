@@ -125,10 +125,12 @@ def _v_min(params, z, xp):
 def _engaged(tecs, state, power, pitch, v, xp):
     """``state`` with, before TECS's first step, the integrators that make its
     outputs the observed ``power`` and ``pitch``, its errors being zero there.
-    The throttle action spans [-1, 1] for power in [0, 1]."""
+    The throttle action spans [-1, 1] for power in [0, 1]. The pitch integral
+    is in the units of master's pitch loop (``experts_tecs.tecs_step``), an
+    energy-balance rate: pitch above trim times TAS g."""
     throttle = 2.0 * power - 1.0
     fresh = state.started <= 0.0
-    gain_inv = xp.maximum(v, 1.0) * tecs.time_const * tecs.gravity
+    gain_inv = xp.maximum(v, 1.0) * tecs.gravity
     return state.replace(
         thr_integ=xp.where(fresh, throttle - tecs.thr_trim, state.thr_integ),
         pitch_integ=xp.where(
@@ -160,6 +162,7 @@ def _fly(
     target_speed,
     airspeed=None,
     power=None,
+    tecs_fn=None,
     **carry,
 ):
     """The autopilot under a guidance law: TECS on height and speed, and the
@@ -170,7 +173,11 @@ def _fly(
     reading), TECS reads the airspeed and engages on the trim found, and the
     speed floor carries the load factor of the bank demanded, not of the full
     limit. Without it, the earlier expert: ground speed, and the floor at the
-    full bank's load factor (the Extra tasks, patrol, formation)."""
+    full bank's load factor (the Extra tasks, patrol, formation).
+
+    ``tecs_fn`` is the TECS step, ``experts_tecs.tecs_step`` unless given: the
+    patrol family's scripted lead, part of its plant, flies the 4.0.9 port
+    (``tecs_step_409``)."""
     z, z_dot = obs[..., 2], obs[..., 3]
     phi, gamma = obs[..., 6], obs[..., 8]
     ground = xp.sqrt(obs[..., 0] ** 2 + obs[..., 1] ** 2 + z_dot**2)
@@ -190,7 +197,8 @@ def _fly(
         # (rule 17): on its first step TECS's integrators take up the trim it
         # finds, the observed throttle and pitch, so it engages bumpless.
         tecs_state = _engaged(params.tecs, tecs_state, power, obs[..., 4], v, xp)
-    power, pitch, tecs = tecs_step(
+    step = tecs_step if tecs_fn is None else tecs_fn
+    power, pitch, tecs = step(
         params.tecs, tecs_state, z, z_dot, v, h_dem, target_speed, phi, xp
     )
     load_factor = 1.0 / xp.maximum(xp.cos(phi), 0.35)
@@ -200,12 +208,15 @@ def _fly(
     return xp.stack(action, axis=-1), state.replace(tecs=tecs, **carry)
 
 
-def plane3d_heading_step(params, state, obs, xp=jnp):
-    """Course hold: the turn rate that closes the heading error in ``tau_hdg``."""
+def plane3d_heading_step(params, state, obs, xp=jnp, tecs_fn=None):
+    """Course hold: the turn rate that closes the heading error in ``tau_hdg``.
+    ``tecs_fn`` as :func:`_fly`'s."""
     v = _ground_speed(obs, xp)
     turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
-    return _fly(params, state, obs, xp, obs[..., 10], v * turn_rate, target)
+    return _fly(
+        params, state, obs, xp, obs[..., 10], v * turn_rate, target, tecs_fn=tecs_fn
+    )
 
 
 def plane3d_heading_select_step(params, state, obs, xp=jnp):
@@ -353,13 +364,13 @@ _PATH = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96
 # clean 1 g stall, 80 m/s EAS: "20% higher than level flight stall speed"
 # (ARSPD_FBW_MIN [P409]).
 _AMENDED = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96.0)
-# The figure-8 flies slower and higher than the other tasks, banked most of
-# the way, so it gets a faster, better damped TECS, chosen to hold with any one
-# gain 25% off. Its lobe tips are flown with a quarter of the bank in hand. PR 9
-# replaces these with the shared tune.
+# The figure-8 flies the shared TECS tune (owner, 2026-11-12, as the aircraft
+# spec's section 3 has it): its own faster, better damped TECS (time constant
+# 1.5 s, pitch damping 2.0, chosen on the 4.0.9 loop) oscillated +-25 m about
+# the path on master's pitch loop. Its lobe tips are still flown with a quarter
+# of the bank in hand until the protocol replaces that too.
 _FIGURE8 = Plane3DGuidanceParams(
     max_bank_rad=float(np.deg2rad(30.0)),
     v_min_eas=96.0,
     turn_bank_margin=0.75,
-    tecs=AIRLINER.replace(time_const=1.5, ptch_damp=2.0),
 )

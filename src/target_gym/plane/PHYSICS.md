@@ -345,11 +345,36 @@ The PID slot holds TECS (`plane_tecs_step` in `experts.py`), what PX4 and ArduPi
 fly for height and speed and the 3D expert's longitudinal half, with the same
 aircraft numbers and tuning (`plane3d/PHYSICS.md`,
 `scripts/tune_aircraft_guidance.py`). Its pitch demand goes to the inner loop. Throttle closes
-the total energy error and pitch holds height. On held-out seeds 200-209 it
+the total energy error and pitch holds height.
+
+**Its pitch loop is ArduPilot master's, not 4.0.9's** (owner's decision of
+2026-11-12, departing from decision D1 of `docs/proposals/expert-protocols-aircraft.md`,
+which pinned 4.0.9). On long streams the 4.0.9 port fell into lasting height
+cycles: with `TECS_SPDWEIGHT` 0, 4.0.9 weights potential energy by 2, which doubles
+the height loop's gain and feed-forward, and against the autopilot's 0.2 g band
+(`pitch_demand_bounds`) an upset of 20 to 50 m became a cycle of +-400 to 600 m that
+only a new sortie ended (plane, plane3d_heading, plane3d_racetrack; plane_energy's
+windows too, from its first clearance). ArduPilot fixed this upstream in
+`AP_TECS::_update_pitch` [SRC-M]: neither weight above 1, "to prevent instability if
+tuned at a speed weight of 1 and weighting is varied to end points in flight"; the
+energy-balance rate a height error asks for, error over `TIME_CONST` plus the demand's
+rate, clipped to `TECS_CLMB_MAX` and `TECS_SINK_MAX`; and the integral on the rate
+error, held 5 deg past the pitch limits and faded while the demand saturates. The
+throttle loop, the demand slews and the gains are unchanged; `TECS_VERT_ACC` stays
+out, as in the 4.0.9 port, the plant's autopilot holding its 0.2 g. The guide's own
+remedy, `TIME_CONST` up to its cap of 10, cured `plane` alone (from 6); the heading,
+racetrack and energy tasks still cycled at 10. `tests/plane/test_tecs_upset.py` holds
+the result: displaced 20 to 100 m off its level in calm air, the expert is back inside
+G-TECS's 10 m within 5 min and stays there. The patrol family's scripted lead, part of
+its plant, keeps the 4.0.9 port (`tecs_step_409`).
+
+On held-out seeds 200-209 it
 holds altitude within 1.5 m on average on `plane`, 1.9 m on `plane_sine`, and
 1.6 m on `plane_energy` once each ladder step is captured; the airliner climbs
 those 360-720 m steps at its 8 m/s, which fills most of each 150 s rung. It
-replaced, in 2026-10, a cascaded PID tuned on the scored seeds.
+replaced, in 2026-10, a cascaded PID tuned on the scored seeds. (These figures predate
+the master pitch loop and the re-record pass; step 5 of
+`docs/proposals/re-record-pass.md` re-measures them.)
 
 ### The reference controller
 

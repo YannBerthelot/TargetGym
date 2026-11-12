@@ -39,6 +39,12 @@ Each was opened, and the quoted lines were checked a second time.
   <https://www.faa.gov/sites/faa.gov/files/f-cp090601.en_.pdf>
 - **[TECS]** ArduPilot, "TECS (Total Energy Control System) for Speed and Height Tuning
   Guide". <https://ardupilot.org/plane/docs/tecs-total-energy-control-system-for-speed-height-tuning-guide.html>
+- **[SRC-M]** ArduPilot master, `libraries/AP_TECS/AP_TECS.cpp`, `_update_pitch`, at
+  commit 546cf152a8c868acbac82dd326f9649da66d6ba1 (2026-11-11); the weight cap, the
+  climb-rate clip and the rate-error integral come from commit 0840bf5a21 "AP_TECS:
+  Implement improved control loops" (2022-11-17). Fetched twice on 2026-11-12 (the
+  file at that commit, and the function through WebFetch).
+  <https://github.com/ArduPilot/ardupilot/blob/546cf152a8c868acbac82dd326f9649da66d6ba1/libraries/AP_TECS/AP_TECS.cpp>
 - **[P409]** ArduPilot, Complete Parameter List, Plane stable V4.0.9.
   <https://ardupilot.org/plane/docs/parameters-Plane-stable-V4.0.9.html>
 - **[L1]** ArduPilot, "Navigation Tuning" (L1 controller, after Park, Deyst and How,
