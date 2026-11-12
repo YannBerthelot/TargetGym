@@ -1,0 +1,20 @@
+{
+ "member": "the Lund/KTH quadruple-tank rig tracking levels to 1 mm; no plant family stands behind it (four_tank/PHYSICS.md:6)",
+ "ranges": {},
+ "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "coupled": [],
+ "no_range": [
+  "v_min",
+  "v_max",
+  "leak_fraction",
+  "leak_duration",
+  "cup_volume",
+  "delta_t",
+  "max_steps_in_episode",
+  "precision_floor",
+  "e_floor",
+  "tracking_exponent",
+  "failure_cost",
+  "restart_steps"
+ ]
+}

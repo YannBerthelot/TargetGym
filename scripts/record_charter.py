@@ -7,8 +7,10 @@ Parts: ``reference`` (J1: the ladder's ``climb``, or the shipped expert on the
 expert-reference tasks), ``nulls`` (each of ``null_set`` over the ladder seeds),
 ``mpc`` (the task's oracle, ``shipped_policy("mpc")``), ``ceiling`` (read from
 ``data/oracle_ceilings``, which ``pc_gym.foresight`` and the tasks' ceiling scripts
-write), ``j2`` (the kept reference and every null on the commit's hash seeds, and
-the family sweep where a task has one) and ``anchor`` (J4: the reference on the
+write through ``charter.write_ceiling``; a file measured on another plant reads
+"not measured"), ``j2`` (the kept reference and every null on the commit's hash
+seeds, and the family sweep, ``scripts/family_sweep.py``, on the task's
+``ours.json``) and ``anchor`` (J4: the reference on the
 scoring seeds). J3's lines run on the ladder seeds 100 to 109, as the ceilings do.
 ``nulls``, ``j2`` and ``anchor`` read the recorded reference.
 
@@ -32,8 +34,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from target_gym import charter  # noqa: E402
 
 NM = charter.NOT_MEASURED
-#: Tasks with a family sweep (B7) runner in scripts/family_sweep.py.
-SWEEPS = ("reactor",)
 
 
 def git_commit() -> tuple[str, bool]:
@@ -125,14 +125,12 @@ def part_mpc(t: Task) -> dict:
 
 
 def part_ceiling(t: Task) -> dict:
-    source = charter.PKG / "data" / "oracle_ceilings" / f"{t.name}.json"
-    if not source.is_file():
-        return {"line": NM, "source": None}
-    stored = json.loads(source.read_text())
-    return {
-        "line": charter.ceiling_line(stored, t.weights),
-        "source": str(source.relative_to(charter.REPO)),
-    }
+    from target_gym.provenance import environment_fingerprint
+
+    stored = charter.load_ceiling(t.name)
+    part = charter.ceiling_part(stored, environment_fingerprint(t.spec), t.weights)
+    source = charter.CEILINGS / f"{t.name}.json"
+    return part | {"source": str(source.relative_to(charter.REPO)) if stored else None}
 
 
 def part_j2(t: Task) -> dict:
@@ -147,13 +145,11 @@ def part_j2(t: Task) -> dict:
     }
     n = sum(len(v) for v in seeds.values())
     trips = sum(v["trips"] for v in ref["scenarios"].values())
-    sweep, draws = NM, None
-    if t.name in SWEEPS:
-        import family_sweep
+    import family_sweep
 
-        table = (charter.PKG / t.name / "ours.json").read_text()
-        draws = getattr(family_sweep, t.name)(json.loads(table))
-        sweep = all(d["holds"] for d in draws)
+    table = family_sweep.table(t.name)
+    draws = None if table is None else family_sweep.run(t.name, table)
+    sweep = charter.sweep_result(draws)
     return {
         "commit": commit,
         "dirty": dirty,

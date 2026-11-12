@@ -1,0 +1,22 @@
+{
+ "member": "a PARSEX-like member of the jacketed exothermic CSTR family (cstr/PHYSICS.md:3)",
+ "ranges": {},
+ "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "coupled": [],
+ "no_range": [
+  "M_j",
+  "feed_T_period",
+  "T_trip",
+  "delta_t",
+  "max_steps_in_episode",
+  "e_floor",
+  "precision_floor",
+  "tracking_exponent",
+  "failure_cost",
+  "restart_steps",
+  "k0_decay",
+  "feed_rise",
+  "cooling_loss",
+  "event_hold"
+ ]
+}

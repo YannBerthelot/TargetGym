@@ -179,9 +179,12 @@ def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
         "converged": f"{len(converged)} of {len(solves)} solves",
         "solves": solves,
     }
-    path = ROOT / "src/target_gym/data/oracle_ceilings/glass_furnace.json"
-    path.parent.mkdir(exist_ok=True)
-    path.write_text(json.dumps(result, indent=1) + "\n")
+    from target_gym import charter
+    from target_gym.provenance import environment_fingerprint
+    from target_gym.registry import REGISTRY
+
+    stamp = environment_fingerprint(REGISTRY["glass_furnace"])
+    charter.write_ceiling("glass_furnace", result, stamp)
     print(json.dumps(result, indent=1))
 
 

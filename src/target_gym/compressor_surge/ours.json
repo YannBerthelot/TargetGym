@@ -1,0 +1,42 @@
+{
+ "member": "a centrifugal compressor with an anti-surge recycle valve, a low-pressure-ratio blower of about 0.5 MW supplying a 24 kPa header; the task represents the family of centrifugal compressors with an anti-surge recycle (compressor_surge/PHYSICS.md:5-7, 635)",
+ "ranges": {
+  "valve_lag": {
+   "lo": 0.15,
+   "hi": 0.3,
+   "unit": "s",
+   "why": "ours, family: a dead time before the valve moves, inside C7's 150 to 300 ms; 0.15 is the lower end (compressor_surge/PHYSICS.md:24, 100; env.py:121-125)"
+  },
+  "drive_rate": {
+   "lo": 0.0166,
+   "hi": 0.104,
+   "unit": "of rated per s",
+   "why": "ours (3 %/s, TUNED); the two readings of Gravdahl et al. 2002 Table 2, 1.66 %/s (rad/s^2) to 10.4 %/s (rev/s^2), converted from % per s to a fraction; compressor_surge/PHYSICS.md:626-640. Source-reading bounds, not a stated family range: confirm before use; the ends are the two published readings, not a stated family range (owner, 2026-11-12)"
+  }
+ },
+ "coupled": [],
+ "coupled_why": "",
+ "no_range": [
+  "surge_window",
+  "header_setpoint",
+  "header_band",
+  "energy_price",
+  "zone_price",
+  "surge_price",
+  "failure_cost",
+  "restart_steps",
+  "A_c",
+  "U_r",
+  "k_d",
+  "dp_out",
+  "k_r",
+  "check_width",
+  "N_min",
+  "tau_N",
+  "setpoint_ramp_s",
+  "demand_sigma",
+  "demand_theta",
+  "V_p",
+  "L_c"
+ ]
+}

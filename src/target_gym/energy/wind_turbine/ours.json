@@ -1,0 +1,42 @@
+{
+ "member": "a utility-scale, pitch-regulated, three-bladed upwind turbine, here the NREL 5 MW reference (126 m rotor, 11.4 m/s rated), above-rated load cases, IEC class B turbulence (PHYSICS.md:4, 3)",
+ "ranges": {
+  "energy_price": {
+   "lo": 60.0,
+   "hi": 140.0,
+   "unit": "$/MWh",
+   "why": "family LCOE range 60 to 140 $/MWh [S20 Table 1] (PHYSICS.md:98)"
+  },
+  "capex_per_kw": {
+   "lo": 1300.0,
+   "hi": 2200.0,
+   "unit": "$/kW",
+   "why": "family range 1,300 to 2,200 $/kW [S20 Table 1] (PHYSICS.md:99)"
+  },
+  "turbine_share": {
+   "lo": 0.65,
+   "hi": 0.84,
+   "unit": "-",
+   "why": "family range 0.65 to 0.84 [S20 Table 4.1] (PHYSICS.md:100)"
+  },
+  "v_ref": {
+   "lo": 37.5,
+   "hi": 50.0,
+   "unit": "m/s",
+   "why": "ours, class I of 37.5 to 50 m/s [S13] (PHYSICS.md:88); the branch it feeds never binds"
+  }
+ },
+ "coupled": [],
+ "coupled_why": "the docs state no pair of ours numbers moving together",
+ "no_range": [
+  "delta_t",
+  "restart_steps",
+  "reset_callout",
+  "derate_hold",
+  "v_mean_tau",
+  "gust_window",
+  "derate_window",
+  "tower_damage_design",
+  "pitch_travel_design"
+ ]
+}

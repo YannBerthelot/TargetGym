@@ -1,0 +1,31 @@
+{
+ "member": "a float-glass furnace of 500 t/d (W2000b), cross-fired regenerative, fuel valve set every 120 s, canal held at 1100 C and fining judged at the cold end (PHYSICS.md, REALITY.md)",
+ "ranges": {},
+ "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "coupled": [],
+ "coupled_why": "the docs state no pair of ours numbers moving together",
+ "no_range": [
+  "lost_glass_price",
+  "fining_pass",
+  "fuel_min",
+  "fuel_max",
+  "override_margin",
+  "override_gain",
+  "override_ti",
+  "cooling_max",
+  "cooling_above",
+  "cooling_gain",
+  "cooling_ti",
+  "walk_sd",
+  "walk_hours",
+  "pull_ramp_h",
+  "pull_notice_h",
+  "gas_swing_h",
+  "event_hold_h",
+  "pull_change",
+  "gas_swing",
+  "plant.eps_surface",
+  "plant.fining_time",
+  "plant.bubble_radius"
+ ]
+}

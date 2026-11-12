@@ -58,10 +58,13 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
 4. **Stamps.** `stamp_env_versions.py`: re-stamp in place with a note where a task's
    behaviour is preserved, otherwise bump its version.
 5. **Charter records.** `record_charter.py` per task: reference, nulls, MPC, ceiling,
-   J2, anchor. Open gaps: only the reactor has a B7 sweep runner, so the other tasks
-   fail J2 on "sweep not measured" until one is written; the ceiling files carry no
-   stamp of the plant they ran on; the pH oracle is not rebuilt, so its MPC line reads
-   "not measured".
+   J2, anchor. Every charter task has a B7 sweep (`scripts/family_sweep.py` on its
+   package's `ours.json`); cstr, distillation, four_tank, ph_neutralization,
+   unstable_cstr and glass_furnace have no sourced range for any `ours` number, so
+   theirs runs the shipped member alone (owner, 2026-11-12). Ceiling files now carry
+   the stamp of the plant they ran on, and none of today's does, so every ceiling
+   reads stale and "not measured" until it is re-measured. The pH oracle is not
+   rebuilt, so its MPC line reads "not measured".
 6. **Old records** (`baseline_returns`, `protocol_results`, `credibility`) only for
    tasks still scored on tracking, the aircraft. Before them, re-measure the oracle's
    best hold (`rho`, `scripts/measure_hold.py`) for `plane3d_circle` and

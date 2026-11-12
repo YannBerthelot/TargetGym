@@ -14,7 +14,9 @@ A record has one block per part, each with its own ``fingerprint``:
   null is the cheapest on ``J``.
 - ``mpc`` (J3): the task's oracle, an MPC with the true model, or "not measured".
 - ``ceiling`` (J3): the foresight ceiling from ``data/oracle_ceilings``, or "not
-  measured".
+  measured", also when the file was measured on another plant: each file carries
+  the ``stamp`` (``provenance.environment_fingerprint``) of the plant it ran on,
+  and one that differs from the plant's stamp leaves the part stale.
 - ``j2``: commit, hash seeds, reference trips, each null's share of seeds beating
   the reference, the sweep (B7) and ``accepted``.
 - ``anchor`` (J4): the reference on the fixed scoring seeds, per scenario and on J.
@@ -34,6 +36,8 @@ import pathlib
 PKG = pathlib.Path(__file__).resolve().parent
 REPO = PKG.parents[1]
 DATA = PKG / "data" / "charter"
+#: The foresight ceilings (J3), one file per task, each stamped with its plant.
+CEILINGS = PKG / "data" / "oracle_ceilings"
 LOG = DATA / "log.jsonl"
 SCRIPTS = REPO / "scripts"
 ROWS_DIR = SCRIPTS / "ladder_rows"
@@ -132,6 +136,14 @@ def verdict(n_seeds: int, reference_trips: int, wins: dict, sweep) -> dict:
     return {"accepted": not reasons, "reasons": reasons}
 
 
+def sweep_result(draws):
+    """B7's outcome for J2: ``NOT_MEASURED`` without a sweep (``draws`` None),
+    else whether the property held on every draw."""
+    if draws is None:
+        return NOT_MEASURED
+    return all(d["holds"] for d in draws)
+
+
 # --- J3 and J4 --------------------------------------------------------------
 
 
@@ -195,6 +207,34 @@ def ceiling_line(stored: dict, weights: dict):
     if set(scenarios) != set(weights):
         return NOT_MEASURED
     return line(scenarios, weights, converged=all(converged))
+
+
+def ceiling_part(stored: dict | None, stamp: str, weights: dict) -> dict:
+    """The record's ``ceiling`` part from a ceilings file: ``NOT_MEASURED`` with
+    no file, or with one measured on another plant than ``stamp`` (or that
+    carries no stamp), else the file as a J3 line."""
+    if stored is None:
+        return {"line": NOT_MEASURED, "why": "no ceiling file"}
+    if stored.get("stamp") != stamp:
+        on = stored.get("stamp") or "an unstamped plant"
+        return {"line": NOT_MEASURED, "why": f"measured on another plant ({on})"}
+    return {"line": ceiling_line(stored, weights)}
+
+
+def load_ceiling(task: str, root: pathlib.Path = CEILINGS) -> dict | None:
+    p = root / f"{task}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def write_ceiling(
+    task: str, data: dict, stamp: str, root: pathlib.Path = CEILINGS
+) -> pathlib.Path:
+    """Write a ceilings file stamped with the plant it ran on: ``stamp`` is
+    ``provenance.environment_fingerprint`` of the task's spec."""
+    root.mkdir(parents=True, exist_ok=True)
+    p = root / f"{task}.json"
+    p.write_text(json.dumps({**data, "stamp": stamp}, indent=1) + "\n")
+    return p
 
 
 # --- schema -----------------------------------------------------------------
@@ -276,11 +316,22 @@ def _j2_errors(j2: dict, weights: dict, anchor) -> list[str]:
 def stale_parts(record: dict | None, current: dict) -> list[str]:
     """The parts of ``record`` missing or whose fingerprint differs from
     ``current["fingerprints"]``; every part when the env version stamp moved or
-    there is no record."""
+    there is no record. The ceiling is also stale when its file was measured on
+    another plant (``current["ceiling_stamp"]``, present when a file exists)."""
     if not record or record.get("version") != current["version"]:
         return list(PARTS)
     fps = current["fingerprints"]
-    return [p for p in PARTS if record.get(p, {}).get("fingerprint") != fps[p]]
+    moved = {"ceiling"} if _ceiling_moved(current) else set()
+    return [
+        p for p in PARTS if p in moved or record.get(p, {}).get("fingerprint") != fps[p]
+    ]
+
+
+def _ceiling_moved(current: dict) -> bool:
+    return (
+        "ceiling_stamp" in current
+        and current["ceiling_stamp"] != current["version"]["stamp"]
+    )
 
 
 # --- storage ----------------------------------------------------------------
@@ -346,9 +397,7 @@ def current(task: str) -> dict:
     )
     oracle = P.oracle_fingerprint(spec) if spec.make_mpc is not None else "none"
     mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task))
-    ceiling = _digest(
-        stamp, oracle, _file_digest(PKG / "data" / "oracle_ceilings" / f"{task}.json")
-    )
+    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"))
     package = type(spec.make_env()).__module__.rsplit(".", 1)[0].split(".")
     sweep = _digest(
         code([SCRIPTS / "family_sweep.py"]),
@@ -357,10 +406,14 @@ def current(task: str) -> dict:
     j2 = _digest(ref, nulls, sweep, J2_TOTAL, J2_PER_SCENARIO, TRIPS_PER)
     fps = {"reference": ref, "nulls": nulls, "mpc": mpc, "ceiling": ceiling}
     fps |= {"j2": j2, "anchor": _digest(ref, ANCHOR_SEEDS)}
-    return {
+    out = {
         "version": {"env": f"{task}-v{spec.version}", "stamp": stamp},
         "fingerprints": fps,
     }
+    stored = load_ceiling(task)
+    if stored is not None:
+        out["ceiling_stamp"] = stored.get("stamp")
+    return out
 
 
 def stale_report(tasks=None) -> dict:

@@ -1,0 +1,62 @@
+{
+ "member": "a slab-heated (TABS) office, 150 m^2, brine-to-water heat pump on a Spanish 2.0TD tariff, medium-mass envelope; the task represents the family of slab-heated offices (hvac/PHYSICS.md:5-7)",
+ "ranges": {
+  "cop_carnot_fraction": {
+   "lo": 0.5,
+   "hi": 0.57,
+   "unit": "-",
+   "why": "ours, family range 0.50 to 0.57 from brine heat pump datasheets [18]; hvac/PHYSICS.md:61, env.py:96-101"
+  },
+  "T_brine": {
+   "lo": -5.0,
+   "hi": 5.0,
+   "unit": "C",
+   "why": "ours, family range -5 to 5 C for a ground loop in the heating season; hvac/PHYSICS.md:62, env.py:102-104"
+  },
+  "occupants_per_m2": {
+   "lo": 0.07,
+   "hi": 0.12,
+   "unit": "1/m^2",
+   "why": "ours, family range 0.07 to 0.12 (8 to 15 m^2 a person); hvac/PHYSICS.md:65, env.py:159-160"
+  },
+  "comfort_price": {
+   "lo": 6.678,
+   "hi": 11.448,
+   "unit": "EUR/(K h)",
+   "why": "DERIVED, not a stated range: comfort_price = productivity_per_K x occupants x 150 m^2 x labour_cost (hvac/PHYSICS.md:71, env.py:164-166) at occupants 0.07 and 0.12, i.e. 0.02*0.07*150*31.8 and 0.02*0.12*150*31.8"
+  },
+  "concrete_heat_capacity": {
+   "lo": 800.0,
+   "hi": 1200.0,
+   "unit": "J/(kg K)",
+   "why": "ours (ISO 10456 as commonly quoted, not read); published range 0.8 to 1.2 kJ/(kg K), converted to J; hvac/PHYSICS.md:57"
+  },
+  "concrete_conductivity": {
+   "lo": 1.5,
+   "hi": 3.5,
+   "unit": "W/(m K)",
+   "why": "ours (ISO 10456 as commonly quoted, not read); published range 1.5 to 3.5 W/(m K); hvac/PHYSICS.md:57"
+  }
+ },
+ "coupled": [
+  [
+   "occupants_per_m2",
+   "comfort_price"
+  ]
+ ],
+ "coupled_why": "comfort_price is the work an occupied kelvin-hour loses and is defined as productivity_per_K x occupants x 150 m^2 x labour_cost (hvac/PHYSICS.md:71), so it moves with the occupant density: the low end 0.07 goes with 6.678 and 0.12 with 11.448",
+ "no_range": [
+  "h_ceiling",
+  "T_supply_min",
+  "T_out_mean",
+  "T_out_amplitude",
+  "T_out_noise_std",
+  "T_out_mean_tau",
+  "solar_peak",
+  "gain_occupied",
+  "gain_unoccupied",
+  "precision_floor",
+  "delta_t",
+  "productivity_per_K"
+ ]
+}
