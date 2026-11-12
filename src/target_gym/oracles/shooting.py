@@ -45,7 +45,9 @@ from target_gym.oracles.ipm import (
     StageRows,
     interior_point,
     stage_barrier,
+    stage_kkt_factor,
     stage_kkt_solve,
+    stage_kkt_solve_factored,
     stage_multipliers,
     stage_shift,
 )
@@ -467,6 +469,7 @@ class Shooting:
             f=lambda zh: osc * f(D * zh) + jnp.sum(weight[:, None] * change(zh) ** 2),
             c=lambda zh: c_fn(D * zh) / Rs, derivs=scaled, G=G, g0=g0, restore=restore,
             kkt=stage_kkt_solve, barrier=stage_barrier, shift=stage_shift,
+            factor=stage_kkt_factor, solve=stage_kkt_solve_factored,
         )  # fmt: skip
         zh = z0 / D
         if cold:

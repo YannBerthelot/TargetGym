@@ -106,6 +106,13 @@ class NLP(NamedTuple):
     given, returns a point with c = 0. ``barrier(H, G, sig)`` returns
     K = H + G' diag(sig) G and ``shift(K, delta)`` K + delta I: dense by
     default, ``stage_barrier`` and ``stage_shift`` for stage blocks.
+
+    ``factor(K, J)`` and ``solve(fac, rz, rc)``, if given, split ``kkt``:
+    ``factor`` returns (fac, ok) and ``solve`` (dz, dlam, ok) for any
+    right-hand side, so an iteration factorises once per inertia trial and
+    reuses the accepted factorisation for every direction it takes
+    (``stage_kkt_factor`` and ``stage_kkt_solve_factored``). Without them
+    each direction calls ``kkt``.
     """
 
     f: Callable
@@ -117,6 +124,8 @@ class NLP(NamedTuple):
     restore: Callable | None = None
     barrier: Callable = lambda H, G, sig: H + G.T @ (sig[:, None] * G)  # noqa: E731
     shift: Callable = lambda K, delta: K + delta * jnp.eye(K.shape[0])  # noqa: E731
+    factor: Callable | None = None
+    solve: Callable | None = None
 
 
 class Result(NamedTuple):
@@ -154,7 +163,19 @@ def interior_point(
     max_restore: int = 3,
 ) -> Result:
     """Solve ``nlp`` from (z, s, lam, w), s and w strictly positive."""
-    f, c_fn, derivs, G, g0, kkt, restore, barrier, shift = nlp
+    f, c_fn, derivs, G, g0 = nlp.f, nlp.c, nlp.derivs, nlp.G, nlp.g0
+    restore, barrier, shift = nlp.restore, nlp.barrier, nlp.shift
+    if nlp.factor is None:
+        kkt = nlp.kkt
+
+        def factor(K, J):
+            return (K, J), jnp.array(True)
+
+        def solve(fac, rz, rc):
+            return kkt(*fac, rz, rc)
+
+    else:
+        factor, solve = nlp.factor, nlp.solve
     n, me, mi = z.shape[0], lam.shape[0], s.shape[0]
     mu_floor = tol / (KAPPA_EPS + 1.0)
     eps = jnp.finfo(z.dtype).eps
@@ -202,15 +223,22 @@ def interior_point(
         K = barrier(H, G, sig)
         mu_avg = s @ w / mi
 
-        def direction(delta, cvec, target):
+        def direction(fac, cvec, target):
+            """The Newton direction on the factorised K + delta I."""
             comp = w - target / s
             rz = -rd - G.T @ (sig * ri + comp)
-            dz, dl, ok = kkt(shift(K, delta), J, rz, -cvec)
+            dz, dl, ok = solve(fac, rz, -cvec)
             ds = G @ dz + ri
             return dz, dl, ds, -sig * ds - comp, ok & jnp.all(jnp.isfinite(dz))
 
+        def attempt(delta):
+            """(factorisation, usable) of K + delta I."""
+            fac, ok = factor(shift(K, delta), J)
+            return fac, ok & direction(fac, c, mu)[-1]
+
         # Inertia correction: no shift, then 1e-4 (or a third of the last
-        # shift), growing 100x (8x once a shift has been needed) to 1e40.
+        # shift), growing 100x (8x once a shift has been needed) to 1e40. The
+        # accepted shift's factorisation serves every direction below.
         def in_cond(st):
             return ~st[2] & (st[1] < 1e40)
 
@@ -220,10 +248,14 @@ def interior_point(
                 d_last == 0, FIRST_HESSIAN_SHIFT, jnp.maximum(1e-20, d_last / 3.0)
             )
             grow = jnp.where(d_last == 0, 100.0, 8.0)
-            delta = jnp.where(i == 0, 0.0, jnp.where(i == 1, first, delta * grow))
-            return i + 1, delta, direction(delta, c, mu)[-1]
+            delta = jnp.where(i == 1, first, delta * grow)
+            fac, usable = attempt(delta)
+            return i + 1, delta, usable, fac
 
-        _, delta, usable = jax.lax.while_loop(in_cond, in_next, (0, 0.0, False))
+        fac0, usable0 = attempt(jnp.zeros((), z.dtype))
+        _, delta, usable, fac = jax.lax.while_loop(
+            in_cond, in_next, (1, jnp.zeros((), z.dtype), usable0, fac0)
+        )
         d_last = jnp.where((delta > 0) & usable, delta, d_last)
         d_max = jnp.maximum(d_max, delta)
 
@@ -242,8 +274,8 @@ def interior_point(
             nG = jnp.where(progress, jnp.minimum(nG + 1, FILTER_SIZE), nG)
             # Free mode: the centring that minimises the quality function, the
             # step's predicted residuals; the step is linear in the target.
-            aff = direction(delta, c, 0.0)
-            cen = [b - a for a, b in zip(aff[:4], direction(delta, c, mu_avg)[:4])]
+            aff = direction(fac, c, 0.0)
+            cen = [b - a for a, b in zip(aff[:4], direction(fac, c, mu_avg)[:4])]
             lo = jnp.maximum(SIGMA_MIN, MU_MIN / mu_avg)
             hi = jnp.maximum(lo, jnp.minimum(SIGMA_MAX, mu_max / mu_avg))
             sigmas = jnp.exp(jnp.linspace(jnp.log(lo), jnp.log(hi), N_SIGMA))
@@ -277,7 +309,7 @@ def interior_point(
         F = jnp.where(reset, F.at[1:].set(jnp.inf), F)
         nF = jnp.where(reset, 1, nF)
         tau = jnp.maximum(TAU_MIN, 1.0 - mu)
-        dz, dl, ds, dw, _ = direction(delta, c, mu)
+        dz, dl, ds, dw, _ = direction(fac, c, mu)
 
         a_max = _to_boundary(s, ds, tau)
         th0, ph0 = theta(z, s), phi(z, s, mu)
@@ -314,7 +346,7 @@ def interior_point(
 
         def soc_next(st):
             p, c_soc, th_old = st[0], st[3], st[4]
-            sz, sl, ss, sw, _ = direction(delta, c_soc, mu)
+            sz, sl, ss, sw, _ = direction(fac, c_soc, mu)
             a_s = _to_boundary(s, ss, tau)
             zt = z + a_s * sz
             accepted, ft, th = verdict(zt, s + a_s * ss, a_max)
@@ -572,74 +604,114 @@ def stage_kkt_solve(K: StageHessian, J: StageJacobian, rz, rc):
     Returns (dz, dlam, ok), ``ok`` false unless every stage's reduced
     Hessian Q_vv is positive definite, which is the inertia the step needs.
     """
+    fac, ok = stage_kkt_factor(K, J)
+    dz, dlam, _ = stage_kkt_solve_factored(fac, rz, rc)
+    return dz, dlam, ok
+
+
+class StageFactor(NamedTuple):
+    """The matrix half of ``stage_kkt_solve``'s Riccati recursion, which no
+    right-hand side changes: each stage's gain ``Kg``, Cholesky factor ``L``
+    of Q_vv, ``Qyv``, the cost-to-go ``Pn`` after it, and the dynamics."""
+
+    Kg: jnp.ndarray
+    L: jnp.ndarray
+    Qyv: jnp.ndarray
+    Pn: jnp.ndarray
+    A: jnp.ndarray
+    B: jnp.ndarray
+    E: jnp.ndarray
+    Ei: jnp.ndarray
+    end: jnp.ndarray
+
+
+def stage_kkt_factor(K: StageHessian, J: StageJacobian):
+    """(fac, ok): the factorisation ``stage_kkt_solve_factored`` reuses for
+    any right-hand side; ``ok`` as ``stage_kkt_solve``'s."""
     S, nx, nu = K.D.shape[0], K.end.shape[0], K.P.shape[1]
     ne = K.P.shape[2] - nu
     ny, nv = nx + nu, nu + ne
-    xi = jnp.arange(nx * S).reshape(S, nx)  # x_1..x_S; x_k at row k - 1
-    ui = nx * S + jnp.arange(nu * S).reshape(S, nu)
-    ei = (nx + nu) * S + jnp.arange(ne * S).reshape(S, ne)
-    xk = jnp.concatenate([xi[:1], xi[:-1]])  # x_k; stage 0's is masked out
-    vk = jnp.concatenate([ui, ei], axis=1)
     mask = (jnp.arange(S) > 0)[:, None].astype(K.D.dtype)
     Hxx = K.D[:, :nx, :nx] * mask[:, :, None] * mask[:, None, :]
     Hxv = K.D[:, :nx, nx:] * mask[:, :, None]
     Hvv = K.D[:, nx:, nx:]
     Hpv = K.P * mask[:, :, None]
-    gx = -rz[xk] * mask
-    gv = -rz[vk]
     E = J.E
     Ei = jnp.linalg.inv(E)
     A = -Ei @ (J.A * mask[:, None, :])
     B = -Ei @ J.B
-    b = (Ei @ rc.reshape(S, nx)[:, :, None])[:, :, 0]
     P_end = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(K.end)
-    p_end = jnp.zeros(ny, K.D.dtype).at[:nx].set(-rz[xi[-1]])
 
     def backward(carry, k):
-        P, p, ok = carry
-        Ab = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(A[k])
-        Bb = (
-            jnp.zeros((ny, nv), K.D.dtype)
-            .at[:nx, :nu]
-            .set(B[k])
-            .at[nx:, :nu]
-            .set(jnp.eye(nu))
-        )
-        bb = jnp.zeros(ny, K.D.dtype).at[:nx].set(b[k])
+        P, ok = carry
+        Ab, Bb = _lifted(A[k], B[k], ny, nv, K.D.dtype)
         Myy = jnp.zeros((ny, ny), K.D.dtype).at[:nx, :nx].set(Hxx[k])
         Myv = jnp.zeros((ny, nv), K.D.dtype).at[:nx].set(Hxv[k]).at[nx:].set(Hpv[k])
         Qyy = Myy + Ab.T @ P @ Ab
         Qyv = Myv + Ab.T @ P @ Bb
         Qvv = Hvv[k] + Bb.T @ P @ Bb
         Qvv = 0.5 * (Qvv + Qvv.T)
-        g = P @ bb + p
-        qy = jnp.zeros(ny, K.D.dtype).at[:nx].set(gx[k]) + Ab.T @ g
-        qv = gv[k] + Bb.T @ g
         L = jnp.linalg.cholesky(Qvv)
         ok = ok & jnp.all(jnp.isfinite(L))
         Kk = -jax.scipy.linalg.cho_solve((L, True), Qyv.T)
-        kk = -jax.scipy.linalg.cho_solve((L, True), qv)
-        P = Qyy + Qyv @ Kk
-        P, p = 0.5 * (P + P.T), qy + Qyv @ kk
-        return (P, p, ok), (Kk, kk, P, p)
+        P_k = Qyy + Qyv @ Kk
+        return (0.5 * (P_k + P_k.T), ok), (Kk, L, Qyv, P)
 
-    (_, _, ok), (Ks, ks, Ps, ps) = jax.lax.scan(
-        backward, (P_end, p_end, True), jnp.arange(S)[::-1]
+    (_, ok), (Kg, L, Qyv, Pn) = jax.lax.scan(
+        backward, (P_end, True), jnp.arange(S)[::-1]
     )
-    Ks, ks, Ps, ps = Ks[::-1], ks[::-1], Ps[::-1], ps[::-1]
-    P_next = jnp.concatenate([Ps[1:], P_end[None]])
-    p_next = jnp.concatenate([ps[1:], p_end[None]])
+    fac = StageFactor(Kg[::-1], L[::-1], Qyv[::-1], Pn[::-1], A, B, E, Ei, P_end)
+    return fac, ok
+
+
+def _lifted(A, B, ny, nv, dtype):
+    """A stage's dynamics in the augmented state y = (dx, du_prev)."""
+    nx, nu = A.shape[0], B.shape[1]
+    Ab = jnp.zeros((ny, ny), dtype).at[:nx, :nx].set(A)
+    Bb = jnp.zeros((ny, nv), dtype).at[:nx, :nu].set(B).at[nx:, :nu].set(jnp.eye(nu))
+    return Ab, Bb
+
+
+def stage_kkt_solve_factored(fac: StageFactor, rz, rc):
+    """``stage_kkt_solve`` on a factorisation: (dz, dlam, ok), ``ok`` true
+    (the factorisation carries the inertia)."""
+    S, nv, ny = fac.L.shape[0], fac.L.shape[1], fac.Pn.shape[1]
+    nx, nu = fac.A.shape[1], fac.B.shape[2]
+    ne = nv - nu
+    dtype = fac.Pn.dtype
+    xi = jnp.arange(nx * S).reshape(S, nx)  # x_1..x_S; x_k at row k - 1
+    ui = nx * S + jnp.arange(nu * S).reshape(S, nu)
+    ei = (nx + nu) * S + jnp.arange(ne * S).reshape(S, ne)
+    xk = jnp.concatenate([xi[:1], xi[:-1]])  # x_k; stage 0's is masked out
+    vk = jnp.concatenate([ui, ei], axis=1)
+    mask = (jnp.arange(S) > 0)[:, None].astype(dtype)
+    gx = -rz[xk] * mask
+    gv = -rz[vk]
+    b = (fac.Ei @ rc.reshape(S, nx)[:, :, None])[:, :, 0]
+    p_end = jnp.zeros(ny, dtype).at[:nx].set(-rz[xi[-1]])
+
+    def backward(p, k):
+        Ab, Bb = _lifted(fac.A[k], fac.B[k], ny, nv, dtype)
+        bb = jnp.zeros(ny, dtype).at[:nx].set(b[k])
+        g = fac.Pn[k] @ bb + p
+        qy = jnp.zeros(ny, dtype).at[:nx].set(gx[k]) + Ab.T @ g
+        qv = gv[k] + Bb.T @ g
+        kk = -jax.scipy.linalg.cho_solve((fac.L[k], True), qv)
+        return qy + fac.Qyv[k] @ kk, (kk, p)
+
+    _, (ks, pn) = jax.lax.scan(backward, p_end, jnp.arange(S)[::-1])
+    ks, pn = ks[::-1], pn[::-1]
 
     def forward(y, k):
-        v = Ks[k] @ y + ks[k]
-        dx = A[k] @ y[:nx] + B[k] @ v[:nu] + b[k]
+        v = fac.Kg[k] @ y + ks[k]
+        dx = fac.A[k] @ y[:nx] + fac.B[k] @ v[:nu] + b[k]
         y1 = jnp.concatenate([dx, v[:nu]])
         # The multiplier is the value function's slope at x_{k+1}.
-        dlam = jnp.linalg.solve(E[k].T, (P_next[k] @ y1 + p_next[k])[:nx])
+        dlam = jnp.linalg.solve(fac.E[k].T, (fac.Pn[k] @ y1 + pn[k])[:nx])
         return y1, (v, dx, dlam)
 
-    _, (V, DX, DL) = jax.lax.scan(forward, jnp.zeros(ny, K.D.dtype), jnp.arange(S))
-    dz = jnp.zeros(rz.shape[0], K.D.dtype)
+    _, (V, DX, DL) = jax.lax.scan(forward, jnp.zeros(ny, dtype), jnp.arange(S))
+    dz = jnp.zeros(rz.shape[0], dtype)
     dz = dz.at[xi.ravel()].set(DX.ravel()).at[ui.ravel()].set(V[:, :nu].ravel())
     dz = dz.at[ei.ravel()].set(V[:, nu:].ravel())
-    return dz, DL.ravel(), ok
+    return dz, DL.ravel(), jnp.array(True)
