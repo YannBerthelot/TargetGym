@@ -630,3 +630,21 @@ On the same day the env was found to pay for a sawtooth that restarted a half-cy
 and the owner had `half_cycle` count by rainflow. So a closed swing is fixed the same
 way as a turn, where the reference runs back past it. The plan carries the two nearest
 open turns as states, and a third comes from the reference.
+
+## Amendment 4, 2026-11-12: noise over the hold
+
+Decided by the owner for `ph_neutralization`. That plan rides its permit floor and
+re-plans only every T_c = 11 steps. K11's one-innovation back-off (0.02 hundredths of
+a pH) did not cover the buffer noise that builds up between solves. Without upsets or
+noise the oracle beat its expert (-82.5 against -112 on seeds 0 and 4). With the
+noise on it lost by 7 to 22 times, on steps outside the permit.
+
+**K11h.** For a task listed in `HOLD_NOISE` (`scripts/measure_oracle_widths.py`),
+K11's noise term is the worst over j = 1 to T_c of 2 s_j max |dq_j / d d|: 2 sigma,
+as the charter's back-off rule, not K11's quantile. Here q_j is the limited quantity
+j steps after the solve, under a deviation d held from the solve's start, and
+s_j = sigma sqrt(1 - a^2j) is the spread an AR(1) deviation (decay a, stationary std
+sigma) builds up over j steps the plan does not see. Holding d from the start bounds
+innovations that arrive within the hold from above. Other tasks keep the one-step
+term. For pH: a = 0.99, sigma = 0.35 mL/s, T_c = 11, so s_11 = 0.156 mL/s, 3.16
+times one innovation.

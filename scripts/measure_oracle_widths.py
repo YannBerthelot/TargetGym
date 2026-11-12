@@ -633,9 +633,33 @@ def _with_deviation(name, task, d):
     return (*task[:i], task[i] + d, *task[i + 1 :])
 
 
+#: Tasks whose K11 noise term covers a whole hold of T_c steps at 2 sigma, the
+#: charter's back-off rule, not one step at K11's quantile (owner, 2026-11-12;
+#: Amendment 4): the pH plan rides its permit floor, re-plans every T_c, and the
+#: buffer noise built up in between took it out of the permit.
+HOLD_NOISE = ("ph_neutralization",)
+HOLD_Z = 2.0
+
+
+def hold_std(a: float, sigma: float, j: int) -> float:
+    """The std of an AR(1) deviation's change over j steps the plan does not see.
+
+    The deviation is d_{k+1} = a d_k + e_k, each e_k of std s = sigma sqrt(1 -
+    a^2) with sigma the stationary std. The solve reads d_0; j steps on,
+    d_j - a^j d_0 = sum_{m<j} a^m e_{j-1-m}, of variance
+    s^2 sum_{m<j} a^2m = s^2 (1 - a^2j) / (1 - a^2) = sigma^2 (1 - a^2j).
+    One step gives s, K11's innovation; a long hold gives sigma.
+    """
+    return float(sigma) * float(np.sqrt(1.0 - float(a) ** (2 * j)))
+
+
 def noise_terms(name: str, points) -> list:
     """K11's noise term of each limit, in ``TaskModel.limits`` order: one
-    innovation of the deviation, a field of the model's task data."""
+    innovation of the deviation, a field of the model's task data. For a task
+    in ``HOLD_NOISE``, the worst over j = 1..T_c of the limited quantity j
+    steps on, under a deviation held from the solve's start, with the std of
+    j innovations, s sqrt(sum_{m<j} a^2m): an upper bound on innovations
+    that arrive within the hold."""
     where, decay = NOISY[name]
     module, attr = where.split(":")
     build = getattr(importlib.import_module(module), attr)
@@ -649,19 +673,37 @@ def noise_terms(name: str, points) -> list:
     n_sites = N_SITES.get(name, 0)
     hinges = len(model.hinges)
 
-    @jax.jit
-    def limited(probe, d):
+    def limited(probe, d, j=1):
         state, u = probe
         task = model.data(state)
         data = {
             "task": _with_deviation(name, task, d), "end": 10**9,
             "widths": jnp.zeros(n_sites),
         }  # fmt: skip
-        return jnp.atleast_1d(model.step(data, model.state_x(state), u, 0)[2])[hinges:]
+        x = model.state_x(state)
+        for t in range(j):
+            x, _, y, *_ = model.step(data, x, u, t)
+        return jnp.atleast_1d(y)[hinges:]
 
     pts = _plan_moves(name, points)
     steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
-    return [float(b) for b in noise_backoff(limited, std, pts, RISK, steps)]
+    if name not in HOLD_NOISE:
+        return [float(b) for b in noise_backoff(limited, std, pts, RISK, steps)]
+    # K11h: 2 hold_std(j) max |dq_j / d d| over the probes, worst over the hold.
+    # The deviation is held from the solve's start, which bounds innovations
+    # that arrive within the hold from above (they act for fewer steps).
+    terms = []
+    for j in range(1, records.load_row("oracle_horizons", name)["T_c_steps"] + 1):
+        site = jax.jit(functools.partial(limited, j=j))
+        gain = np.max(
+            [
+                np.abs(np.asarray(jax.jacfwd(lambda d, q=q: site(q, d))(0.0), float))
+                for q in pts
+            ],
+            axis=0,
+        )
+        terms.append(HOLD_Z * hold_std(a, sigma, j) * gain)
+    return [float(b) for b in np.max(terms, axis=0)]
 
 
 def main(tasks) -> None:
