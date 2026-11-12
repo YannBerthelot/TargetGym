@@ -464,6 +464,12 @@ def noise_tune(k, tau1, theta, nb, h, db=None, kc_min=0.0, rule=None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+class TrippedDuringTest(RuntimeError):
+    """A test run tripped the plant. Under the continuing default the plant
+    restarts inside the same trajectory (``base.failure_kernel``), so what
+    follows is the restart, not the response: the run is refused, never fitted."""
+
+
 @dataclass(frozen=True)
 class Loop:
     """A P-only loop of H18: MV ``mv`` holds CV ``cv`` with gain ``kc``,
@@ -730,10 +736,10 @@ class Plant:
                 obs, state, mem = carry
                 a, mem = ctrl.step(ctrl.params, mem, obs, jnp)
                 a = jnp.reshape(a, (self.n_mv,))
-                obs, state, *_ = env.step_env(
+                obs, state, _, _, info = env.step_env(
                     jax.random.fold_in(key, t), state, a, params
                 )
-                return (obs, state, mem), (a, mem)
+                return (obs, state, mem), (a, mem, info["tripped"])
 
             return jax.lax.scan(
                 body, (*env.reset_env(key, params), ctrl.init_state), jnp.arange(n)
@@ -750,7 +756,15 @@ class Plant:
             obs, state, _, _, info = env.step_env(key, state, a, params)
             return state, read(obs, state), info["tripped"]
 
-        (obs, state, _), (acts, mems) = jax.jit(jax.vmap(expert))(self._keys)
+        (obs, state, _), (acts, mems, trips) = jax.jit(jax.vmap(expert))(self._keys)
+        # The tests start from this hold: one that tripped holds no operating
+        # point, and its average reads the excursion as one.
+        tripped = np.flatnonzero(np.asarray(trips).any(axis=1))
+        if tripped.size:
+            raise TrippedDuringTest(
+                f"{spec.name}: the settling hold tripped on seeds "
+                f"{[int(seeds[i]) for i in tripped]}"
+            )
         take = start or (lambda a, m: a[:, -window:].mean(axis=1))
         self.u0 = np.asarray(take(np.asarray(acts), mems), float).reshape(
             len(seeds), -1

@@ -42,6 +42,7 @@ from jax import lax  # noqa: E402
 
 from target_gym import eval as E  # noqa: E402
 from target_gym.benchmark import episode_keys  # noqa: E402
+from target_gym.identification import TrippedDuringTest  # noqa: E402
 from target_gym.plane import experts as P2  # noqa: E402
 from target_gym.plane.dynamics import PITCH_DEMAND_MAX  # noqa: E402
 from target_gym.plane3d import experts as P3  # noqa: E402
@@ -68,7 +69,8 @@ def rollout(name, step, params, seeds, env_params=None):
     jitted once per task and controller and vmapped over the seeds. Seed ``s``
     is the protocol's episode ``s``: its reset and step keys come from
     ``episode_keys``, so it starts where the scored run starts and meets the
-    same gusts."""
+    same gusts. The tracking cost is infinite from a trip on, so a candidate
+    that trips is never ranked on its restart."""
     spec = REGISTRY[name]
     p = env_params or spec.make_test_params()
     key = (name, step, repr(p))
@@ -82,12 +84,17 @@ def rollout(name, step, params, seeds, env_params=None):
             init = P3.Plane3DGuidanceState() if name in STEPS else P2.PlaneTECSState()
 
             def body(carry, k):
-                obs, st, cs = carry
+                obs, st, cs, out = carry
                 a, cs = step(ctrl_params, cs, obs, jnp)
-                obs, st, _, _, _ = env.step_env(k, st, a, p)
-                return (obs, st, cs), (obs, env.reward_terms(st, p)["tracking"])
+                obs, st, _, _, info = env.step_env(k, st, a, p)
+                # From a trip on the plane is the restart, not these gains'
+                # flight: the candidate is refused, at infinite cost.
+                out = out | info["tripped"]
+                track = env.reward_terms(st, p)["tracking"]
+                return (obs, st, cs, out), (obs, jnp.where(out, jnp.inf, track))
 
-            return lax.scan(body, (obs, st, init), steps[:, 0])[1]
+            init = (obs, st, init, jnp.asarray(False))
+            return lax.scan(body, init, steps[:, 0])[1]
 
         _ROLLOUTS[key] = jax.jit(jax.vmap(one, in_axes=(None, 0)))
     obs, track = _ROLLOUTS[key](params, jnp.array(list(seeds)))
@@ -127,7 +134,11 @@ def flight_test():
                 integ += 230.0 - v
                 cmd = np.clip(0.03 - 0.01 * (230.0 - v) - 2e-4 * integ, -0.26, 0.26)
                 demand = jnp.array([thr, cmd / PITCH_DEMAND_MAX, 0.0])
-                _, s, _, _, _ = step(key, s, demand, p)
+                _, s, _, _, info = step(key, s, demand, p)
+                if bool(info["tripped"]):
+                    raise TrippedDuringTest(
+                        f"flight test at {alt:.0f} m, throttle {thr}: tripped"
+                    )
                 log.append((float(s.z_dot), float(s.theta)))
             rows.append(np.mean(log[-60:], axis=0))
         climb, theta = np.array(rows).T

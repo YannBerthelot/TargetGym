@@ -36,6 +36,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from target_gym.identification import TrippedDuringTest
+
 # ─── Tuning rules ────────────────────────────────────────────────────────────
 
 
@@ -240,7 +242,22 @@ def relay_experiment(
                 action = jnp.array(action_arr)
 
         # Step environment
-        obs, state, _, done, _ = step_env(key, state, action, params)
+        obs, state, _, done, info = step_env(key, state, action, params)
+        if bool(info["tripped"]):
+            # The plant restarts inside the run: the crossings after it time
+            # the restart, not the oscillation, so the experiment is refused.
+            warnings.warn(
+                f"Relay experiment at operating_point={operating_point:.4f}: "
+                f"the plant tripped at step {step}; Ku/Tu not read."
+            )
+            return {
+                "Ku": None,
+                "Tu": None,
+                "amplitude": None,
+                "raw_periods": [],
+                "success": False,
+                "tripped": True,
+            }
         if hasattr(obs, "shape") and obs.shape == ():
             obs = (
                 env.get_obs(state, params)
@@ -370,7 +387,12 @@ def _find_action_bias(
                 a = np.zeros(action_dim)
                 a[action_index] = action_val
                 action = jnp.array(a)
-            _, state, _, done, _ = step_env(key, state, action, long_params)
+            _, state, _, done, info = step_env(key, state, action, long_params)
+            if bool(info["tripped"]):
+                raise TrippedDuringTest(
+                    f"the bias search tripped the plant at action {action_val}: "
+                    "the settled reading would be the restart's"
+                )
             if bool(done):
                 break
         obs = (

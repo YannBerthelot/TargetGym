@@ -57,7 +57,11 @@ def trace(env, p, step, key, st, policy, vi, ti):
     errs, obs = [], None
     for _ in range(MAXSTEPS):
         a = policy(obs) if obs is not None else policy(env.get_obs(st, p))
-        obs, st, _, term, _ = step(key, st, jnp.atleast_1d(jnp.asarray(a)), p)
+        obs, st, _, term, info = step(key, st, jnp.atleast_1d(jnp.asarray(a)), p)
+        # A trip is the crash this script refuses; under the continuing default
+        # it never terminates, and the restart's errors would read as closure.
+        if bool(info["tripped"]):
+            return np.array(errs), True
         o = np.asarray(obs)
         errs.append(float(np.abs(o[list(vi)] - o[list(ti)]).mean()))
         if bool(term):
