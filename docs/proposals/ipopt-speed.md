@@ -114,7 +114,7 @@ understood.
 | 1 | Stage Hessian by reverse over forward, one `grad` of a JVP per input (prototyped) | measured: 3.0x per iteration on the whole day (31.4 to 10.3 s), 2.4x at 385 stages; peak RSS 17.3 to 11.7 GB; identical iterates (KKT error equal to 12 digits) | done: 6 lines in `shooting.py`, test oracle changed to central differences | every oracle and ceiling built on `Shooting` (14 tasks). Solver fingerprints move. Plans should be the same to rounding, but a borderline solve could flip. |
 | 2 | Cold start from simulated states (prototyped as `Shooting.solve(..., start=moves)` and `--start` in the script) | measured at 960 steps: the first rung converges in 241 to 271 iterations instead of capping at 300 | done for the ceiling script. For task oracles G8 says never start from an expert, so only the "held, simulated" start would be eligible there, and only for plants stable under held moves. | the reactor ceiling script. Oracles only if the owner amends G8. |
 | 3 | Drop the repeated rung (done in the script) | saves one full rung per seed: 3.6 to 5.8 h at the old speed | none | the reactor ceiling script only |
-| 4 | Factorise the Riccati recursion once per shift and reuse it for every right-hand side (step, affine, centring, second-order corrections) | estimated 2 to 4x on the KKT part, about 1.3 to 2x per iteration after option 1 | about 100 lines in `ipm.py` (split `stage_kkt_solve` into factor and solve) | every oracle (fingerprints). Same iterates in exact arithmetic. |
+| 4 | Factorise the Riccati recursion once per shift and reuse it for every right-hand side (step, affine, centring, second-order corrections) (built, owner's decision) | measured, 10 iterations, same 8 cores side by side: warm (adaptive) solves 1.27x at 385 stages (2.28 to 1.79 s) and 1.52x on the whole day (20.8 to 13.7 s); cold solves no gain (12.8 against 13.0 s), since they take only two directions per iteration and each stage scan costs about the same with or without the matrix work; identical iterates (KKT error equal to every digit after 2, 5 and 12 iterations) | about 100 lines in `ipm.py`: `stage_kkt_factor` and `stage_kkt_solve_factored`, `NLP.factor` and `NLP.solve` | every oracle (fingerprints), landed with option 1 so they move once |
 | 5 | Skip structurally zero Hessian directions (the reactor's 30 queue states are a shift register: zero curvature except the arriving slot) | estimated 2x on the Hessian (49 to about 20 directions) | moderate: detect zero rows once per build, or a task hook | `shooting.py` (fingerprints) |
 | 6 | Per-stage inertia correction (shift only the stages whose reduced Hessian is indefinite) | could cut iterations a lot where a few stages are non-convex (trace item 2), not measured | a departure from IPOPT's algorithm. The solver docs would need an amendment, and the owner should decide. | `ipm.py`, every oracle |
 | 7 | Condense the 45 output states out of the Riccati state (94 to 49 wide) | estimated 4 to 7x on each KKT solve | large: the rows on outputs would become nonlinear in (x_k, u_k), which the port does not support | `shooting.py`, `ipm.py` |
@@ -125,13 +125,16 @@ over stages, and the Hessians already vectorise over stages).
 
 ## Full day with options 1 to 3
 
-In progress on bob (tmux `ipm-ref2880` in `~/ipopt-new`; seed 102, options 1 to
-3, 600-iteration cap, 10 cores). Bob's load ran from 150 to 380 meanwhile, so
-iterations took about 20 to 30 s, not the 10.3 s measured at 8 cores. At iteration
-147 of the first rung, mu is 1.8e-6 and the KKT error 6.3. At iteration 73 it was
-0.2: the error is not monotone. On the old code mu stayed at 0.1 through the whole
-300-iteration rung, and the rung ended at KKT 1.4. Whether the full day converges
-within 600 iterations is not known yet.
+Seed 102, the whole day, reference-plan start, 600-iteration cap, 10 cores on bob
+at load 150 to 380 (tmux `ipm-ref2880` in `~/ipopt-new`; that tree's `ipm.py`
+prints a trace, so never copy it back). Option 4 was not in this run.
+
+| rung (rod width, boron width) | old code (#174 runs) | options 1 to 3 |
+| --- | --- | --- |
+| 1 (0.0105, 0.1) | 300 iterations, capped, KKT 1.4, 4.25 h, planned cost 1 903.4 | **372 iterations, converged, KKT 9.9e-9**, 1.37 h, planned cost 1 896.2 |
+| 2 (0.00105, 0.01) | 300, capped, KKT 0.71, 4.6 h | running |
+
+The later rungs' results will be added when the run ends.
 
 ## pH oracle (second job, from the owner)
 

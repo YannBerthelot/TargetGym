@@ -52,6 +52,9 @@ def main():
     ap.add_argument("--iters", type=int, nargs="+", default=[3, 8])
     ap.add_argument("--skip-solve", action="store_true")
     ap.add_argument("--skip-ff", action="store_true")
+    ap.add_argument(
+        "--warm", action="store_true", help="time warm (adaptive) re-solves instead"
+    )
     args = ap.parse_args()
     env, p = Reactor(), ReactorParams()
     _, state = env.reset_env(jax.random.PRNGKey(102), p)
@@ -126,12 +129,24 @@ def main():
             if not args.skip_solve:
                 for it in args.iters:
                     _, s2 = build(env, q, steps, 1, it)
+                    if args.warm:  # a warm, adaptive re-solve from a 5-iteration plan
+                        _, s5 = build(env, q, steps, 1, 5)
+                        start = s5.solve(data, x0, hold)
+
+                        def run(s2=s2, start=start):
+                            return s2.resolve(data, x0, hold, start)
+
+                    else:
+
+                        def run(s2=s2):
+                            return s2.solve(data, x0, hold)
+
                     t0 = time.time()
-                    plan = s2.solve(data, x0, hold)
+                    plan = run()
                     jax.block_until_ready(plan.z)
                     first = time.time() - t0
                     t0 = time.time()
-                    plan = s2.solve(data, x0, hold)
+                    plan = run()
                     jax.block_until_ready(plan.z)
                     c = plan.certificate
                     out[f"solve_{it}"] = {
