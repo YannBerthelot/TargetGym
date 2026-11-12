@@ -42,6 +42,11 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
      the upset that started them and last to the sortie's end; no window shows them.
      formation's expert trips 387 times per 1 000 h (43 in 111 h). Diagnose each and
      fix it by the practitioner's procedure (tuning by real protocol), then rerun E1.
+     Done in #194: TECS on ArduPilot master's pitch loop (E1 cost per step plane 3.0
+     to 1.0, plane_energy 129 to 0.55, plane3d_heading 3.8 to 1.4), the figure-8 on
+     the shared tune, and formation's lead at the parade roll rate with its bank
+     capped at 30 deg (0 collisions per 1 000 h, window cost 28.6 to 42.7).
+   Step 2 is done (2026-11-12).
 3. **Recipes.** Run `tune_process_experts.py` and `tune_industrial_experts.py` with
    `--write` at levels 1, 0.5 and 2 on every task they cover. The recipes run their
    bump tests at the level's sensor noise, so cstr's and unstable_cstr's gains will
