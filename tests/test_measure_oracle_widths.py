@@ -9,6 +9,7 @@ import importlib.util
 import pathlib
 
 import jax
+import numpy as np
 import pytest
 
 from target_gym.registry import REGISTRY
@@ -103,3 +104,47 @@ def test_the_ph_hold_back_off_uses_the_buffer_noise_over_eleven_steps(widths):
     assert widths.hold_std(a, sigma, tc) == pytest.approx(0.155886, rel=1e-5)
     assert widths.hold_std(a, sigma, 1) == pytest.approx(0.049373, rel=1e-4)
     assert widths.HOLD_Z == 2.0
+
+
+def test_the_ph_floor_probe_discharges_at_the_permit_floor(widths):
+    """The charge balance in env.py's docstring, solved by Brent's method (not
+    the env's bisection or the closed-form inverse that sets the probe):
+    Wa + 10^(pH-14) - 10^-pH + Wb (1 + 2 10^(pH-pK2)) / (1 + 10^(pK1-pH)
+    + 10^(pH-pK2)) = 0, at the probe's discharge invariants."""
+    from scipy.optimize import brentq
+
+    (state, _), *rest = widths.ph_floor_probe()
+    p = REGISTRY["ph_neutralization"].make_test_params()
+    Wa, Wb = float(state.Wa), float(state.Wb)
+
+    def balance(pH):
+        carbonate = (1 + 2 * 10 ** (pH - p.pK2)) / (
+            1 + 10 ** (p.pK1 - pH) + 10 ** (pH - p.pK2)
+        )
+        return Wa + 10 ** (pH - 14) - 10**-pH + Wb * carbonate
+
+    assert rest == []
+    # float32 invariants near 1e-3 M: about 1e-7 relative, and dpH/dWa ~ 5.4
+    # per mM there, so about 1e-6 pH.
+    assert brentq(balance, 0.0, 14.0, xtol=1e-14) == pytest.approx(6.0, abs=1e-5)
+
+
+def test_the_ph_floor_probe_is_a_steady_state_of_the_plan(widths):
+    """At the floor the plan holds still: one step of the planner's model
+    under the probe's own move leaves every tank's invariants where they are,
+    since each holds the streams' flow-weighted mean."""
+    import jax.numpy as jnp
+
+    from target_gym.oracles.controller import enable_x64, float64
+    from target_gym.pc_gym.ph_neutralization.oracle import ph_model
+
+    spec = REGISTRY["ph_neutralization"]
+    (state, u), *_ = widths.ph_floor_probe()
+    with enable_x64():
+        p, s = float64(spec.make_test_params()), float64(state)
+        model = ph_model(spec.make_env(), p)
+        data = {"task": model.data(s), "end": 10**9, "widths": jnp.zeros(0)}
+        x = model.state_x(s)
+        x1 = model.step(data, x, jnp.asarray(u, jnp.float64), 0)[0]
+    # The buffer holds its nominal; the invariants in mM: float32 inputs, 1e-6.
+    np.testing.assert_allclose(x1[:7], x[:7], rtol=1e-5, atol=1e-6)

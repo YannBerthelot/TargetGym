@@ -645,6 +645,9 @@ as the charter's back-off rule, not K11's quantile. Here q_j is the limited quan
 j steps after the solve, under a deviation d held from the solve's start, and
 s_j = sigma sqrt(1 - a^2j) is the spread an AR(1) deviation (decay a, stationary std
 sigma) builds up over j steps the plan does not see. Holding d from the start bounds
-innovations that arrive within the hold from above. Other tasks keep the one-step
-term. For pH: a = 0.99, sigma = 0.35 mL/s, T_c = 11, so s_11 = 0.156 mL/s, 3.16
-times one innovation.
+innovations that arrive within the hold from above. The gain is measured where the
+plan rides, not at the expert's states (owner, the same day): for pH, the plant held
+at its permit floor, pH 6.0, on nominal flows with the trim shut
+(`ph_floor_probe`), where the titration curve is steeper than near pH 7. Other tasks
+keep the one-step term at the expert's states. For pH: a = 0.99, sigma = 0.35 mL/s,
+T_c = 11, so s_11 = 0.156 mL/s, 3.16 times one innovation.

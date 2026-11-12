@@ -641,6 +641,36 @@ HOLD_NOISE = ("ph_neutralization",)
 HOLD_Z = 2.0
 
 
+def ph_floor_probe() -> list:
+    """K11h's probe for pH: the plant held at its permit floor, where the plan
+    rides (owner, 2026-11-12), on nominal flows with the trim shut. At steady
+    state every tank holds the streams' flow-weighted mean invariants, so the
+    floor's base flow is ``steady_base_flow(permit_low, q2_nominal)`` and
+    stage 1, stage 2 and the basin all hold ``steady_state_invariants`` of it.
+    The titration curve is steeper there than at the expert's pH near 7."""
+    from target_gym.oracles.controller import raw_of
+    from target_gym.pc_gym.ph_neutralization.env import (
+        steady_base_flow,
+        steady_state_invariants,
+    )
+
+    spec = REGISTRY["ph_neutralization"]
+    env, p = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(SEEDS.start), p)
+    q2 = p.q2_nominal
+    q3 = steady_base_flow(p.permit_low, q2, p)
+    Wa, Wb = steady_state_invariants(q3, q2, p)
+    state = state.replace(
+        Wa_s1=Wa, Wb_s1=Wb, Wa=Wa, Wb=Wb, Wa_basin=Wa, Wb_basin=Wb, basin=0.0,
+        pH=p.permit_low, pH_s1=p.permit_low, q1=p.q1, q2=q2, q3=q3, q3_trim=0.0,
+    )  # fmt: skip
+    return [(state, np.array([float(raw_of(q3, p.q3_min, p.q3_max)), -1.0]))]
+
+
+#: K11h's probes where the plan rides, in place of the expert's states.
+FLOOR_PROBES = {"ph_neutralization": ph_floor_probe}
+
+
 def hold_std(a: float, sigma: float, j: int) -> float:
     """The std of an AR(1) deviation's change over j steps the plan does not see.
 
@@ -689,7 +719,8 @@ def noise_terms(name: str, points) -> list:
     steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
     if name not in HOLD_NOISE:
         return [float(b) for b in noise_backoff(limited, std, pts, RISK, steps)]
-    # K11h: 2 hold_std(j) max |dq_j / d d| over the probes, worst over the hold.
+    # K11h: 2 hold_std(j) max |dq_j / d d| at the floor, worst over the hold.
+    pts = _plan_moves(name, FLOOR_PROBES[name]())
     # The deviation is held from the solve's start, which bounds innovations
     # that arrive within the hold from above (they act for fewer steps).
     terms = []
@@ -731,6 +762,8 @@ def main(tasks) -> None:
             **zone,
             "probes": f"the expert's states, training seeds {SEEDS.start} to "
             f"{SEEDS.stop - 1}, every {EVERY}th step" if points else None,
+            **({"noise_probe": "the permit floor, steady on nominal flows"}
+               if name in HOLD_NOISE else {}),
         }  # fmt: skip
         path = records.write("oracle_widths", name, records.stamped(row), compact=True)
         print(name, json.dumps(sites), backoffs, "->", path.name, flush=True)
