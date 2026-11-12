@@ -125,10 +125,13 @@ over stages, and the Hessians already vectorise over stages).
 
 ## Full day with options 1 to 3
 
-In progress on bob (seed 102, options 1 to 3, 600-iteration cap, 10 cores, bob
-at load 150 to 220). At iteration 73 of the first rung, mu is 1.5e-4 and the KKT
-error 0.2, at about 20 s per iteration under that load. On the old code mu never
-left 0.1 in a whole rung. This section will be updated when the run ends.
+In progress on bob (tmux `ipm-ref2880` in `~/ipopt-new`; seed 102, options 1 to
+3, 600-iteration cap, 10 cores). Bob's load ran from 150 to 380 meanwhile, so
+iterations took about 20 to 30 s, not the 10.3 s measured at 8 cores. At iteration
+147 of the first rung, mu is 1.8e-6 and the KKT error 6.3. At iteration 73 it was
+0.2: the error is not monotone. On the old code mu stayed at 0.1 through the whole
+300-iteration rung, and the rung ended at KKT 1.4. Whether the full day converges
+within 600 iterations is not known yet.
 
 ## pH oracle (second job, from the owner)
 
@@ -144,6 +147,8 @@ replay gap 3e-10). The env is unchanged. Fix and test: branch
 
 Over seeds 0 to 4 the solver then had no failed or capped solve. The oracle
 still lost to its expert, and the cause was the buffer noise between re-plans,
-not the upsets. Without upsets or noise it beat the expert (-82.5 against -112).
+not the upsets: without upsets or noise it beat the expert (-82.5 against -112).
 The owner chose to size the permit back-off for the noise over a T_c hold, at
-2 sigma. That work and its seed check are on draft PR #199.
+2 sigma. With that, it beats the expert on seed 0 only. At K11's quantile (4.8
+sigma) it wins seeds 0 to 3 and loses seed 4, even with upsets off. Numbers and
+next steps are on draft PR #199.
