@@ -28,12 +28,11 @@ from target_gym.patrol.env import (
     PatrolState,
     compute_reward_terms_patrol,
     get_obs_full,
-    lead_autopilot,
+    lead_autopilot_step,
     lead_leg,
 )
 from target_gym.patrol.env_jax import PlanePatrol
 from target_gym.plane3d.env import compute_reward_terms_heading, wrap_angle
-from target_gym.plane3d.experts import plane3d_heading_step
 from target_gym.reward import trip_cost
 
 KEY = jax.random.PRNGKey(0)
@@ -197,9 +196,7 @@ def test_with_the_autopilot_in_the_lead_seat_each_wingman_flies_a_patrol(k, sigm
     # and each restarts on its own draw.
     actions = jax.random.uniform(jax.random.PRNGKey(7), (k, 3), minval=-0.2, maxval=0.2)
     for _ in range(3):
-        lead_action, new_memory = plane3d_heading_step(
-            lead_autopilot(params), memory, obs[:15]
-        )
+        lead_action, new_memory = lead_autopilot_step(params, memory, obs[:15])
         joint = jnp.concatenate([lead_action, actions.ravel()])
         obs2, new, _, _, _ = env.step_env(KEY, state, joint, params)
         for i in range(k):
