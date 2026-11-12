@@ -62,9 +62,9 @@ def build(env, p, steps, block, max_iter):
     decay = 1.0 - p.demand_theta * p.delta_t
 
     def step(d, x, u, t):
-        start, down, up, _, delay, burn = d["task"]
+        start, down, up, _, *rest = d["task"]
         wobble = d["path"][t] * decay ** (-1.0 * t * env.control_period)
-        here = {**d, "task": (start, down, up, wobble, delay, burn)}
+        here = {**d, "task": (start, down, up, wobble, *rest)}
         return model.step(here, x, u, t)[:3]
 
     stage = StageModel(
