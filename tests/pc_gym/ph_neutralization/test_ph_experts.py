@@ -84,6 +84,7 @@ def test_the_oracle_plans_on_the_buffer_flow_it_reads():
             s = st.replace(q2=jnp.float64(q2))
             d["task"] = m.data(s)
             x1, cost = m.step(d, m.state_x(s), u, 0)[:2]
-            out[q2] = float(planner_pH(x1[0], x1[1], p)), float(cost)
+            # The plan states the invariants in mM.
+            out[q2] = float(planner_pH(x1[0] / 1e3, x1[1] / 1e3, p)), float(cost)
     assert out[2.0][0] > out[0.0][0]
     assert out[2.0][1] == pytest.approx(out[0.0][1])
