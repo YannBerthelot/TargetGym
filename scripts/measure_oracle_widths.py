@@ -68,6 +68,12 @@ GUARDS = {
         "the level band keeps h >= h_min"
     },
     "unstable_cstr": {},
+    "ph_neutralization": {
+        "diversion": "pc_gym/ph_neutralization/env.py:432 to :437, the sewer "
+        "floor's switch and the pump-back's cap; the permit keeps them off",
+        "buffer_clip": "pc_gym/ph_neutralization/env.py:426, the buffer flow's "
+        "clip, which its mean path never meets",
+    },
     "hvac": {},
     "battery": {
         "current_guards": "energy/battery/env.py:299, :329, :330, the charge, "
@@ -572,6 +578,13 @@ NOISY = {
         lambda p: (
             1.0 - _theta("cement_kiln.env", "FEED_OU_THETA") * p.delta_t,
             p.feed_noise_std,
+        ),
+    ),
+    "ph_neutralization": (
+        "target_gym.pc_gym.ph_neutralization.oracle:ph_model",
+        lambda p: (
+            1.0 - _theta("pc_gym.ph_neutralization.env", "BUFFER_OU_THETA") * p.delta_t,
+            p.q2_noise_std,
         ),
     ),
     "hvac": (

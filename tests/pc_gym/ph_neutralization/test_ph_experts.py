@@ -59,22 +59,31 @@ def test_the_oracle_plans_on_the_buffer_flow_it_reads():
     """The oracle reads the buffer flow, which the observation hides, and plans
     its mean path: the planner's copy of the params has the OU innovation
     zeroed, and the planned step from the same tanks moves with the buffer the
-    state carries. Rewritten for the job score (charter Amendment 3): the
-    planned stage cost is the reward's terms."""
+    state carries. The buffer is bicarbonate, a base, so more of it leaves stage
+    1 less acid (PHYSICS.md, the streams). Rewritten for the shared solver: the
+    planned cost is the reagent's litres, the same for both."""
     import jax.numpy as jnp
 
     from target_gym.experts.mpc import plan_params
-    from target_gym.pc_gym.ph_neutralization.oracle import ph_stage
+    from target_gym.oracles.controller import enable_x64, float64
+    from target_gym.pc_gym.ph_neutralization.oracle import planner_pH
 
     spec = registry.get("ph_neutralization")
     env = spec.make_env()
-    params = spec.make_test_params()
-    planned = plan_params(spec, params)
+    planned = plan_params(spec, spec.make_test_params())
     assert float(planned.q2_noise_std) == 0.0
-
-    _, state = env.reset_env(jax.random.PRNGKey(0), planned)
-    action = env.initial_action(state, planned)
-    low, cost_low = ph_stage(env, state.replace(q2=jnp.asarray(0.0)), action, planned)
-    high, cost_high = ph_stage(env, state.replace(q2=jnp.asarray(2.0)), action, planned)
-    assert float(high.pH_s1) > float(low.pH_s1)
-    assert np.isfinite(float(cost_low)) and np.isfinite(float(cost_high))
+    oracle = spec.make_mpc(env, planned)
+    m, p = oracle.model, oracle.params
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(0), p)
+        st = float64(state)
+        u = m.hold(st)
+        d = {"task": None, "end": 1, "widths": jnp.zeros(0)}
+        out = {}
+        for q2 in (0.0, 2.0):
+            s = st.replace(q2=jnp.float64(q2))
+            d["task"] = m.data(s)
+            x1, cost = m.step(d, m.state_x(s), u, 0)[:2]
+            out[q2] = float(planner_pH(x1[0], x1[1], p)), float(cost)
+    assert out[2.0][0] > out[0.0][0]
+    assert out[2.0][1] == pytest.approx(out[0.0][1])
