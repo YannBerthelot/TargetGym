@@ -156,7 +156,7 @@ def ladder(task, table):
 def run(task, table):
     """The sweep of ``task`` on ``table``: the reactor's own runner, else the
     ladder's."""
-    return (reactor if task == "reactor" else ladder)(table)
+    return reactor(table) if task == "reactor" else ladder(task, table)
 
 
 def at_rest_cost(env, p):
