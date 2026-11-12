@@ -85,6 +85,44 @@ def test_a_plan_on_the_loads_ramp_replays_on_the_env(start_of_ramp):
     assert float(cert["output_gap"]) <= 1e-6
 
 
+@pytest.mark.medium
+def test_a_plan_mid_stream_and_reloading_replays_on_the_env():
+    """The env loads the turbine on the day it carries (its own rate and depth, on a
+    plan clock a stream rebased at ``plan_t0``), at most ``pickup`` while it reloads
+    after a restart, and burns boron since the last refuelling (``burn_t0``); the
+    plan must load and burn the same. A state 20000 sub-steps (27.8 h) into a
+    stream, refuelled now, its plan rebased 20 s ago on a day going down at twice
+    the window's rate to 0.7, and the turbine reloading at 0.9: the day falls below
+    0.9 at 150 s plan time, inside the ten steps (300 s), so the reload is met and
+    released mid-plan. Tolerances as on the window's replay above."""
+    env = SPEC.make_env()
+    params = SPEC.make_test_params()
+    oracle = SPEC.make_mpc(env, plan_params(SPEC, params))
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(100), oracle.params)
+        st = float64(state)
+        now = 20000
+        st = st.replace(
+            physics_time=jnp.asarray(now, st.physics_time.dtype),
+            plan_t0=jnp.asarray(now - 4, st.plan_t0.dtype),
+            burn_t0=jnp.asarray(now, st.burn_t0.dtype),
+            plan_rate=jnp.float64(2.0 * oracle.params.load_ramp_rate),
+            plan_depth=jnp.float64(0.3),
+            ramp_down_at=jnp.float64(0.0),
+            pickup=jnp.float64(0.9),
+            load_wobble=jnp.float64(0.0),
+            target_n=jnp.float64(0.9),
+            rod_in=0.5,
+        )
+        m = oracle.model
+        d = {"task": m.data(st), "end": 10, "widths": jnp.zeros(1)}
+        moves = m.hold(st)[None] + 0.1 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
+        cert = oracle._certify(d, st, m.state_x(st), moves, 10)
+    assert not bool(cert["replay_trip"])
+    assert float(cert["replay_gap"]) <= 1e-10
+    assert float(cert["output_gap"]) <= 1e-6
+
+
 @pytest.mark.parametrize(
     "arriving, expected",
     [

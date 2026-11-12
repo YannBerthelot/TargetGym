@@ -9,8 +9,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   clip removed and the move bounded instead (T1); the rod demand within the rods'
   travel over the hold (T1r, ``reach``); the boron line's queue in the state; the
   corner left inside the reach smoothed by softplus at the K5 width (T5,
-  ``data/oracle_widths/reactor.json``); the load on the day's schedule, with its
-  wobble on its noise-free mean path;
+  ``data/oracle_widths/reactor.json``); the load the env applies: the day the
+  state carries (its rate, depth and plan clock, which a stream rebases), at most
+  the reload's ``pickup`` after a restart, and the wobble on its noise-free mean
+  path; the burnup since the state's last refuelling (``burn_t0``);
 - objective: |Tref - Tavg| past the rods' dead band, and delta I past the offset's
   band on either side (a surrogate for the env's offset clock, which K8's replay
   leaves out), through epigraph rows on every sub-step, and the rods' travel and the
@@ -27,25 +29,29 @@ main trade. The ceiling comes from ``scripts/reactor_foresight.py``, which plans
 whole day; this slot stays so the shared runners have an oracle.
 """
 
+from types import SimpleNamespace
+
 import jax
 import jax.numpy as jnp
 
 from target_gym.oracles.controller import Oracle, TaskModel, softplus_clip
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reactor.env import (
+    NOT_RELOADING,
     _reactor_stiff_step,
     flux_tilt,
     moderator_tilt,
+    planned_load,
     rod_tilt,
     rod_worth,
-    scheduled_load,
     tavg_dnb_limit,
     tavg_program,
 )
 from target_gym.reward import trip_cost
 
-#: Where the plan's rods, boron and queue sit in ``x``, after the plant's 15 states.
-RODS, BORON, QUEUE = 15, 16, 17
+#: Where the plan's rods, boron, the turbine's reload cap and the boron queue sit in
+#: ``x``, after the plant's 15 states.
+RODS, BORON, PICKUP, QUEUE = 15, 16, 17, 18
 
 
 def rod_travel(p):
@@ -81,11 +87,19 @@ def boron_step(arriving, boron, p, width):
 
 def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     """One control step from ``x`` = (the plant, the rods in raw units, the boron,
-    its queue) under the raw demand ``u``: ``(x_next, rows)``, one row (Tref - Tavg,
-    n, T_fuel, T_hot, Tavg, delta I) per sub-step. ``width`` is the rate corner's
-    (0.0 is the exact clip) and ``deltas`` are added to its output, one per sub-step
-    (K5's probe)."""
-    start, ramp_down_at, ramp_up_at, wobble, delay, burn_rate = task
+    the reload's cap, the boron queue) under the raw demand ``u``: ``(x_next,
+    rows)``, one row (Tref - Tavg, n, T_fuel, T_hot, Tavg, delta I, the day's load
+    the reload does not take) per sub-step.
+    ``width`` is the rate corner's (0.0 is the exact clip) and ``deltas`` are added
+    to its output, one per sub-step (K5's probe). The load is the env's
+    (``env.compute_next_state``): the day ``task`` carries on its plan clock, capped
+    by the reload, which climbs at the conditioning ramps until it meets the day."""
+    start, ramp_down_at, ramp_up_at, wobble, delay, burn_rate = task[:6]
+    plan_t0, plan_rate, plan_depth, burn_t0 = task[6:]
+    day = SimpleNamespace(
+        ramp_down_at=ramp_down_at, ramp_up_at=ramp_up_at, plan_rate=plan_rate,
+        plan_depth=plan_depth,
+    )  # fmt: skip
     most = rod_travel(p)
     period = env.control_period
     substeps = int(env.integration_method.split("_")[-1])
@@ -94,33 +108,40 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     queue = jnp.concatenate([u[1:], x[QUEUE:-1]])
     arriving = queue[delay.astype(jnp.int32) - 1]
 
-    def load_at(i):
-        k = start + t * period + i
-        day = scheduled_load(k * p.delta_t, ramp_down_at, ramp_up_at, p)
-        return day + wobble * decay ** (t * period + i)
+    def day_at(i):
+        return planned_load((start + t * period + i - plan_t0) * p.delta_t, day)
+
+    def load_at(i, pickup):
+        return jnp.minimum(day_at(i), pickup) + wobble * decay ** (t * period + i)
 
     def sub_step(carry, i):
-        plant, rods, boron = carry
+        plant, rods, boron, pickup = carry
         rods = rods + softplus_clip(u[0] - rods, -most, most, width) + deltas[i]
         rod_in = 0.5 * (1.0 - rods)
         boron = boron_step(arriving, boron, p, boron_width)
         rho = rod_worth(rod_in, p) - rod_worth(p.rod_park, p)
         rho = rho + p.boron_worth * (boron - p.boron_ref)
-        rho = rho + p.boron_worth * burn_rate * (start + t * period + i) * p.delta_t
+        burnt = burn_rate * (start + t * period + i - burn_t0) * p.delta_t
+        rho = rho + p.boron_worth * burnt
         eps = rod_tilt(rod_in, p)
-        plant, _ = _reactor_stiff_step(plant, rho, p, substeps, load_at(i), eps)
+        load = load_at(i, pickup)
+        plant, _ = _reactor_stiff_step(plant, rho, p, substeps, load, eps)
+        climb = jnp.where(pickup < p.reload_knee, p.reload_fast_rate, p.reload_rate)
+        pickup = pickup + climb * p.delta_t
+        pickup = jnp.where(pickup >= day_at(i + 1), NOT_RELOADING, pickup)
         T_hot, T_cold = plant[8], plant[9]
         T_avg = 0.5 * (T_hot + T_cold)
-        error = tavg_program(load_at(i + 1), p) - T_avg
+        error = tavg_program(load_at(i + 1, pickup), p) - T_avg
         tilt = eps + moderator_tilt(T_hot, T_cold, p)
         delta_I = plant[0] * flux_tilt(plant[14], plant[12], plant[0], tilt, p)
-        rows = jnp.stack([error, plant[0], plant[7], T_hot, T_avg, delta_I])
-        return (plant, rods, boron), rows
+        short = jnp.maximum(day_at(i + 1) - pickup, 0.0)
+        rows = jnp.stack([error, plant[0], plant[7], T_hot, T_avg, delta_I, short])
+        return (plant, rods, boron, pickup), rows
 
-    (plant, rods, boron), rows = jax.lax.scan(
-        sub_step, (x[:RODS], x[RODS], x[BORON]), jnp.arange(period)
+    (plant, rods, boron, pickup), rows = jax.lax.scan(
+        sub_step, (x[:RODS], x[RODS], x[BORON], x[PICKUP]), jnp.arange(period)
     )
-    return jnp.concatenate([plant, jnp.stack([rods, boron]), queue]), rows
+    return jnp.concatenate([plant, jnp.stack([rods, boron, pickup]), queue]), rows
 
 
 #: $/h per 1 % of rated delta I past the band, the plan's surrogate (ours).
@@ -139,6 +160,10 @@ def reactor_model(env, p) -> TaskModel:
     # the surrogate out of the planned reward.
     per_delta_I = float(PLAN_BAND_WEIGHT * 100.0 * p.delta_t / 3600.0)
     flow_step = float(p.effluent_price * p.delta_t * period)
+    # The reload's lost output, a sub-step's dollars per unit of load not taken: no
+    # move changes it, but the plan's reward is the env's.
+    per_GW_s = p.P_electric_GW * 1000.0 * p.derate_price_per_MWh / 3600.0
+    per_short = float(per_GW_s * p.delta_t)
 
     def step(d, x, u, t):
         boron_width = d.get("boron_width", 0.0)
@@ -152,7 +177,7 @@ def reactor_model(env, p) -> TaskModel:
             -off - p.ao_band * rows[:, 1], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
             -u[1:], u[1:], rows[:, 1:5].ravel(),
         ])  # fmt: skip
-        return x1, jnp.zeros((), x.dtype), y, rows[-1:, 4], ()
+        return x1, per_short * jnp.sum(rows[:, 6]), y, rows[-1:, 4], ()
 
     price = float(trip_cost(p))
     band = (
@@ -165,18 +190,18 @@ def reactor_model(env, p) -> TaskModel:
     )  # Tavg's floor is a limit with time to act, charged on replay, not planned
     rod_raw = lambda s: 1.0 - 2.0 * s.rod_in  # noqa: E731
     return TaskModel(
-        nx=47, nu=2, step=step,
+        nx=48, nu=2, step=step,
         state_x=lambda s: jnp.concatenate([
             s.n[None], s.C,
             jnp.stack([
                 s.T_fuel, s.T_coolant, s.T_cold, s.T_sg, s.I_hat, s.Xe_hat, s.I_tilt,
-                s.Xe_tilt, rod_raw(s), s.boron,
+                s.Xe_tilt, rod_raw(s), s.boron, s.pickup,
             ]),
             s.boron_queue,
         ]),
         data=lambda s: (
             s.physics_time, s.ramp_down_at, s.ramp_up_at, s.load_wobble, s.boron_delay,
-            s.burn_rate,
+            s.burn_rate, s.plan_t0, s.plan_rate, s.plan_depth, s.burn_t0,
         ),
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],
