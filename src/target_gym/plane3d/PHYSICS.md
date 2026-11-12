@@ -294,7 +294,11 @@ observation alone:
   weighted to hold height (`TECS_SPDWEIGHT` 0). Its pitch loop is ArduPilot
   master's since 2026-11-12, not 4.0.9's (`plane/PHYSICS.md`, the expert): weights
   capped at 1, the demanded climb clipped to the climb and sink limits, the integral
-  on the rate error. Its pitch demand goes to the plant's inner loop. Its aircraft numbers come from a flight test of the model at
+  on the rate error. All four tasks fly the shared airliner tune; the figure-8's
+  own faster TECS (time constant 1.5 s, pitch damping 2.0, chosen on the 4.0.9
+  loop) oscillated +-25 m about the path on master's loop and was dropped (owner,
+  2026-11-12; scored windows 0.37 per step before the port, 0.62 after). Its pitch
+  demand goes to the plant's inner loop. Its aircraft numbers come from a flight test of the model at
   230 m/s: full throttle climbs 7.9 to 10.2 m/s and idle sinks 23 to 27 m/s
   between 7500 and 3500 m.
 - **Bank: a demand to the plant's inner loop.** The 45 deg limit is ArduPilot's

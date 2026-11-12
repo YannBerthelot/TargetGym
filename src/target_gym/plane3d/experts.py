@@ -364,13 +364,13 @@ _PATH = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96
 # clean 1 g stall, 80 m/s EAS: "20% higher than level flight stall speed"
 # (ARSPD_FBW_MIN [P409]).
 _AMENDED = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96.0)
-# The figure-8 flies slower and higher than the other tasks, banked most of
-# the way, so it gets a faster, better damped TECS, chosen to hold with any one
-# gain 25% off. Its lobe tips are flown with a quarter of the bank in hand. PR 9
-# replaces these with the shared tune.
+# The figure-8 flies the shared TECS tune (owner, 2026-11-12, as the aircraft
+# spec's section 3 has it): its own faster, better damped TECS (time constant
+# 1.5 s, pitch damping 2.0, chosen on the 4.0.9 loop) oscillated +-25 m about
+# the path on master's pitch loop. Its lobe tips are still flown with a quarter
+# of the bank in hand until the protocol replaces that too.
 _FIGURE8 = Plane3DGuidanceParams(
     max_bank_rad=float(np.deg2rad(30.0)),
     v_min_eas=96.0,
     turn_bank_margin=0.75,
-    tecs=AIRLINER.replace(time_const=1.5, ptch_damp=2.0),
 )
