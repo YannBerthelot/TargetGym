@@ -9,6 +9,7 @@ The oracle in the MPC slot (``FormationOracle``) is in ``oracle.py``.
 """
 
 import jax.numpy as jnp
+import numpy as np
 from flax import struct
 
 from target_gym.experts.pid import (
@@ -19,6 +20,7 @@ from target_gym.formation.env import (
     LEAD_OBS_BASE,
     WINGMAN_OBS,
 )
+from target_gym.plane.dynamics import BANK_DEMAND_MAX
 from target_gym.patrol.experts import (
     HOLD,
     HORNET_TECS,
@@ -42,32 +44,37 @@ from target_gym.plane3d.experts import (
 class FormationLeadParams(HornetGuidanceParams):
     """The lead's autopilot: the heading task's course hold and TECS on
     height and the 3D tasks' speed schedule. A formation lead flies smooth and
-    predictable, and with the engine's 1.7 s lag TECS's throttle does.
-    ``turn_lag`` is the time, s, over which it eases onto a new leg's turn
-    rate, so its wingmen, who see the turn only once it starts, can follow."""
+    predictable, and with the engine's 1.7 s lag TECS's throttle does. It
+    rolls at the parade rate of roll, ``parade_roll`` rad/s: its bank demand
+    moves no faster, so its wingmen, who see a turn only once it starts, can
+    match it. VT-6's Formation Supplement: "A smooth, continuous roll rate of
+    3-5 seconds to reach 30 degrees AOB (or roll level out of turn) is a good
+    benchmark" [VT-6]; its fast end, 30 deg in 3 s (owner, 2026-11-12)."""
 
-    turn_lag: float = 0.0
+    parade_roll: float = float(np.deg2rad(30.0) / 3.0)
 
 
 @struct.dataclass
 class FormationLeadState(Plane3DGuidanceState):
-    """The autopilot's memory, and the turn rate it is easing onto."""
+    """The autopilot's memory, and the bank it last demanded."""
 
-    turn_rate: float = 0.0
+    bank: float = 0.0
 
 
 def formation_lead_step(params, state, obs, xp=jnp):
     """The lead seat: course hold on the route's commanded heading with its
-    turn rate (``obs[15]``, rad per step) fed forward, eased over ``turn_lag``
-    from the last, and TECS."""
+    turn rate (``obs[15]``, rad per step) fed forward, and TECS; the bank
+    demand moved toward its target at no more than the parade rate of roll,
+    from the bank flown when the autopilot engages."""
     v_ground = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + 1e-6)
-    ease = params.dt / (params.turn_lag + params.dt)
-    rate = state.turn_rate + ease * (obs[15] / params.dt - state.turn_rate)
-    turn = rate + _wrap_angle(obs[11] - obs[9], xp) / params.tau_hdg
+    turn = obs[15] / params.dt + _wrap_angle(obs[11] - obs[9], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
-    return _fly(
-        params, state, obs, xp, obs[10], v_ground * turn, target, turn_rate=rate
-    )
+    action, memory = _fly(params, state, obs, xp, obs[10], v_ground * turn, target)
+    previous = xp.where(state.tecs.started > 0.0, state.bank, obs[6])
+    step = params.parade_roll * params.dt
+    bank = xp.clip(action[2] * BANK_DEMAND_MAX, previous - step, previous + step)
+    action = xp.concatenate([action[:2], xp.reshape(bank / BANK_DEMAND_MAX, (1,))])
+    return action, memory.replace(bank=bank)
 
 
 @struct.dataclass
@@ -105,13 +112,11 @@ def formation_team_step(params, state, obs, xp=jnp):
 #: wingmen flying :data:`HOLD`, checked on held-out seeds 200-209
 #: (scripts/tune_formation_hold.py, [lead pitch]). TECS flies the pitch on
 #: height alone (the airliner's ``spd_weight`` 0), a little faster than the
-#: heading task's (``time_const`` 1.5 against 2). It eases onto a new turn over
-#: 2 s (2026-11-10): taken at once, a reversal rolled it 60 deg in a second and
-#: its wingmen, a step behind, tripped on two of the ten seeds; 2 s is the
-#: shortest of 2, 4 and 8 with no trip, and keeps the lead nearest its heading.
-#: Every other autopilot value is the 3D heading task's
-#: (scripts/tune_aircraft_guidance.py).
-LEAD = FormationLeadParams(tecs=HORNET_TECS.replace(time_const=1.5), turn_lag=2.0)
+#: heading task's (``time_const`` 1.5 against 2). It rolls at the parade rate
+#: (``parade_roll``, 2026-11-12), which replaced a 2 s ease onto each leg's
+#: turn rate chosen as the shortest of 2, 4 and 8 s with no trip. Every other
+#: autopilot value is the 3D heading task's (scripts/tune_aircraft_guidance.py).
+LEAD = FormationLeadParams(tecs=HORNET_TECS.replace(time_const=1.5))
 
 
 def make_formation_pid_controller(num_wingmen: int = 2) -> Controller:

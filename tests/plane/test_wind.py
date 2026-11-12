@@ -18,7 +18,8 @@ from target_gym import (
     PlanePatrol,
 )
 from target_gym.plane.dynamics import total_wind_2d
-from target_gym.plane3d.env import PlaneParams3D
+from target_gym.plane3d import hornet
+from target_gym.plane3d.env import PlaneParams3D, airspeed_3d, heading_3d
 
 FIXED = dict(target_altitude_range=(5000, 5000), initial_altitude_range=(5000, 5000))
 #: Turbulence comes in a zone (Amendment 2 rule 17; plane/REALITY.md, BEA447
@@ -166,11 +167,30 @@ class TestTurbulence:
 
 class TestEngineBound:
     def test_patrol_inherits_steady_wind(self):
+        """The steady wind is the engine's, so the patrol's scripted lead flies
+        in it. The lead holds its ground track and ground speed (the 3D heading
+        expert on the track, ``psi``, and ground speed), so a crosswind does not
+        move its path: it crabs. Its air velocity is its ground velocity minus
+        the wind, the wind triangle, which sets its air heading and airspeed;
+        and its wing flies at that airspeed: level, on less dynamic pressure,
+        it needs more lift coefficient, CL proportional to n_z / V_air^2, so
+        its incidence above the zero-lift angle grows at least by that ratio
+        (lower Mach lowers the lift slope, which only adds incidence).
+
+        This oracle replaced "the lead's y moves with the wind" on the owner's
+        approval (2026-11-12): since the lead starts established on its track
+        (481fee8), a steady wind cannot move its path, and the old oracle had
+        passed only because the lead then wandered off its track.
+        """
         env = PlanePatrol()
 
-        def lead_y(wy, n=150):
+        def lead(wy, n=150):
+            # Steady air: no turbulence, so the wind is the steady one alone.
             params = env.default_params.replace(
-                max_steps_in_episode=n, lead_turn_rate_range=(0.0, 0.0), wind_y=wy
+                max_steps_in_episode=n,
+                lead_turn_rate_range=(0.0, 0.0),
+                wind_y=wy,
+                turbulence_sigma=0.0,
             )
             _, state = env.reset_env(jax.random.PRNGKey(1), params)
 
@@ -179,12 +199,37 @@ class TestEngineBound:
                 _, ns, _, _, _ = env.step_env(
                     jax.random.PRNGKey(1), s, jnp.zeros(3), params
                 )
-                return (ns,), ns.lead.y
+                return (ns,), None
 
-            (s,), ys = jax.lax.scan(step, (state,), None, length=n)
-            return float(ys[-1])
+            (s,), _ = jax.lax.scan(step, (state,), None, length=n)
+            return s.lead, params
 
-        assert not np.isclose(lead_y(0.0), lead_y(25.0), atol=1.0)
+        calm, calm_params = lead(0.0)
+        windy, windy_params = lead(25.0)
+
+        # The lead holds its track and ground speed in both.
+        track = float(calm.psi)
+        speed = float(np.hypot(calm.x_dot, calm.y_dot))
+        assert float(windy.psi) == pytest.approx(track, abs=1e-3)
+        assert float(np.hypot(windy.x_dot, windy.y_dot)) == pytest.approx(
+            speed, rel=1e-3
+        )
+
+        # The wind triangle: air velocity = ground velocity - (0, 25) m/s.
+        air_x, air_y = speed * np.cos(track), speed * np.sin(track) - 25.0
+        assert float(heading_3d(windy, windy_params)) == pytest.approx(
+            np.arctan2(air_y, air_x), abs=1e-3
+        )
+        windy_air = float(airspeed_3d(windy, windy_params))
+        assert windy_air == pytest.approx(np.hypot(air_x, air_y), rel=1e-3)
+
+        # The wing flies at that airspeed: lift balance, from the zero-lift
+        # angle the airframe's published lift curve gives [HARV].
+        zero_lift = np.deg2rad(-hornet.CL0 / hornet.CL_ALPHA)
+        calm_air = float(airspeed_3d(calm, calm_params))
+        needed = (float(windy.n_z) / float(calm.n_z)) * (calm_air / windy_air) ** 2
+        grown = (float(windy.alpha) - zero_lift) / (float(calm.alpha) - zero_lift)
+        assert grown >= needed
 
 
 class TestWindShear:
