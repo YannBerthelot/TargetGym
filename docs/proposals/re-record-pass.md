@@ -14,10 +14,15 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
      load with xenon at 1.33 of balance, and the expert re-trips 10 of 10 times, about
      18 min in, as the burnout drives the hot leg past 610 K. Restart at reduced power
      while the xenon burns out, then return to the plan at a ramp, as the boiler's
-     restart does and as Doel-3's record shows. Check the expert rides it.
+     restart does and as Doel-3's record shows. Check the expert rides it. Done in
+     #193: restart at 15 %, reload at 15 %/h to 50 % and 3 %/h above, the shortfall
+     charged, standby lump 6 h. Open: on stream fast_return days the expert still
+     trips once on 4 of 5 seeds, 23 to 67 h after a restart, a weakness of its own on
+     those days, not of the restart.
    - **Reactor expert reads the plan once.** It reads the load plan on its first step
      only, so in a stream it never sees later days. Make it read each day's plan; its
-     windows may move, which this pass re-records anyway.
+     windows may move, which this pass re-records anyway. Done in #193, with the
+     day's ramp rate and minimum load added as obs 11 and 12.
    - **Absorbed event draws.** A draw while an event of its kind is under way is
      absorbed (boiler, glass, reactor), so fewer events happen than the sourced rate.
      Estimated, not measured: glass gas swings about 0.8 a day against the sourced 1.5
