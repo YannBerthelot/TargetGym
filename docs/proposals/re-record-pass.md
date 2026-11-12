@@ -8,6 +8,11 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
    step against reflux step, internal against external flows) and cstr's open-loop
    settling test failed before #173. Whatever still fails goes to the process
    session, which fixes the plant against `REALITY.md` before anything is recorded.
+   Done in #191 (2026-11-12): the distillation tests restated on D1, cstr's kept as
+   a strict-xfail finding. Outside the small tier, two boiler_drum reality tests have
+   failed since before #173 (`test_swell_grows_toward_low_load`,
+   `test_shrink_is_smaller_and_shorter_than_swell`), and the reactor oracle's
+   replay test fails at 20 and -3000; both are open.
 2. **Stream fixes** (owner, 2026-11-11, from #189's review). None moves a scored
    window before its trip, but each changes what a stream records.
    - **Reactor restart after a hot standby.** The plant comes back at the plan's full
@@ -28,7 +33,9 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
      Estimated, not measured: glass gas swings about 0.8 a day against the sourced 1.5
      (each keeps its kind busy about 14 h); reactor about 70 % of EDF's 39 load-follow
      days a year. Measure each task's delivered rate on a long stream, then set
-     `events_per_h` so the delivered rate is the sourced one.
+     `events_per_h` so the delivered rate is the sourced one. Done in #192: per-visit
+     correction, and `Scenario.pinned_events_per_h` so pinned scoring runs see the
+     same rate; boiler upsets reach 0.71 in a pinned run, a documented gap.
    - **Aircraft references on long streams** (owner, 2026-11-11, from #190's E1 run:
      4 seeds of 111 plant hours each). plane's and plane3d_heading's experts fall
      into altitude limit cycles (±430 m, period 20 min; ±600 m, growing) that outlive
