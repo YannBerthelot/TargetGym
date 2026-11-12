@@ -61,7 +61,9 @@ _HEIGHT_ONLY = P.replace(spd_weight=0.0, ptch_damp=0.0, integ_gain=0.0)
 
 def _pitch(p, dh, h_dot=0.0, state=None):
     state = state or TECSState(h_ref=5000.0, v_ref=230.0, v_prev=230.0, started=1.0)
-    _, pitch, new = tecs_step(p, state, 5000.0 - dh, h_dot, 230.0, 5000.0, 230.0, 0.0, np)
+    _, pitch, new = tecs_step(
+        p, state, 5000.0 - dh, h_dot, 230.0, 5000.0, 230.0, 0.0, np
+    )
     return float(pitch), new
 
 
@@ -70,7 +72,9 @@ def test_a_height_error_asks_for_the_flight_path_that_closes_it_in_time_const():
     20 / (5 * 230) rad above trim, a 4 m/s climb (master caps the weights at 1
     "to prevent instability")."""
     pitch, _ = _pitch(_HEIGHT_ONLY, 20.0)
-    assert pitch - _HEIGHT_ONLY.pitch_trim == pytest.approx(20.0 / (5.0 * 230.0), rel=1e-6)
+    assert pitch - _HEIGHT_ONLY.pitch_trim == pytest.approx(
+        20.0 / (5.0 * 230.0), rel=1e-6
+    )
 
 
 @pytest.mark.parametrize("dh,limit", [(1000.0, 10.0), (-1000.0, -10.0)])

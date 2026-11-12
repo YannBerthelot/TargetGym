@@ -20,7 +20,6 @@ from target_gym.formation.env import (
     LEAD_OBS_BASE,
     WINGMAN_OBS,
 )
-from target_gym.plane.dynamics import BANK_DEMAND_MAX
 from target_gym.patrol.experts import (
     HOLD,
     HORNET_TECS,
@@ -29,6 +28,7 @@ from target_gym.patrol.experts import (
     HornetGuidanceParams,
     patrol_hold_step,
 )
+from target_gym.plane.dynamics import BANK_DEMAND_MAX
 from target_gym.plane3d.experts import (
     Plane3DGuidanceState,
     _cruise_speed,

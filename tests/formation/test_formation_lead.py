@@ -32,9 +32,7 @@ def _lead_bank_demands(steps=200):
     @jax.jit
     def run():
         _, state = env.reset_env(jax.random.PRNGKey(0), params)
-        state = state.replace(
-            lead_turn_schedule=REVERSALS, lead_turn_rate=REVERSALS[0]
-        )
+        state = state.replace(lead_turn_schedule=REVERSALS, lead_turn_rate=REVERSALS[0])
         memory = jax.tree.map(jnp.asarray, ctrl.init_state)
 
         def body(carry, t):

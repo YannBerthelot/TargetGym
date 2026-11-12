@@ -143,6 +143,42 @@ TECS on height and the 3D tasks' speed schedule. With the engine's 1.7 s lag
 TECS's throttle flies as smooth and predictable as a formation lead should, so
 the set power the old 20 s lag called for is gone.
 
+It rolls at the parade rate of roll (owner's decision of 2026-11-12): its bank
+demand moves at no more than 10 deg/s, 30 deg of bank in 3 s. The source is
+VT-6's Formation Supplement (CNATRA TW-5, June 2022, T-6B): "A smooth,
+continuous roll rate of 3-5 seconds to reach 30 degrees AOB (or roll level out
+of turn) is a good benchmark", of which the owner took the fast end; it adds
+"Lead should allow wing time to stabilize in position before reversing turns",
+with no number [VT-6]. Two other sources were weighed. A draft Navy manual
+(P-1213) puts the parade rate at about 10 deg/s, but its page could not be
+opened (its mirror's certificate does not match its host), so it is not used.
+CNATRA TW-4's *Primary Formation* (T-34C) defines the parade rate as "rolling at
+a rate that achieves 30º angle of bank after 30º of turn" [TW-4]. That rule
+depends on speed: rolling at p, the turn made by 30 deg of bank is
+(g / (V p)) ln(1 / cos 30 deg), which gives about 2 deg/s at a T-34C's 77 m/s
+and 0.8 deg/s at the Hornet's 200 m/s, a 40 s roll, so it is a trainer's rule,
+not a rate for this lead. The parade rate replaced a 2 s ease onto each leg's
+turn rate, the shortest of 2, 4 and 8 s that tripped no training seed.
+
+- **[VT-6]** VT-6 Formation Supplement (FORMSUP), CNATRA TW-5, June 2022, section
+  on parade turns. <https://www.cnatra.navy.mil/tw5/vt6/assets/docs/university/formsup.pdf>,
+  downloaded twice on 2026-11-12, both copies SHA-256
+  3760e2a74d469785580881bd503d707b2b53eb4fccc1d6f940f954def58e98a2.
+- **[TW-4]** CNATRA TW-4, *Primary Formation*, the lead's duties in parade turns.
+  <https://www.cnatra.navy.mil/tw4/fitu/assets/docs/syllabus-primary/Form.docx>,
+  fetched 2026-11-12.
+
+**Finding: the wingman hold at route reversals.** In a stream a sortie flies its
+route for 7.8 h on average, so a route whose adjacent legs reverse at nearly
+the full parade-turn rate (a jump of 0.048 rad/s or more) is flown again every
+8 min. At such a reversal the wingman on the outside of the new turn falls up
+to 55 m behind its slot laterally and collides with the other wingman. The
+wingmen's masses are not the cause. With the lead at the parade rate,
+the long-stream run (E1, 4 seeds of 111 plant hours) counts 369 collisions per
+1 000 h (387 before) and the scored windows trip on 2 of 10 seeds (none
+before). The route is the task's and stays (owner, 2026-11-12); the hold
+(`patrol.experts.HOLD`, the protocol's section 3.5) is where it is to be fixed.
+
 The lead and the hold were tuned on training seeds 100-109 and checked once
 on held-out seeds 200-209 (`scripts/tune_formation_hold.py`,
 `tests/patrol/test_formation_hold.py`), against the 3D heading task's limits
