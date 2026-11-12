@@ -12,7 +12,10 @@ decisions of 2026-11-11. Nothing here runs before #173 merges.
    a strict-xfail finding. Outside the small tier, two boiler_drum reality tests have
    failed since before #173 (`test_swell_grows_toward_low_load`,
    `test_shrink_is_smaller_and_shorter_than_swell`), and the reactor oracle's
-   replay test fails at 20 and -3000; both are open.
+   replay test fails at 20 and -3000. Both closed in #195 (2026-11-12, owner): the
+   swell test restated on S1's equal steps (p. 16), the shrink test a strict-xfail
+   finding (Houtz's circulation disruption, which S1's model lacks), and the oracle's
+   delta-I surrogate left out of K8's replay. Step 1 is done.
 2. **Stream fixes** (owner, 2026-11-11, from #189's review). None moves a scored
    window before its trip, but each changes what a stream records.
    - **Reactor restart after a hot standby.** The plant comes back at the plan's full
