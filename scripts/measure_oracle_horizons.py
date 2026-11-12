@@ -269,8 +269,14 @@ TASKS = {
     "first_order": ({"u": 0.1}, {"x": _s("x", "x_min", "x_max")}, {}),
     "cstr": ({"water": 0.1}, {"T": _s("T", None, "T_trip")}, {}),
     "four_tank": ({"pump1": 0.1, "pump2": 0.1}, _H, {"h1": "pump1", "h2": "pump2"}),
-    # +0.1 mL/s on the 10 to 22 mL/s base flow.
-    "ph_neutralization": ({"base": 2 * 0.1 / 12.0}, {"pH": _s("pH")}, {}),
+    # The base valve's step kept (raw 1/60, 0.18 mL/s on its 0 to 22 mL/s since
+    # v5); the stage-2 trim valve (v5) is new, at 0.1. The expert holds the
+    # discharge pH with the trim, stage 1 on its own probe.
+    "ph_neutralization": (
+        {"base": 2 * 0.1 / 12.0, "trim": 0.1},
+        {"pH": _s("pH")},
+        {"pH": "trim"},
+    ),
     "distillation": (
         {"L": 0.1, "V": 0.1},
         {
