@@ -1,4 +1,5 @@
-"""The formation's lead rolls at the parade rate of roll.
+"""The formation's lead flies parade turns: the parade rate of roll, and no
+more than the parade turn's bank.
 
 Contract (owner's decision of 2026-11-12, formation/PHYSICS.md): a formation
 lead rolls into and out of its turns at a smooth, constant rate its wingmen can
@@ -8,7 +9,15 @@ AOB (or roll level out of turn) is a good benchmark"; the owner chose its fast
 end, 30 deg in 3 s, 10 deg/s. So, flying a route of full parade-turn
 reversals, the expert's lead never moves its bank demand faster than 10 deg/s,
 and it does roll at that rate through a reversal.
+
+Parade turns are flown at 30 deg of bank: CNATRA TW-4's *Primary Formation*
+trains "30º angle of bank turns" in parade, and VT-6's supplement says "Focus on
+30 degree VMC turns" (owner's decision of 2026-11-12); the route's fastest leg
+is that turn. So the lead never demands more than 30 deg of bank, which leaves
+its wingmen, whose hold may bank to 45 deg, room to keep their slots.
 """
+
+import functools
 
 import jax
 import jax.numpy as jnp
@@ -19,11 +28,13 @@ from target_gym.plane.dynamics import BANK_DEMAND_MAX
 from target_gym.registry import REGISTRY
 
 PARADE_ROLL = np.deg2rad(30.0) / 3.0  # rad/s [VT-6]
+PARADE_BANK = np.deg2rad(30.0)  # rad [TW-4, VT-6]
 #: The route's fastest legs: the parade turn's 30 deg, both ways
 #: (``lead_turn_rate_range``).
 REVERSALS = jnp.array([0.0303, -0.0303] * 4)
 
 
+@functools.cache
 def _lead_bank_demands(steps=200):
     spec = REGISTRY["formation"]
     env, params = spec.make_env(), spec.make_test_params()
@@ -58,3 +69,9 @@ def test_the_lead_rolls_at_the_parade_rate_through_route_reversals():
     # ... and at it while reversing: the 60 deg roll takes several steps at
     # the limit, from the first leg change (step 60) on.
     assert np.sum(rates[55:75] >= PARADE_ROLL * (1.0 - 1e-5)) >= 3
+
+
+@pytest.mark.medium
+def test_the_lead_banks_no_more_than_the_parade_turn():
+    bank = _lead_bank_demands()
+    assert np.abs(bank).max() <= PARADE_BANK * (1.0 + 1e-5)

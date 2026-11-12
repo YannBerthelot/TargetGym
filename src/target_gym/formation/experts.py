@@ -49,7 +49,9 @@ class FormationLeadParams(HornetGuidanceParams):
     moves no faster, so its wingmen, who see a turn only once it starts, can
     match it. VT-6's Formation Supplement: "A smooth, continuous roll rate of
     3-5 seconds to reach 30 degrees AOB (or roll level out of turn) is a good
-    benchmark" [VT-6]; its fast end, 30 deg in 3 s (owner, 2026-11-12)."""
+    benchmark" [VT-6]; its fast end, 30 deg in 3 s (owner, 2026-11-12). It
+    turns at no more than the parade turn's 30 deg of bank (``max_bank_rad``,
+    :data:`LEAD`), the bank parade turns are trained at [TW-4, VT-6]."""
 
     parade_roll: float = float(np.deg2rad(30.0) / 3.0)
 
@@ -114,9 +116,15 @@ def formation_team_step(params, state, obs, xp=jnp):
 #: height alone (the airliner's ``spd_weight`` 0), a little faster than the
 #: heading task's (``time_const`` 1.5 against 2). It rolls at the parade rate
 #: (``parade_roll``, 2026-11-12), which replaced a 2 s ease onto each leg's
-#: turn rate chosen as the shortest of 2, 4 and 8 s with no trip. Every other
-#: autopilot value is the 3D heading task's (scripts/tune_aircraft_guidance.py).
-LEAD = FormationLeadParams(tecs=HORNET_TECS.replace(time_const=1.5))
+#: turn rate chosen as the shortest of 2, 4 and 8 s with no trip, and banks at
+#: most the parade turn's 30 deg (2026-11-12): at the autopilot's 45 deg, the
+#: wingmen's own limit, it left them no bank to keep their slots through a
+#: reversal (formation/PHYSICS.md). Every other autopilot value is the 3D
+#: heading task's (scripts/tune_aircraft_guidance.py).
+LEAD = FormationLeadParams(
+    tecs=HORNET_TECS.replace(time_const=1.5),
+    max_bank_rad=float(np.deg2rad(30.0)),
+)
 
 
 def make_formation_pid_controller(num_wingmen: int = 2) -> Controller:
