@@ -6,6 +6,8 @@ Each entry is the keyword arguments of a ``target_gym.scenarios.Scenario``; the
 registry builds them, so this package imports nothing outside itself.
 """
 
+import math
+
 HOUR = 3600.0
 
 # Shares of operating time (REALITY.md section 7). EDF's units load-follow 250 h a
@@ -42,10 +44,68 @@ def _stream(dwell_h, events_per_h):
     )
 
 
+#: One draw a visit; ``suite`` raises it so that one day a visit is delivered.
 _DAY = _stream(LOAD_FOLLOW_DWELL_H, 1.0 / DAY_H)
+
+#: A day's program as ``ReactorParams`` draws it, unless a row overrides it: the
+#: dispatch announces it ``day_notice_range`` ahead of the ramp down, the load ramps
+#: to ``load_min`` at ``load_ramp_rate``, holds over ``hold_range`` and ramps back.
+NOTICE_RANGE = (1800.0, 7200.0)  # s
+DEFAULT_DAY = {
+    "load_min": 0.5,
+    "load_ramp_rate": 0.02 / 60.0,
+    "hold_range": (3.0 * HOUR, 8.0 * HOUR),
+}
+
+
+def _outlasts(lo, hi):
+    """E[exp(-T / dwell)] for T uniform over [lo, hi] s: the chance a load-follow
+    visit outlasts it."""
+    k = 1.0 / (LOAD_FOLLOW_DWELL_H * HOUR)
+    if hi == lo:
+        return math.exp(-k * lo)
+    return (math.exp(-k * lo) - math.exp(-k * hi)) / (k * (hi - lo))
+
+
+def _one_day_a_visit(row):
+    """``row`` drawing load-follow days at the rate that delivers one a visit on
+    average (owner, 2026-11-11), EDF's 39.5 days a year over the load-follow
+    share's 39.5 visits.
+
+    A day drawn while one is under way, from its announcement until its return
+    ramp ends, is absorbed (``env_jax.start_event``), so one draw a visit
+    delivered 0.70 to 0.85 days. A visit that starts with no day under way gets a
+    draw before it ends with chance p = lam / (lam + 1/dwell) and outlasts a day's
+    program with chance q, so it delivers p / (1 - p q) days; one a visit needs
+    lam = 1 / (dwell q). q multiplies the chances the visit outlasts the notice,
+    the two ramps and the hold.
+
+    A scoring run pinned to the row (R2) is one endless visit, where a draw rate
+    lam delivers lam / (1 + lam busy) days an hour, busy the program's mean
+    length; it draws at r / (1 - r busy), r one a 24 h visit, to see the stream's
+    days per load-follow hour (owner, 2026-11-12)."""
+    day = {**DEFAULT_DAY, **row["overrides"]}
+    ramp = (1.0 - day["load_min"]) / day["load_ramp_rate"]
+    q = _outlasts(*NOTICE_RANGE) * _outlasts(2 * ramp, 2 * ramp)
+    q *= _outlasts(*day["hold_range"])
+    busy_h = (sum(NOTICE_RANGE) / 2 + 2 * ramp + sum(day["hold_range"]) / 2) / HOUR
+    r = 1.0 / LOAD_FOLLOW_DWELL_H
+    return {
+        **row,
+        "events_per_h": 1.0 / (LOAD_FOLLOW_DWELL_H * q),
+        "pinned_events_per_h": r / (1.0 - r * busy_h),
+    }
 
 
 def suite():
+    # Each load-follow row draws its days faster than one a visit, by its own day's
+    # shape, so that it delivers one a visit (``_one_day_a_visit``).
+    return tuple(
+        _one_day_a_visit(row) if row["events_per_h"] else row for row in _rows()
+    )
+
+
+def _rows():
     return (
         dict(
             name="edf_daily",

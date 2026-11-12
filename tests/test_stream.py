@@ -248,6 +248,31 @@ def test_a_scoring_run_pins_its_scenario_burns_in_and_ends():
     assert abs(burn_events - expected) < 4 * np.sqrt(expected)
 
 
+def test_a_scoring_run_refuses_fewer_event_slots_than_it_can_plan():
+    # A scoring run plans the floor or the ceiling of its expected count, the chance
+    # a step draws times S (R2); fewer slots than the ceiling would drop events
+    # without a word (owner, 2026-11-12). At one hour a step, 0.1 an hour is a chance
+    # of 1 - exp(-0.1) = 0.0952 a step: 4.76 over 50 steps, so up to 5 events. A
+    # pinned rate of 0.2 an hour, 0.181 a step, plans up to 10.
+    kw = dict(pin=1, b_min=10, scored=50)
+    rows = suite((0.6, 0.4), (15.0, 15.0), (0.1, 0.1))
+    for short in (4, 0):
+        with pytest.raises(ValueError, match="max_events"):
+            StreamEnv(Toy(), ToyParams(), rows, max_events=short, **kw)
+    StreamEnv(Toy(), ToyParams(), rows, max_events=5, **kw)
+    pinned = [
+        rows[0],
+        Scenario(
+            "s1", weight=0.4, dwell_h=15.0, events_per_h=0.1, pinned_events_per_h=0.2
+        ),
+    ]
+    with pytest.raises(ValueError, match="max_events"):
+        StreamEnv(Toy(), ToyParams(), pinned, max_events=9, **kw)
+    StreamEnv(Toy(), ToyParams(), pinned, max_events=10, **kw)
+    # A scenario with no events plans none and needs no slot.
+    StreamEnv(Toy(), ToyParams(), suite((0.6, 0.4), (15.0, 15.0)), **kw)
+
+
 @pytest.mark.parametrize(
     "expected, n, counts",
     [(2.3, 10, [2] * 7 + [3] * 3), (0.25, 4, [0, 0, 0, 1]), (4.0, 3, [4, 4, 4])],

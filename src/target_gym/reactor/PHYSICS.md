@@ -245,8 +245,8 @@ counts from 0, as before.
 ### The stream (docs/proposals/long-strata.md, S1)
 
 As a continuing plant (`target_gym.stream`) each load-follow scenario is a day:
-it lasts 24 h on average and brings one day's program on average
-(`events_per_h` 1/24), and baseload days last 24 h too, so each day is a
+it lasts 24 h on average and brings one day's program on average, EDF's 39.5
+days a year (REALITY.md section 7), and baseload days last 24 h too, so each day is a
 load-follow day at load following's share (0.108, REALITY.md section 7). The
 dispatch announces each day (`start_event`): the load starts down a time drawn in
 `day_notice_range` (the window's own 0.5 to 2 h) ahead, ramps at the scenario's rate
@@ -254,7 +254,14 @@ to its minimum, holds a time drawn in `hold_range`, and comes back. The day carr
 its rate and depth, so it runs to its end through a switch, and the plan's clock is
 rebased on each new day, so it stays exact however long the plant runs. A day drawn
 while one is under way, from its announcement to the end of its return ramp, is
-absorbed (ours). A stream starts with no day planned: nothing ahead and full load.
+absorbed (ours), so a visit draws days faster than one a visit, at the rate that
+delivers one on average by the day's own shape (owner, 2026-11-11; `scenarios.py`):
+1.21 a day for `edf_short_hold` to 1.77 for the Krško days, whose ramps keep the
+dispatch busy 13.75 h. One draw a visit delivered 0.70 to 0.86 days a visit, 30 a
+year. Draws are memoryless, so about two visits in five bring no day and a quarter
+bring two or more. A scoring run pinned to a load-follow row is one long visit and
+draws at its own rate, 0.051 to 0.098 an hour, which delivers one day per 24 h there
+(`pinned_events_per_h`; owner, 2026-11-12). A stream starts with no day planned: nothing ahead and full load.
 
 Burnup runs as in a window, and every 30 days (`renewal_days`, ours; owner,
 2026-11-11) the stream refuels the core: it is renewed at its cycle point as at

@@ -41,7 +41,13 @@ class Scenario:
     ``dwell_h`` hours, and its events start at ``events_per_h`` per hour, both from
     the plant record (long-strata draft 4, S1). ``stream_overrides`` are parameters
     only a continuing plant reads, applied after ``overrides``: how long an event
-    holds before it returns, or turning off the window's own event."""
+    holds before it returns, or turning off the window's own event.
+
+    ``pinned_events_per_h``, where set, is the rate a scoring run pinned to the
+    scenario (R2) draws at instead. A pinned run is one endless visit, and where a
+    draw is absorbed while an event of its kind is under way, a visit's start
+    delivers more than its long run: the pinned rate delivers per scored hour what
+    the stream delivers per hour in the scenario (owner, 2026-11-12)."""
 
     name: str
     overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
@@ -50,6 +56,7 @@ class Scenario:
     weight: float = 1.0
     dwell_h: float | None = None
     events_per_h: float = 0.0
+    pinned_events_per_h: float | None = None
     stream_overrides: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
 

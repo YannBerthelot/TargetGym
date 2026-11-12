@@ -148,8 +148,8 @@ counts when it was read twice on separate fetches; "seen once" marks the rest.
   index went back to pipe gas and up again three times in about two days; each
   LNG episode spent about 8 h above half its rise, and the third (to 52.7 MJ/m3)
   was still on at the chart's end (read from the chart) [ST1]. The source behind
-  the slide is a glass-melting paper. The stream's gas regimes take 1.5 swings a
-  day, each held 8 h. The swing there is 4 % in 1 to 2 h, against the task's 6 %
+  the slide is a glass-melting paper. The stream's gas regimes deliver 1.5 swings a
+  day, each held 8 h (PHYSICS.md, the stream). The swing there is 4 % in 1 to 2 h, against the task's 6 %
   over 6 h (ours, section 7); the window keeps its own.
 - **Seen once.** ENTSOG: at mixed exit points no daily change above 5.5 MJ/m3 was
   recorded, though a month can exceed it; 2 of 29 points with 15 min data changed
