@@ -2,7 +2,7 @@
   {
     "name": "plane",
     "group": "aircraft",
-    "version": 6,
+    "version": 7,
     "display_name": "Altitude hold",
     "params_cls": [
       "target_gym.plane.env",
@@ -62,7 +62,7 @@
   {
     "name": "plane_energy",
     "group": "aircraft",
-    "version": 9,
+    "version": 10,
     "display_name": "Altitude and airspeed",
     "params_cls": [
       "target_gym.plane.env",
@@ -117,7 +117,7 @@
   {
     "name": "plane_sine",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "Altitude - sinusoid",
     "params_cls": [
       "target_gym.plane.env",
@@ -172,7 +172,7 @@
   {
     "name": "plane3d_heading",
     "group": "aircraft",
-    "version": 8,
+    "version": 9,
     "display_name": "3D heading",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -232,7 +232,7 @@
   {
     "name": "plane3d_circle",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "3D circle",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -295,7 +295,7 @@
   {
     "name": "plane3d_racetrack",
     "group": "aircraft",
-    "version": 9,
+    "version": 10,
     "display_name": "3D holding pattern",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -360,7 +360,7 @@
   {
     "name": "plane3d_figure8",
     "group": "aircraft",
-    "version": 6,
+    "version": 7,
     "display_name": "3D figure-8",
     "params_cls": [
       "target_gym.plane3d.env",
@@ -422,7 +422,7 @@
   {
     "name": "patrol",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "Patrol - wingman",
     "params_cls": [
       "target_gym.patrol.env",
@@ -461,7 +461,7 @@
   {
     "name": "patrol_range_bearing",
     "group": "aircraft",
-    "version": 5,
+    "version": 6,
     "display_name": "Patrol - wingman, range and bearing",
     "params_cls": [
       "target_gym.patrol.env",
@@ -500,7 +500,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 6,
+    "version": 7,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -535,7 +535,7 @@
   {
     "name": "first_order",
     "group": "process",
-    "version": 4,
+    "version": 5,
     "display_name": "First order",
     "params_cls": [
       "target_gym.pc_gym.first_order.env",
@@ -570,7 +570,7 @@
   {
     "name": "four_tank",
     "group": "process",
-    "version": 6,
+    "version": 7,
     "display_name": "Four-tank",
     "params_cls": [
       "target_gym.pc_gym.four_tank.env",
@@ -605,7 +605,7 @@
   {
     "name": "ph_neutralization",
     "group": "process",
-    "version": 5,
+    "version": 6,
     "display_name": "pH neutralisation",
     "params_cls": [
       "target_gym.pc_gym.ph_neutralization.env",
@@ -644,7 +644,7 @@
   {
     "name": "distillation",
     "group": "process",
-    "version": 8,
+    "version": 9,
     "display_name": "Distillation",
     "params_cls": [
       "target_gym.pc_gym.distillation.env",
@@ -679,7 +679,7 @@
   {
     "name": "glass_furnace",
     "group": "industrial",
-    "version": 5,
+    "version": 6,
     "display_name": "Glass Furnace",
     "params_cls": [
       "target_gym.glass_furnace.env_jax",
@@ -716,7 +716,7 @@
   {
     "name": "reactor",
     "group": "industrial",
-    "version": 9,
+    "version": 10,
     "display_name": "Reactor",
     "params_cls": [
       "target_gym.reactor.env",
@@ -753,7 +753,7 @@
   {
     "name": "hvac",
     "group": "industrial",
-    "version": 5,
+    "version": 6,
     "display_name": "Building HVAC",
     "params_cls": [
       "target_gym.hvac.env",
@@ -792,7 +792,7 @@
   {
     "name": "cement_kiln",
     "group": "industrial",
-    "version": 4,
+    "version": 5,
     "display_name": "Cement Kiln",
     "params_cls": [
       "target_gym.cement_kiln.env",
@@ -831,7 +831,7 @@
   {
     "name": "boiler_drum",
     "group": "industrial",
-    "version": 5,
+    "version": 6,
     "display_name": "Boiler Drum",
     "params_cls": [
       "target_gym.boiler_drum.env",
@@ -866,7 +866,7 @@
   {
     "name": "wind_turbine",
     "group": "energy",
-    "version": 5,
+    "version": 6,
     "display_name": "Wind Turbine",
     "params_cls": [
       "target_gym.energy.wind_turbine.env",
@@ -905,7 +905,7 @@
   {
     "name": "battery",
     "group": "energy",
-    "version": 5,
+    "version": 6,
     "display_name": "Battery",
     "params_cls": [
       "target_gym.energy.battery.env",
