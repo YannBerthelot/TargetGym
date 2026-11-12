@@ -103,11 +103,17 @@ def test_swell_per_unit_step_is_larger_at_medium_than_high_load():
     assert medium / 15.0 > high / 12.0, (medium / 15.0, high / 12.0)
 
 
-# 4. S1 printed p. 20, S2 sec. 5.2, S11: swell grows toward low load.
-#    Ordinal: peak rise for a steam step of 10 % of the load.
+# 4. S1 printed p. 16: "a given change in input power gives a larger variation
+#    in average steam volume ratio at low power. This explains why the shrink
+#    and swell effects are larger at low power than at high power." S1 compares
+#    equal changes (p. 26: "The steam valve changes were almost the same");
+#    S2 sec. 5.2 and S11 report the larger swell at low load. Ordinal: peak rise
+#    for the same steam step, 10 % of nominal, at 50, 75 and 100 % load.
+#    Restated on equal steps with the owner's approval (2026-11-12); the earlier
+#    step of 10 % of the current load, and its p. 20, misread S1.
 def test_swell_grows_toward_low_load():
     nominal = PARAMS.q_steam_nominal
-    rises = [_peak_rise(f * nominal, 0.1 * f * nominal)[0] for f in (0.5, 0.75, 1.0)]
+    rises = [_peak_rise(f * nominal, 0.1 * nominal)[0] for f in (0.5, 0.75, 1.0)]
     assert rises[0] > rises[1] > rises[2], rises
 
 
@@ -121,6 +127,14 @@ def _excursion(levels):
 #    "of shorter duration" than swell. Equal and opposite valve steps. The
 #    excursion is read up to the first time the mass trend brings the level
 #    back through its start, which is what the source calls the shrink or swell.
+@pytest.mark.xfail(
+    strict=True,
+    reason="finding, kept (owner, 2026-11-12): S14's smaller shrink comes from "
+    "a circulation disruption on a pressure drop that S1's model lacks and no "
+    "source sizes; the plant's shrink exceeds its swell through S1 Appendix B's "
+    "T_d = 600 / q_s, and S1 Fig. 12's plant data look symmetric (PHYSICS.md "
+    "sec. 6).",
+)
 def test_shrink_is_smaller_and_shorter_than_swell():
     q0 = PARAMS.q_steam_nominal
     step = 0.1 * q0
