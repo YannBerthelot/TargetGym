@@ -630,3 +630,46 @@ On the same day the env was found to pay for a sawtooth that restarted a half-cy
 and the owner had `half_cycle` count by rainflow. So a closed swing is fixed the same
 way as a turn, where the reference runs back past it. The plan carries the two nearest
 open turns as states, and a third comes from the reference.
+
+## Amendment 4, 2026-11-12: noise over the hold
+
+Decided by the owner for `ph_neutralization`. That plan rides its permit floor and
+re-plans only every T_c = 11 steps. K11's one-innovation back-off (0.02 hundredths of
+a pH) did not cover the buffer noise that builds up between solves. Without upsets or
+noise the oracle beat its expert (-82.5 against -112 on seeds 0 and 4). With the
+noise on it lost by 7 to 22 times, on steps outside the permit.
+
+**K11h.** For a task listed in `HOLD_NOISE` (`scripts/measure_oracle_widths.py`),
+K11's noise term is the worst over j = 1 to T_c of 2 s_j max |dq_j / d d|: 2 sigma,
+as the charter's back-off rule, not K11's quantile. Here q_j is the limited quantity
+j steps after the solve, under a deviation d held from the solve's start, and
+s_j = sigma sqrt(1 - a^2j) is the spread an AR(1) deviation (decay a, stationary std
+sigma) builds up over j steps the plan does not see. Holding d from the start bounds
+innovations that arrive within the hold from above. The gain is measured where the
+plan rides, not at the expert's states (owner, the same day): for pH, the plant held
+at its permit floor, pH 6.0, on nominal flows with the trim shut
+(`ph_floor_probe`), where the titration curve is steeper than near pH 7. Other tasks
+keep the one-step term at the expert's states. For pH: a = 0.99, sigma = 0.35 mL/s,
+T_c = 11, so s_11 = 0.156 mL/s, 3.16 times one innovation.
+
+**Over the dead time, 2026-11-13.** Decided by the owner for `ph_neutralization`.
+Sized over T_c, the floor back-off (0.23 hundredths) still lost seeds 1 to 4. The
+seed-4 trace showed why: every step outside the permit had the trim valve at its
+limit. A buffer dip is then left to the base valve, which answers only after its
+dead time, far longer than T_c. So K11h's window is the dead time of the actuator
+left to correct (`HOLD_NOISE` names it), rounded up to whole steps:
+j = 1 to `uncorrected_steps`. That dead time is the horizon protocol's valid test
+of that actuator; fits the protocol refused are not used. For pH, the base's
+seed-108 test (`evidence/oracle_horizons/ph_neutralization.json`) gives
+theta = 303.959 s, or 61 steps of 5 s, so s_61 = 0.35 sqrt(1 - 0.99^122) =
+0.294 mL/s. The back-off is 8.89 hundredths of a pH.
+
+With upsets and noise on, the oracle against its expert, seeds 0 to 4:
+
+| | seed 0 | seed 1 | seed 2 | seed 3 | seed 4 |
+| --- | --- | --- | --- | --- | --- |
+| oracle | -67.7 | -83.8 | -82.4 | -86.0 | -96.3 |
+| expert | -100.6 | -113.0 | -111.5 | -114.3 | -122.2 |
+
+No trips on either side. All 657 solves converge (KKT at most 1e-8), and none
+fail or hit the cap.

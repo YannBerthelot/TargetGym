@@ -55,26 +55,57 @@ def test_the_planners_pH_has_the_titration_curves_slope(q3):
     np.testing.assert_allclose([float(g) for g in grad], want, rtol=1e-3)
 
 
+@pytest.mark.parametrize("q3", [12.0, 15.6, 18.0])
+def test_the_planners_pH_is_the_root_to_rounding_in_float64(q3):
+    """The solver plans in float64 to IPOPT's 1e-8: a pH that moves in the
+    bisection's steps (14 / 2^20, 1.3e-5 pH) while its slope is the curve's
+    stalls it. In float64 the planner's pH is the documented balance's root to
+    1e-10 pH, against Brent's to 1e-14; the bisection alone is off by up to
+    its half-width, 6.7e-6."""
+    import jax.numpy as jnp
+
+    from target_gym.oracles.controller import enable_x64, float64
+    from target_gym.pc_gym.ph_neutralization.env import steady_state_invariants
+    from target_gym.pc_gym.ph_neutralization.oracle import planner_pH
+
+    p = registry.get("ph_neutralization").make_test_params()
+    Wa, Wb = (float(v) for v in steady_state_invariants(q3, p.q2_nominal, p))
+    with enable_x64():
+        q = float64(p)
+        value = float(planner_pH(jnp.float64(Wa), jnp.float64(Wb), q))
+    assert value == pytest.approx(_root(Wa, Wb, p), abs=1e-10)
+
+
 def test_the_oracle_plans_on_the_buffer_flow_it_reads():
     """The oracle reads the buffer flow, which the observation hides, and plans
     its mean path: the planner's copy of the params has the OU innovation
     zeroed, and the planned step from the same tanks moves with the buffer the
-    state carries. Rewritten for the job score (charter Amendment 3): the
-    planned stage cost is the reward's terms."""
+    state carries. The buffer is bicarbonate, a base, so more of it leaves stage
+    1 less acid (PHYSICS.md, the streams). Rewritten for the shared solver: the
+    planned cost is the reagent's litres, the same for both."""
     import jax.numpy as jnp
 
     from target_gym.experts.mpc import plan_params
-    from target_gym.pc_gym.ph_neutralization.oracle import ph_stage
+    from target_gym.oracles.controller import enable_x64, float64
+    from target_gym.pc_gym.ph_neutralization.oracle import planner_pH
 
     spec = registry.get("ph_neutralization")
     env = spec.make_env()
-    params = spec.make_test_params()
-    planned = plan_params(spec, params)
+    planned = plan_params(spec, spec.make_test_params())
     assert float(planned.q2_noise_std) == 0.0
-
-    _, state = env.reset_env(jax.random.PRNGKey(0), planned)
-    action = env.initial_action(state, planned)
-    low, cost_low = ph_stage(env, state.replace(q2=jnp.asarray(0.0)), action, planned)
-    high, cost_high = ph_stage(env, state.replace(q2=jnp.asarray(2.0)), action, planned)
-    assert float(high.pH_s1) > float(low.pH_s1)
-    assert np.isfinite(float(cost_low)) and np.isfinite(float(cost_high))
+    oracle = spec.make_mpc(env, planned)
+    m, p = oracle.model, oracle.params
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(0), p)
+        st = float64(state)
+        u = m.hold(st)
+        d = {"task": None, "end": 1, "widths": jnp.zeros(0)}
+        out = {}
+        for q2 in (0.0, 2.0):
+            s = st.replace(q2=jnp.float64(q2))
+            d["task"] = m.data(s)
+            x1, cost = m.step(d, m.state_x(s), u, 0)[:2]
+            # The plan states the invariants in mM.
+            out[q2] = float(planner_pH(x1[0] / 1e3, x1[1] / 1e3, p)), float(cost)
+    assert out[2.0][0] > out[0.0][0]
+    assert out[2.0][1] == pytest.approx(out[0.0][1])

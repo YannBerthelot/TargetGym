@@ -1,5 +1,6 @@
 """The oracles on the shared solver (``oracles.controller``): the five process
-tasks of C1 and the six industrial and energy tasks of C2.
+tasks of C1, pH neutralisation (rebuilt for its job score), and the six industrial
+and energy tasks of C2.
 
 Contract, from docs/proposals/oracle-smoothing-protocol.md (sections 2, 3)
 and the owner decisions in oracle-audit.md:
@@ -41,10 +42,12 @@ from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
 FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+PH = ("ph_neutralization",)
 #: Exactness is the rewrites', so what a planner leaves out of its plan by
 #: design is held still here: a disturbance it holds over the plan (the
 #: autoclave's feed wander; the CSTR's daily feed cycle, collapsed onto its
-#: middle; the compressor consumers' noise, whose mean path it plans on), and
+#: middle; the compressor consumers' noise, whose mean path it plans on; the pH
+#: influent's upsets and swings, held at the solve's strength and flow), and
 #: a score term it does not price (the turbine tower's fatigue, which reads
 #: the history's turning points; the compressor's header zone, an indicator
 #: the plan prices as a smooth hinge).
@@ -53,6 +56,7 @@ QUIET = {
     "cstr": {"feed_T_range": (297.15, 297.15)},
     "wind_turbine": {"tower_share": 0.0},
     "compressor_surge": {"demand_sigma": 0.0, "zone_price": 0.0},
+    "ph_neutralization": {"window_upsets": 0.0},
 }
 #: An event already in force at the solve, as the state carries it (certainty
 #: equivalence): the CSTR's catalyst loss and feed build-up, and four_tank's
@@ -72,7 +76,7 @@ C2 = (
 # oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
 # plant on the old cost.
 AIRCRAFT = ("plane_sine",)
-ON_SOLVER = FIVE + C2 + AIRCRAFT
+ON_SOLVER = FIVE + PH + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -479,6 +483,10 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
         # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
         ("hvac", 9.54 * 0.25 * 0.05),
+        # The reagent a step's hold needs for 0.005 pH more at pH 7 on the nominal
+        # streams: q3 15.5497 -> 15.5596 mL/s by bisection on the mix's charge
+        # balance, 0.009907 mL/s over 5 s, in litres.
+        ("ph_neutralization", 0.0099073575 * 5.0 / 1000.0),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -498,6 +506,7 @@ PRICED = {
     "cement_kiln": 2,  # free lime, fuel
     "reactor": 2,  # Tavg past its dead band, the offset past its band (its clock)
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
+    "ph_neutralization": 1,  # reagent; both valves' sum at a steady state
 }  # fmt: skip
 
 
