@@ -1,7 +1,7 @@
 """Measure a charter task's ceiling (charter Words "Ceiling", J3) on its current
 plant and write ``data/oracle_ceilings/<task>.json`` stamped with that plant.
 
-    python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR
+    python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR [--start mpc]
     python scripts/record_ceilings.py write TASK OUT_DIR
 
 ``solve`` plans one episode with the true model, the true state and the episode's
@@ -11,6 +11,15 @@ parameters, as the J3 lines are scored. Only the replayed cost is reported.
 ``write`` gathers every solved seed into the ceilings file, which
 ``scripts/record_charter.py --parts ceiling`` then reads. The glass furnace has its
 own script, ``scripts/glass_slow_oracle.py``.
+
+``--start mpc`` (owner, 2026-11-13) also starts the solve from the oracle's realised
+moves on the same seed and scenario (``shipped_policy("mpc")``, as the MPC line runs
+it) and keeps those moves as a candidate, so the ceiling costs no more than the oracle's
+run by construction. G8 forbids starting a ceiling from an expert, not from the oracle.
+Without it the start is cold, as the first ceilings were. The choice is written into
+each solve's row and the file (``start_option``), with per seed ``oracle_fallback``
+(the plan kept is the oracle's moves unchanged) and ``improved_on_oracle`` (it costs
+less than them), counted per scenario in ``solver``.
 
 The protocols are the ones the ceilings were first measured with (2026-11-08 to
 2026-11-10), whose drivers were not kept:
@@ -50,7 +59,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from target_gym import charter, scenarios  # noqa: E402
-from target_gym.benchmark import (
+from target_gym.benchmark import (  # noqa: E402
     episode_keys,
     episodes_of,
     run_policy,
@@ -114,7 +123,24 @@ class StatePlan:
         return np.clip(u, -1.0, 1.0), carry
 
 
-def solve_process(task, scenario, seed):
+def oracle_run(task, scenario, seed) -> dict:
+    """The shipped oracle's realised moves on ``seed``, its cost and trips."""
+    from target_gym.benchmark import shipped_policy
+
+    L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
+    rollout = run_policy(
+        shipped_policy("mpc"), env, params, task_info(task, env, params, 1),
+        seeds=[seed],
+    )  # fmt: skip
+    (ep,) = episodes_of(rollout)
+    return {
+        "moves": np.asarray(rollout["action"][0], float),
+        "cost": float(ep.cost.mean()),
+        "trips": int(np.sum(ep.failed)),
+    }
+
+
+def solve_process(task, scenario, seed, warm=None):
     from target_gym.pc_gym import foresight as F
 
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
@@ -125,9 +151,11 @@ def solve_process(task, scenario, seed):
     )
     moves = np.asarray(rollout["action"][0], float)
     starts = {"hold": np.tile(moves[:1], (T, 1)), "reference": moves}
+    if warm is not None:
+        starts["mpc"] = warm
     restarts = 0
     if task == "compressor_surge":
-        starts["mid"] = 0.5 * (starts["hold"] + moves)
+        starts["mid"] = 0.5 * (starts["hold"] + starts["reference"])
         restarts = 2
     window = getattr(O, "CEILING_WINDOW", None)
     runs = []
@@ -180,7 +208,7 @@ def _cert(plan) -> dict:
             "violation": float(c.violation)}  # fmt: skip
 
 
-def solve_shooting(task, scenario, seed):
+def solve_shooting(task, scenario, seed, warm=None):
     from target_gym.oracles.controller import enable_x64, float64, widths_row
     from target_gym.oracles.shooting import Shooting, StageModel
 
@@ -215,8 +243,11 @@ def solve_shooting(task, scenario, seed):
             certs = []
             for w in rungs if plan is None else rungs[-1:]:
                 d = {"task": data, "widths": jnp.asarray(w), "end": T}
-                plan = (shoot.solve(d, x0, hold) if plan is None
-                        else shoot.resolve(d, x0, hold, plan))  # fmt: skip
+                if plan is None:
+                    first = None if warm is None else jnp.asarray(_pad(warm, shoot.N))
+                    plan = shoot.solve(d, x0, hold, start=first)
+                else:
+                    plan = shoot.resolve(d, x0, hold, plan)
                 jax.block_until_ready(plan.z)
                 certs.append(_cert(plan))
             if task in RETRY and (certs[-1]["capped"] or certs[-1]["failed"]):
@@ -254,6 +285,12 @@ def solve_shooting(task, scenario, seed):
         "outer": rows,
         "solver": {"converged": not (last["failed"] or last["capped"]), **last},
     }
+
+
+def _pad(moves, n):
+    """``moves`` cut or extended (last move held) to ``n`` rows."""
+    moves = np.asarray(moves, float)
+    return np.concatenate([moves, np.repeat(moves[-1:], max(n - len(moves), 0), 0)])[:n]
 
 
 def _turns(O, tm, data, x0, us, T, p64, st64):
@@ -336,20 +373,41 @@ def solve_reactor(task, scenario, seed):
 R_CAP = 600
 
 
-def solve(task, scenario, seed, out_dir):
+def solve(task, scenario, seed, out_dir, start="cold"):
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    mpc = oracle_run(task, scenario, seed) if start == "mpc" else None
+    warm = None if mpc is None else mpc["moves"]
     if task in PROCESS:
-        res = solve_process(task, scenario, seed)
+        res = solve_process(task, scenario, seed, warm)
     elif task in SHOOTING:
-        res = solve_shooting(task, scenario, seed)
+        res = solve_shooting(task, scenario, seed, warm)
     elif task == "battery":
         res = solve_battery(task, scenario, seed)
     elif task == "reactor":
         res = solve_reactor(task, scenario, seed)
     else:
         raise SystemExit(f"{task}: no ceiling protocol here")
+    if mpc is not None:
+        from target_gym.pc_gym.foresight import PlanPolicy
+
+        L, spec, row, env, params, *_ = setup(task, scenario, seed)
+        own = replay(task, env, params, seed, PlanPolicy(mpc["moves"][None]))
+        res["oracle_run"] = {"cost": mpc["cost"], "trips": mpc["trips"],
+                             "moves_replayed": own}  # fmt: skip
+        better = (own["trips"], own["cost"]) < (res["trips"], res["cost"])
+        if better:  # the oracle's own moves beat every solve: keep them
+            res |= own | {"start": "mpc moves, unimproved"}
+        # Whether the solve measured anything beyond the oracle's run: a plan that is
+        # the oracle's moves unchanged is a fallback, not a ceiling (owner, 2026-11-13).
+        unmoved = res.get("start") == "mpc" and res["solver"].get("fell_back")
+        res["oracle_fallback"] = bool(better or unmoved)
+        res["improved_on_oracle"] = bool(
+            not res["trips"]
+            and res["cost"] < own["cost"] - 1e-9 - 1e-6 * abs(own["cost"])
+        )
+    res = {"start_option": start} | res
     res = {"task": task, "scenario": scenario, "seed": seed,
            "seconds": time.time() - t0} | res  # fmt: skip
     (out / f"{task}__{scenario}__{seed}.json").write_text(json.dumps(res, indent=1))
@@ -377,6 +435,9 @@ def write(task, out_dir):
                       "fell_back": sum(bool(x["fell_back"]) for x in sol)}  # fmt: skip
         else:
             solver = {"converged": sum(bool(x["converged"]) for x in sol)}
+        if any("oracle_fallback" in r for r in runs):
+            solver["oracle_fallback"] = sum(r["oracle_fallback"] for r in runs)
+            solver["improved_on_oracle"] = sum(r["improved_on_oracle"] for r in runs)
         rows[s] = {
             "weight": weights[s], "seeds": [r["seed"] for r in runs],
             "ceiling_costs": [r["cost"] for r in runs],
@@ -389,6 +450,9 @@ def write(task, out_dir):
     data = {
         "task": task,
         "method": _method(task),
+        "start_option": sorted(
+            {r.get("start_option", "cold") for v in got.values() for r in v}
+        ),
         "J_ceiling": sum(weights[s] * rows[s]["ceiling_mean"] for s in weights),
         "scenarios": rows,
         "generated": datetime.date.today().isoformat(),
@@ -412,7 +476,8 @@ def _method(task) -> str:
 
 if __name__ == "__main__":
     if sys.argv[1] == "solve":
-        solve(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5])
+        start = sys.argv[7] if sys.argv[6:7] == ["--start"] else "cold"
+        solve(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], start)
     elif sys.argv[1] == "write":
         write(sys.argv[2], sys.argv[3])
     else:
