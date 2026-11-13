@@ -25,7 +25,9 @@ from target_gym.oracles.ipm import (
     StageRows,
     interior_point,
     stage_barrier,
+    stage_kkt_factor,
     stage_kkt_solve,
+    stage_kkt_solve_factored,
     stage_multipliers,
     stage_shift,
 )
@@ -197,6 +199,31 @@ def test_a_shift_that_failed_does_not_set_the_next_shift():
         np.testing.assert_allclose(r.z, [1.0, 1.0], atol=1e-6)
 
 
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_every_direction_comes_from_the_accepted_shift(adaptive):
+    """f = sum (z^2 - 1)^2 / 4 on z1 = z2 has its minima at z = +-1 and a
+    maximum at 0. At the start, z = 0.2, f'' = 3 z^2 - 1 = -0.88: K + delta I
+    is the wrong inertia until delta is near 1, and the unshifted Newton step
+    heads for the maximum. The gradient z^3 - z is negative there, so a step
+    from the accepted shift descends to z = 1; the step, the adaptive mode's
+    affine and centring directions and the second-order corrections must all
+    come from that shift's factorisation."""
+    with enable_x64():
+        nlp = _nlp(
+            lambda z: jnp.sum((z**2 - 1.0) ** 2) / 4.0,
+            lambda z: jnp.atleast_1d(z[0] - z[1]),
+            jnp.eye(2), 10.0 * jnp.ones(2),
+        )  # fmt: skip
+        z0 = 0.2 * jnp.ones(2)
+        r = interior_point(
+            nlp, z0, z0 + 10.0, jnp.zeros(1), 0.01 / (z0 + 10.0), mu0=0.01,
+            max_iter=60, adaptive=adaptive,
+        )  # fmt: skip
+    assert float(r.shift) > 0.0
+    assert 0.0 <= float(r.error) <= 1e-8
+    np.testing.assert_allclose(r.z, [1.0, 1.0], atol=1e-6)
+
+
 def test_the_accept_tests_allow_ten_eps_of_the_reference():
     """f = 1 + |z - 1|^2 / 2, plus 4 eps on any point past the start, from
     z = 1 - 2e-8: the Newton step to z = 1 lowers the smooth part by 4e-16
@@ -318,6 +345,31 @@ def test_stage_kkt_solve_is_the_dense_solve(seed, ne):
     np.testing.assert_allclose(dz, expected[:n], **TIGHT)
     np.testing.assert_allclose(dlam, expected[n:], **TIGHT)
     assert bool(ok) and _inertia_ok(K, J)
+
+
+@pytest.mark.parametrize("ne", [0, 3])
+def test_one_factorisation_solves_every_right_hand_side(ne):
+    """An iteration factorises K + delta I once and takes every direction
+    (the step, the affine and centring ones, the second-order corrections)
+    from it: each right-hand side is the dense solve of the same system."""
+    with enable_x64():
+        (Kb, Jb, _), (K, J, _), _, _ = _blocks(4, ne)
+        fac, ok = stage_kkt_factor(Kb, Jb)
+        rng = np.random.default_rng(7)
+        rhs = [
+            (rng.normal(size=K.shape[0]), rng.normal(size=J.shape[0])) for _ in range(3)
+        ]
+        got = [
+            stage_kkt_solve_factored(fac, jnp.asarray(rz), jnp.asarray(rc))
+            for rz, rc in rhs
+        ]
+    n, m = K.shape[0], J.shape[0]
+    M = np.block([[K, -J.T], [J, np.zeros((m, m))]])
+    assert bool(ok)
+    for (rz, rc), (dz, dlam, _) in zip(rhs, got):
+        expected = np.linalg.solve(M, np.concatenate([rz, rc]))
+        np.testing.assert_allclose(dz, expected[:n], **TIGHT)
+        np.testing.assert_allclose(dlam, expected[n:], **TIGHT)
 
 
 @pytest.mark.parametrize("ne", [0, 3])

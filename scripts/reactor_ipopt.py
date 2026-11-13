@@ -87,6 +87,12 @@ def main():
     parser.add_argument(
         "--final-max-iter", type=int, default=None, help="the last rung's cap"
     )
+    parser.add_argument(
+        "--start", choices=["held", "simulated", "reference"], default="held",
+        help="the cold solve's start: every state at x0 under the held moves, the "
+        "held moves and the states they reach, or the reference plan's moves and "
+        "the states they reach",
+    )  # fmt: skip
     args = parser.parse_args()
 
     env, p = Reactor(), ReactorParams()
@@ -99,7 +105,9 @@ def main():
     # further tenfold: at a resting command each branch stays open by width x ln 2, and
     # the planner takes that mixing free, which the plant does not give.
     plans = None
-    widths = [(SCALE * 0.1, 0.1), (SCALE * 0.01, 0.01), (WIDTH, 0.01), (WIDTH, 0.001)]
+    # SCALE * 0.01 is WIDTH, so the old third rung, (WIDTH, 0.01), solved the second
+    # rung's problem again: 300 more iterations on the whole day for nothing.
+    widths = [(SCALE * 0.1, 0.1), (WIDTH, 0.01), (WIDTH, 0.001)]
     with enable_x64():
         q, st = float64(p), float64(state)
         model, shooting = build(env, q, args.steps, args.block, args.max_iter)
@@ -116,7 +124,13 @@ def main():
             data["widths"] = jnp.asarray([width])
             data["boron_width"] = jnp.asarray(boron_width)
             t0 = time.time()
-            if plans is None:
+            if plans is None and args.start != "held":
+                us = jnp.asarray(reference, float)[: args.steps : args.block]
+                us = jnp.concatenate([us, us[-1:]])[: shooting.N]
+                if args.start == "simulated":
+                    us = jnp.tile(hold, (shooting.N, 1))
+                plans = shooting.solve(data, x0, hold, start=us)
+            elif plans is None:
                 plans = shooting.solve(data, x0, hold)
             else:
                 plans = shooting.resolve(data, x0, hold, plans)
