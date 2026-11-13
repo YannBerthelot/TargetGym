@@ -13,7 +13,8 @@ parameters, as the J3 lines are scored. Only the replayed cost is reported.
 own script, ``scripts/glass_slow_oracle.py``.
 
 ``--start mpc`` (owner, 2026-11-13) also starts the solve from the oracle's realised
-moves on the same seed and scenario (``shipped_policy("mpc")``, as the MPC line runs
+moves on the same seed and scenario (not where a shooting model maps its moves to the
+env's actions, as the wind turbine's does: its oracle's actions are not its moves) (``shipped_policy("mpc")``, as the MPC line runs
 it) and keeps those moves as a candidate, so the ceiling costs no more than the oracle's
 run by construction. G8 forbids starting a ceiling from an expert, not from the oracle.
 Without it the start is cold, as the first ceilings were. The choice is written into
@@ -244,7 +245,10 @@ def solve_shooting(task, scenario, seed, warm=None):
             for w in rungs if plan is None else rungs[-1:]:
                 d = {"task": data, "widths": jnp.asarray(w), "end": T}
                 if plan is None:
-                    first = None if warm is None else jnp.asarray(_pad(warm, shoot.N))
+                    # The oracle's run gives env actions; where the model maps its
+                    # moves to them (``action``), they are not moves, so no start.
+                    first = (None if warm is None or tm.action is not None
+                             else jnp.asarray(_pad(warm, shoot.N)))  # fmt: skip
                     plan = shoot.solve(d, x0, hold, start=first)
                 else:
                     plan = shoot.resolve(d, x0, hold, plan)
