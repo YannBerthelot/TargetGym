@@ -18,7 +18,7 @@ it) and keeps those moves as a candidate, so the ceiling costs no more than the 
 run by construction. G8 forbids starting a ceiling from an expert, not from the oracle.
 Without it the start is cold, as the first ceilings were. The choice is written into
 each solve's row and the file (``start_option``), with per seed ``oracle_fallback``
-(the plan kept is the oracle's moves unchanged) and ``improved_on_oracle`` (it costs
+(the plan kept is the oracle's moves, or one from them no cheaper) and ``improved_on_oracle`` (it costs
 less than them), counted per scenario in ``solver``.
 
 The protocols are the ones the ceilings were first measured with (2026-11-08 to
@@ -401,12 +401,13 @@ def solve(task, scenario, seed, out_dir, start="cold"):
             res |= own | {"start": "mpc moves, unimproved"}
         # Whether the solve measured anything beyond the oracle's run: a plan that is
         # the oracle's moves unchanged is a fallback, not a ceiling (owner, 2026-11-13).
-        unmoved = res.get("start") == "mpc" and res["solver"].get("fell_back")
-        res["oracle_fallback"] = bool(better or unmoved)
         res["improved_on_oracle"] = bool(
             not res["trips"]
             and res["cost"] < own["cost"] - 1e-9 - 1e-6 * abs(own["cost"])
         )
+        # Kept the oracle's moves, or a plan from them no cheaper than they are.
+        from_oracle = res.get("start", "").startswith("mpc")
+        res["oracle_fallback"] = bool(from_oracle and not res["improved_on_oracle"])
     res = {"start_option": start} | res
     res = {"task": task, "scenario": scenario, "seed": seed,
            "seconds": time.time() - t0} | res  # fmt: skip
