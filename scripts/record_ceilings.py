@@ -15,14 +15,15 @@ own script, ``scripts/glass_slow_oracle.py``.
 The protocols are the ones the ceilings were first measured with (2026-11-08 to
 2026-11-10), whose drivers were not kept:
 
-- process (cstr, distillation, compressor_surge, unstable_cstr): ``pc_gym.foresight``
+- process (cstr, distillation, compressor_surge, unstable_cstr, ph_neutralization): ``pc_gym.foresight``
   L-BFGS-B from the reset's hold (the reference's first move held) and the kept
   reference's moves, the cheaper untripped plan kept; compressor_surge also from their
   midpoint, each start restarted twice from its own end plan.
 - shooting (boiler_drum, hvac, wind_turbine): the shared interior-point solver
   (``oracles.shooting``) on the oracle's own model, one plan over the episode, block 1,
   through K7's width rungs (``data/oracle_widths``), limits backed off by the task's
-  ``ceiling_backoffs``; the wind turbine re-solved with the tower's rainflow turning
+  ``ceiling_backoffs`` (hvac: its slab edge through 1, 0.1, 0.01 K, a capped seed
+  re-solved through 1, 0.3, 0.1, 0.03, 0.01 K at cap 1500); the wind turbine re-solved with the tower's rainflow turning
   points frozen until they stop changing (``OUTER`` solves at most).
 - battery: ``energy.battery.oracle.ceiling_search``.
 - reactor: ``scripts/reactor_ipopt.py``'s whole-day NLP from the simulated-state
@@ -49,14 +50,23 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from target_gym import charter, scenarios  # noqa: E402
-from target_gym.benchmark import episode_keys, episodes_of, run_policy, task_info  # noqa: E402
+from target_gym.benchmark import (
+    episode_keys,
+    episodes_of,
+    run_policy,
+    task_info,
+)  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 
 PROCESS = {"cstr": 3000, "distillation": 3000, "compressor_surge": 2000,
-           "unstable_cstr": 300}  # fmt: skip
+           "unstable_cstr": 300, "ph_neutralization": 2000}  # fmt: skip
 SHOOTING = {"boiler_drum": "boiler_model", "hvac": "hvac_model",
             "wind_turbine": "wind_model"}  # fmt: skip
 OUTER, CAP = 8, 500
+#: Width rungs the first ceilings used where the widths row has no site (hvac's slab
+#: edge, in K), and the finer re-solve with its cap for a seed a rung capped.
+RUNGS = {"hvac": ([1.0], [0.1], [0.01])}
+RETRY = {"hvac": (([1.0], [0.3], [0.1], [0.03], [0.01]), 1500)}
 NOISE = 1.0
 
 
@@ -85,7 +95,8 @@ def replay(task, env, params, seed, policy) -> dict:
 
 class StatePlan:
     """Fixed moves per step, mapped to the action by ``action(state, u)`` on the true
-    state where the model has one (an oracle row, so ``run_policy`` passes the state)."""
+    state where the model has one (an oracle row, so ``run_policy`` passes the state).
+    """
 
     name, oracle = "ceiling", True
 
@@ -109,7 +120,9 @@ def solve_process(task, scenario, seed):
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
     kept = charter.load(task)["reference"]["kept"]
     ref = L.Reference(kept, L.build(task, row)[kept])
-    rollout = run_policy(ref, env, params, task_info(task, env, params, 1), seeds=[seed])
+    rollout = run_policy(
+        ref, env, params, task_info(task, env, params, 1), seeds=[seed]
+    )
     moves = np.asarray(rollout["action"][0], float)
     starts = {"hold": np.tile(moves[:1], (T, 1)), "reference": moves}
     restarts = 0
@@ -138,11 +151,17 @@ def solve_process(task, scenario, seed):
     out = replay(task, env, params, seed, policy)
     solver = {k: cert[k] for k in ("status", "capped", "fell_back", "iterations",
                                    "projected_gradient", "min_margin")}  # fmt: skip
-    return out | {"planned": cert["planned_cost"], "start": tag, "solver": solver,
-                  "starts": {t: c["planned_cost"] for t, _, c in runs}}
+    return out | {
+        "planned": cert["planned_cost"],
+        "start": tag,
+        "solver": solver,
+        "starts": {t: c["planned_cost"] for t, _, c in runs},
+    }
 
 
 def _rungs(task):
+    if task in RUNGS:
+        return [np.array(w, float) for w in RUNGS[task]]
     from target_gym.oracles.controller import widths_row
 
     sites = list(widths_row(task)["sites"].values())
@@ -200,6 +219,16 @@ def solve_shooting(task, scenario, seed):
                         else shoot.resolve(d, x0, hold, plan))  # fmt: skip
                 jax.block_until_ready(plan.z)
                 certs.append(_cert(plan))
+            if task in RETRY and (certs[-1]["capped"] or certs[-1]["failed"]):
+                finer, cap = RETRY[task]
+                again = Shooting(stage, T, tm.nx, max_iter=cap)
+                plan = None
+                for w in finer:
+                    d = {"task": data, "widths": jnp.asarray(w), "end": T}
+                    plan = (again.solve(d, x0, hold) if plan is None
+                            else again.resolve(d, x0, hold, plan))  # fmt: skip
+                    jax.block_until_ready(plan.z)
+                    certs.append(_cert(plan) | {"retry": True})
             us = np.asarray(shoot.moves(plan))[:T]
             with enable_x64(False):
                 out = replay(task, env, params, seed, StatePlan(us, tm32.action))
@@ -207,7 +236,9 @@ def solve_shooting(task, scenario, seed):
             new = None
             if task == "wind_turbine":
                 new = _turns(O, tm, data, x0, us, T, p64, st64)
-                r["changed"] = None if frozen is None else int(np.sum(frozen[0] != new[0]))
+                r["changed"] = (
+                    None if frozen is None else int(np.sum(frozen[0] != new[0]))
+                )
             print(json.dumps(r), flush=True)
             rows.append(r)
             if not r["trips"] and (best is None or r["cost"] < best["cost"]):
@@ -217,8 +248,12 @@ def solve_shooting(task, scenario, seed):
             frozen = new
     keep = best or rows[-1]
     last = keep["certificates"][-1]
-    return {"cost": keep["cost"], "trips": keep["trips"], "outer": rows,
-            "solver": {"converged": not (last["failed"] or last["capped"]), **last}}
+    return {
+        "cost": keep["cost"],
+        "trips": keep["trips"],
+        "outer": rows,
+        "solver": {"converged": not (last["failed"] or last["capped"]), **last},
+    }
 
 
 def _turns(O, tm, data, x0, us, T, p64, st64):
@@ -278,7 +313,9 @@ def solve_reactor(task, scenario, seed):
         x0, hold = model.state_x(st64), model.hold(st64)
         plan = None
         for width, boron in rungs:
-            data["widths"], data["boron_width"] = jnp.asarray([width]), jnp.asarray(boron)
+            data["widths"], data["boron_width"] = jnp.asarray([width]), jnp.asarray(
+                boron
+            )
             t0 = time.time()
             if plan is None:
                 plan = shoot.solve(data, x0, hold, start=jnp.tile(hold, (shoot.N, 1)))
@@ -290,8 +327,10 @@ def solve_reactor(task, scenario, seed):
         moves = np.asarray(shoot.moves(plan))[:T]
     out = replay(task, env, params, seed, PlanPolicy(moves[None]))
     last = certs[-1]
-    return out | {"certificates": certs,
-                  "solver": {"converged": not (last["failed"] or last["capped"]), **last}}
+    return out | {
+        "certificates": certs,
+        "solver": {"converged": not (last["failed"] or last["capped"]), **last},
+    }
 
 
 R_CAP = 600
@@ -362,8 +401,10 @@ def write(task, out_dir):
 def _method(task) -> str:
     for line in (__doc__ or "").split("\n- ")[1:]:
         head = line.split(":")[0]
-        if task in head or (task in PROCESS and head.startswith("process")) or (
-            task in SHOOTING and head.startswith("shooting")
+        if (
+            task in head
+            or (task in PROCESS and head.startswith("process"))
+            or (task in SHOOTING and head.startswith("shooting"))
         ):
             return " ".join(line.split())
     return ""
