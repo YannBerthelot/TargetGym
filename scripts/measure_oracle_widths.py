@@ -24,6 +24,7 @@ import argparse
 import functools
 import importlib
 import json
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -633,12 +634,16 @@ def _with_deviation(name, task, d):
     return (*task[:i], task[i] + d, *task[i + 1 :])
 
 
-#: Tasks whose K11 noise term covers a whole hold of T_c steps at 2 sigma, the
-#: charter's back-off rule, not one step at K11's quantile (owner, 2026-11-12;
-#: Amendment 4): the pH plan rides its permit floor, re-plans every T_c, and the
-#: buffer noise built up in between took it out of the permit.
-HOLD_NOISE = ("ph_neutralization",)
+#: Tasks whose K11 noise term covers, at 2 sigma (the charter's back-off rule),
+#: the noise over the interval the plan cannot correct, not one step at K11's
+#: quantile (owner, 2026-11-12 and 2026-11-13; Amendment 4). Each names the
+#: actuator left to correct: the pH plan rides its permit floor with the trim
+#: at its limit, so only the base valve answers a buffer dip, after its dead
+#: time (200 to 340 s), far longer than T_c (55 s).
+HOLD_NOISE = {"ph_neutralization": "base"}
 HOLD_Z = 2.0
+#: The horizon protocol's evidence, one file per task.
+EVIDENCE = Path(__file__).resolve().parents[1] / "evidence" / "oracle_horizons"
 
 
 def ph_floor_probe() -> list:
@@ -671,6 +676,23 @@ def ph_floor_probe() -> list:
 FLOOR_PROBES = {"ph_neutralization": ph_floor_probe}
 
 
+def uncorrected_steps(name: str) -> int:
+    """Steps the plan cannot correct: the dead time of ``HOLD_NOISE[name]``'s
+    actuator, as the horizon protocol measured it, rounded up to whole steps.
+
+    It reads the evidence's valid pair for that actuator (the protocol's own
+    acceptance, V1 to V4), not the worst over its invalid fits: an invalid fit
+    is one the protocol refused. For pH that is the base's seed-108 test, theta
+    303.959 s, so 61 steps of 5 s. Several valid pairs take the longest."""
+    evidence = json.load(open(EVIDENCE / f"{name}.json"))
+    thetas = [
+        float(pair["fit"]["theta"])
+        for pair in evidence["pairs"]
+        if pair["mv"] == HOLD_NOISE[name] and pair["label"] == "valid"
+    ]
+    return int(np.ceil(max(thetas) / float(evidence["dt"])))
+
+
 def hold_std(a: float, sigma: float, j: int) -> float:
     """The std of an AR(1) deviation's change over j steps the plan does not see.
 
@@ -686,7 +708,7 @@ def hold_std(a: float, sigma: float, j: int) -> float:
 def noise_terms(name: str, points) -> list:
     """K11's noise term of each limit, in ``TaskModel.limits`` order: one
     innovation of the deviation, a field of the model's task data. For a task
-    in ``HOLD_NOISE``, the worst over j = 1..T_c of the limited quantity j
+    in ``HOLD_NOISE``, the worst over j = 1..``uncorrected_steps`` of the limited quantity j
     steps on, under a deviation held from the solve's start, with the std of
     j innovations, s sqrt(sum_{m<j} a^2m): an upper bound on innovations
     that arrive within the hold."""
@@ -724,7 +746,7 @@ def noise_terms(name: str, points) -> list:
     # The deviation is held from the solve's start, which bounds innovations
     # that arrive within the hold from above (they act for fewer steps).
     terms = []
-    for j in range(1, records.load_row("oracle_horizons", name)["T_c_steps"] + 1):
+    for j in range(1, uncorrected_steps(name) + 1):
         site = jax.jit(functools.partial(limited, j=j))
         gain = np.max(
             [

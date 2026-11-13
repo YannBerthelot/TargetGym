@@ -43,14 +43,13 @@ def test_every_noisy_task_is_listed(widths):
     assert set(widths.NOISY) == set(NOISE_FIELD)
 
 
-def test_a_hold_noise_task_is_noisy_and_has_a_hold(widths):
-    """K11h (Amendment 4) sizes the term over T_c steps: the task must have a
-    noise to size and a measured T_c."""
-    from target_gym import records
-
+def test_a_hold_noise_task_is_noisy_and_has_a_measured_dead_time(widths):
+    """K11h (Amendment 4, owner 2026-11-13) sizes the term over the dead time
+    of the actuator left to correct: the task must have a noise to size and a
+    valid horizon test of that actuator."""
     for name in widths.HOLD_NOISE:
         assert name in widths.NOISY
-        assert records.load_row("oracle_horizons", name)["T_c_steps"] >= 1
+        assert widths.uncorrected_steps(name) >= 1
 
 
 @pytest.mark.parametrize("name", sorted(NOISE_FIELD))
@@ -90,19 +89,21 @@ def test_the_hold_std_is_the_ar1_spread_over_the_hold(widths, a, sigma, j, want)
     assert widths.hold_std(a, sigma, j) == pytest.approx(want, rel=1e-12)
 
 
-def test_the_ph_hold_back_off_uses_the_buffer_noise_over_eleven_steps(widths):
-    """pH: theta 2e-3 /s and 5 s steps give a = 1 - theta dt = 0.99; the
-    stationary std is 0.35 mL/s (env.py). Over T_c = 11 steps,
-    0.35 sqrt(1 - 0.99^22) = 0.35 sqrt(1 - 0.801631) = 0.155886 mL/s, 3.16
-    times one innovation, 0.35 sqrt(1 - 0.99^2) = 0.049373 mL/s."""
-    from target_gym import records
-
+def test_the_ph_back_off_covers_the_base_valves_measured_dead_time(widths):
+    """pH (owner, 2026-11-13): with the trim at its limit only the base valve
+    corrects, so the plan cannot correct the buffer for the base's dead time.
+    The horizon protocol's one valid base test (seed 108,
+    evidence/oracle_horizons/ph_neutralization.json) fits theta = 303.959 s:
+    60.79 steps of 5 s, 61 to cover it whole. theta 2e-3 /s and 5 s steps give
+    a = 1 - theta dt = 0.99, the stationary std is 0.35 mL/s (env.py); over
+    61 steps 0.35 sqrt(1 - 0.99^122) = 0.35 sqrt(1 - 0.293387) = 0.294204
+    mL/s, against 0.155886 over T_c = 11 steps."""
     _, decay = widths.NOISY["ph_neutralization"]
     a, sigma = decay(REGISTRY["ph_neutralization"].make_test_params())
-    tc = records.load_row("oracle_horizons", "ph_neutralization")["T_c_steps"]
-    assert (float(a), float(sigma), tc) == (pytest.approx(0.99), 0.35, 11)
-    assert widths.hold_std(a, sigma, tc) == pytest.approx(0.155886, rel=1e-5)
-    assert widths.hold_std(a, sigma, 1) == pytest.approx(0.049373, rel=1e-4)
+    assert (float(a), float(sigma)) == (pytest.approx(0.99), 0.35)
+    j = widths.uncorrected_steps("ph_neutralization")
+    assert j == 61
+    assert widths.hold_std(a, sigma, j) == pytest.approx(0.294204, rel=1e-5)
     assert widths.HOLD_Z == 2.0
 
 
