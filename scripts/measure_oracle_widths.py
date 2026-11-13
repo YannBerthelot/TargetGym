@@ -24,6 +24,7 @@ import argparse
 import functools
 import importlib
 import json
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -68,6 +69,12 @@ GUARDS = {
         "the level band keeps h >= h_min"
     },
     "unstable_cstr": {},
+    "ph_neutralization": {
+        "diversion": "pc_gym/ph_neutralization/env.py:432 to :437, the sewer "
+        "floor's switch and the pump-back's cap; the permit keeps them off",
+        "buffer_clip": "pc_gym/ph_neutralization/env.py:426, the buffer flow's "
+        "clip, which its mean path never meets",
+    },
     "hvac": {},
     "battery": {
         "current_guards": "energy/battery/env.py:299, :329, :330, the charge, "
@@ -574,6 +581,13 @@ NOISY = {
             p.feed_noise_std,
         ),
     ),
+    "ph_neutralization": (
+        "target_gym.pc_gym.ph_neutralization.oracle:ph_model",
+        lambda p: (
+            1.0 - _theta("pc_gym.ph_neutralization.env", "BUFFER_OU_THETA") * p.delta_t,
+            p.q2_noise_std,
+        ),
+    ),
     "hvac": (
         "target_gym.hvac.oracle:hvac_model",
         lambda p: (
@@ -620,9 +634,84 @@ def _with_deviation(name, task, d):
     return (*task[:i], task[i] + d, *task[i + 1 :])
 
 
+#: Tasks whose K11 noise term covers, at 2 sigma (the charter's back-off rule),
+#: the noise over the interval the plan cannot correct, not one step at K11's
+#: quantile (owner, 2026-11-12 and 2026-11-13; Amendment 4). Each names the
+#: actuator left to correct: the pH plan rides its permit floor with the trim
+#: at its limit, so only the base valve answers a buffer dip, after its dead
+#: time (200 to 340 s), far longer than T_c (55 s).
+HOLD_NOISE = {"ph_neutralization": "base"}
+HOLD_Z = 2.0
+#: The horizon protocol's evidence, one file per task.
+EVIDENCE = Path(__file__).resolve().parents[1] / "evidence" / "oracle_horizons"
+
+
+def ph_floor_probe() -> list:
+    """K11h's probe for pH: the plant held at its permit floor, where the plan
+    rides (owner, 2026-11-12), on nominal flows with the trim shut. At steady
+    state every tank holds the streams' flow-weighted mean invariants, so the
+    floor's base flow is ``steady_base_flow(permit_low, q2_nominal)`` and
+    stage 1, stage 2 and the basin all hold ``steady_state_invariants`` of it.
+    The titration curve is steeper there than at the expert's pH near 7."""
+    from target_gym.oracles.controller import raw_of
+    from target_gym.pc_gym.ph_neutralization.env import (
+        steady_base_flow,
+        steady_state_invariants,
+    )
+
+    spec = REGISTRY["ph_neutralization"]
+    env, p = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(SEEDS.start), p)
+    q2 = p.q2_nominal
+    q3 = steady_base_flow(p.permit_low, q2, p)
+    Wa, Wb = steady_state_invariants(q3, q2, p)
+    state = state.replace(
+        Wa_s1=Wa, Wb_s1=Wb, Wa=Wa, Wb=Wb, Wa_basin=Wa, Wb_basin=Wb, basin=0.0,
+        pH=p.permit_low, pH_s1=p.permit_low, q1=p.q1, q2=q2, q3=q3, q3_trim=0.0,
+    )  # fmt: skip
+    return [(state, np.array([float(raw_of(q3, p.q3_min, p.q3_max)), -1.0]))]
+
+
+#: K11h's probes where the plan rides, in place of the expert's states.
+FLOOR_PROBES = {"ph_neutralization": ph_floor_probe}
+
+
+def uncorrected_steps(name: str) -> int:
+    """Steps the plan cannot correct: the dead time of ``HOLD_NOISE[name]``'s
+    actuator, as the horizon protocol measured it, rounded up to whole steps.
+
+    It reads the evidence's valid pair for that actuator (the protocol's own
+    acceptance, V1 to V4), not the worst over its invalid fits: an invalid fit
+    is one the protocol refused. For pH that is the base's seed-108 test, theta
+    303.959 s, so 61 steps of 5 s. Several valid pairs take the longest."""
+    evidence = json.load(open(EVIDENCE / f"{name}.json"))
+    thetas = [
+        float(pair["fit"]["theta"])
+        for pair in evidence["pairs"]
+        if pair["mv"] == HOLD_NOISE[name] and pair["label"] == "valid"
+    ]
+    return int(np.ceil(max(thetas) / float(evidence["dt"])))
+
+
+def hold_std(a: float, sigma: float, j: int) -> float:
+    """The std of an AR(1) deviation's change over j steps the plan does not see.
+
+    The deviation is d_{k+1} = a d_k + e_k, each e_k of std s = sigma sqrt(1 -
+    a^2) with sigma the stationary std. The solve reads d_0; j steps on,
+    d_j - a^j d_0 = sum_{m<j} a^m e_{j-1-m}, of variance
+    s^2 sum_{m<j} a^2m = s^2 (1 - a^2j) / (1 - a^2) = sigma^2 (1 - a^2j).
+    One step gives s, K11's innovation; a long hold gives sigma.
+    """
+    return float(sigma) * float(np.sqrt(1.0 - float(a) ** (2 * j)))
+
+
 def noise_terms(name: str, points) -> list:
     """K11's noise term of each limit, in ``TaskModel.limits`` order: one
-    innovation of the deviation, a field of the model's task data."""
+    innovation of the deviation, a field of the model's task data. For a task
+    in ``HOLD_NOISE``, the worst over j = 1..``uncorrected_steps`` of the limited quantity j
+    steps on, under a deviation held from the solve's start, with the std of
+    j innovations, s sqrt(sum_{m<j} a^2m): an upper bound on innovations
+    that arrive within the hold."""
     where, decay = NOISY[name]
     module, attr = where.split(":")
     build = getattr(importlib.import_module(module), attr)
@@ -636,19 +725,38 @@ def noise_terms(name: str, points) -> list:
     n_sites = N_SITES.get(name, 0)
     hinges = len(model.hinges)
 
-    @jax.jit
-    def limited(probe, d):
+    def limited(probe, d, j=1):
         state, u = probe
         task = model.data(state)
         data = {
             "task": _with_deviation(name, task, d), "end": 10**9,
             "widths": jnp.zeros(n_sites),
         }  # fmt: skip
-        return jnp.atleast_1d(model.step(data, model.state_x(state), u, 0)[2])[hinges:]
+        x = model.state_x(state)
+        for t in range(j):
+            x, _, y, *_ = model.step(data, x, u, t)
+        return jnp.atleast_1d(y)[hinges:]
 
     pts = _plan_moves(name, points)
     steps = RECORDED_SEEDS * int(p.max_steps_in_episode)
-    return [float(b) for b in noise_backoff(limited, std, pts, RISK, steps)]
+    if name not in HOLD_NOISE:
+        return [float(b) for b in noise_backoff(limited, std, pts, RISK, steps)]
+    # K11h: 2 hold_std(j) max |dq_j / d d| at the floor, worst over the hold.
+    pts = _plan_moves(name, FLOOR_PROBES[name]())
+    # The deviation is held from the solve's start, which bounds innovations
+    # that arrive within the hold from above (they act for fewer steps).
+    terms = []
+    for j in range(1, uncorrected_steps(name) + 1):
+        site = jax.jit(functools.partial(limited, j=j))
+        gain = np.max(
+            [
+                np.abs(np.asarray(jax.jacfwd(lambda d, q=q: site(q, d))(0.0), float))
+                for q in pts
+            ],
+            axis=0,
+        )
+        terms.append(HOLD_Z * hold_std(a, sigma, j) * gain)
+    return [float(b) for b in np.max(terms, axis=0)]
 
 
 def main(tasks) -> None:
@@ -676,6 +784,8 @@ def main(tasks) -> None:
             **zone,
             "probes": f"the expert's states, training seeds {SEEDS.start} to "
             f"{SEEDS.stop - 1}, every {EVERY}th step" if points else None,
+            **({"noise_probe": "the permit floor, steady on nominal flows"}
+               if name in HOLD_NOISE else {}),
         }  # fmt: skip
         path = records.write("oracle_widths", name, records.stamped(row), compact=True)
         print(name, json.dumps(sites), backoffs, "->", path.name, flush=True)
