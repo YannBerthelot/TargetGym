@@ -134,12 +134,26 @@ prints a trace, so never copy it back). Option 4 was not in this run.
 | 1 (0.0105, 0.1) | 300 iterations, capped, KKT 1.4, 4.25 h, planned cost 1 903.4 | **372 iterations, converged, KKT 9.9e-9**, 1.37 h, planned cost 1 896.2 |
 | 2 (0.00105, 0.01) | 300, capped, KKT 0.71, 4.6 h | 600, capped, KKT 2.2, 2.61 h, planned cost 1 796.5 (violation 1.1e-5) |
 
-Rung 3 never finished: the run was stopped at about 18:05 on 2026-11-12, when the
-owner cleared every job on bob for a clean start. So the full day still has no
-converged plan at the narrow rungs. Rung 1 converges now; rung 2 runs twice as
-many iterations in about half the old time, but stays capped with KKT 2.2. The
-narrow widths are the open problem, and a rerun of rungs 2 and 3 (with option 4)
-belongs on smithers or flanders, not on a shared bob.
+That run was stopped during rung 3 at about 18:05 on 2026-11-12, when the owner
+cleared every job on bob.
+
+### Rerun with options 1 to 4
+
+Same seed, start and cap, on smithers (CPU, 10 pinned cores, 2026-11-13 to 14),
+with the factorisation reuse (option 4) merged in #201. The times are not clean:
+for the last 18 h of rungs 2 and 3, other jobs of ours filled the machine's
+memory and it swapped. Read them as upper bounds.
+
+| rung (rod width, boron width) | options 1 to 4 |
+| --- | --- |
+| 1 (0.0105, 0.1) | 385 iterations, converged, KKT 4.3e-9, 2.5 h, planned cost 1 896.2 |
+| 2 (0.00105, 0.01) | 600, capped, KKT 1.5e-6, 10.3 h, planned cost 1 796.4 |
+| 3 (0.00105, 0.001) | **452 iterations, converged, KKT 7.4e-9**, 10.0 h, planned cost 1 789.2 |
+
+The full day now ends converged at the narrowest rung. Rung 2 still hits the
+cap, but at KKT 1.5e-6 rather than 2.2, and rung 3 converges from where it
+stops. Replayed on the plant, the plan costs 1 801.2 against the reference's
+4 701.1, with no trip.
 
 ## pH oracle (second job, from the owner)
 
