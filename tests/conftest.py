@@ -64,6 +64,36 @@ _CACHE_DIR = os.environ.get(
 )
 
 
+# A worker past this resident size drops its compiled programs before the next
+# test. Two workers at this size, with the compile in flight, stay inside a CI
+# runner's 16 GB: on 2026-11-14 the per-module drop alone let both workers
+# grow until the runner shut down, 16 % into the small tier.
+_FREE_ABOVE_BYTES = 4 * 1024**3
+
+
+def _resident_bytes():
+    """This process's resident size, or 0 where ``/proc`` does not say."""
+    try:
+        with open("/proc/self/statm") as f:
+            return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return 0
+
+
+def _drop_compiled_programs():
+    import ctypes
+    import gc
+
+    import jax
+
+    jax.clear_caches()
+    gc.collect()
+    try:  # glibc keeps freed pages unless asked to hand them back
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _free_compiled_programs():
     """Drop compiled programs after each module, where ``FREE_COMPILED_PROGRAMS``
@@ -71,9 +101,18 @@ def _free_compiled_programs():
     the worker count, and the on-disk cache brings back what is needed."""
     yield
     if os.environ.get("FREE_COMPILED_PROGRAMS"):
-        import jax
+        _drop_compiled_programs()
 
-        jax.clear_caches()
+
+@pytest.fixture(autouse=True)
+def _free_compiled_programs_when_large():
+    """Inside a module too: one parametrised over every task compiles them all."""
+    yield
+    if (
+        os.environ.get("FREE_COMPILED_PROGRAMS")
+        and _resident_bytes() > _FREE_ABOVE_BYTES
+    ):
+        _drop_compiled_programs()
 
 
 def pytest_configure(config):  # noqa: ARG001
