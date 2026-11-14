@@ -411,6 +411,20 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
+  job** (battery, boiler_drum, compressor_surge, distillation, hvac,
+  ph_neutralization, wind_turbine). It now returns their cost ratio, and the
+  numbers read against a tracking hold (`score`, `headroom`, `room_left`, the
+  holds, the settling ratio, `s_max`) are NaN there. `headroom` is NaN, not 0,
+  for an unknown ceiling.
+- **A seed where neither side cost anything counted against the policy.** The
+  ratio floored only the policy's cost, so 0 over 0 read as 0; both are floored
+  and it reads as 1.
+- **On a step that tripped, an episode's reward terms were the restarted
+  plant's**, with no failure charge, while its cost held the trip. Every
+  environment now reports the step's terms in `info["reward_terms"]`, on the
+  state the reward was computed on, and `run_policy` reads them. Rewards,
+  observations and states are unchanged.
 - **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
   runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
   `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against

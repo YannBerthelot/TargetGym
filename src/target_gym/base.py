@@ -539,6 +539,9 @@ def finish_step(env, key, state, new_state, params, **info):
       ``reward`` stays the true cost, and the score reads it.
     - ``applied_action`` (``applied_action``), what the actuator did, from the
       ``state`` ``actuate`` returned.
+    - ``reward_terms``, where the environment has them: the terms of this
+      step's reward, on the state the kernel scores. After a trip the returned
+      state is the restarted plant, whose terms are not this step's.
     """
     new_state = remember(env, state, new_state, params)
     new_state, tripped, scored, terminated = failure_kernel(
@@ -553,4 +556,6 @@ def finish_step(env, key, state, new_state, params, **info):
         "measured_reward": measured_reward(env, scored, tripped, reward, params),
         "applied_action": applied_action(env, state, params),
     }
+    if callable(getattr(env, "reward_terms", None)):
+        info["reward_terms"] = env.reward_terms(scored, params)
     return new_state, reward, terminated, info
