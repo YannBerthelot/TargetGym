@@ -1,5 +1,5 @@
 {
-  "fingerprint": "01cf3edb57782902",
-  "note": "finish_step reports info['reward_terms'] on the scored state (trip-step terms fix); rewards, observations and trips bit-identical on 8 tasks over 400 random-action steps, params traced and constant",
-  "stamped": "2026-11-14T12:37:49+00:00"
+  "fingerprint": "d5483531e83eeaa3",
+  "note": "plane3d: each heading clearance is drawn from fold_in(fold_in(key, time), _CLEARANCE), so a caller's constant key still varies it. plane3d_heading-v9 draws other headings from the same range; v9 is unreleased and kept (owner, 2026-11-14). The circle, racetrack and figure-8 take no heading clearance.",
+  "stamped": "2026-11-14T14:41:15+00:00"
 }

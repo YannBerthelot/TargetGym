@@ -425,6 +425,10 @@ The next release is 0.8.0, because these changes break code written for
   environment now reports the step's terms in `info["reward_terms"]`, on the
   state the reward was computed on, and `run_policy` reads them. Rewards,
   observations and states are unchanged.
+- **`plane3d_heading` gave the same heading at every clearance to a caller that
+  kept one key** (the video writer, the planners' models). Each clearance is now
+  drawn from the key and the step. Scored runs draw other headings from the same
+  range; the version stays v9, which no release has shipped.
 - **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
   runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
   `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
