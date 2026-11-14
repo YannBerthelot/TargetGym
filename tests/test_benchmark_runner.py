@@ -459,3 +459,18 @@ def test_the_batched_oracle_runs_the_same_episodes():
         # episodes apart.
         np.testing.assert_allclose(r, rewards[s], rtol=1e-4)
         assert n_trips == trips[s]
+
+
+def test_a_trip_steps_terms_are_the_ones_its_reward_charged():
+    """docs/reward-shaping.md: the reward is minus the sum of its terms, on every
+    step. A trip restarts the plant inside the step, and the step's terms are
+    still the tripping state's, failure charge included, not the fresh plant's.
+    ``unstable_cstr`` at full initiator runs away and trips."""
+    spec = REGISTRY["unstable_cstr"]
+    params = spec.make_test_params()
+    ep = E.run_episode(spec, params, lambda obs: np.ones(1, np.float32), seed=0)
+    assert ep.failed.any(), "full initiator was meant to trip the reactor"
+    total = sum(ep.terms.values())
+    # float32 sums of a handful of terms: the reward contract's own tolerance.
+    np.testing.assert_allclose(total, ep.cost, rtol=1e-5, atol=1e-6)
+    assert (ep.terms["failure"][ep.failed] > 0).all()
