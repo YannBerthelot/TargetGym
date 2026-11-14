@@ -1,5 +1,5 @@
 {
-  "fingerprint": "35aa79352dde4c9d",
-  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-14T14:45:07+00:00"
+  "fingerprint": "6732ecd91ab7f1b8",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-14T16:16:30+00:00"
 }
