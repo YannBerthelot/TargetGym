@@ -97,7 +97,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `reactor` | delay and slow, partial observability, economic, moving target | Xenon is a multi-hour memory; most of the state is hidden (148); priced at the spot price (217); follows a drifting demand. |
 | `compressor_surge` | safety, nonlinearity, disturbance | Trips below the surge line (9); the Moore-Greitzer cubic characteristic; the consumers' demand ramps. |
 | `wind_turbine` | disturbance, economic, safety | The rotor-effective wind is hidden in turbulence (87); an imbalance price (198); trips on over- and under-speed (107). |
-| `battery` | economic, moving target, safety | A priced running cost (92); a dispatch setpoint every 5 minutes; trips outside 5 to 95% charge (93). |
+| `battery` | none | Extra since 2026-11-15 (owner's decision): it failed acceptance (J2), so it is in no aggregate. Its reason is in `energy/battery/PHYSICS.md`, Status. |
 | `plane` | disturbance | The gusts are hidden, which is the point (180). |
 | `plane_energy` | moving target, coupling | A ladder of altitudes with airspeed scored too, which removes the spare degree of freedom (193, 194). |
 | `plane_sine` | moving target | A sinusoid, as a frequency probe (193). |

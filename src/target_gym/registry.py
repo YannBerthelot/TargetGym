@@ -1200,6 +1200,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_battery_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        extra=(
+            "failed acceptance (J2, 2026-11-15, owner's decision): null "
+            "policies beat the reference on 16 of 30 seeds and the family "
+            "sweep held on 0 of 8 draws; trading is the whole cost on the "
+            "price scenarios and a wrong charge estimate costs nothing on most "
+            "seeds (energy/battery/PHYSICS.md, Status)"
+        ),
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
