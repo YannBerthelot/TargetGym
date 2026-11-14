@@ -277,11 +277,12 @@ TASKS = {
         {"pH": _s("pH")},
         {"pH": "trim"},
     ),
+    # No trip limits since Amendment 2: the specs are zones, not trips.
     "distillation": (
         {"L": 0.1, "V": 0.1},
         {
-            "yD": ((lambda o, s, p: s.x[-1]), "yD_floor", None),
-            "xB": ((lambda o, s, p: s.x[0]), None, "xB_ceiling"),
+            "yD": ((lambda o, s, p: s.x[-1]), None, None),
+            "xB": ((lambda o, s, p: s.x[0]), None, None),
         },
         {"yD": "L", "xB": "V"},
     ),
