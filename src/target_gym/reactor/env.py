@@ -58,7 +58,7 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import log_scaled_reward
+from target_gym.utils import log_scaled_reward, stationary_innovation
 
 # ---------------------------------------------------------------------------
 # Standard 6-group U-235 thermal delayed-neutron data (Keepin 1965).
@@ -984,11 +984,11 @@ def compute_next_state(
     # ── The load: the day's schedule, plus the OU wobble on top ──
     key_t = jax.random.fold_in(state.demand_key, new_physics_time)
     noise = jax.random.normal(key_t, dtype=jnp.float32)
-    wobble = (
-        state.load_wobble
-        - p.demand_theta * state.load_wobble * p.delta_t
-        + p.demand_sigma * jnp.sqrt(p.delta_t) * noise
-    )
+    # The innovation that keeps the wobble at its stated spread,
+    # ``demand_sigma / sqrt(2 demand_theta)`` (0.5 % of load).
+    decay = 1.0 - p.demand_theta * p.delta_t
+    spread = p.demand_sigma / jnp.sqrt(2.0 * p.demand_theta)
+    wobble = decay * state.load_wobble + stationary_innovation(spread, decay) * noise
     day = planned_load(plan_seconds(new_physics_time, state, p), state)
     # After a restart the turbine takes at most ``pickup``, which climbs at the
     # conditioning ramps until it meets the plan (``ReactorParams.restart_load``).

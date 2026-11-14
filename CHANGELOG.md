@@ -425,6 +425,20 @@ The next release is 0.8.0, because these changes break code written for
   environment now reports the step's terms in `info["reward_terms"]`, on the
   state the reward was computed on, and `run_policy` reads them. Rewards,
   observations and states are unchanged.
+- **The aircraft's air above the tropopause was not the standard atmosphere.**
+  Density kept the troposphere's lapse above 11 000 m (2.9 % high at 12 000 m,
+  0.8 % at FL370), and the airspeed schedule held the tropopause's pressure
+  above it (17 % high at 12 000 m, 4.5 % at FL370), so a Mach 0.8 cruise at
+  12 000 m read 136 m/s of CAS where the tables give 126. One
+  `plane.dynamics.standard_atmosphere` now serves density, speed of sound, the
+  schedule, the CAS reading and the engine's lag. Below 11 000 m density moves
+  by a part in 100 000, from the pressure exponent's last figure.
+- **Four disturbances were wider than their stated spread.** hvac's weather,
+  the pH buffer flow, the kiln's raw-meal feed and the reactor's load wobble
+  took an Euler step whose stationary deviation is `1 / sqrt(1 - theta dt / 2)`
+  times the parameter: 0.5 %, 0.25 %, 0.6 % and 0.4 % too wide. The innovation is
+  now `std * sqrt(1 - decay ** 2)` (`utils.stationary_innovation`), and the
+  decay per step, which the oracles and hvac's forecast model, is unchanged.
 - **A reading's `interval` was counted in sub-steps on a plant whose step holds
   several** (the reactor, 6): its noise would have been held 6 times too long.
   No shipped reading was affected; the interval now counts control steps.

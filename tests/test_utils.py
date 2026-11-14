@@ -116,3 +116,20 @@ def test_convert_raw_action_to_range_basic():
     rescaled = convert_raw_action_to_range(raw, min_action, max_action)
     expected = jnp.array([0.0, 3.0, 1.0])
     assert jnp.allclose(rescaled, expected)
+
+
+# -------------------------------
+# Test stationary_innovation
+# -------------------------------
+def test_stationary_innovation_keeps_the_process_at_its_stated_spread():
+    """x' = decay * x + s * xi with xi ~ N(0, 1) has variance
+    decay**2 * var + s**2. At the stated spread that must give the spread back:
+    s**2 = std**2 * (1 - decay**2). By hand, std 3 and decay 0.8:
+    s = 3 * sqrt(0.36) = 1.8, and 0.64 * 9 + 3.24 = 9."""
+    from target_gym.utils import stationary_innovation
+
+    s = float(stationary_innovation(3.0, 0.8))
+    assert s == pytest.approx(1.8, rel=1e-6)
+    assert 0.8**2 * 3.0**2 + s**2 == pytest.approx(3.0**2, rel=1e-6)
+    # No decay left, no memory: every draw is a fresh one at the full spread.
+    assert float(stationary_innovation(3.0, 0.0)) == pytest.approx(3.0)
