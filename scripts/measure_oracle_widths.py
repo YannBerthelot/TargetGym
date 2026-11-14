@@ -69,6 +69,12 @@ GUARDS = {
         "the level band keeps h >= h_min"
     },
     "unstable_cstr": {},
+    "distillation": {
+        "product_clips": "pc_gym/distillation/env.py:284, :303, the distillate's "
+        "clip and the bottoms' it implies; D's range is a planned limit",
+        "composition_clip": "pc_gym/distillation/env.py:367, the compositions' "
+        "clip to [0, 1], which guards the integrator only",
+    },
     "ph_neutralization": {
         "diversion": "pc_gym/ph_neutralization/env.py:432 to :437, the sewer "
         "floor's switch and the pump-back's cap; the permit keeps them off",
