@@ -32,7 +32,8 @@ The protocols are the ones the ceilings were first measured with (2026-11-08 to
 - shooting (boiler_drum, hvac, wind_turbine): the shared interior-point solver
   (``oracles.shooting``) on the oracle's own model, one plan over the episode, block 1,
   through K7's width rungs (``data/oracle_widths``), limits backed off by the task's
-  ``ceiling_backoffs`` (hvac: its slab edge through 1, 0.1, 0.01 K, a capped seed
+  ``ceiling_backoffs`` (wind: the widths row's K11 back-off on near_rated and on a
+  seed that tripped, as first measured; hvac: its slab edge through 1, 0.1, 0.01 K, a capped seed
   re-solved through 1, 0.3, 0.1, 0.03, 0.01 K at cap 1500); the wind turbine re-solved with the tower's rainflow turning
   points frozen until they stop changing (``OUTER`` solves at most).
 - battery: ``energy.battery.oracle.ceiling_search``.
@@ -76,6 +77,10 @@ OUTER, CAP = 8, 500
 #: Width rungs the first ceilings used where the widths row has no site (hvac's slab
 #: edge, in K), and the finer re-solve with its cap for a seed a rung capped.
 RUNGS = {"hvac": ([1.0], [0.1], [0.01])}
+#: Tasks whose ceiling is solved again at the widths row's K11 back-offs, on these
+#: scenarios and on any seed whose plan tripped at the task's own back-off (the wind
+#: turbine's tables smooth over more than the speed reading's sigma near rated).
+K11_RETRY = {"wind_turbine": ("near_rated",)}
 RETRY = {"hvac": (([1.0], [0.3], [0.1], [0.03], [0.01]), 1500)}
 NOISE = 1.0
 
@@ -209,7 +214,7 @@ def _cert(plan) -> dict:
             "violation": float(c.violation)}  # fmt: skip
 
 
-def solve_shooting(task, scenario, seed, warm=None):
+def solve_shooting(task, scenario, seed, warm=None, k11=False):
     from target_gym.oracles.controller import enable_x64, float64, widths_row
     from target_gym.oracles.shooting import Shooting, StageModel
 
@@ -222,7 +227,7 @@ def solve_shooting(task, scenario, seed, warm=None):
     with enable_x64():
         p64 = float64(params)
         tm = build(env, p64, **kw)
-        if hasattr(O, "ceiling_backoffs"):
+        if hasattr(O, "ceiling_backoffs") and not k11:
             back = list(O.ceiling_backoffs(env, p64))
         else:
             back = widths_row(task).get("limit_backoffs") or []
@@ -387,6 +392,10 @@ def solve(task, scenario, seed, out_dir, start="cold"):
         res = solve_process(task, scenario, seed, warm)
     elif task in SHOOTING:
         res = solve_shooting(task, scenario, seed, warm)
+        if task in K11_RETRY and (scenario in K11_RETRY[task] or res["trips"]):
+            again = solve_shooting(task, scenario, seed, warm, k11=True)
+            if (again["trips"], again["cost"]) < (res["trips"], res["cost"]):
+                res = again | {"backoff": "K11 (data/oracle_widths)"}
     elif task == "battery":
         res = solve_battery(task, scenario, seed)
     elif task == "reactor":
