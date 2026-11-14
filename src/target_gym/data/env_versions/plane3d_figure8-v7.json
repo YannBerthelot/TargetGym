@@ -1,5 +1,5 @@
 {
-  "fingerprint": "9aeb9b92049e2810",
-  "note": "plane3d: each heading clearance is drawn from fold_in(fold_in(key, time), _CLEARANCE), so a caller's constant key still varies it. plane3d_heading-v9 draws other headings from the same range; v9 is unreleased and kept (owner, 2026-11-14). The circle, racetrack and figure-8 take no heading clearance.",
-  "stamped": "2026-11-14T14:41:15+00:00"
+  "fingerprint": "2de03acf740753d2",
+  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
+  "stamped": "2026-11-14T14:45:07+00:00"
 }

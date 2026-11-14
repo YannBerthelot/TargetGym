@@ -176,14 +176,15 @@ def _readings(env):
     return getattr(env, "readings", ())
 
 
-def _noisy(reading, stream, value, state, params):
+def _noisy(env, reading, stream, value, state, params):
     """``reading`` of ``value`` at ``state``: exactly ``value`` at scale 0.
 
     ``epsilon`` depends only on the episode's key, the reading's ``stream`` and
     the update index, so every policy on one episode key meets the same noise.
     """
     scale = params.sensor_noise_scale
-    period = jnp.maximum(jnp.round(reading.interval / params.delta_t), 1)
+    # In control steps, which ``state.time`` counts: a step may hold sub-steps.
+    period = jnp.maximum(jnp.round(reading.interval / _control_step(env, params)), 1)
     update = jnp.asarray(state.time, jnp.int32) // period.astype(jnp.int32)
     key = jax.random.fold_in(jax.random.fold_in(state.sensor_key, stream), update)
     shape = () if getattr(reading, "shared", False) else jnp.shape(value)
@@ -297,13 +298,13 @@ def measured_state(env, state, params):
         field = operator.attrgetter(reading.field)
         if reading.index is None:
             true = _aged(env, reading, field(state), state, params)
-            value = _noisy(reading, stream, true, state, params)
+            value = _noisy(env, reading, stream, true, state, params)
         else:
             true = _aged(env, reading, field(state)[reading.index], state, params)
             value = (
                 field(measured)
                 .at[reading.index]
-                .set(_noisy(reading, stream, true, state, params))
+                .set(_noisy(env, reading, stream, true, state, params))
             )
         measured = _replace_at(measured, reading.field, value)
     return measured
@@ -329,7 +330,7 @@ def measured_obs(get_obs):
             true = get_obs(self, state, params)
             for stream, reading in channels:
                 value = _aged(self, reading, true[reading.channel], state, params)
-                read = _noisy(reading, stream, value, state, params)
+                read = _noisy(self, reading, stream, value, state, params)
                 obs = obs.at[reading.channel].set(read)
         return obs
 

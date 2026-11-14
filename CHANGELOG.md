@@ -425,6 +425,9 @@ The next release is 0.8.0, because these changes break code written for
   environment now reports the step's terms in `info["reward_terms"]`, on the
   state the reward was computed on, and `run_policy` reads them. Rewards,
   observations and states are unchanged.
+- **A reading's `interval` was counted in sub-steps on a plant whose step holds
+  several** (the reactor, 6): its noise would have been held 6 times too long.
+  No shipped reading was affected; the interval now counts control steps.
 - **`plane3d_heading` gave the same heading at every clearance to a caller that
   kept one key** (the video writer, the planners' models). Each clearance is now
   drawn from the key and the step. Scored runs draw other headings from the same
@@ -446,6 +449,14 @@ The next release is 0.8.0, because these changes break code written for
 - **`env.state_space()` works on every task.** It raised an `AttributeError` on
   the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
   formation.
+
+### Removed
+
+- **`target_gym.interpolator`, `target_gym.runners.utils`, and
+  `target_gym.utils.run_n_steps` and `compute_episode_returns_vectorized`.**
+  Nothing in the package called them, and they passed one key to the reset and
+  to every step, so a plant's noise was a single repeated draw. Use
+  `target_gym.benchmark.run_policy` or `target_gym.eval.run_episode`.
 
 ## [0.7.0] - 2026-11-02
 

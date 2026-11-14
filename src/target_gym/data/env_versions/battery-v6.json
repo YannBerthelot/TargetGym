@@ -1,5 +1,5 @@
 {
-  "fingerprint": "1696dff369639ac0",
-  "note": "finish_step reports info['reward_terms'] on the scored state (trip-step terms fix); rewards, observations and trips bit-identical on 8 tasks over 400 random-action steps, params traced and constant",
-  "stamped": "2026-11-14T12:37:49+00:00"
+  "fingerprint": "ef85f1fe747313e7",
+  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
+  "stamped": "2026-11-14T14:45:07+00:00"
 }
