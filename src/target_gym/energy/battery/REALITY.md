@@ -296,6 +296,15 @@ These were read once, by text extraction of the PDFs, and not re-fetched.
   https://www.neso.energy/document/384606/download
 - **NESO-SOE:** NESO, SOE Monitoring Guidance for Energy Limited DC/DM/DR
   Providers, v2, Mar 2025. https://www.neso.energy/document/347241/download
+- **SIOSHANSI-PJM:** R. Sioshansi, P. Denholm, T. Jenkin, J. Weiss,
+  Estimating the value of electricity storage in PJM: arbitrage and some
+  welfare effects, Energy Economics 31(2), 2009, 269-277; preprint
+  https://www.cmu.edu/ceic/people/rsioshan/docs/pjm_arbitrage.pdf. Read twice
+  on 2026-11-15 (fetched, then re-opened by a second reader): sec. 2, p. 2,
+  storage captures value "by storing low-cost energy and then reselling that
+  energy during higher-priced hours"; footnote 9, p. 5, an 80 %-efficient
+  device "requires 1.25 hours of storage for one hour of discharge". It gives
+  no price threshold; dispatch there is a perfect-foresight linear program.
 - **NESO-GUIDE:** NESO, Dynamic Response Services Provider Guidance, Jun 2026.
   https://www.neso.energy/document/276606/download
 - **NESO-WEB:** NESO, Dynamic Services (DC/DM/DR) web page, technical

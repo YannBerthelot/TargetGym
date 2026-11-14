@@ -180,7 +180,9 @@ O&M, and REALITY.md has no cost per cycle.
 **Rule 23.** On 30 seeds of each scenario (100 to 129), the expert and a zero
 baseline cost more than 0 on every seed. Normal block: the expert GBP 6.10 on
 average (losses 6.00, availability 0.10), a zero baseline GBP 5.37. Centring
-the charge costs losses, which is the operator's real trade.
+the charge costs losses, which is the operator's real trade. These numbers
+and the table under section 6 were measured with the planner that centred
+the charge, before the expert's recipe changed on 2026-11-15 (section 10).
 
 ## 6. Scenarios (rule 20)
 
@@ -297,6 +299,19 @@ The ladder row, `row()` in `scripts/ladder_rows/battery.py`, needs:
 - the cost from the `availability`, `losses` and `trade` terms in GBP, with no
   tracking term (`scoring.JOB_SCORED`) and no trips;
 - the six scenarios, 4 h at 1 s each: 14 400 steps.
+
+**The expert's recipe (owner, 2026-11-15).** It keeps NESO's plan: declare
+the open period's baseline so that the reported energy reaches the period's
+target after the locked baselines (NESO-GUIDE p. 37, item 4). The target is
+priced by the round trip. Stored energy is valued at the base price, and a
+device charges 1/eta for each unit it discharges (Sioshansi et al. 2009,
+sec. 2 and footnote 9). So holding more than the export requirement only
+loses, and storing pays when the open period's day-ahead price is below
+`price_base * eta`, GBP 68.08/MWh. The target is the low edge plus rule 22's
+back-off (2 x 0.0501, the ladder's bump-test sigma), or, when storing pays, the
+high edge less it. The paper states no price threshold of its own; the
+threshold is derived from its round-trip relation. The recipe was written down
+before any run and nothing in it was searched on scores.
 
 ## 11. What the oracle needs
 
