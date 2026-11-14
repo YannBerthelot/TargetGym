@@ -54,7 +54,11 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import (
+    convert_raw_action_to_range,
+    log_scaled_reward,
+    stationary_innovation,
+)
 
 # Bisection steps for the pH root-find. The bracket is [0, 14], so 20 halvings
 # resolve to ~1.3e-5 pH units -- three orders of magnitude finer than a pH
@@ -417,12 +421,10 @@ def compute_next_state(
     # OU buffer-flow disturbance, keyed on ``state.time`` so a constant key
     # still gives a genuine zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = p.q2_noise_std * jnp.sqrt(2.0 * BUFFER_OU_THETA * p.delta_t)
-    q2 = (
-        state.q2
-        + BUFFER_OU_THETA * (p.q2_nominal - state.q2) * p.delta_t
-        + sigma * noise
-    )
+    # The innovation that keeps the flow's spread at ``q2_noise_std``.
+    decay = 1.0 - BUFFER_OU_THETA * p.delta_t
+    sigma = stationary_innovation(p.q2_noise_std, decay)
+    q2 = p.q2_nominal + decay * (state.q2 - p.q2_nominal) + sigma * noise
     q2 = jnp.clip(q2, p.q2_min, p.q2_max)
 
     q1 = influent_flow(state, p)

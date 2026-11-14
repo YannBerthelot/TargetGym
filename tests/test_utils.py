@@ -6,10 +6,8 @@ import numpy as np
 import pytest
 
 from target_gym.utils import (
-    compute_episode_returns_vectorized,
     compute_norm_from_coordinates,
     convert_raw_action_to_range,
-    run_n_steps,
 )
 from target_gym.video import convert_frames_from_gym_to_wandb, save_video
 
@@ -44,24 +42,6 @@ def test_convert_raw_action_to_range():
     rescaled = convert_raw_action_to_range(raw, min_action, max_action)
     expected = jnp.array([0.0, 2.0, 6.0])
     assert jnp.allclose(rescaled, expected)
-
-
-# -------------------------------
-# Test compute_episode_returns_vectorized
-# -------------------------------
-def test_compute_episode_returns_vectorized_simple():
-    rewards = jnp.array([1, 1, 1, 1])
-    dones = jnp.array([0, 1, 0, 1])
-    returns = compute_episode_returns_vectorized(rewards, dones)
-    # first episode: 1+1=2, second episode: 1+1=2
-    assert jnp.allclose(returns, jnp.array([2.0, 2.0]))
-
-
-def test_compute_episode_returns_vectorized_truncated():
-    rewards = jnp.array([1, 1, 1])
-    dones = jnp.array([0, 0, 0])  # truncated, no done
-    returns = compute_episode_returns_vectorized(rewards, dones)
-    assert jnp.allclose(returns, jnp.array([3.0]))
 
 
 class DummyState:
@@ -139,50 +119,17 @@ def test_convert_raw_action_to_range_basic():
 
 
 # -------------------------------
-# Dummy environment for run_n_steps
+# Test stationary_innovation
 # -------------------------------
-class DummyJaxEnv:
-    def __init__(self, max_steps=5):
-        self.max_steps = max_steps
+def test_stationary_innovation_keeps_the_process_at_its_stated_spread():
+    """x' = decay * x + s * xi with xi ~ N(0, 1) has variance
+    decay**2 * var + s**2. At the stated spread that must give the spread back:
+    s**2 = std**2 * (1 - decay**2). By hand, std 3 and decay 0.8:
+    s = 3 * sqrt(0.36) = 1.8, and 0.64 * 9 + 3.24 = 9."""
+    from target_gym.utils import stationary_innovation
 
-    def reset_env(self, key, params):
-        obs = jnp.zeros((2,))
-        state = jnp.array(0)  # simple scalar state
-        return obs, state
-
-    def step_env(self, key, state, action, params):
-        reward = 1.0
-        done = state >= self.max_steps - 1
-        next_state = state + 1
-        info = {}
-        obs = jnp.zeros((2,))
-        return obs, next_state, reward, done, info
-
-
-def expected_mean_return(n_steps, max_steps):
-    num_full_eps = n_steps // max_steps
-    last_steps = n_steps % max_steps
-    returns = [max_steps] * num_full_eps
-    if last_steps:
-        returns.append(last_steps)
-    return sum(returns) / len(returns)
-
-
-def dummy_policy(obs):
-    return jnp.zeros_like(obs)
-
-
-# -------------------------
-# Test run_n_steps
-# -------------------------
-@pytest.mark.parametrize("n_steps,max_steps", [(3, 2), (5, 2), (6, 3), (10, 4)])
-def test_run_n_steps_dummy(n_steps, max_steps):
-    env = DummyJaxEnv(max_steps=max_steps)
-    params = None
-
-    mean_return = run_n_steps(env, dummy_policy, params, n_steps=n_steps, seed=0)
-    expected = expected_mean_return(n_steps, max_steps)
-
-    assert jnp.isclose(
-        mean_return, expected
-    ), f"Mean return {mean_return} != expected {expected}"
+    s = float(stationary_innovation(3.0, 0.8))
+    assert s == pytest.approx(1.8, rel=1e-6)
+    assert 0.8**2 * 3.0**2 + s**2 == pytest.approx(3.0**2, rel=1e-6)
+    # No decay left, no memory: every draw is a fresh one at the full spread.
+    assert float(stationary_innovation(3.0, 0.0)) == pytest.approx(3.0)

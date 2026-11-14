@@ -527,8 +527,10 @@ class Plane3DHeading(_Airplane3DBase):
             & (state.time < params.max_steps_in_episode)
             & (jnp.mod(state.time, period) == 0)
         )
+        # The step is folded in, so a caller that keeps one key still gets a
+        # new draw at each clearance.
         heading = jax.random.uniform(
-            jax.random.fold_in(key, _CLEARANCE),
+            jax.random.fold_in(jax.random.fold_in(key, state.time), _CLEARANCE),
             minval=params.target_heading_range[0],
             maxval=params.target_heading_range[1],
         )
