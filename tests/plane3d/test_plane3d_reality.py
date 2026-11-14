@@ -217,8 +217,9 @@ def test_the_clearance_itself_costs_nothing():
     assert _band_cost(env, state, params) == pytest.approx(0.0, abs=1e-6)
 
 
-def _clearances(seed, steps=600):
-    """The heading task's targets and costs step by step under the reference."""
+def _clearances(seed, steps=600, one_key=False):
+    """The heading task's targets and costs step by step under the reference;
+    ``one_key`` hands the plant the same key on every step."""
     env, _ = tg.make(HEADING)
     params = _params(HEADING, target_altitude_range=(5000.0, 5000.0))
     key = jax.random.PRNGKey(seed)
@@ -227,7 +228,7 @@ def _clearances(seed, steps=600):
     memory, policy = expert.reset(), jax.jit(expert.step)
     step = jax.jit(env.step_env)
     targets, costs, sizes = [float(state.target_heading)], [], []
-    for k in jax.random.split(key, steps):
+    for k in [key] * steps if one_key else jax.random.split(key, steps):
         action, memory = policy(memory, obs)
         obs, new, reward, _, _ = step(k, state, action, params)
         if float(new.target_heading) != targets[-1]:
@@ -251,6 +252,16 @@ def test_heading_clearances_come_in_a_sequence():
     for size, target, psi in sizes:
         turn = abs(np.angle(np.exp(1j * (target - psi))))
         assert size == pytest.approx(turn, abs=1e-4)
+
+
+def test_clearances_differ_for_a_caller_that_keeps_one_key():
+    """A caller may hand ``step_env`` the same key on every step (the conformance
+    suite's key contract; the video writer and the planners' models do). Each
+    clearance is still its own draw over the compass: three in a row are three
+    headings, where one repeated draw would give the same heading three times."""
+    _, targets, _, _ = _clearances(seed=4, steps=460, one_key=True)
+    drawn = targets[[150, 300, 450]]
+    assert len(set(np.round(drawn, 4))) == 3
 
 
 def test_a_new_clearance_costs_nothing_when_it_is_given():
