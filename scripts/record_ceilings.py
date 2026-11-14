@@ -1,7 +1,7 @@
 """Measure a charter task's ceiling (charter Words "Ceiling", J3) on its current
 plant and write ``data/oracle_ceilings/<task>.json`` stamped with that plant.
 
-    python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR [--start mpc]
+    python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR [--start mpc[+expert]]
     python scripts/record_ceilings.py write TASK OUT_DIR
 
 ``solve`` plans one episode with the true model, the true state and the episode's
@@ -16,7 +16,11 @@ own script, ``scripts/glass_slow_oracle.py``.
 moves on the same seed and scenario (not where a shooting model maps its moves to the
 env's actions, as the wind turbine's does: its oracle's actions are not its moves) (``shipped_policy("mpc")``, as the MPC line runs
 it) and keeps those moves as a candidate, so the ceiling costs no more than the oracle's
-run by construction. G8 forbids starting a ceiling from an expert, not from the oracle.
+run by construction. ``+expert`` (owner, 2026-11-14, amending G8: a ceiling may start
+from the expert's run, an oracle still never does) does the same with the shipped
+expert's run on an expert-reference task (the reactor): a second solve from its moves,
+and its moves kept as a candidate, with ``expert_fallback`` and ``improved_on_expert``
+recorded like the oracle's.
 Without it the start is cold, as the first ceilings were. The choice is written into
 each solve's row and the file (``start_option``), with per seed ``oracle_fallback``
 (the plan kept is the oracle's moves, or one from them no cheaper) and ``improved_on_oracle`` (it costs
@@ -39,7 +43,8 @@ The protocols are the ones the ceilings were first measured with (2026-11-08 to
 - battery: ``energy.battery.oracle.ceiling_search``.
 - reactor: ``scripts/reactor_ipopt.py``'s whole-day NLP from the simulated-state
   start (G8 allows it in the ceiling script only), the load's wobble read off a
-  rollout on the seed's keys.
+  rollout on the seed's keys; with ``+expert`` also from the expert's moves, the
+  cheaper untripped replay kept.
 """
 
 from __future__ import annotations
@@ -136,6 +141,26 @@ def oracle_run(task, scenario, seed) -> dict:
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
     rollout = run_policy(
         shipped_policy("mpc"), env, params, task_info(task, env, params, 1),
+        seeds=[seed],
+    )  # fmt: skip
+    (ep,) = episodes_of(rollout)
+    return {
+        "moves": np.asarray(rollout["action"][0], float),
+        "cost": float(ep.cost.mean()),
+        "trips": int(np.sum(ep.failed)),
+    }
+
+
+def expert_run(task, scenario, seed) -> dict:
+    """The shipped expert's realised moves on ``seed`` (the reference of the
+    expert-reference tasks, ``charter.EXPERT_REFERENCE``), its cost and trips."""
+    from target_gym.benchmark import shipped_policy
+
+    if task not in charter.EXPERT_REFERENCE:
+        raise SystemExit(f"{task}: --start expert is for expert-reference tasks")
+    L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
+    rollout = run_policy(
+        shipped_policy("pid"), env, params, task_info(task, env, params, 1),
         seeds=[seed],
     )  # fmt: skip
     (ep,) = episodes_of(rollout)
@@ -336,7 +361,7 @@ def solve_battery(task, scenario, seed):
                   "solver": {k: res[k] for k in keep}}  # fmt: skip
 
 
-def solve_reactor(task, scenario, seed):
+def solve_reactor(task, scenario, seed, warm=None):
     import reactor_ipopt as R
 
     from target_gym.oracles.controller import enable_x64, float64
@@ -357,26 +382,34 @@ def solve_reactor(task, scenario, seed):
         model, shoot = R.build(env, q, T, 1, R_CAP)
         data = {"task": model.data(st64), "end": T, "path": jnp.asarray(path, float)}
         x0, hold = model.state_x(st64), model.hold(st64)
-        plan = None
-        for width, boron in rungs:
-            data["widths"], data["boron_width"] = jnp.asarray([width]), jnp.asarray(
-                boron
-            )
-            t0 = time.time()
-            if plan is None:
-                plan = shoot.solve(data, x0, hold, start=jnp.tile(hold, (shoot.N, 1)))
-            else:
-                plan = shoot.resolve(data, x0, hold, plan)
-            jax.block_until_ready(plan.z)
-            certs.append(_cert(plan) | {"seconds": time.time() - t0})
-            print(json.dumps(certs[-1]), flush=True)
-        moves = np.asarray(shoot.moves(plan))[:T]
-    out = replay(task, env, params, seed, PlanPolicy(moves[None]))
-    last = certs[-1]
-    return out | {
-        "certificates": certs,
-        "solver": {"converged": not (last["failed"] or last["capped"]), **last},
-    }
+        firsts = {"cold": jnp.tile(hold, (shoot.N, 1))}
+        if warm is not None:  # the expert's moves, the last held past the episode
+            w = np.asarray(warm, float)
+            w = np.concatenate([w, np.repeat(w[-1:], max(shoot.N - len(w), 0), 0)])
+            firsts["expert"] = jnp.asarray(w[: shoot.N])
+        chains = {}
+        for name, first in firsts.items():
+            plan = None
+            for width, boron in rungs:
+                data["widths"] = jnp.asarray([width])
+                data["boron_width"] = jnp.asarray(boron)
+                t0 = time.time()
+                if plan is None:
+                    plan = shoot.solve(data, x0, hold, start=first)
+                else:
+                    plan = shoot.resolve(data, x0, hold, plan)
+                jax.block_until_ready(plan.z)
+                certs.append(_cert(plan) | {"seconds": time.time() - t0, "start": name})
+                print(json.dumps(certs[-1]), flush=True)
+            chains[name] = (np.asarray(shoot.moves(plan))[:T], certs[-1])
+    best = None
+    for name, (moves, last) in chains.items():
+        out = replay(task, env, params, seed, PlanPolicy(moves[None]))
+        out |= {"start": name, "solver": {
+            "converged": not (last["failed"] or last["capped"]), **last}}  # fmt: skip
+        if best is None or (out["trips"], out["cost"]) < (best["trips"], best["cost"]):
+            best = out
+    return best | {"certificates": certs}
 
 
 R_CAP = 600
@@ -386,7 +419,9 @@ def solve(task, scenario, seed, out_dir, start="cold"):
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    mpc = oracle_run(task, scenario, seed) if start == "mpc" else None
+    opts = set(start.split("+"))
+    mpc = oracle_run(task, scenario, seed) if "mpc" in opts else None
+    expert = expert_run(task, scenario, seed) if "expert" in opts else None
     warm = None if mpc is None else mpc["moves"]
     if task in PROCESS:
         res = solve_process(task, scenario, seed, warm)
@@ -399,7 +434,9 @@ def solve(task, scenario, seed, out_dir, start="cold"):
     elif task == "battery":
         res = solve_battery(task, scenario, seed)
     elif task == "reactor":
-        res = solve_reactor(task, scenario, seed)
+        res = solve_reactor(
+            task, scenario, seed, None if expert is None else expert["moves"]
+        )
     else:
         raise SystemExit(f"{task}: no ceiling protocol here")
     if mpc is not None:
@@ -421,6 +458,21 @@ def solve(task, scenario, seed, out_dir, start="cold"):
         # Kept the oracle's moves, or a plan from them no cheaper than they are.
         from_oracle = res.get("start", "").startswith("mpc")
         res["oracle_fallback"] = bool(from_oracle and not res["improved_on_oracle"])
+    if expert is not None:  # the same for the expert's run (owner, 2026-11-14; G8)
+        from target_gym.pc_gym.foresight import PlanPolicy
+
+        L, spec, row, env, params, *_ = setup(task, scenario, seed)
+        own = replay(task, env, params, seed, PlanPolicy(expert["moves"][None]))
+        res["expert_run"] = {"cost": expert["cost"], "trips": expert["trips"],
+                             "moves_replayed": own}  # fmt: skip
+        if (own["trips"], own["cost"]) < (res["trips"], res["cost"]):
+            res |= own | {"start": "expert moves, unimproved"}
+        res["improved_on_expert"] = bool(
+            not res["trips"]
+            and res["cost"] < own["cost"] - 1e-9 - 1e-6 * abs(own["cost"])
+        )
+        from_expert = res.get("start", "").startswith("expert")
+        res["expert_fallback"] = bool(from_expert and not res["improved_on_expert"])
     res = {"start_option": start} | res
     res = {"task": task, "scenario": scenario, "seed": seed,
            "seconds": time.time() - t0} | res  # fmt: skip
@@ -452,6 +504,11 @@ def write(task, out_dir):
         if any("oracle_fallback" in r for r in runs):
             solver["oracle_fallback"] = sum(r["oracle_fallback"] for r in runs)
             solver["improved_on_oracle"] = sum(r["improved_on_oracle"] for r in runs)
+        if any("expert_fallback" in r for r in runs):
+            solver["expert_fallback"] = sum(r.get("expert_fallback", 0) for r in runs)
+            solver["improved_on_expert"] = sum(
+                r.get("improved_on_expert", 0) for r in runs
+            )
         rows[s] = {
             "weight": weights[s], "seeds": [r["seed"] for r in runs],
             "ceiling_costs": [r["cost"] for r in runs],
