@@ -105,8 +105,15 @@ def _free_compiled_programs():
 
 
 @pytest.fixture(autouse=True)
-def _free_compiled_programs_when_large():
-    """Inside a module too: one parametrised over every task compiles them all."""
+def _free_compiled_programs_when_large(request):
+    """Inside a module too: one parametrised over every task compiles them all.
+
+    Each worker also leaves the name of its test in a file, which the CI watch
+    line prints: a test that takes the runner down reports nothing itself."""
+    if os.environ.get("FREE_COMPILED_PROGRAMS"):
+        worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+        with open(os.path.join(_CACHE_DIR, f"current-test-{worker}"), "w") as f:
+            f.write(request.node.nodeid)
     yield
     if (
         os.environ.get("FREE_COMPILED_PROGRAMS")
