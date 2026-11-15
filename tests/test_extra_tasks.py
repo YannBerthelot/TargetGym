@@ -6,6 +6,10 @@ from the code: four_tank is Extra (a lab rig with no industrial job); cstr,
 unstable_cstr and compressor_surge are back in the benchmark. battery is Extra by
 the owner's decision of 2026-11-15: it failed acceptance (J2), so it leaves the
 core pool, the headline and the capability claims, with its code kept.
+unstable_cstr is Extra by the owner's decision of the same day: its J2 passed,
+but on 4 of its 5 scenarios the true-state oracle tracks exactly, so its room
+measures a perfect state reading rather than control. It leaves the core pool
+and the capability claims the same way.
 """
 
 import pytest
@@ -37,9 +41,25 @@ def test_battery_moves_no_capability_spoke():
     assert profile["hold"]["economic"] == pytest.approx(suite.radius(0.1))
 
 
-@pytest.mark.parametrize(
-    "name", ["cstr", "unstable_cstr", "compressor_surge", "ph_neutralization"]
-)
+def test_unstable_cstr_is_extra_with_its_reason():
+    spec = registry.get("unstable_cstr")
+    assert spec.extra and "oracle" in spec.extra
+    assert "unstable_cstr" not in {s.name for s in registry.benchmark_specs()}
+
+
+def test_unstable_cstr_moves_no_capability_spoke():
+    """Out of the capability claims: its score enters no aggregate, so the
+    instability spoke rests on the boiler drum alone."""
+    from target_gym import suite
+
+    assert suite.CAPABILITIES["unstable_cstr"] == ()
+    high = {"score": 0.9, "transient_ratio": 3.0, "oracle_transient_ratio": 3.0}
+    boiler = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
+    profile = suite.profile({"unstable_cstr": high, "boiler_drum": boiler})
+    assert profile["hold"]["instability"] == pytest.approx(suite.radius(0.1))
+
+
+@pytest.mark.parametrize("name", ["cstr", "compressor_surge", "ph_neutralization"])
 def test_the_process_tasks_brought_back_are_in_the_benchmark(name):
     assert registry.get(name).extra is None
     assert name in {s.name for s in registry.benchmark_specs()}

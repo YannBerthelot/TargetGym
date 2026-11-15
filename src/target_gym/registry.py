@@ -1233,6 +1233,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         # (size and period ours), so the normal day moves the unstable point.
         # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=7,
+        extra=(
+            "measures state knowledge, not control (2026-11-15, owner's "
+            "decision): J2 passed, but on 4 of its 5 scenarios the true-state "
+            "oracle tracks exactly (cost 2e-12 to 2e-10, every solve converged), "
+            "so its room of about 180 is the value of a perfect state reading; "
+            "only grade_change tests control (pc_gym/unstable_cstr/PHYSICS.md, "
+            "Status)"
+        ),
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
         scenarios=_scenarios(
