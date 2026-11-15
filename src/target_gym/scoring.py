@@ -288,7 +288,10 @@ def s_max(b: float, c: float, bound: float) -> float:
 
 
 def headroom(b: float, c: float) -> float:
-    """Decades between a cost ``b`` and the ceiling ``c``; 0 within it."""
+    """Decades between a cost ``b`` and the ceiling ``c``; 0 within it, NaN
+    where either is unknown (a job-scored task has no ceiling)."""
+    if b != b or c != c:
+        return float("nan")
     return float(math.log10(b / c)) if b > c else 0.0
 
 
@@ -414,13 +417,17 @@ def _ratio_ci(log_ratios: np.ndarray, n_boot: int = 2000) -> tuple[float, float]
 
 def _paired(b: np.ndarray, x: np.ndarray) -> tuple[float, tuple, float]:
     """Per-seed ratios ``b / x`` as an interquartile mean, its interval and
-    the share of seeds where ``x`` costs less."""
-    logs = np.log10(b / np.maximum(x, 1e-300))
+    the share of seeds where ``x`` costs less. Both sides are floored, so a
+    seed where neither costs anything counts as level, ``_ratio``'s 0 over 0."""
+    logs = np.log10(np.maximum(b, 1e-300) / np.maximum(x, 1e-300))
     return float(10 ** _iqm(logs)), _ratio_ci(logs), float(np.mean(x < b))
 
 
 def _ratio(b: float, x: float) -> float:
-    """``b / x``, 1 when both are 0 (neither ever left the band)."""
+    """``b / x``, 1 when both are 0 (neither ever left the band), NaN where
+    either is unknown."""
+    if b != b or x != x:
+        return float("nan")
     if b == x:
         return 1.0
     return b / x if x > 0 else float("inf")
@@ -439,8 +446,12 @@ def compare(
     moves_b = np.array([E.transient_cost([ep], settle)[0] for ep in expert])
     moves_x = np.array([E.transient_cost([ep], settle)[0] for ep in policy])
     t_ratio, t_ci, t_win = _paired(moves_b, moves_x)
-    b_hold = E.hold(expert, burn_in, "tracking", settle)[0]
-    x_hold = E.hold(policy, burn_in, "tracking", settle)[0]
+    # A task scored on its job has no tracking term: its hold, and what is
+    # read against it, is unknown.
+    tracked = "tracking" in expert[0].terms
+    nan = float("nan")
+    b_hold = E.hold(expert, burn_in, "tracking", settle)[0] if tracked else nan
+    x_hold = E.hold(policy, burn_in, "tracking", settle)[0] if tracked else nan
     out = dict(
         ratio=ratio,
         ratio_ci=ratio_ci,
@@ -461,8 +472,9 @@ def compare(
         transient_win_rate=t_win,
     )
     if band is not None:
-        out["expert_settling"] = E.settling_time(expert, band)[0]
-        out["policy_settling"] = E.settling_time(policy, band)[0]
+        known = band == band
+        out["expert_settling"] = E.settling_time(expert, band)[0] if known else nan
+        out["policy_settling"] = E.settling_time(policy, band)[0] if known else nan
         out["settling_ratio"] = _ratio(out["expert_settling"], out["policy_settling"])
     key = next((k for k in ("consumption", "running") if k in expert[0].terms), None)
     if key is not None:

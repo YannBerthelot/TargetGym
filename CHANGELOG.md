@@ -411,6 +411,41 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
+  job** (battery, boiler_drum, compressor_surge, distillation, hvac,
+  ph_neutralization, wind_turbine). It now returns their cost ratio, and the
+  numbers read against a tracking hold (`score`, `headroom`, `room_left`, the
+  holds, the settling ratio, `s_max`) are NaN there. `headroom` is NaN, not 0,
+  for an unknown ceiling.
+- **A seed where neither side cost anything counted against the policy.** The
+  ratio floored only the policy's cost, so 0 over 0 read as 0; both are floored
+  and it reads as 1.
+- **On a step that tripped, an episode's reward terms were the restarted
+  plant's**, with no failure charge, while its cost held the trip. Every
+  environment now reports the step's terms in `info["reward_terms"]`, on the
+  state the reward was computed on, and `run_policy` reads them. Rewards,
+  observations and states are unchanged.
+- **The aircraft's air above the tropopause was not the standard atmosphere.**
+  Density kept the troposphere's lapse above 11 000 m (2.9 % high at 12 000 m,
+  0.8 % at FL370), and the airspeed schedule held the tropopause's pressure
+  above it (17 % high at 12 000 m, 4.5 % at FL370), so a Mach 0.8 cruise at
+  12 000 m read 136 m/s of CAS where the tables give 126. One
+  `plane.dynamics.standard_atmosphere` now serves density, speed of sound, the
+  schedule, the CAS reading and the engine's lag. Below 11 000 m density moves
+  by a part in 100 000, from the pressure exponent's last figure.
+- **Four disturbances were wider than their stated spread.** hvac's weather,
+  the pH buffer flow, the kiln's raw-meal feed and the reactor's load wobble
+  took an Euler step whose stationary deviation is `1 / sqrt(1 - theta dt / 2)`
+  times the parameter: 0.5 %, 0.25 %, 0.6 % and 0.4 % too wide. The innovation is
+  now `std * sqrt(1 - decay ** 2)` (`utils.stationary_innovation`), and the
+  decay per step, which the oracles and hvac's forecast model, is unchanged.
+- **A reading's `interval` was counted in sub-steps on a plant whose step holds
+  several** (the reactor, 6): its noise would have been held 6 times too long.
+  No shipped reading was affected; the interval now counts control steps.
+- **`plane3d_heading` gave the same heading at every clearance to a caller that
+  kept one key** (the video writer, the planners' models). Each clearance is now
+  drawn from the key and the step. Scored runs draw other headings from the same
+  range; the version stays v9, which no release has shipped.
 - **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
   runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
   `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
@@ -428,6 +463,14 @@ The next release is 0.8.0, because these changes break code written for
 - **`env.state_space()` works on every task.** It raised an `AttributeError` on
   the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
   formation.
+
+### Removed
+
+- **`target_gym.interpolator`, `target_gym.runners.utils`, and
+  `target_gym.utils.run_n_steps` and `compute_episode_returns_vectorized`.**
+  Nothing in the package called them, and they passed one key to the reset and
+  to every step, so a plant's noise was a single repeated draw. Use
+  `target_gym.benchmark.run_policy` or `target_gym.eval.run_episode`.
 
 ## [0.7.0] - 2026-11-02
 

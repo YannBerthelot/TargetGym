@@ -29,7 +29,7 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range
+from target_gym.utils import convert_raw_action_to_range, stationary_innovation
 
 SECONDS_PER_DAY = 86_400.0
 SECONDS_PER_HOUR = 3_600.0
@@ -512,12 +512,10 @@ def compute_next_state(
     T_supply = jnp.where(state.frost > 0.5, p.T_supply_max, commanded)
 
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = p.T_out_noise_std * jnp.sqrt(2.0 * WEATHER_OU_THETA * p.delta_t)
-    weather_dev = (
-        state.weather_dev
-        - WEATHER_OU_THETA * state.weather_dev * p.delta_t
-        + sigma * noise
-    )
+    # The innovation that keeps the deviation's spread at ``T_out_noise_std``.
+    decay = 1.0 - WEATHER_OU_THETA * p.delta_t
+    sigma = stationary_innovation(p.T_out_noise_std, decay)
+    weather_dev = decay * state.weather_dev + sigma * noise
     level = outdoor_mean_ahead(state.T_out_level, 1, p)
     _compute_velocity = partial(
         compute_velocity,

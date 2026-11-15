@@ -754,3 +754,27 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
     atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
     np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=atol)
     np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=atol)
+
+
+def test_a_readings_interval_counts_control_steps_where_a_step_has_sub_steps():
+    """``Reading.interval`` is in plant seconds, and ``state.time`` counts control
+    steps. The reactor's control step is 6 sub-steps of ``delta_t`` (30 s), so a
+    flux reading that updates every 60 s holds its noise for 2 steps: steps 0-1
+    share a draw, steps 2-3 share the next, and the two draws differ."""
+    from target_gym.base import FieldReading, true_obs
+    from target_gym.reactor.env_jax import Reactor
+
+    class SlowFlux(Reactor):
+        readings = (FieldReading("n", sigma=1.9e-4, interval=60.0),)
+
+    env = SlowFlux()
+    params = REGISTRY["reactor"].make_test_params()
+    assert float(params.delta_t) * env.control_period == 30.0
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    true = float(true_obs(env, state, params)[0])
+    noise = [
+        float(env.get_obs(dataclasses.replace(state, time=t), params)[0]) - true
+        for t in range(4)
+    ]
+    assert noise[0] == noise[1] and noise[2] == noise[3]
+    assert noise[1] != noise[2]
