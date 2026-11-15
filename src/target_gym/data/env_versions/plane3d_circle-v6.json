@@ -1,5 +1,5 @@
 {
-  "fingerprint": "8cc1b2926b82a4a7",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "675df3365c6ec8f1",
+  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
+  "stamped": "2026-11-14T14:45:07+00:00"
 }

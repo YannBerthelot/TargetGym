@@ -9,7 +9,10 @@ on:
   pull_request:
     # feat/sensor-noise carries the 0.8.0 plant fixes until their one re-record
     # (docs/proposals/industrial-fixes.md). Drop it when that branch lands.
-    branches: [ "main", "feat/sensor-noise" ]
+    # int/amendment3 is the charter rework's integration branch: its pull requests
+    # run the test job's small and medium tiers past the stale records (owner,
+    # 2026-11-14). Drop it when that branch lands.
+    branches: [ "main", "feat/sensor-noise", "int/amendment3" ]
 
 permissions:
   contents: read
@@ -178,9 +181,9 @@ jobs:
     # Pull requests into the integration branch run lint and docs only. The full
     # run is its one draft pull request into main, past a stale `records` until
     # the re-record. Drop this condition when that branch lands.
-    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise') }}
+    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise' || github.base_ref == 'int/amendment3') }}
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.head_ref == 'feat/sensor-noise' && 60 || 30 }}
+    timeout-minutes: ${{ (github.head_ref == 'feat/sensor-noise' || github.base_ref == 'int/amendment3') && 60 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -196,8 +199,8 @@ jobs:
       # records that are stale until then, so they would stop the medium tier
       # and the cache. Drop all of this when that branch lands, with the timeout
       # above and the job's `if`.
-      FREE_COMPILED_PROGRAMS: ${{ github.head_ref == 'feat/sensor-noise' && '1' || '' }}
-      INTEGRATION_ARGS: ${{ github.head_ref == 'feat/sensor-noise' && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
+      FREE_COMPILED_PROGRAMS: ${{ (github.head_ref == 'feat/sensor-noise' || github.base_ref == 'int/amendment3') && '1' || '' }}
+      INTEGRATION_ARGS: ${{ (github.head_ref == 'feat/sensor-noise' || github.base_ref == 'int/amendment3') && '-n 2 --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2] --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]' || '' }}
 
     steps:
     - uses: actions/checkout@v4
@@ -249,7 +252,7 @@ jobs:
     - name: Small tests
       if: matrix.python-version != '3.13'
       run: |
-        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1)"; done ) & fi
+        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
         uv run pytest -q -m "not medium and not large and not records" $INTEGRATION_ARGS
 
     # Medium tests start other processes, write videos, or compile an aircraft
@@ -272,7 +275,7 @@ jobs:
       env:
         COVERAGE_CORE: sysmon
       run: |
-        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1)"; done ) & fi
+        if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
         uv run pytest -q -m "not medium and not large and not records" --cov=target_gym $INTEGRATION_ARGS
 
   large-test:
