@@ -63,7 +63,7 @@ def test_the_physics_clock_runs_a_control_period_per_env_step():
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key)
 
-    _, state2, _, _, _ = env.step_env(key, state, jnp.array([0.0, 0.0]))
+    _, state2, _, _, _ = env.step_env(key, state, jnp.array([0.0, 0.0, 1.0]))
     assert state2.physics_time == state.physics_time + CONTROL_PERIOD
 
 
@@ -93,7 +93,7 @@ def test_the_load_wobbles_inside_its_day():
     targets = [float(state.target_n)]
     _jstep = jax.jit(env.step_env)
     for _ in range(30):
-        _, state, _, _, _ = _jstep(key, state, jnp.array([0.0, 0.0]), params)
+        _, state, _, _, _ = _jstep(key, state, jnp.array([0.0, 0.0, 1.0]), params)
         targets.append(float(state.target_n))
     assert max(targets) < 1.05
     assert min(targets) > 0.95
@@ -146,12 +146,16 @@ def test_time_limit_counts_env_steps_and_rollout_stops_there():
     obs, state = env.reset_env(jax.random.PRNGKey(0), params)
     step = jax.jit(env.step_env)
     for _ in range(30):
-        _, state, _, _, _ = step(jax.random.PRNGKey(0), state, jnp.zeros((2,)), params)
+        _, state, _, _, _ = step(
+            jax.random.PRNGKey(0), state, jnp.array([0.0, 0.0, 1.0]), params
+        )
     assert int(state.time) == 30
     assert int(state.physics_time) == 30 * CONTROL_PERIOD
     assert bool(env.is_truncated(state, params))
 
-    _, _, rewards = rollout(spec, params, lambda obs: jnp.zeros((2,)), seed=0)
+    _, _, rewards = rollout(
+        spec, params, lambda obs: jnp.array([0.0, 0.0, 1.0]), seed=0
+    )
     assert len(rewards) == 30
     # Past the old (physics-step) limit the plant is still live and scored in
     # full: no order-of-magnitude drop between the first and the last step.
@@ -166,8 +170,10 @@ def test_demand_noise_is_fresh_every_sub_step():
     params = env.default_params
     obs, state = env.reset_env(jax.random.PRNGKey(3), params)
     step = jax.jit(env.step_env)
-    _, s1, _, _, _ = step(jax.random.PRNGKey(0), state, jnp.zeros((2,)), params)
-    _, s2, _, _, _ = step(jax.random.PRNGKey(0), s1, jnp.zeros((2,)), params)
+    _, s1, _, _, _ = step(
+        jax.random.PRNGKey(0), state, jnp.array([0.0, 0.0, 1.0]), params
+    )
+    _, s2, _, _, _ = step(jax.random.PRNGKey(0), s1, jnp.array([0.0, 0.0, 1.0]), params)
     d1 = float(s1.target_n) - float(state.target_n)
     d2 = float(s2.target_n) - float(s1.target_n)
     assert d1 != d2
@@ -186,7 +192,7 @@ def test_the_plant_runs_in_float64_under_x64():
         env = Reactor()
         _, state = env.reset_env(jax.random.PRNGKey(0), env.default_params)
         _, state, reward, _, _ = env.step_env(
-            jax.random.PRNGKey(1), state, jnp.array([0.1, 0.0]), env.default_params
+            jax.random.PRNGKey(1), state, jnp.array([0.1, 0.0, 1.0]), env.default_params
         )
         floats = {
             leaf.dtype

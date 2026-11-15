@@ -13,7 +13,10 @@ labelled "read from fig. N".
 Follow the grid's load plan through the day, keeping the average coolant temperature
 on its program and the axial offset inside its band, at the least lost output and
 wear. Rods are fast but tilt the power; boron barely tilts it but arrives late
-[S1, annex II-3; S2, section 2.2].
+[S1, annex II-3; S2, section 2.2]. How fast the unit can follow is the family's
+struggle: operators "strive to quickly return to higher power levels once electricity
+prices become profitable again. Unfortunately, this is not always easy or possible to
+achieve, as flexibility can be limited by the core control system" [S2, section 1.1].
 
 ## 2. What operators read
 
@@ -28,6 +31,14 @@ wear. Rods are fast but tilt the power; boron barely tilts it but arrives late
 - **The plan.** The dispatch's load plan is known in advance [S2, section 1].
 - **Xenon.** Operators plan dilution with a xenon tool run on the power history
   [S2, section 1]; the history is theirs to read.
+- **The offset's penalty time.** The process computer accumulates the penalty
+  deviation time, "that allows the operator to assess the status of the penalty
+  deviation time", and alarms past 1 h in the previous 24 h [ST1, B 3.2.3A-1].
+- **The core's burnup.** Results "can vary significantly from one transient to
+  another, depending on ... the reactor core history and the fuel burnup"
+  [S2, section 1.2]; the target flux difference and its band are given by burnup
+  [ST1, B 3.2.3A-3]. That operators read their core's point in its cycle off a
+  display: not found, taken as known to them.
 
 ## 3. What they move, and in which mode
 
@@ -42,12 +53,32 @@ wear. Rods are fast but tilt the power; boron barely tilts it but arrives late
 - **Mode G** (48 of EDF's 56 units) uses grey and black power-shimming groups plus an
   R group in a 27-step band [S14]. Not modelled; recorded in
   docs/proposals/reactor-coupling.md.
+- **The turbine.** One operator runs the core and another the turbine island, who
+  "has to set the power target and the power variation rate of the turbine according
+  to the grid dispatcher instructions" [S2, section 1.2]. The reactor's power "will
+  naturally follow the turbine power until they balance out again" [S2, section 2.1].
+- **What boron allows through the cycle.** "The effectiveness of dilutions decreases
+  over the fuel burnup cycle because the boron concentration of the primary coolant
+  is gradually reduced to counterbalance uranium depletion (the lower the boron
+  concentration, the less boron is removed for a given volume of injected fresh
+  water). Therefore, in Mode A, the maximum turbine power variation rate is
+  theoretically limited to 1-2 %NP/min at the beginning of the fuel cycle and only
+  0.1-0.3 %NP/min at 80 % of the fuel cycle. Flexibility is often even more limited
+  in practice, since the operator can struggle to control the AO properly"
+  [S2, section 2.2].
+- **What a predictive assistant gains** on Mode A, on simulators [S2, section 3.2]: a
+  shorter return to full power at 80 % of the cycle, "by gradually increasing the
+  turbine power variation rate as the xenon concentration decreases"; axial
+  oscillations cancelled about 50 % faster by steering the iodine imbalance, which
+  "cannot be measured"; and about 25 % less water and boron injected over a daily
+  cycle by relaxing the offset's limits at low power. These are the room the family
+  documents, not a claim about any agent.
 
 ## 4. Limits
 
 | limit | kind | form | sources |
 |---|---|---|---|
-| axial offset | penalty clock | within +-0.05 of the reference during load follow (EDF) [S1, annex II-4.3]; 1 h outside in 24 h, then a power reduction to under 50 % (Westinghouse: D.C. Cook and RAOC specifications, from search summaries) | S1, S4 |
+| axial offset | band, penalty clock and outer limits | the flux difference, delta I in % of rated power, within 5 % of a target that scales with power (EDF's +-0.05 [S1, annex II-4.3]; Krsko's +-5 % [S3]; the standard's figure shows the band 10 % wide at every power). Outside it, penalty time accumulates a minute a minute at 50 % of rated power and above and half a minute a minute from 15 % to 50 %; 1 h in the previous 24 h is allowed, then the unit must be under 50 % within 30 min. At 90 % and above the flux difference must be inside the band: 15 min to restore it, then 15 min to be under 90 %. From 50 % to 90 % it must also stay inside the acceptable operation limits, which a plant's core report gives; the standard's figure, "for illustration only", draws them from 11 % at 90 % power to 31 % at 50 % | ST1, B 3.2.3A and Figure B 3.2.3A-1 |
 | Tavg minimum for criticality | timed | 15 to 30 min to restore in the family's specifications (older custom specs 15 min, STS 3.4.2 30 min, from the reviewer's memory, not opened) | review |
 | rod insertion limit | timed | straight lines in power; KAIST's lead gives 22 % of the bank in at full power to 78 % at half; 2 h to restore (STS 3.1.6, from memory) | S4, review |
 | power, fuel, hot leg | trip | reactor protection | general |
@@ -94,8 +125,8 @@ rest.
   50 % and 90 % of rated power the flux difference may sit outside its target band
   for "a 1 hour cumulative penalty deviation time limit, cumulative during the
   preceding 24 hours", alarmed past "1 hour in the previous 24 hours"; below 50 %
-  the time counts half [ST1, B 3.2.3A]. The task's clock now looks back 24 h; it
-  still counts in full at every power, EDF's scope (section 4).
+  the time counts half [ST1, B 3.2.3A]. The task's clock looks back 24 h, and
+  since 2026-11-15 it counts by the power as these bases state it (section 4).
 - **How load-follow days come.** EDF's units load-follow 250 h a year [S17]; units
   stood at their minimum on weekend nights "and sometimes longer", and one made two
   variations a day down to 20 % [S17, slides 4 and 5]. How many days in a row a unit
@@ -111,8 +142,9 @@ rest.
   the floor rises after [S17, slides 6 and 12]. Seen once: past about 90 % of the
   cycle units take part only in frequency control (World Nuclear Association); EDF's
   1300 MWe campaigns went from 12 to 18 months; below about 100 ppm boron, removal is
-  too slow to follow xenon (US 4,432,930). The stream's refuelling every 30 days is
-  ours: it keeps the core at the start of cycle the coefficients describe.
+  too slow to follow xenon (US 4,432,930). So the task's core sits anywhere in the
+  first 90 % of its cycle, and a stream's core burns through that range and then
+  refuels (PHYSICS.md section 4).
 - **Restart after a trip.** Restart times as in section 5 [S15; S16]. After a
   refuelling outage most plants ramp at 10 to 30 % an hour below about 20 % of rated
   power and 3 % an hour above it [ST2]; Exelon's plants about 15 % an hour below the
@@ -141,8 +173,10 @@ rest.
 ### Sources for section 8
 
 - [ST1] US NRC, NUREG-1431 Rev. 3.0, Standard Technical Specifications,
-  Westinghouse Plants, Bases B 3.2.3A, pp. B 3.2.3A-1, -3, -5 (copy at
-  https://naygn.org/wp-content/uploads/2013/09/PWR-TS-Basis.pdf).
+  Westinghouse Plants, Bases B 3.2.3A, pp. B 3.2.3A-1 to -8, with Figure B 3.2.3A-1
+  on the last (copy at
+  https://naygn.org/wp-content/uploads/2013/09/PWR-TS-Basis.pdf). Read again on
+  2026-11-15, twice, the figure off the rendered page.
 - [ST2] EPRI 1000847 (2001), report summary: power ascension after refuelling.
 - [ST3] EPRI 1012915 (2006), summary and section 1: fuel reliability and power
   ascension rates.
@@ -154,7 +188,8 @@ rest.
 
 - [S1] IAEA Nuclear Energy Series NP-T-3.23 (2018), *Non-baseload operation in
   nuclear power plants*. <https://www-pub.iaea.org/MTCD/Publications/PDF/P1756_web.pdf>
-- [S2] Barbier et al., OAPS, ICAPP 2025. <https://arxiv.org/pdf/2605.20169>
+- [S2] Barbier et al., OAPS, ICAPP 2025. <https://arxiv.org/pdf/2605.20169>. Sections
+  1.1, 1.2, 2.1, 2.2 and 3.2 read again on 2026-11-15, twice.
 - [S3] Krsko, NENE 2022 paper 911.
   <https://www.djs.si/nene2022/proceedings/htm/pdf/NENE2022_911.pdf>
 - [S4] Moon et al., KNS Autumn 2018, 18A-534.

@@ -42,6 +42,28 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
+  the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
+  release shipped, keeps its number). Upgrade notes:
+  - The action is `[rod demand, boron flow, turbine loading rate]`: a policy with
+    two outputs must be rebuilt. With the third action at +1 the turbine follows
+    the dispatch's plan, as it always did before. The plan the turbine does not
+    take is charged as lost output at $80/MWh.
+  - The observation has 16 channels: the core's cycle point (13), the plan's load
+    now (14) and the offset's penalty time in hours (15) joined.
+  - The core sits at a point drawn evenly over the first 90 % of its cycle, with
+    that point's boron (1690 ppm at the start, 0 at the end), moderator
+    coefficient and boron worth. `ReactorParams(cycle_range=(0.0, 0.0))` is the
+    start-of-cycle core of before. `renewal_days` is gone: a stream's core burns
+    through the range and refuels at its end (`refuels`).
+  - The offset's band is 5 % of rated delta I at every power (it was 5 % of
+    offset, so half as wide at half power). Penalty time counts in full at 50 %
+    of rated power and above, by half from 15 % to 50 % and not below; at 90 %
+    and above the flux difference must be back in its band within 30 min; from
+    50 % to 90 % it must stay inside the acceptable operation limits (NUREG-1431,
+    Bases B 3.2.3A).
+  - The shipped expert and oracle ask the turbine to follow the plan and are
+    still the start-of-cycle plant's; they are rebuilt next.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts

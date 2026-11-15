@@ -243,7 +243,9 @@ def reload_from(load, seconds, plant, xp=jnp):
 def reference_step(params, state, obs, xp=jnp):
     """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron
     (20 min late), to_down, to_up, xenon's power history, the day's ramp rate
-    (%/min), its minimum load]``, the action ``[rod demand, boron flow]``."""
+    (%/min), its minimum load, ...]``, the action ``[rod demand, boron flow,
+    turbine loading rate]``. The turbine is asked to load as fast as it may, so it
+    follows the plan (and after a trip's restart, the conditioning ramps)."""
     from target_gym.reactor.env import ReactorParams, rod_insertion_limit
 
     p, plant = params, ReactorParams()
@@ -322,7 +324,7 @@ def reference_step(params, state, obs, xp=jnp):
         rc_lag=rc_state.mismatch_lag, rc_moving=rc_state.moving,
         rc_started=rc_state.started,
     )  # fmt: skip
-    return xp.stack([rods, out], axis=-1), new
+    return xp.stack([rods, out, xp.ones_like(out)], axis=-1), new
 
 
 def make_reactor_pid_controller() -> Controller:

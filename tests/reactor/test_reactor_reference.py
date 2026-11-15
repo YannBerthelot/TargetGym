@@ -33,6 +33,10 @@ from target_gym.reactor.experts import (
     xenon_play,
 )
 
+#: The reference is the start-of-cycle plant's until it is rebuilt for the drawn cycle
+#: point (PHYSICS.md section 6), so these tests run a core at the start of its cycle.
+START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
+
 
 def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     env = Reactor()
@@ -48,7 +52,7 @@ def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     )
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     s = s.replace(ramp_down_at=jnp.float32(0.0), ramp_up_at=jnp.float32(1e8))
-    hold = jnp.array([1.0 - 2.0 * float(s.rod_in), 0.0], jnp.float32)
+    hold = jnp.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0], jnp.float32)
 
     def step(c, _):
         s, I, Xe, first = c
@@ -69,7 +73,7 @@ def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
 def test_the_reference_keeps_the_rods_inside_their_insertion_limit(seed):
     """The owner's condition for the procedure (2026-11-08): bank D holds the offset
     only from above its insertion limit, on the EDF day."""
-    env, p = Reactor(), ReactorParams()
+    env, p = Reactor(), ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
@@ -97,7 +101,8 @@ def _day(scenario, seed, **changes):
 
     spec = REGISTRY["reactor"]
     (sc,) = [s for s in scenarios.suite(spec) if s.name == scenario]
-    p = scenarios.params_for(spec, sc, **changes)  # scored: sensor noise on
+    # Scored (sensor noise on), at the start of the cycle.
+    p = scenarios.params_for(spec, sc, **{**START_OF_CYCLE, **changes})
     env, expert = Reactor(), make_reactor_pid_controller()
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
@@ -143,7 +148,7 @@ EDGE = 1.6 / K_PER_PPM  # 3 ppm
 
 
 def _play(debt, rate):
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     return xenon_play(debt, rate, p, dt=30.0, lead=600.0, dead_band=1.6)
 
 
@@ -252,7 +257,7 @@ def _dispatch(steps, onsets, notice_h, ramp_h, hold_h):
 
 
 def test_the_reference_reads_each_day_s_dispatch():
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     ramp_h = (1.0 - p.load_min) / p.load_ramp_rate / 3600.0
     second = 24 * HOUR_STEPS
@@ -292,7 +297,7 @@ def test_the_reference_reads_each_day_s_dispatch():
 
 
 def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     load = 0.15
     T_avg = p.T_avg_no_load + (p.T_avg_full_load - p.T_avg_no_load) * load
@@ -332,7 +337,7 @@ def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
 def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
     from target_gym.reactor.experts import ReferenceParams
 
-    p, ref = ReactorParams(), ReferenceParams()
+    p, ref = ReactorParams(**START_OF_CYCLE), ReferenceParams()
     expert = make_reactor_pid_controller()
     ramp_h = (1.0 - low) / per_h
     hold_h = 3.0

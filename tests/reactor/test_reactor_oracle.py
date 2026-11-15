@@ -45,8 +45,8 @@ def test_a_demand_past_the_rods_reach_moves_them_as_one_at_it(sign):
     state = state.replace(rod_in=jnp.asarray(0.5, state.n.dtype))
     raw = 1.0 - 2.0 * float(state.rod_in)
     reach = reach_scale(env, p, 1)[0] / 2.0
-    at = env.step_env(key, state, jnp.array([raw + sign * reach, 0.0]), p)[1]
-    past = env.step_env(key, state, jnp.array([sign, 0.0]), p)[1]
+    at = env.step_env(key, state, jnp.array([raw + sign * reach, 0.0, 1.0]), p)[1]
+    past = env.step_env(key, state, jnp.array([sign, 0.0, 1.0]), p)[1]
     moved = 2.0 * (float(state.rod_in) - float(at.rod_in))
     assert moved == pytest.approx(sign * reach, rel=1e-3)
     for field in ("rod_in", "n", "T_coolant", "T_cold"):
@@ -110,6 +110,7 @@ def test_a_plan_mid_stream_and_reloading_replays_on_the_env():
             plan_depth=jnp.float64(0.3),
             ramp_down_at=jnp.float64(0.0),
             pickup=jnp.float64(0.9),
+            conditioning=jnp.float64(1.0),  # as a restart leaves it (2026-11-15)
             load_wobble=jnp.float64(0.0),
             target_n=jnp.float64(0.9),
             rod_in=0.5,

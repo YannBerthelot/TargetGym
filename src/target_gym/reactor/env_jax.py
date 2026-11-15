@@ -26,11 +26,12 @@ from target_gym.reactor.env import (
     ReactorParams,
     ReactorState,
     balance_power,
-    burnt,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    core_at,
+    cycle_point,
     flux_tilt,
     get_obs,
     moderator_tilt,
@@ -53,6 +54,8 @@ from target_gym.video import SavesVideo
 
 #: Salt for a refuelling's draws, apart from the step's own key.
 _REFUEL = 0x52454655
+#: Fold for the cycle point's draw at reset, beside the burnup's and the tilts'.
+_CYCLE = 11
 
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
@@ -66,10 +69,11 @@ class Reactor(
     """
     Nuclear reactor: a two-point core with rods and boron.
 
-    Observation (13,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
+    Observation (16,): [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron
     (20 min late), hours to the ramp down, hours to the ramp up, xenon's power, the
-    day's ramp rate (%/min), the day's minimum load]
-    Action      (2,): [rod demand, boron flow] in [-1, 1]
+    day's ramp rate (%/min), the day's minimum load, the cycle point, the plan's
+    load now, the offset's penalty time (h)]
+    Action      (3,): [rod demand, boron flow, turbine loading rate] in [-1, 1]
     """
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
@@ -88,8 +92,8 @@ class Reactor(
     )
     #: Runs as a continuing plant (``target_gym.stream``): each load-follow day
     #: starts through ``start_event``, carries its rate and depth and ends, the
-    #: plan's clock is rebased at each day, and the offset's allowance looks back
-    #: 24 h.
+    #: plan's clock is rebased at each day, the offset's allowance looks back
+    #: 24 h, and the core burns through its cycle and refuels at its end.
     STREAM_READY = True
 
     registry_name: str = "reactor"
@@ -119,7 +123,7 @@ class Reactor(
     )
 
     def __init__(self, integration_method: str = "tr_bdf2_4"):
-        self.obs_shape = (13,)
+        self.obs_shape = (16,)
         self.integration_method = integration_method
 
     @property
@@ -146,12 +150,12 @@ class Reactor(
         if params is None:
             params = self.default_params
 
-        action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
+        action, state = actuate(self, state, jnp.reshape(action, (3,)), params)
         action = jnp.clip(action, -1.0, 1.0)
         state = roll_offset_clock(state, params, CONTROL_PERIOD)
         # The boron command joins the queue once a control step.
         state = state.replace(
-            boron_queue=jnp.concatenate([action[1:], state.boron_queue[:-1]])
+            boron_queue=jnp.concatenate([action[1:2], state.boron_queue[:-1]])
         )
         # A controller gets one reading a step, so every sub-step's measured
         # cost carries the draw of the observation this step returns.
@@ -331,16 +335,22 @@ class Reactor(
         )
         I_tilt0 = jnp.where(follow, tilts[row, 0], 0.0)
         Xe_tilt0 = jnp.where(follow, tilts[row, 1], 0.0)
-        # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
-        shift = (
-            carried * params.boron_worth / (params.alpha_coolant + params.alpha_fuel)
+        # Where the core sits in its cycle, drawn evenly, and its boron, moderator
+        # coefficient and boron worth there.
+        cycle0 = jax.random.uniform(
+            jax.random.fold_in(key, _CYCLE),
+            minval=params.cycle_range[0],
+            maxval=params.cycle_range[1],
         )
+        core = core_at(cycle0, params)
+        # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
+        shift = carried * core.boron_worth / (core.alpha_coolant + core.alpha_fuel)
         T_fuel, T_hot, T_cold, T_sg = (
             T - shift for T in steady_state_temperatures(load, params)
         )
         # Critical on boron: the rods stay parked, whatever xenon asks for.
-        needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, params)
-        boron = params.boron_ref + needed / params.boron_worth
+        needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, core)
+        boron = core.boron_ref + needed / core.boron_worth
         delay = jax.random.randint(
             delay_key,
             (),
@@ -398,6 +408,10 @@ class Reactor(
             ao_hours=jnp.zeros(OFFSET_HOURS, dtype),
             ao_mark=as_state(0.0),
             burn_t0=jnp.zeros((), jnp.int32),
+            cycle0=as_state(cycle0),
+            conditioning=as_state(0.0),
+            ao_strict=as_state(0.0),
+            ao_far=as_state(0.0),
         )
 
         obs = self.get_obs(state)
@@ -445,7 +459,8 @@ class Reactor(
     ) -> ReactorState:
         """A trip's restart (long-strata R8; owner, 2026-11-11 and 2026-11-12): the
         plant comes back at reduced power once the lump's dead time has passed, and
-        the turbine reloads.
+        the turbine reloads, as fast as the third action asks and the fuel's
+        conditioning ramps allow.
 
         The trip's lump prices the dead time only: ``restart_steps`` after a scram,
         ``standby_steps`` after a timed limit's hot standby. The plant restarts at
@@ -453,12 +468,12 @@ class Reactor(
         the rods parked, and critical on boron with the burnup since the last
         refuelling diluted, as operators line a restart out. Iodine and xenon, means
         and tilts, are what the dead time at zero power left
-        (``xenon_after_shutdown``). The turbine then takes at most ``pickup``, which
-        climbs at the conditioning ramps until it meets the plan
+        (``xenon_after_shutdown``). The turbine then loads from there, no faster
+        than the conditioning ramps, until it meets the plan
         (``env.compute_next_state``); the plan it does not take is charged as lost
         output in tracking. The turbine's load and Tref start at the restart load.
         The core's burn rate, boron delay and cycle point are the plant's own and
-        stay. The xenon reading (obs 10) is the power whose balance is that xenon,
+        stay, and the boron is its cycle point's. The xenon reading (obs 10) is the power whose balance is that xenon,
         1 above full power's (``balance_power``). The rest is as at reset, and so is
         the xenon of a solve that overflowed.
         """
@@ -478,8 +493,10 @@ class Reactor(
         plan = planned_load(plan_seconds(state.physics_time, state, p), state)
         load = jnp.minimum(plan, p.restart_load)
         T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, p)
-        needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, p)
-        boron = p.boron_ref + needed / p.boron_worth - burnt(state, p)
+        # Critical on the boron of the core's cycle point, burnup included.
+        core = core_at(cycle_point(state, p), p)
+        needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, core)
+        boron = core.boron_ref + needed / core.boron_worth
         dtype = fresh.n.dtype
         as_state = lambda x: jnp.asarray(x, dtype=dtype)  # noqa: E731
         eps = rod_tilt(p.rod_park, p) + moderator_tilt(T_hot, T_cold, p)
@@ -501,25 +518,28 @@ class Reactor(
             burn_rate=state.burn_rate,
             boron_delay=state.boron_delay,
             burn_t0=state.burn_t0,
+            cycle0=state.cycle0,
             pickup=as_state(load),
+            conditioning=as_state(1.0),
             target_n=as_state(load + state.load_wobble),
             T_ref=as_state(tavg_program(load + state.load_wobble, p)),
         )
         return canonical_dtypes(hot)
 
     def refuel(self, key: chex.PRNGKey, state: ReactorState, params: ReactorParams):
-        """A stream's refuelling (owner, 2026-11-11): every ``renewal_days`` the
-        core is renewed at its cycle point as at reset, uncharged, the outside
-        world carrying on; burnup counts again from there. A window (0) never
-        refuels."""
+        """A stream's refuelling (owner, 2026-11-11 and 2026-11-15): when the core
+        reaches the end of ``cycle_range``, where its load following ends, it is
+        renewed at the range's start as at reset, uncharged, the outside world
+        carrying on; burnup counts again from there. A window (``refuels`` False)
+        never refuels."""
         p = params
-        days = jnp.asarray(p.renewal_days)
-        per = jnp.maximum(jnp.round(days * 86400.0 / (p.delta_t * CONTROL_PERIOD)), 1)
-        time = jnp.asarray(state.time, jnp.int32)
-        due = (days > 0) & (time > 0) & (time % per.astype(jnp.int32) == 0)
-        _, fresh = self.reset_env(jax.random.fold_in(key, _REFUEL), p)
+        start, end = p.cycle_range
+        due = jnp.asarray(p.refuels, bool) & (cycle_point(state, p) >= end)
+        _, fresh = self.reset_env(
+            jax.random.fold_in(key, _REFUEL), p.replace(cycle_range=(start, start))
+        )
         # The core is renewed, not the turbine: its load, Tref and reload carry on.
-        turbine = ("target_n", "T_ref", "pickup")
+        turbine = ("target_n", "T_ref", "pickup", "conditioning")
         world = {f: getattr(state, f) for f in (*self.OUTSIDE_WORLD, *turbine)}
         fresh = fresh.replace(
             time=state.time,
@@ -533,9 +553,9 @@ class Reactor(
 
     def action_space(self, params: ReactorParams | None = None) -> spaces.Box:
         return spaces.Box(
-            low=-jnp.ones(2),
-            high=jnp.ones(2),
-            shape=(2,),
+            low=-jnp.ones(3),
+            high=jnp.ones(3),
+            shape=(3,),
             dtype=jnp.float32,
         )
 

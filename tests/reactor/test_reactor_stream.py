@@ -32,7 +32,7 @@ from target_gym.stream import StreamEnv, make_stream
 LOAD, TO_DOWN, TO_UP = 3, 8, 9
 HOUR_STEPS = 120  # 30 s control steps
 #: Rods parked (3 of 228 steps in), no boron flow: the reset's own line-out.
-PARKED = jnp.array([1.0 - 2.0 * 3.0 / 228.0, 0.0])
+PARKED = jnp.array([1.0 - 2.0 * 3.0 / 228.0, 0.0, 1.0])
 #: An envelope nothing reaches, so no trip restarts the plant (a restart reloads
 #: the turbine, which moves the load off the plan).
 WIDE = dict(
@@ -240,8 +240,11 @@ def test_time_outside_the_offset_band_a_day_ago_stops_counting(stream):
 #   iodine and xenon (means and tilts) as that time at zero power leaves them: 48 h
 #   after a scram (``restart_steps``), 6 h after a timed limit's hot standby
 #   (``standby_steps``; owner, 2026-11-12);
-# - a stream refuels the core every ``renewal_days``: renewed at its cycle point
-#   as at reset, uncharged, the outside world carrying on; a window never does.
+# - a stream's core burns through its cycle and refuels when it reaches the end of
+#   its load-following range (``cycle_range``, 90 % of the cycle: REALITY.md
+#   section 8): renewed at the range's start as at reset, uncharged, the outside
+#   world carrying on; a window never does (owner, 2026-11-15; until then the
+#   stream refuelled every 30 days to stay at the start of the cycle).
 #
 # Oracles: the zero-power iodine and xenon equations (PHYSICS.md section 1, the
 # point form at n = 0) integrated numerically; the lump's times; and a critical
@@ -314,31 +317,36 @@ def test_the_kernel_restarts_a_trip_through_the_restart(stream):
     hot = jnp.float32(700.0)
     before = tripped.replace(n=jnp.float32(1.0), T_coolant=hot, T_cold=hot, T_sg=hot)
     _, after, _, _, info = jax.jit(stream.env.step_env)(
-        jax.random.PRNGKey(0), before, jnp.array([1.0, -1.0]), base
+        jax.random.PRNGKey(0), before, jnp.array([1.0, -1.0, 1.0]), base
     )
     assert bool(info["tripped"])
     assert float(after.Xe_hat) < 0.3  # a scram's 48 h of decay, not a fresh balance
     assert float(after.rod_in) == pytest.approx(3.0 / 228.0, abs=1e-6)
 
 
-def test_a_stream_refuels_the_core_at_its_cycle_point_and_a_window_never(stream):
-    from target_gym.reactor.env import burnt
+def test_a_stream_refuels_the_core_at_the_end_of_its_range_and_a_window_never(stream):
+    from target_gym.reactor.env import burnt, cycle_point
 
     renew = _params(stream, "baseload")
-    assert renew.renewal_days > 0
-    per = int(round(renew.renewal_days * 24 * HOUR_STEPS))
-    s, _ = _reset(stream, per - 1)
-    s = s.replace(Xe_hat=jnp.float32(1.1))  # a xenon no reset would draw
-    assert float(burnt(s, renew)) > 10.0  # ppm of burnup since the stream began
+    assert bool(renew.refuels)
+    start, end = renew.cycle_range
+    s, _ = _reset(stream)
+    # A core that began a hair under the end of its range: the 20 min of burnup
+    # since the stream began carry it past.
+    s = s.replace(cycle0=jnp.float32(end - 1e-6), Xe_hat=jnp.float32(1.1))
+    assert float(burnt(s, renew)) > 0.02  # ppm, 2.3 ppm a day at least
+    assert float(cycle_point(s, renew)) > end
     step = jax.jit(stream.env.step_env)
     _, renewed, *_ = step(jax.random.PRNGKey(0), s, PARKED, renew)
-    assert int(renewed.time) == per and float(burnt(renewed, renew)) == 0.0
+    assert float(cycle_point(renewed, renew)) == pytest.approx(start, abs=1e-7)
+    assert float(burnt(renewed, renew)) == 0.0
     assert float(renewed.Xe_hat) <= 1.0 + 1e-6  # balanced at a recent 0.9 to 1
+    assert int(renewed.time) == int(s.time) + 1
     assert int(renewed.physics_time) == int(s.physics_time) + 6  # the world goes on
     window = stream.env.default_params.replace(demand_sigma=0.0)
-    assert window.renewal_days == 0.0
+    assert not bool(window.refuels)
     _, kept, *_ = step(jax.random.PRNGKey(0), s, PARKED, window)
-    assert float(burnt(kept, window)) > 10.0
+    assert float(cycle_point(kept, window)) > end
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +517,7 @@ def test_the_observation_carries_the_day_s_rate_and_minimum(
     s, base = _reset(stream)
     s = stream.env.start_event(s, jax.random.PRNGKey(1), _params(stream, scenario))
     obs = np.asarray(stream.env.get_obs(s, base))  # read on baseload's params
-    assert obs.shape == (13,)
+    assert obs.shape == (16,)
     assert obs[RATE] == pytest.approx(per_min, rel=1e-5)
     assert obs[LOW] == pytest.approx(low, abs=1e-6)
     # Plan values, not sensors: the instruments' noise leaves them exact.

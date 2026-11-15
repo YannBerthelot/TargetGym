@@ -12,10 +12,15 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   ``data/oracle_widths/reactor.json``); the load the env applies: the day the
   state carries (its rate, depth and plan clock, which a stream rebases), at most
   the reload's ``pickup`` after a restart, and the wobble on its noise-free mean
-  path; the burnup since the state's last refuelling (``burn_t0``);
+  path; the core at its cycle point (``env.core_at``), with the burnup since the
+  state's last refuelling (``burn_t0``);
+- the turbine is not one of its moves: it is asked to load as fast as it may
+  (the third action at +1), so it follows the plan, climbs at the conditioning
+  ramps after a restart, and at its own fastest rate from any other load under
+  the plan, as the env does;
 - objective: |Tref - Tavg| past the rods' dead band, and delta I past the offset's
-  band on either side (a surrogate for the env's offset clock, which K8's replay
-  leaves out), through epigraph rows on every sub-step, and the rods' travel and the
+  band on either side, 5 % of rated at every power (a surrogate for the env's
+  offset clocks, which K8's replay leaves out), through epigraph rows on every sub-step, and the rods' travel and the
   effluent through rows a step (T2);
 - limits: power, fuel temperature and the hot leg on every sub-step's state; Tavg's
   floor has time to act, so only the replay charges it;
@@ -38,7 +43,9 @@ from target_gym.oracles.controller import Oracle, TaskModel, softplus_clip
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reactor.env import (
     NOT_RELOADING,
+    ON_PLAN,
     _reactor_stiff_step,
+    core_at,
     flux_tilt,
     moderator_tilt,
     planned_load,
@@ -49,9 +56,10 @@ from target_gym.reactor.env import (
 )
 from target_gym.reward import trip_cost
 
-#: Where the plan's rods, boron, the turbine's reload cap and the boron queue sit in
-#: ``x``, after the plant's 15 states.
-RODS, BORON, PICKUP, QUEUE = 15, 16, 17, 18
+#: Where the plan's rods, boron, the turbine's load under its plan, whether the
+#: conditioning ramps bind it, and the boron queue sit in ``x``, after the plant's
+#: 15 states.
+RODS, BORON, PICKUP, CONDITIONING, QUEUE = 15, 16, 17, 18, 19
 
 
 def rod_travel(p):
@@ -87,15 +95,19 @@ def boron_step(arriving, boron, p, width):
 
 def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
     """One control step from ``x`` = (the plant, the rods in raw units, the boron,
-    the reload's cap, the boron queue) under the raw demand ``u``: ``(x_next,
-    rows)``, one row (Tref - Tavg, n, T_fuel, T_hot, Tavg, delta I, the day's load
-    the reload does not take) per sub-step.
+    the turbine's load under its plan, whether the conditioning ramps bind it, the
+    boron queue) under the raw demand ``u``: ``(x_next, rows)``, one row (Tref -
+    Tavg, n, T_fuel, T_hot, Tavg, delta I, the day's load the turbine does not
+    take) per sub-step.
     ``width`` is the rate corner's (0.0 is the exact clip) and ``deltas`` are added
     to its output, one per sub-step (K5's probe). The load is the env's
-    (``env.compute_next_state``): the day ``task`` carries on its plan clock, capped
-    by the reload, which climbs at the conditioning ramps until it meets the day."""
+    (``env.compute_next_state``) with the third action at +1: the day ``task``
+    carries on its plan clock, capped by the turbine's own load while it is under
+    the day, which climbs at the conditioning ramps while they bind and at the
+    turbine's fastest rate otherwise, until it meets the day."""
     start, ramp_down_at, ramp_up_at, wobble, delay, burn_rate = task[:6]
-    plan_t0, plan_rate, plan_depth, burn_t0 = task[6:]
+    plan_t0, plan_rate, plan_depth, burn_t0, cycle0 = task[6:]
+    renewed_at = p.boron_ref * (1.0 - cycle0)  # critical boron at the last renewal
     day = SimpleNamespace(
         ramp_down_at=ramp_down_at, ramp_up_at=ramp_up_at, plan_rate=plan_rate,
         plan_depth=plan_depth,
@@ -115,20 +127,28 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         return jnp.minimum(day_at(i), pickup) + wobble * decay ** (t * period + i)
 
     def sub_step(carry, i):
-        plant, rods, boron, pickup = carry
+        plant, rods, boron, pickup, conditioning = carry
         rods = rods + softplus_clip(u[0] - rods, -most, most, width) + deltas[i]
         rod_in = 0.5 * (1.0 - rods)
         boron = boron_step(arriving, boron, p, boron_width)
-        rho = rod_worth(rod_in, p) - rod_worth(p.rod_park, p)
-        rho = rho + p.boron_worth * (boron - p.boron_ref)
         burnt = burn_rate * (start + t * period + i - burn_t0) * p.delta_t
-        rho = rho + p.boron_worth * burnt
+        core = core_at(cycle0 + burnt / p.boron_ref, p)  # the core's coefficients now
+        rho = rod_worth(rod_in, p) - rod_worth(p.rod_park, p)
+        rho = rho + core.boron_worth * (boron - renewed_at)
+        rho = rho + core.boron_worth * burnt
         eps = rod_tilt(rod_in, p)
         load = load_at(i, pickup)
-        plant, _ = _reactor_stiff_step(plant, rho, p, substeps, load, eps)
-        climb = jnp.where(pickup < p.reload_knee, p.reload_fast_rate, p.reload_rate)
-        pickup = pickup + climb * p.delta_t
-        pickup = jnp.where(pickup >= day_at(i + 1), NOT_RELOADING, pickup)
+        plant, _ = _reactor_stiff_step(plant, rho, core, substeps, load, eps)
+        # The env's turbine with the third action at +1.
+        held = jnp.where(pickup > 0.5 * NOT_RELOADING, day_at(i), pickup)
+        climb = jnp.where(held < p.reload_knee, p.reload_fast_rate, p.reload_rate)
+        fastest = jnp.where(conditioning > 0.5, climb, p.turbine_rate)
+        pickup = jnp.maximum(
+            held + fastest * p.delta_t, jnp.minimum(held, p.restart_load)
+        )
+        meets = pickup >= day_at(i + 1) - ON_PLAN
+        pickup = jnp.where(meets, NOT_RELOADING, pickup)
+        conditioning = jnp.where(meets, 0.0, conditioning)
         T_hot, T_cold = plant[8], plant[9]
         T_avg = 0.5 * (T_hot + T_cold)
         error = tavg_program(load_at(i + 1, pickup), p) - T_avg
@@ -136,12 +156,14 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         delta_I = plant[0] * flux_tilt(plant[14], plant[12], plant[0], tilt, p)
         short = jnp.maximum(day_at(i + 1) - pickup, 0.0)
         rows = jnp.stack([error, plant[0], plant[7], T_hot, T_avg, delta_I, short])
-        return (plant, rods, boron, pickup), rows
+        return (plant, rods, boron, pickup, conditioning), rows
 
-    (plant, rods, boron, pickup), rows = jax.lax.scan(
-        sub_step, (x[:RODS], x[RODS], x[BORON], x[PICKUP]), jnp.arange(period)
+    start_of_step = (x[:RODS], x[RODS], x[BORON], x[PICKUP], x[CONDITIONING])
+    (plant, rods, boron, pickup, conditioning), rows = jax.lax.scan(
+        sub_step, start_of_step, jnp.arange(period)
     )
-    return jnp.concatenate([plant, jnp.stack([rods, boron, pickup]), queue]), rows
+    tail = jnp.stack([rods, boron, pickup, conditioning])
+    return jnp.concatenate([plant, tail, queue]), rows
 
 
 #: $/h per 1 % of rated delta I past the band, the plan's surrogate (ours).
@@ -170,11 +192,12 @@ def reactor_model(env, p) -> TaskModel:
         x1, rows = reactor_step(
             env, p, x, u, t, d["task"], d["widths"][0], boron_width=boron_width
         )
-        # The offset's band in delta I is the band times the power, both sides.
+        # The offset's band: rated delta I either side of a target that scales
+        # with the power.
         off = rows[:, 5] - rows[:, 1] * p.ao_ref
         y = jnp.concatenate([
-            rows[:, 0] / p.e_floor, off - p.ao_band * rows[:, 1],
-            -off - p.ao_band * rows[:, 1], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
+            rows[:, 0] / p.e_floor, off - p.ao_band,
+            -off - p.ao_band, (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
             -u[1:], u[1:], rows[:, 1:5].ravel(),
         ])  # fmt: skip
         return x1, per_short * jnp.sum(rows[:, 6]), y, rows[-1:, 4], ()
@@ -190,18 +213,18 @@ def reactor_model(env, p) -> TaskModel:
     )  # Tavg's floor is a limit with time to act, charged on replay, not planned
     rod_raw = lambda s: 1.0 - 2.0 * s.rod_in  # noqa: E731
     return TaskModel(
-        nx=48, nu=2, step=step,
+        nx=49, nu=2, step=step,
         state_x=lambda s: jnp.concatenate([
             s.n[None], s.C,
             jnp.stack([
                 s.T_fuel, s.T_coolant, s.T_cold, s.T_sg, s.I_hat, s.Xe_hat, s.I_tilt,
-                s.Xe_tilt, rod_raw(s), s.boron, s.pickup,
+                s.Xe_tilt, rod_raw(s), s.boron, s.pickup, s.conditioning,
             ]),
             s.boron_queue,
         ]),
         data=lambda s: (
             s.physics_time, s.ramp_down_at, s.ramp_up_at, s.load_wobble, s.boron_delay,
-            s.burn_rate, s.plan_t0, s.plan_rate, s.plan_depth, s.burn_t0,
+            s.burn_rate, s.plan_t0, s.plan_rate, s.plan_depth, s.burn_t0, s.cycle0,
         ),
         hold=lambda s: jnp.stack([rod_raw(s), jnp.zeros_like(s.rod_in)]),
         tracked=lambda s: 0.5 * (s.T_coolant + s.T_cold)[None],
@@ -215,6 +238,8 @@ def reactor_model(env, p) -> TaskModel:
             Hinge(weight=flow_step * float(p.boration_flow)),
         ),
         limits=band * period,
+        # The turbine loads as fast as it may: the third action, not a move.
+        action=lambda s, u: jnp.concatenate([u, jnp.ones(1, u.dtype)]),
         move_rows=lambda x, u, steps: reach(env, p, x, u, steps),
         move_scale=lambda steps: reach_scale(env, p, steps),
         tie_budget=per_K * period * 0.5 * float(p.precision_floor),
