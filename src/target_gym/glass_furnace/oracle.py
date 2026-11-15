@@ -5,11 +5,12 @@ and the episode's future, here every walk innovation and event the episode's key
 planned on the task's own reward through the env's own ``step_env`` and
 ``compute_reward_terms``, so no cost is written twice.
 
-The reward is the fuel bill plus the step's charged pull at the lost glass price when the
-canal is under its target or the fining share under its pass mark. That second term is a
-step: losing a step costs 416.88 EUR, nine times the step's whole fuel bill. The planner
-therefore states it as what it is at any plan worth having, a limit on every step,
-fining >= pass and canal >= target, and minimises the fuel bill under them. It also
+The reward is the fuel bill, plus the plates the cold end rejects for their defects,
+plus the step's whole charged pull at the lost glass price when the canal is under its
+target or the fining share under its pass mark. That last term is a step: losing a step
+costs 416.88 EUR, nine times the step's whole fuel bill. The planner therefore states
+it as what it is at any plan worth having, a limit on every step, fining >= pass and
+canal >= target, and minimises the fuel and the rejected plates under them. It also
 asks no more than the crown override's cap: a valve asked over the cap gets the cap,
 and asking that cap's path itself gets the same valve, the same override integral and
 so the same episode, so on the env's step this loses nothing, and it keeps the
@@ -114,8 +115,8 @@ class Plan(NamedTuple):
     valve: np.ndarray  # kg/s asked, one per step
     knots: np.ndarray  # kg/s, one per knot
     cost: float  # EUR per step, the reward's mean cost on the planned rollout
-    running: float  # EUR per step, its fuel bill
-    tail_running: float  # EUR per tail step, the tail's fuel bill as planned
+    running: float  # EUR per step, its fuel and rejected plates
+    tail_running: float  # EUR per tail step, the tail's fuel and plates as planned
     lost_steps: int  # steps the planned rollout loses
     status: int  # SLSQP's exit mode, 0 converged
     message: str
@@ -129,8 +130,10 @@ class Plan(NamedTuple):
 
 def rollout(env, params, state, keys, valve):
     """The env's episode from ``state`` under ``valve`` (kg/s per step), on the
-    episode's step ``keys``: per step ``(cost, running, fining, canal, headroom)``, EUR,
-    the reward's own readings, and kg/s between the override's cap and the valve."""
+    episode's step ``keys``: per step ``(cost, running, fining, canal, headroom)``, EUR
+    (``running`` the fuel and the rejected plates, what a step that keeps both marks
+    costs), the reward's own readings, and kg/s between the override's cap and the
+    valve."""
     return _scan(env, params, state, keys, valve)[1]
 
 
@@ -145,7 +148,17 @@ def _scan(env, params, state, keys, valve):
         )  # the override's cap on this step (env_jax.override)
         _, s1, r, _, _ = env.step_env(k, s, E.to_action(u, params), params)
         read = P.sensors(s1.plant, params.grid, params.plant)
-        run = E.compute_reward_terms(s1, params)["running"]
+        # The bill of a step that keeps both marks: its fuel, and the plates its
+        # defects reject, by the env's own ``costs`` at the marks.
+        plates = E.costs(
+            0.0,
+            params.canal_target,
+            params.fining_pass,
+            s1.pull,
+            params,
+            read["defects"],
+        )["tracking"]
+        run = E.compute_reward_terms(s1, params)["running"] + plates
         headroom = jnp.maximum(cap, params.fuel_min) - u
         return s1, (-r, run, read["fining"], read["canal"], headroom)
 

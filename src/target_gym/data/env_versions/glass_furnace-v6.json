@@ -1,5 +1,5 @@
 {
-  "fingerprint": "1d08ad7a7bd2412b",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "fa51bd8249e21afe",
+  "note": "Unreleased version, re-stamped in place (owner, 2026-11-14 rule; go of 2026-11-15): the plant now carries the defects its tank blocks give off when their temperature rises and reboil past the last port (REALITY.md section 10), and the reward charges the plates they reject. Every earlier field is bit-identical over a two-day run; the reward moves wherever defects leave.",
+  "stamped": "2026-11-15T02:47:32+00:00"
 }

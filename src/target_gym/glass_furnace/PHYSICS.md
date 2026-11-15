@@ -2,8 +2,9 @@
 
 Reference plant: a **regenerative side-port fired float-glass furnace**, about 500 t/day,
 natural gas, its melter, waist and working end in one long section. Registered as
-`glass_furnace-v5` (attempt 3 of the rebuild, charter Amendments 1 to 3; v5 makes fining
-a time-temperature integral).
+`glass_furnace-v6` (attempt 3 of the rebuild, charter Amendments 1 to 3; v5 made fining
+a time-temperature integral; v6, not yet released, also charges the defects a
+temperature move makes, section 10 of `REALITY.md`).
 
 This document is the task's contract. The plant record it rests on is `REALITY.md`
 (sources S1 to S44); the cold review is `COLD_REVIEW.md`; the design, the measurements and
@@ -37,8 +38,15 @@ Temperatures are in K unless a name says otherwise.
   carried with the flow. Fining is a time-temperature integral [S45], not the peak: in
   the 1420 to 1500 C band [S31] a cell's unfined share falls at the band's share over
   `fining_time`, 1 h at the band's top (`fining_after`). Glass that cools keeps what it
-  fined, since the gas it released is spent; reheating fined glass, which raises reboil
-  bubbles [S45], is not modelled.
+  fined, since the gas it released is spent.
+- **Tank blocks.** The blocks each cell touches follow its glass over 2 h. A block at or
+  above 1450 C that rises gives off defects (bubbles, knots, stones) in proportion to
+  its rise and to the wall and floor area its cell touches per kg of glass [TR4; S7].
+  A block that cools, holds, or is colder gives off nothing.
+- **Reboil.** Past the last port the fining that still runs makes new bubbles [S45;
+  TR3]: each share of fining done there adds defects in proportion.
+- **Defects.** Counted per plate, carried with the glass as the fining share is, batch
+  glass arriving with none. Nothing clears them on the way to the canal.
 
 | Quantity | Value | Source |
 |---|---|---|
@@ -57,6 +65,8 @@ Temperatures are in K unless a name says otherwise.
 | Refiner crown | 6.8 W/(m^2 K), four times insulated | Ford float, seen once |
 | Combustion, regenerator nodes, reversal | LHV 50 MJ/kg, 10 % excess air, 25 min reversal, 40 s gap | As v1 to v3 had them |
 | Emissivity, firing shares, couple depth, height | `ours` | None found |
+| Block lag and release temperature | 2 h, 1450 C | The dwell and the coolest temperature of Dunkl's cycles [TR4] |
+| Block release, reboil | 270 and 10.5 defects per plate | `ours`, see the unsourced numbers |
 
 **The design state.** Every episode starts from `design_state.npz`, the plant settled for
 30 days at the fuel that holds the crown's face at 1590 C in bay 3 (W2000b's peak) and the
@@ -75,7 +85,8 @@ Keep a float furnace's glass fined and at forming temperature where it leaves fo
 bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end,
 about 18 minutes after the glass leaves; the melt answers a valve move over about two
 days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far
-from the defect limit costs fuel, too little loses glass.
+from the defect limit costs fuel, too little loses glass. Every rise of the bath where
+it touches its hot blocks, and fining pushed past the last port, costs plates.
 
 | obs | meaning |
 |---|---|
@@ -128,10 +139,13 @@ restart ("a cooled crown") has nothing to restart here, and the task has no
 **Job and score (rule 15).** Keep the glass fined and at forming temperature at the canal
 at the least fuel (REALITY.md, section 6). Cost per step: fuel at 60.5 EUR/MWh [S21], plus
 the charged pull at 600 EUR/t (`ours`, the owner's pick) when the canal is under 1100 C
-[S16] or the fining share leaving is under 0.5. The named property: lower variance lets
+[S16] or the fining share leaving is under 0.5, and otherwise the plates the cold end
+rejects: a share `1 - exp(-d)` of the pull at `d` defects per plate in the glass leaving
+(REALITY.md, section 10). The named property: lower variance lets
 the fuel drop toward the defect limit, worth 2 to 4 % of fuel in the family [S1; S2; S3].
 
-**Limits by kind (rule 14).** Fining: a zone, priced as lost glass. Canal: a zone, held by
+**Limits by kind (rule 14).** Fining: a zone, priced as lost glass. Defects: priced by the
+plates they reject, with no mark. Canal: a zone, held by
 the refiner's cooling loop. Crown at 1620 C [S13]: protected by the plant's override, the
 owner's pick and a known deviation (the record finds wear, not protection). The 1400 C
 low side is not modelled: it never binds, since the hottest face sits far above it.
@@ -154,6 +168,10 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | 12 | A constant valve with a margin may do nearly as well as a controller | Measured on v5 (2026-11-09): the fining PI costs 232,043 EUR a 7-day episode against 242,995 for the best constant valve (the conformance test's two seeds), and the ladder's kept rung costs 1.14 % more than the oracle's best paths, weighted (0.8 to 2.0 % per scenario, `data/oracle_ceilings/glass_furnace.json`, 2026-11-10). No solve converged, so the room is a lower bound; on every scenario-seed the oracle's kept plan costs less than the rung. The oracle holds its last knot 24 h past the episode under the limits and pays that tail's fuel, because the furnace runs on. Without the tail the room was 3.05 %, half of it in the last 24 h; with the tail's fuel free, 1.69 %. Paying for the fining it leaves, the oracle now spends 0.26 point more than the cascade over the last day, as the cascade leaves its furnace as it is. 0.8 point is the first knot, which coasts on the design state's fining margin (0.603 against a 0.5 pass), and 0.6 the middle five days | Small room, as the family's 2 to 4 % saving says |
 | 13 | Crown wear neither priced nor measured | Fixed: measured as is | Hours over 1600 and 1610 C, and the maximum, per policy |
 | 14 | Cooling air power, scanner rejects and cullet remelt are not charged; the agent sees the valve after the override | Known deviation; the last is intended | Small |
+| 15 | The defect rates have no source: no figure was found for defects per kelvin of block rise or per share of reboil (REALITY.md, section 10) | Known deviation; `ours`, for a practitioner to replace | The lost glass scales with them. Measured on the plant (2026-11-15, `scripts/glass_room/plant_runs.py`): held on its tables the furnace loses 1.0 % of its glass on the normal day; a loop on the bath's true mean temperature, which no instrument reads, loses 0.48 % |
+| 16 | Every block at or above 1450 C releases alike and colder blocks never do; the source's tests ran at 1450 to 1550 C. Nothing clears defects, though bubbles given off ahead of the fining zone would fine out | Known deviation | An upper bound on what reaches the canal from the hot blocks; nothing from the floor |
+| 17 | Reboil is the plant's own fining reaction past the last port. Bubbles made near the surface there might still leave, and the small ones re-dissolve on cooling between 1350 and 1275 C [TR1], which is not modelled | Known deviation | Running the unfired zone hot costs plates: 0.04 % of the glass in normal work, 1.9 % with the crown 20 K hotter (prototype, `p1` 10 %) |
+| 18 | The agent does not read the defects. Lines count them at the cold end [S38], unit and resolution not found | Open, for the owner | The agent learns of them through the reward only |
 
 ### Unsourced numbers and their family ranges (rule 19)
 
@@ -174,6 +192,9 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | Surface emissivity, port shares, couple depth and bay, combustion height | 0.8; ports 1 to 4 even then 0.7, 0.4; 36 mm in bay 3; 2.4 m | Not found; ours |
 | Bubble radius | 8.3 mm | Top of the laboratory range [S32] |
 | Fining time | 1 h at the band's top | Not found; ours. By Stokes at this plant's viscosity, a 0.5 mm bubble (radius ours) rises half the 1.2 m depth in 1.0 h at 1500 C and 1.7 h at 1420 C. At 3 h the plant could not pass 0.5 under its crown cap |
+| Block release | 270 defects per plate for each K a block rises, per m2 of block per kg of glass in its cell | Not found. Set so that the furnace held on its tables loses 1 % of its glass to block defects on the normal day, the low end of what the family reports as recoverable: yield up to about 8 % better under supervisory control [S7] |
+| Block release temperature and lag | 1450 C, 2 h | The coolest temperature and the dwell of Dunkl's cycles [TR4]; whether colder blocks release was not found |
+| Reboil | 10.5 defects per plate per unit of fining share done past the last port | Not found; ours: glass doing 1 % of its fining there loses one plate in ten |
 | Scenario weights | Normal 0.7; pull up and down 0.05 each; gas rich and lean 0.1 each | Gas swings: none at stable entry points to weekly where LNG blends [S19; S20], each 0 to 0.3. Pull changes: none on a steady float line [S5] to about 20 job changes a month on a container line [S9], each 0 to 0.3. Normal: the rest, 0.4 to 1 |
 
 ### The reference ladder's row (rule 3, for `scripts/reference_ladder.py`)
@@ -220,8 +241,9 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 
 `compute_reward = -(tracking + running + failure)`, in EUR per step, see
 docs/reward-shaping.md. `running` is the fuel burnt at its heating value and price;
-`tracking` is the step's charged pull at `lost_glass_price` when the canal is under
-`canal_target` or the fining share leaving is under `fining_pass`, both read on the true
+`tracking` is the lost share of the step's charged pull at `lost_glass_price`: all of it
+when the canal is under `canal_target` or the fining share leaving is under
+`fining_pass`, else the plates rejected, `1 - exp(-defects)`, all read on the true
 state. Neither goes through `reward.tracking_cost`, so there is no exponent and no hold.
 
 | parameter | value | source |
@@ -234,7 +256,8 @@ state. Neither goes through `reward.tracking_cost`, so there is no exponent and 
 | `failure_cost` | 0 | No trip: the crown is protected and the canal and fining are priced zones |
 | `restart_steps` | 0 | No trip |
 
-`reward_version = 1` gives 1 for a step of good glass and 0 for one lost.
+`reward_version = 1` gives the share of the step's glass that is good: 1 for all of it, 0
+for a step lost.
 
 ## 4. Actuators and timing
 

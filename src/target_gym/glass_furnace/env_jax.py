@@ -3,7 +3,8 @@ walks that move it with the valve held, and a reward in money.
 
 The score is the operator's job (REALITY.md, section 6): fuel at its price; glass charged
 while the canal is under its target, or not fined, is lost to cullet at its price, on the
-pull actually charged. The silica crown's 1620 C is the plant's own override (owner,
+pull actually charged, and so are the plates the cold end rejects for the defects the
+tank blocks give off when their temperature rises and for reboil (REALITY.md, section 10). The silica crown's 1620 C is the plant's own override (owner,
 2026-11-08; a known deviation, since no source shows such a protection): a limit control
 trims the valve so the hottest face stays under it, and the agent sees the valve it got.
 The refiner's cooling loop holds the canal just above its target, as a plant's local loop
@@ -61,10 +62,11 @@ OBS_NAMES = (
     "batch line, m",
 )
 #: The settled design point: crown face 1590 C in bay 3, canal 1101 C
-#: (``scripts/glass_slow_settle.py``).
+#: (``scripts/glass_slow_settle.py``), its blocks at their glass's temperature and its
+#: glass free of defects, as a settled furnace's are.
 DESIGN_STATE = pathlib.Path(__file__).with_name("design_state.npz")
 #: The file's digest, here so that the version stamp, which reads code, changes with it.
-DESIGN_STATE_SHA256 = "de473f2a174d7508e4baa213ee6ed68effd2b1116c82927021a2fe05674b2d35"
+DESIGN_STATE_SHA256 = "82416411bf5367ff9916d76a2e823eb81f302eea1407248523f00d4e4093e7a1"
 #: The fining share's reading scatter (ours), and the tolerance a controller is told.
 FINING_SCATTER = 0.005
 
@@ -279,15 +281,18 @@ def override(asked, hot, limit, params):
     return u, limit + p.delta_t / p.override_ti * (u - limit)
 
 
-def costs(fuel, canal, fining, pull, params):
+def costs(fuel, canal, fining, pull, params, defects=0.0):
     """Costs of one step, EUR: ``running`` the ``fuel`` kg/s burnt at nominal heating
-    value, ``tracking`` the step's charged ``pull`` if the canal is under its target or
-    the glass under-fined."""
+    value, ``tracking`` the share of the step's charged ``pull`` that is lost: all of
+    it if the canal is under its target or the glass under-fined, else the plates the
+    cold end rejects, ``1 - exp(-defects)`` of them at ``defects`` expected per plate.
+    """
     dt = params.delta_t
     lost = (canal < params.canal_target) | (fining < params.fining_pass)
+    share = jnp.where(lost, 1.0, -jnp.expm1(-jnp.maximum(defects, 0.0)))
     return dict(
         running=fuel * dt * params.plant.LHV / 3.6e9 * params.gas_price,
-        tracking=jnp.where(lost, pull * dt / 1000.0 * params.lost_glass_price, 0.0),
+        tracking=share * (pull * dt / 1000.0 * params.lost_glass_price),
     )
 
 
@@ -296,22 +301,25 @@ def compute_reward_terms(state, params, tripped=None, xp=jnp):
     read = P.sensors(state.plant, params.grid, params.plant)
     gas = gas_factor(state.walk, state.time, state, params)
     fired = state.fuel * P.mean_firing(params.plant) * (1.0 + gas)
-    terms = costs(fired, read["canal"], read["fining"], state.pull, params)
+    terms = costs(
+        fired, read["canal"], read["fining"], state.pull, params, read["defects"]
+    )
     tripped = False if tripped is None else tripped
     return R.with_trip(terms, tripped, R.trip_cost(params), xp)
 
 
 def compute_reward_v1(state, params):
-    """Version 1, kept constructible (``reward.select``): 1 for a step of good glass,
-    0 for one lost."""
-    lost = compute_reward_terms(state, params)["tracking"] > 0.0
-    return jnp.where(lost, 0.0, 1.0)
+    """Version 1, kept constructible (``reward.select``): the share of the step's
+    glass that is good, 1 for all of it and 0 for a step lost."""
+    worth = state.pull * params.delta_t / 1000.0 * params.lost_glass_price
+    return 1.0 - compute_reward_terms(state, params)["tracking"] / worth
 
 
 def compute_reward(state, params):
     """Minus the step's cost in EUR: the fuel burnt, at its heating value and the gas
-    price, plus the step's charged pull at the lost glass price when the canal is under
-    its target or the glass leaving is under-fined. Nothing trips."""
+    price, plus the lost share of the step's charged pull at the lost glass price: all
+    of it when the canal is under its target or the glass leaving is under-fined, else
+    the plates its defects reject. Nothing trips."""
     terms = compute_reward_terms(state, params)
     return R.select(
         params.reward_version, compute_reward_v1(state, params), R.total(terms)
