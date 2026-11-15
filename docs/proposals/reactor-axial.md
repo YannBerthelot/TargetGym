@@ -1,11 +1,69 @@
 # Reactor rebuild: axial offset, rods and boron
 
-Status: reactor-v9 (next section) is the current design, on top of v8, v7 and Amendment 3; the EDF rebuild
+Status: the next section (2026-11-15) is the current design, on top of reactor-v9, v8, v7 and Amendment 3; the EDF rebuild
 of 2026-11-08 and the first attempt of 2026-11-07 below it are history, on branch
 `claude/reactor-axial-dd4617` (from `feat/sensor-noise` at a9c8ea8). Nothing is merged and
 no shared baseline was re-recorded. The plant is described in
 [`src/target_gym/reactor/PHYSICS.md`](../../src/target_gym/reactor/PHYSICS.md). This page
 holds the measurements, under the rules of `task-charter.md`.
+
+## Turbine action, cycle point and offset limits, 2026-11-15 (reactor-v10, unreleased)
+
+This section is the current design; everything below it describes the plant at the
+start of its cycle with the load imposed.
+
+**Why.** A review on 2026-11-15 found the task where its family has no difficulty.
+On reactor-v10 at the start of the cycle (seeds 100 to 104) the shipped expert cost
+$4,275 a day on `edf_daily`, about half of it Tavg parked just outside its free band
+and half effluent, with the offset's derate at $0 on 5 of 6 scenarios. The same
+controller with gains by formula and a 0.8 K dead band cost $3,252, against the
+whole-day ceilings' $1,750. The shipped oracle, which plans 5 min ahead, tripped 11
+to 32 times a day on load-follow days, and the ceilings cost more than the expert
+on 5 of 30 seeds, since their plans cannot see the offset's clock. The plant record's
+own source (OAPS, REALITY.md section 3) puts the family's struggle elsewhere: how
+fast the unit follows as boron runs out through the cycle.
+
+**What changed** (PHYSICS.md sections 1, 4 and 6): the turbine's loading rate is a
+third action and the plan it does not take is lost output; the core sits at a point
+drawn over the first 90 % of its cycle; the offset's limits are NUREG-1431's; the
+reference runs from the curve book at the day's cycle point and loads the turbine at
+the rate boron carries.
+
+### The reference through the cycle, seeds 100 to 109
+
+Dollars a day, sensor noise on, means over the ten seeds (`study/measure.py`, on
+`benchmark.run_policy`). No trip on any of the 240 days.
+
+| Scenario | Start of cycle | 45 % | 90 % | Drawn (the task) |
+|---|---:|---:|---:|---:|
+| edf_daily | 3,878 | 8,074 | 52,559 | 18,991 |
+| edf_short_hold | 3,700 | 8,675 | 62,067 | 21,906 |
+| krsko_slow | 976 | 1,432 | 6,694 | 2,685 |
+| krsko_shallow | 500 | 866 | 4,423 | 1,681 |
+| fast_return | 8,011 | 13,271 | 60,170 | 25,113 |
+| baseload | 105 | 46 | 36 | 39 |
+
+- On the EDF and fast days the cost late in the cycle is lost output: $42,638 of
+  `edf_daily`'s $52,559 at 90 %, the turbine waiting for the boron on the return.
+  On the Krsko days, whose ramps boron carries at every cycle point, it is
+  effluent, which grows as boron falls: 9.6 t of dilution a day at the start, 101 t
+  at 90 %.
+- Weighted over the suite on the drawn cycle: $1,557 a day, 98 % of it from the
+  load-follow days. On the plant of before it was $5,244 (one trip) for the shipped
+  expert, baseload a quarter of the rest.
+- The null (rods parked, no boron, the turbine on its plan) costs $237 on drawn
+  baseload days against the reference's $39, and trips on the load-follow days
+  ($1.35M on `krsko_shallow`, 14 trips over ten seeds).
+
+### Not measured yet
+
+- The ceiling and the room on this plant. A two-number foresight search on a
+  prototype of it at 80 % of the cycle (diluting 30 to 45 min before the return,
+  the rod program holding Tavg) cost $16,580 on `edf_daily` against $26,218 for a
+  comparable classical controller, on seeds 100 to 104; the reference here costs
+  $28,858 on those seeds at 80 % of the cycle, on slightly different coefficients.
+- Acceptance (J2), the family sweep (B7) and a learning check (J7).
+- The oracle slot still plans 5 min ahead with the turbine on its plan.
 
 ## Starting tilt and the family sweep, 2026-11-10 (reactor-v9)
 

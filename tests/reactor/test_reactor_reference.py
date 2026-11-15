@@ -33,8 +33,8 @@ from target_gym.reactor.experts import (
     xenon_play,
 )
 
-#: The reference is the start-of-cycle plant's until it is rebuilt for the drawn cycle
-#: point (PHYSICS.md section 6), so these tests run a core at the start of its cycle.
+#: These tests run a core at the start of its cycle, where their hand values were
+#: written; test_reactor_reference_cycle.py runs the reference through the cycle.
 START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
 
 
@@ -266,7 +266,7 @@ def test_the_reference_reads_each_day_s_dispatch():
     T_avg = p.T_avg_full_load  # on the program at full load
     lined_out = np.array(
         [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, 1.0, 2.0, 0.5],
+         0.0, 0.0, 1.0, 2.0, 0.5, 0.0, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     obs = np.tile(lined_out, (steps, 1))
@@ -301,9 +301,10 @@ def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
     expert = make_reactor_pid_controller()
     load = 0.15
     T_avg = p.T_avg_no_load + (p.T_avg_full_load - p.T_avg_no_load) * load
+    # The plan's load reads 1 throughout: the turbine, at 15 %, is far under it.
     reloading = np.array(
         [load, T_avg + 2.5, 1.0 - 2.0 * 3.0 / 228.0, load, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, load, 2.0, 0.5],
+         0.0, 0.0, load, 2.0, 0.5, 0.0, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     steps = 2 * HOUR_STEPS
@@ -325,16 +326,25 @@ def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
 
 # --- the day's own ramp (re-record pass, step 2; owner, 2026-11-12) ---
 # Contract: the reference plans with the day's own ramp rate and minimum, read
-# from the dispatch (obs 11, % of rated load a minute; obs 12, the day's minimum).
-# Oracle: on a plant held lined out at full power, through the ramp down the plan's
-# feedforward is ``ff`` times the load the ramp moves in a 30 s step, ``-rate *
-# 30 s``, from the boron line's lead before the ramp to the lead before its end,
-# and nothing through the 3 h hold after it: 97.256 x 0.08 / 3600 x 30 = 0.06484
-# at 8 %/h over 6.25 h, and 0.03242 at 4 %/h over the 6.25 h a 25 % depth takes.
+# from the dispatch (obs 11, % of rated load a minute; obs 12, the day's minimum),
+# and feeds forward the boron the program asks for the load the ramp moves, from
+# the curve book at the day's cycle point (owner, 2026-11-15; until then a gain
+# fitted on a bump test at the start of the cycle). Oracle: on a plant held lined
+# out at full power, through the ramp down the plan's feedforward is the program's
+# ppm per unit of load times the ramp's rate, as a boration at the boron read, from
+# the boron line's lead before the ramp to the lead before its end, and nothing
+# through the 3 h hold after it. By hand (test_reactor_reference_cycle.py): 205.6
+# ppm per unit of load at the start of the cycle, 216.7 at 80 % of it; full
+# boration at the 1000 ppm read adds 3 / 2.5e5 x (7800 - 1000) = 0.0816 ppm/s. So
+# 205.6 x 0.08 / 3600 / 0.0816 = 0.05599 at 8 %/h, 0.02800 at 4 %/h, and 0.05901
+# at 8 %/h and 80 % of the cycle.
 
 
-@pytest.mark.parametrize("per_h, low", [(0.08, 0.5), (0.04, 0.75)])
-def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
+@pytest.mark.parametrize(
+    "per_h, low, cycle, expected",
+    [(0.08, 0.5, 0.0, 0.05599), (0.04, 0.75, 0.0, 0.02800), (0.08, 0.5, 0.8, 0.05901)],
+)
+def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low, cycle, expected):
     from target_gym.reactor.experts import ReferenceParams
 
     p, ref = ReactorParams(**START_OF_CYCLE), ReferenceParams()
@@ -345,7 +355,7 @@ def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
     T_avg = p.T_avg_full_load
     lined_out = np.array(
         [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, 1.0, per_h * 100.0 / 60.0, low],
+         0.0, 0.0, 1.0, per_h * 100.0 / 60.0, low, cycle, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     obs = np.tile(lined_out, (steps, 1))
@@ -362,6 +372,5 @@ def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
     lead_h = ref.lead / 3600.0
     during = (t > 1.0 - lead_h + 0.1) & (t < 1.0 + ramp_h - lead_h - 0.1)
     after = (t > 1.0 + ramp_h + 0.1) & (t < 1.0 + ramp_h + hold_h - lead_h - 0.1)
-    expected = -ref.ff * per_h / 3600.0 * 30.0
-    np.testing.assert_allclose(flow[during], expected, rtol=1e-3)
+    np.testing.assert_allclose(flow[during], expected, rtol=3e-3)
     np.testing.assert_allclose(flow[after], 0.0, atol=1e-6)

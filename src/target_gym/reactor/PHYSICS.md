@@ -460,23 +460,66 @@ weighted-saving headline does not use).
 
 ## 6. The expert
 
-**Not yet rebuilt for the plant of 2026-11-15.** The expert asks the turbine to
-follow its plan (the third action at +1) and its feedforwards and gains are the
-start-of-cycle plant's. So it is the reference only for a core at the start of its
-cycle; later in the cycle boron cannot carry the plan's ramps and it trips. Its
-rebuild, from the plant's balances at the day's cycle point and with a rule for the
-turbine, is the next step.
+The expert is the reference: the Westinghouse procedure (Krsko, NENE 2022, section 3;
+KNS 18A-534), kept over EDF's Mode A, which loses to the null on these days (D8), run
+from the operator's curve book at the day's cycle point (owner, 2026-11-15). Bank D
+holds the axial offset and never sits deeper than its insertion limit. Boron trims
+Tavg, fed forward from the day's plan and from the operator's tool for xenon and the
+fuel's burnup. The turbine loads at the rate the boron line carries. The owner
+adopted the procedure on 2026-11-08, on condition it keeps the insertion limit.
 
-The expert is the reference of `scripts/reactor_ladder.py`: the Westinghouse procedure
-(Krsko, NENE 2022, section 3; KNS 18A-534), kept over EDF's Mode A, which loses to the
-null on these days (D8). Bank D holds the axial offset and never sits deeper than its
-insertion limit; boron trims Tavg past the rods' 1.6 C dead band (IAEA NP-T-3.23, annex
-II-5.1), fed forward from the day's plan, led by the boron line's delay, and from
-xenon's balance by the operator's xenon tool (textbook iodine and xenon run on the
-observed power from the power history, `xenon_feedforward`). Both loops are SIMC PIs
-on bump tests at full power and at the half-power hold, keeping the least gain. The
-owner adopted it on 2026-11-08, on condition it keeps the insertion limit, which it
-does on every scenario. Results and room are in `docs/proposals/reactor-axial.md`.
+**From the curve book (2026-11-15).** The reference reads the core's cycle point
+(observation 13) and takes that point's boron worth and moderator coefficient
+(`experts.curve_book`, the plant's own lines of section 1). What it works out for
+boron is in ppm, turned into a flow by the pumps' rates at the boron read, so its
+loops have the same gain diluting and borating, at any point of the cycle. Until
+then its gains and its feedforward were fitted at the start of the cycle.
+
+- *The plan's boron.* The program asks `ppm_per_load` of boron per unit of load, the
+  power defect on the program over the boron's worth: 205.6 ppm at the start of the
+  cycle, 216.7 at 80 % of it. It is counted, not timed: what the load the turbine
+  will take asks for, a lead ahead (600 s, the middle of the line's delay), is added
+  to what is still owed, and the line sends what it can of it each step. So a ramp
+  faster than the line still gets all its boron.
+- *The Tavg loop.* A SIMC PI past the 1.6 K free band, on what is charged (the
+  owner's rule of 2026-11-10): `Kc = 1 / (k 2 theta)` and `Ti = 8 theta`, with `k`
+  the curve book's K of Tavg per ppm and `theta` = 615 s, the boron line's dead time
+  to Tavg from the recipe's bump tests.
+- *The operator's tool.* Xenon's rate, and the burnup read off the cycle point (a
+  ppm of boron is 1 / 1690 of the cycle), kept as a debt with the play of
+  2026-11-10 below. Its edges sit two standard deviations of Tavg inside the free
+  band, the zone's back-off (charter J1, k = 2): a Tavg that close to the edge
+  predicts a charge. Under the load's 0.5 % wobble, with rods and boron still,
+  Tavg's error spreads by 0.548 K at the start of the cycle and 0.209 K at 80 %
+  (`experts.tavg_spread`; the figure is quasi-static, and the days recorded at the
+  start of the cycle show 0.43 K). Each edge is pulled in by what xenon moves Tavg
+  over the line's longest delay, 15 min, since an edge is a limit. The debt starts
+  from where Tavg reads and is corrected toward it at the Tavg loop's integral
+  time, so what the plan's boron and the line's delay leave behind does not build
+  up unseen.
+
+Two numbers still come from the recipe's bump tests (`scripts/reactor_ladder.py`):
+the rods' loop on the offset and the line's dead time. Nothing was set from a cost.
+
+**The turbine (2026-11-15).** The reference loads the turbine at the rate boron
+carries (`experts.carried_rate`): full dilution at the boron read, plus xenon's
+rate, over the ppm the program asks per unit of load. That is 1.97 %/min at the start
+of the cycle with 1690 ppm and 0.50 %/min at 80 % of it with 450 ppm, the limits OAPS
+calls theoretical (REALITY.md section 3). Tavg's free band is reactivity too: every
+kelvin Tavg sits warmer than the cold side of the backed-off band is load the core
+can pick up, 0.9 % of rated load at the start of the cycle and 2.4 % at 80 % of it
+(a kelvin over `tavg_per_ppm x ppm_per_load`), and the turbine takes it over the
+line's lead. So the turbine loads at the carried rate with Tavg at that cold side,
+faster the warmer Tavg is, and tapers to a stop as Tavg cools from there to the free
+band's cold edge (`experts.turbine_demand`). While the reference holds the turbine
+under its plan, xenon's burnout carries load with the dilution, so it comes off the
+boron still owed and the tool does not borate it away.
+
+The reference does not dilute ahead of a return with the rods holding Tavg, and it
+does not spend the offset's allowance: it is the standard strategy, which keeps the
+offset on its reference (OAPS, section 3.1). What a planner gains over it is the
+task's room, and the family's own account of what a predictive assistant adds
+(REALITY.md section 3).
 
 **The rods' action band (owner, 2026-11-08), fixed before any rerun.** On a baseload
 day a plant's rods sit still: the target band is a limit operators keep, and they move
@@ -488,10 +531,11 @@ target band (act only once outside, which spends the penalty clock). The owner f
 it at half the band: the rods' loop sees no error while the offset is within 0.025 of
 its reference, half of EDF's 0.05 (2.5 % of delta I at full power, half the +-5 %
 delta I band of Krsko and the Westinghouse specifications), and past it the error is
-the excess. It is a band on the offset, like the target band, so in delta I it
-narrows with power as the target band does; read as 2.5 % of delta I at every power
-it would equal the whole band at the half-power hold. **ours,** family range 0 to
-0.05, chosen at half, and not to be adjusted after results (J1).
+the excess. **ours,** family range 0 to 0.05, chosen at half, and not to be adjusted
+after results (J1). It follows the target band's units: since 2026-11-15 the band is
+5 % of rated delta I at every power (section 4), so the action band is 2.5 % of rated
+delta I at every power; until then both were bands on the offset, which narrow in
+delta I with the power.
 
 **Rods on Tavg through a fast ramp (owner, 2026-11-10), fixed before any rerun.** On
 the start-of-cycle core (reactor-v8) a load cut releases about 820 pcm of Doppler and
@@ -500,7 +544,7 @@ so a 5 %/min ramp outruns it: with the rods on the offset, Tavg ran 20 to 29 K h
 and the hot leg tripped. In the family, fast ramps are carried by rods on Tavg
 (Westinghouse's automatic rod control, NRC HRTD 8.1; EDF's grey rods), while Krsko's
 procedure, rods on the offset and boron on Tavg, is a slow-ramp one (8 %/h). So the
-reference switches by one test: while the day's plan ramps faster than boron can
+reference switched by one test: while the day's plan ramps faster than boron can
 follow, the rods run Westinghouse's rod program on Tavg; otherwise bank D holds the
 offset. Boron can follow when the ppm a second the ramp needs, the plant's power
 defect per unit of load (from `rod_balance` on the program) times the planned load
@@ -508,6 +552,12 @@ rate, is within the line's full dilution (`dilution_flow / primary_mass * boron`
 full boration (`boration_flow / primary_mass * (acid - boron)`), at the boronmeter's
 reading. The handback is bumpless: the offset loop starts from where the rods are.
 The rod insertion limit holds in both modes. No new number.
+
+Since 2026-11-15 the same switch is read off the plan's boron count: the rods run
+the rod program on Tavg while boration is still owed for a ramp down, more than the
+line sends in a step, and for the line's lead after the last of it is sent, so the
+handback waits for the boron to reach the core. On the way up the turbine waits for
+the boron instead (above), and the rods stay on the offset.
 
 **The xenon tool's play (owner, 2026-11-10), fixed before any rerun.** The rule: a
 controller acts on what the cost charges and on what predicts a charge, never on a

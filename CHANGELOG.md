@@ -62,8 +62,13 @@ The next release is 0.8.0, because these changes break code written for
     and above the flux difference must be back in its band within 30 min; from
     50 % to 90 % it must stay inside the acceptable operation limits (NUREG-1431,
     Bases B 3.2.3A).
-  - The shipped expert and oracle ask the turbine to follow the plan and are
-    still the start-of-cycle plant's; they are rebuilt next.
+  - The expert is rebuilt for it: the same procedure, run from the curve book at
+    the day's cycle point, with the turbine loaded at the rate the boron line
+    carries. `ReferenceParams` lost `t_Kc`, `t_Ti`, `ff` and `dead_band` and
+    gained `theta`, `backoff` and `longest`; the helpers `curve_book`,
+    `ppm_per_load`, `tavg_per_ppm`, `tavg_spread`, `carried_rate` and
+    `turbine_demand` are new. The oracle still asks the turbine to follow the
+    plan and is rebuilt next.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
