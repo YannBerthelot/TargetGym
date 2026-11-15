@@ -85,11 +85,7 @@ RATE_LIMITS = {
         lambda p: p.target_T_crown_range[1] - p.target_T_crown_range[0],
         lambda p: {"fuel": 2 * p.actuator_rate},
     ),
-    "boiler_drum": (
-        "pressure",
-        lambda p: p.target_pressure_range[1] - p.target_pressure_range[0],
-        lambda p: {"fuel": 2 * p.actuator_rate[0], "feedwater": 2 * p.actuator_rate[1]},
-    ),
+    # boiler_drum v5 holds pressure at one setpoint, no target range: no H21 row.
     "reactor": (
         "T_avg",
         lambda p: _tref_span(p),
