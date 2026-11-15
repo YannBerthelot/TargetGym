@@ -17,8 +17,8 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   band on either side (a surrogate for the env's offset clock, which K8's replay
   leaves out), through epigraph rows on every sub-step, and the rods' travel and the
   effluent through rows a step (T2);
-- limits: power, fuel temperature and the hot leg on every sub-step's state; Tavg's
-  floor has time to act, so only the replay charges it;
+- limits: power, fuel temperature, the hot leg, Tavg's floor and DNB limit and the
+  rods' insertion limit on every sub-step's state, the timed ones as hard bounds;
   elastic at the trip cost per unit (T3), backed off by the planner's error on
   them (K11, in the widths file);
 - dropped guard (T4): the rods' range clip after the rate limit, since the demand
@@ -42,6 +42,7 @@ from target_gym.reactor.env import (
     flux_tilt,
     moderator_tilt,
     planned_load,
+    rod_insertion_limit,
     rod_tilt,
     rod_worth,
     tavg_dnb_limit,
@@ -135,7 +136,10 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         tilt = eps + moderator_tilt(T_hot, T_cold, p)
         delta_I = plant[0] * flux_tilt(plant[14], plant[12], plant[0], tilt, p)
         short = jnp.maximum(day_at(i + 1) - pickup, 0.0)
-        rows = jnp.stack([error, plant[0], plant[7], T_hot, T_avg, delta_I, short])
+        past_ril = rod_in - rod_insertion_limit(plant[0], p)
+        rows = jnp.stack(
+            [error, plant[0], plant[7], T_hot, T_avg, delta_I, short, past_ril]
+        )
         return (plant, rods, boron, pickup), rows
 
     (plant, rods, boron, pickup), rows = jax.lax.scan(
@@ -146,6 +150,12 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
 
 #: $/h per 1 % of rated delta I past the band, the plan's surrogate (ours).
 PLAN_BAND_WEIGHT = 1000.0
+
+
+#: The rows of ``reactor_step`` the plan limits, in ``reactor_model``'s band
+#: order: the power, the fuel and hot-leg temperatures, Tavg and the rods past
+#: their insertion limit.
+LIMITED = (1, 2, 3, 4, 7)
 
 
 def reactor_model(env, p) -> TaskModel:
@@ -175,19 +185,24 @@ def reactor_model(env, p) -> TaskModel:
         y = jnp.concatenate([
             rows[:, 0] / p.e_floor, off - p.ao_band * rows[:, 1],
             -off - p.ao_band * rows[:, 1], (x1[RODS:RODS + 1] - x[RODS:RODS + 1]) / 2.0,
-            -u[1:], u[1:], rows[:, 1:5].ravel(),
+            -u[1:], u[1:], rows[:, LIMITED].ravel(),
         ])  # fmt: skip
         return x1, per_short * jnp.sum(rows[:, 6]), y, rows[-1:, 4], ()
 
     price = float(trip_cost(p))
+    # Every trip the env has, on every sub-step's state, in ``LIMITED`` order. Tavg's
+    # floor (15 min), its DNB limit (2 h) and the rods' insertion limit (2 h) are
+    # timed, but the plan looks five minutes ahead, shorter than the floor's timer,
+    # so a timer it left to the replay ran out unseen. Each is planned as a hard
+    # bound: a plan that used the allowance could be cheaper, so the ceiling stays
+    # an upper bound.
     band = (
         Limit(p.n_min, p.n_max, price),
         Limit(p.T_fuel_min, p.T_fuel_max, price),
         Limit(hi=p.T_coolant_max, price=price),
-        # Tavg's DNB limit is timed (2 h), planned as a hard bound: a plan that
-        # used the allowance could be cheaper, so the ceiling stays an upper bound.
-        Limit(hi=float(tavg_dnb_limit(p)), price=price),
-    )  # Tavg's floor is a limit with time to act, charged on replay, not planned
+        Limit(p.T_avg_min, float(tavg_dnb_limit(p)), price),
+        Limit(hi=0.0, price=price),
+    )
     rod_raw = lambda s: 1.0 - 2.0 * s.rod_in  # noqa: E731
     return TaskModel(
         nx=48, nu=2, step=step,

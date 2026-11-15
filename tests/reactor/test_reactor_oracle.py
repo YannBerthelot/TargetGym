@@ -19,7 +19,7 @@ from target_gym import registry
 from target_gym.experts.mpc import plan_params
 from target_gym.oracles.controller import Oracle, enable_x64, float64
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.env import scheduled_load
+from target_gym.reactor.env import rod_worth, scheduled_load
 from target_gym.reactor.oracle import boron_step, reach_scale, reactor_model
 
 SPEC = registry.get("reactor")
@@ -143,3 +143,55 @@ def test_every_move_has_a_scale():
     env, p = Reactor(), ReactorParams()
     model = reactor_model(env, p)
     assert len(model.move_scale(1)) == model.nu
+
+
+def _violated(model, state):
+    """The planner's limits a held move breaks on its first step from ``state``."""
+    d = {"task": model.data(state), "end": 10, "widths": jnp.zeros(1)}
+    x = model.state_x(state)
+    _, _, y, *_ = model.step(d, x, model.hold(state), 0)
+    q = np.asarray(y, float)[len(model.hinges) :]
+    return [
+        i for i, (v, lim) in enumerate(zip(q, model.limits))
+        if v < lim.lo or v > lim.hi
+    ]  # fmt: skip
+
+
+def _rods_in(state, rod_in, p, balanced):
+    """The rods at ``rod_in``; ``balanced``, with the boron cut by their worth, so
+    the power holds where it was."""
+    rod_in = jnp.asarray(rod_in, state.n.dtype)
+    cut = (rod_worth(rod_in, p) - rod_worth(state.rod_in, p)) / p.boron_worth
+    return state.replace(rod_in=rod_in, boron=state.boron - cut * balanced)
+
+
+@pytest.mark.parametrize(
+    "timer, setup",
+    [
+        # The rods driven to 0.8 of the stroke at full power: the power falls to
+        # a third within the step and Tavg under its floor of 556 K.
+        ("below_floor", lambda s, p: _rods_in(s, 0.8, p, balanced=False)),
+        # The rods at 0.30 of the stroke with the boron cut to hold full power,
+        # past the insertion limit of 0.22 there (``ril_full``).
+        ("ril_outside", lambda s, p: _rods_in(s, 0.30, p, balanced=True)),
+    ],
+)
+def test_every_trip_the_env_times_is_a_planned_limit(timer, setup):
+    """The env times two trips, Tavg under its floor and the rods past their
+    insertion limit, and trips once either has lasted its allowance. The plan
+    looks five minutes ahead, less than the floor's 15 minutes, so a timer it does
+    not plan runs out unseen. Like DNB, each is planned as a hard bound: a step
+    on which the env starts a timer breaks one of the planner's limits, and the
+    reset, which starts none, breaks none."""
+    env, params = SPEC.make_env(), SPEC.make_test_params()
+    with enable_x64():
+        p = float64(params)
+        model = reactor_model(env, p)
+        key = jax.random.PRNGKey(100)
+        _, reset = env.reset_env(key, p)
+        reset = float64(reset)
+        assert _violated(model, reset) == []
+        state = setup(reset, p)
+        stepped = env.step_env(key, state, model.hold(state), p)[1]
+        assert float(getattr(stepped, timer)) > 0.0  # the env starts its timer
+        assert _violated(model, state)

@@ -344,7 +344,12 @@ def wind_sites(points) -> tuple[dict, list]:
 def reactor_sites(points) -> tuple[dict, list]:
     """The rods' rate limit (env.py:568), once per sub-step, against Tavg; and the
     back-off of the limits on every sub-step's state."""
-    from target_gym.reactor.oracle import reactor_model, reactor_step, rod_travel
+    from target_gym.reactor.oracle import (
+        LIMITED,
+        reactor_model,
+        reactor_step,
+        rod_travel,
+    )
 
     spec = REGISTRY["reactor"]
     env, p = spec.make_env(), float64(spec.make_test_params())
@@ -371,7 +376,7 @@ def reactor_sites(points) -> tuple[dict, list]:
 
     @jax.jit
     def limited(probe, deltas):
-        return run(probe, deltas[0])[1][:, 1:].ravel()
+        return run(probe, deltas[0])[1][:, LIMITED].ravel()
 
     return out, [float(b) for b in limit_backoff(limited, [width or 0.0], pts, n)]
 
