@@ -371,7 +371,10 @@ def reactor_sites(points) -> tuple[dict, list]:
 
     @jax.jit
     def limited(probe, deltas):
-        return run(probe, deltas[0])[1][:, 1:].ravel()
+        # The rows the model limits, in its band order: n, T_fuel, T_hot, Tavg
+        # (``reactor_model``'s ``rows[:, 1:5]``), not delta_I or the reload's
+        # shortfall, so each gap lands on its own limit.
+        return run(probe, deltas[0])[1][:, 1:5].ravel()
 
     return out, [float(b) for b in limit_backoff(limited, [width or 0.0], pts, n)]
 
