@@ -209,6 +209,15 @@ def test_charter_tasks_are_the_ladder_rows_less_fixtures_plus_reactor(tmp_path):
     assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
 
 
+def test_charter_tasks_leave_out_extra_tasks(tmp_path):
+    """Owner's decision, 2026-11-15: an Extra task (EnvSpec.extra) is never
+    scored, so its record is kept but no longer held current. four_tank,
+    battery and unstable_cstr are Extra and have ladder rows."""
+    for stem in ("cstr", "four_tank", "battery", "unstable_cstr"):
+        (tmp_path / f"{stem}.py").write_text("")
+    assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
+
+
 def test_the_log_only_grows(tmp_path):
     log = tmp_path / "log.jsonl"
     charter.append_log({"run": 1}, log)

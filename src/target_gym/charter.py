@@ -65,10 +65,15 @@ _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
 
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
-    """Every task with a ladder row, less the fixtures, plus the expert-reference
-    tasks."""
+    """Every task with a ladder row, less the fixtures and the Extra tasks, plus
+    the expert-reference tasks. An Extra task (``EnvSpec.extra``) is never
+    scored, so its record is kept but no longer held current (owner's
+    decision, 2026-11-15)."""
+    from target_gym.registry import REGISTRY
+
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
-    return sorted((rows - set(FIXTURES)) | set(EXPERT_REFERENCE))
+    extra = {name for name, spec in REGISTRY.items() if spec.extra}
+    return sorted((rows - set(FIXTURES) - extra) | set(EXPERT_REFERENCE))
 
 
 # --- J2 ---------------------------------------------------------------------

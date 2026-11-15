@@ -1,7 +1,9 @@
 """Every charter task's record (docs/proposals/task-charter.md, J2 to J4) is
 present, schema-valid and current. Charter tasks: every row in
-scripts/ladder_rows less the fixture first_order, plus the reactor, whose
-reference is its shipped expert (``target_gym.charter.charter_tasks``).
+scripts/ladder_rows less the fixture first_order and the Extra tasks, plus the
+reactor, whose reference is its shipped expert
+(``target_gym.charter.charter_tasks``). An Extra task's record is kept but no
+longer held current (owner's decision, 2026-11-15).
 
 Marked ``records``: a stale record fails here alone, and
 ``scripts/record_charter.py --tasks T`` refreshes it.
