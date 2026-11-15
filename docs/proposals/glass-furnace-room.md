@@ -307,13 +307,16 @@ release has shipped it.
   plate, the latter carried by the same transport as the fining share; four parameters
   (`block_lag`, `block_release_T`, `block_release`, `reboil_plate`).
 - `env_jax.py`: the reward's lost-glass term is now a share of the pull: all of it under
-  a mark, else the plates rejected, `1 - exp(-defects)`.
+  a mark, else the plates rejected, `1 - exp(-defects)`. The observation gains a
+  thirteenth channel, the defects per plate read at the cold end, 0.3 h late with the
+  fining reading's scatter (the owner's go, 2026-11-15).
 - `oracle.py`: its objective is fuel plus rejected plates, the env's own bill at the
   marks, so it still plans the task's reward.
 - `design_state.npz`: the settled blocks and zero defects added; the other arrays are
   untouched.
-- `tests/glass_furnace/test_glass_transients.py`: eight tests written from the contract
-  before the code.
+- `tests/glass_furnace/test_glass_transients.py`: nine tests written from the contract
+  before the code. One existing line changed, with the owner's go for the reading: the
+  glass furnace's row in `tests/test_industrial_readings.py` gains channel 12 at 0.005.
 - `PHYSICS.md`, `REALITY.md` section 10, `ours.json`, the version stamp.
 
 **Checks.**
@@ -357,7 +360,10 @@ holding the bath must move its target correctly or lose the fining.
 **Still open.**
 
 - The rate, for a practitioner to replace, and whether blocks under 1450 C release.
-- The agent does not read the defects; lines count them at the cold end.
+- The defect reading's scatter is the fining reading's, for want of its own; a real
+  count is noisier the fewer defects there are.
+- `scripts/generate_env_pages.py` stops on a `cstr` mismatch that predates this work,
+  so the glass furnace's docs page was patched by hand for the new channel.
 - The reference: the ladder has not been rerun on this plant, and none of its rungs can
   hold the bath.
 - The ceiling and every recorded row for the task are stale.

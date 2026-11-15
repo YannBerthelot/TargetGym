@@ -1,5 +1,5 @@
 {
-  "fingerprint": "fa51bd8249e21afe",
-  "note": "Unreleased version, re-stamped in place (owner, 2026-11-14 rule; go of 2026-11-15): the plant now carries the defects its tank blocks give off when their temperature rises and reboil past the last port (REALITY.md section 10), and the reward charges the plates they reject. Every earlier field is bit-identical over a two-day run; the reward moves wherever defects leave.",
-  "stamped": "2026-11-15T02:47:32+00:00"
+  "fingerprint": "1495ad0c77e3469b",
+  "note": "Unreleased version, re-stamped in place (owner, 2026-11-14 rule; go of 2026-11-15): the plant carries the defects its tank blocks give off when their temperature rises and reboil past the last port (REALITY.md section 10), the reward charges the plates they reject, and the observation gains the defects per plate read at the cold end (13 channels). Every earlier field is bit-identical over a two-day run; the reward moves wherever defects leave.",
+  "stamped": "2026-11-15T10:54:14+00:00"
 }

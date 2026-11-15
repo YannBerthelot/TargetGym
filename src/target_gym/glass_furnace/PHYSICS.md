@@ -102,6 +102,7 @@ it touches its hot blocks, and fining pushed past the last port, costs plates.
 | 9 | pull planned `pull_notice_h` ahead, kg/s |
 | 10 | cullet ratio charged |
 | 11 | batch line, m, every 30 min |
+| 12 | defects per plate read at the cold end, 0.3 h late |
 
 **Scenarios.** Five, weighted by their share of operating time (`physical_scenarios.py`):
 the normal day (0.7), a planned 10 % rise or fall in pull shown 8 h ahead (0.05 each),
@@ -171,7 +172,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | 15 | The defect rates have no source: no figure was found for defects per kelvin of block rise or per share of reboil (REALITY.md, section 10) | Known deviation; `ours`, for a practitioner to replace | The lost glass scales with them. Measured on the plant (2026-11-15, `scripts/glass_room/plant_runs.py`): held on its tables the furnace loses 1.0 % of its glass on the normal day; a loop on the bath's true mean temperature, which no instrument reads, loses 0.48 % |
 | 16 | Every block at or above 1450 C releases alike and colder blocks never do; the source's tests ran at 1450 to 1550 C. Nothing clears defects, though bubbles given off ahead of the fining zone would fine out | Known deviation | An upper bound on what reaches the canal from the hot blocks; nothing from the floor |
 | 17 | Reboil is the plant's own fining reaction past the last port. Bubbles made near the surface there might still leave, and the small ones re-dissolve on cooling between 1350 and 1275 C [TR1], which is not modelled | Known deviation | Running the unfired zone hot costs plates: 0.04 % of the glass in normal work, 1.9 % with the crown 20 K hotter (prototype, `p1` 10 %) |
-| 18 | The agent does not read the defects. Lines count them at the cold end [S38], unit and resolution not found | Open, for the owner | The agent learns of them through the reward only |
+| 18 | The agent reads the defects per plate, 0.3 h late with scatter 0.005; real lines count core bubbles, stones and scratches at the cold end [S38], with no unit or resolution found | Known deviation (owner's go for the reading, 2026-11-15) | A smooth reading with constant scatter, where a real count is noisier the fewer defects there are |
 
 ### Unsourced numbers and their family ranges (rule 19)
 
@@ -187,7 +188,7 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 | Crown override margin and gains | 5 K, 0.0101 kg/s per K, 2 h | Ours, a protection's design; SIMC on the fuel step |
 | Refiner cooling capacity, setpoint offset, gains | Twice design, 1 K, by SIMC | Not found; ours |
 | Walk spreads and memories | Gas 2 %, pull 1 %, cullet 5 points, blanket 10 %, sulfate 17 %; 24 or 12 h | Gas: ENTSOG's 4 to 6 MJ/m3 read as four spreads [S20]; pull: the 2 % wander as two [S5]; cullet and blanket: the owner's +-10 points and +-20 %; sulfate: ours |
-| Quality reading noise | 0.005 | Not found; ours |
+| Quality reading noise | 0.005 | Not found; ours, for the fining share and for the defects per plate |
 | Waist and working end widths | 3.5 and 7.9 m | A 1300 t/d furnace's ratios to its melter [S18], scaled |
 | Surface emissivity, port shares, couple depth and bay, combustion height | 0.8; ports 1 to 4 even then 0.7, 0.4; 36 mm in bay 3; 2.4 m | Not found; ours |
 | Bubble radius | 8.3 mm | Top of the laboratory range [S32] |
@@ -214,8 +215,8 @@ low side is not modelled: it never binds, since the hottest face sits far above 
 - **Measured disturbances for feedforward:** pull (observation 8) and planned pull (9),
   cullet ratio (10), batch line (11). Observation 6 is the refiner cooling's share of its
   capacity, 7 the valve after the override.
-- **Readings:** couples and canal at 0.36 K; the fining share 0.3 h late at 0.005; the
-  batch line sampled every 30 min. All through `target_gym.base`'s instruments, so they
+- **Readings:** couples and canal at 0.36 K; the fining share and the defects per plate
+  (observation 12) 0.3 h late at 0.005; the batch line sampled every 30 min. All through `target_gym.base`'s instruments, so they
   are a function of the state and the episode's key.
 
 ### What the registration retired (charter D2)
@@ -281,6 +282,7 @@ sulfate stay hidden. `sensor_noise_scale = 0` gives the noise-free task.
 | floor couples, canal | 0.36 K | | Ours | the crown couple's figure, for want of their own |
 | fining share | 0.005 | 1080 s late | Ours | the cold end is 14 to 20 min downstream: a 50 m bath and a 100 m lehr at 7.5 to 10.4 m/min [S40; S41; S42] |
 | batch line | 0 | every 30 min | Read for the cadence | Klemiato 2021 |
+| defects per plate | 0.005 | 1080 s late | Ours | the fining share's figures, from the same scanners, for want of their own [S38] |
 
 `reward`, the override and the refiner loop read the true state.
 
@@ -296,7 +298,7 @@ sulfate stay hidden. `sensor_noise_scale = 0` gives the noise-free task.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `glass_furnace` | 5040 | 120 | 168.0 h | 1 in [-1, 1] | 12 | 48 |
+| `glass_furnace` | 5040 | 120 | 168.0 h | 1 in [-1, 1] | 13 | 63 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

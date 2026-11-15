@@ -11,9 +11,9 @@ The refiner's cooling loop holds the canal just above its target, as a plant's l
 does, and the agent sees how hard it works.
 
 The agent reads what operators read (REALITY.md, section 1): crown and bottom couples, the
-canal, the fining share only at the cold end a transit later, the cullet ratio the batch
-plant holds, the batch line on its camera's cadence, and the pull plan as far ahead as its
-notice. Gas quality, blanket thickness and sulfate stay hidden. The episode is established
+canal, the fining share and the defects per plate only at the cold end a transit later,
+the cullet ratio the batch plant holds, the batch line on its camera's cadence, and the
+pull plan as far ahead as its notice. Gas quality, blanket thickness and sulfate stay hidden. The episode is established
 operation: it starts from the settled design state, the walks where the seed puts them,
 and a planned pull change or a gas swing comes at a time the seed draws inside its window.
 """
@@ -60,6 +60,7 @@ OBS_NAMES = (
     "pull planned, kg/s",
     "cullet ratio",
     "batch line, m",
+    "defects per plate read at the cold end",
 )
 #: The settled design point: crown face 1590 C in bay 3, canal 1101 C
 #: (``scripts/glass_slow_settle.py``), its blocks at their glass's temperature and its
@@ -333,7 +334,7 @@ class GlassFurnace(
 ):
     """A regenerative float glass furnace, its melt in two dimensions.
 
-    Observation (12,): OBS_NAMES.
+    Observation (13,): OBS_NAMES.
     Action (1,): fuel valve, raw in [-1, 1] -> [fuel_min, fuel_max] kg/s.
     """
 
@@ -361,7 +362,9 @@ class GlassFurnace(
     # Crown and bottom couples and the canal pyrometer at the shipped couple's 0.36 K
     # (ours for the three without a figure); the fining share at the cold end 0.3 h
     # late (ours, family range 14 to 20 min: a 50 m bath and a 100 m lehr at 7.5 to
-    # 10.4 m/min), its noise ours; the batch line every 30 min (Klemiato 2021).
+    # 10.4 m/min), its noise ours; the batch line every 30 min (Klemiato 2021); the
+    # defects per plate from the same scanners, as late, at the fining reading's
+    # scatter for want of their own (ours).
     readings: tuple = (
         ChannelReading(channel=0, sigma=0.36),
         ChannelReading(channel=1, sigma=0.36),
@@ -369,6 +372,7 @@ class GlassFurnace(
         ChannelReading(channel=3, sigma=0.36),
         ChannelReading(channel=4, sigma=FINING_SCATTER, dead_time=1080.0),
         ChannelReading(channel=11, sigma=0.0, interval=1800.0, sampled=True),
+        ChannelReading(channel=12, sigma=FINING_SCATTER, dead_time=1080.0),
     )
 
     render_furnace = classmethod(_render)
@@ -454,6 +458,7 @@ class GlassFurnace(
             planned_pull(hours + p.pull_notice_h, state, p),
             state.cullet,
             batch_line(state.plant, p),
+            read["defects"],
         )
         return jnp.stack([jnp.asarray(v, jnp.float32) for v in values])
 

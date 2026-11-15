@@ -16,7 +16,10 @@ Contract, from REALITY.md section 10 and the owner's go of 2026-11-15, not from 
   glass leaving, a share 1 - exp(-d) of the pull is lost at the lost-glass price. Glass
   under a mark is lost whole, and never more than the whole pull;
 - the packaged design state is settled: its blocks are at their glass's temperature and
-  its glass carries no defects, so a furnace held there loses next to nothing to them.
+  its glass carries no defects, so a furnace held there loses next to nothing to them;
+- the agent reads what operators read: the cold end's scanners count the defects [S38],
+  so the last channel is the defects per plate of the glass that left a transit
+  earlier, the same 0.3 h as the fining reading, exact at noise scale 0.
 """
 
 import jax
@@ -200,3 +203,31 @@ def test_firing_harder_sheds_defects_and_firing_less_does_not():
     down, _ = _day_at(0.97 * fuel, p)
     assert float(np.asarray(up)[-1]) > 0.0
     assert float(np.asarray(down).max()) < 0.1 * float(np.asarray(up).max())
+
+
+def test_the_cold_end_counts_the_defects_a_transit_later():
+    p = _quiet()
+    _, state = ENV.reset_env(jax.random.PRNGKey(0), p)
+    a = P.layout(p.grid)
+    # Defects already in the tank, more toward the charger, so that what leaves
+    # changes from step to step as the glass moves on.
+    along = jnp.linspace(0.3, 0.0, a.nc)
+    plant = state.plant.replace(defects=jnp.broadcast_to(along, state.plant.T.shape))
+    state = state.replace(plant=plant)
+    q = E.OBS_NAMES.index("defects per plate read at the cold end")
+    assert q == len(E.OBS_NAMES) - 1
+    late = next(r for r in ENV.readings if r.channel == q)
+    d = int(round(late.dead_time / p.delta_t))
+    assert d == int(round(0.3 * 3600.0 / p.delta_t))  # the fining reading's transit
+    fuel, _, _ = E.design_state()
+
+    def f(st, k):
+        obs, st, _, _, _ = ENV.step_env(k, st, E.to_action(jnp.asarray(fuel), p), p)
+        return st, (obs[q], P.sensors(st.plant, p.grid, p.plant)["defects"])
+
+    keys = jax.random.split(jax.random.PRNGKey(1), 3 * d + 10)
+    read, leaving = (
+        np.asarray(v) for v in jax.jit(lambda: jax.lax.scan(f, state, keys)[1])()
+    )
+    assert np.ptp(leaving) > 1e-4  # what leaves does change over the run
+    np.testing.assert_allclose(read[d:], leaving[:-d], rtol=1e-5, atol=1e-8)
