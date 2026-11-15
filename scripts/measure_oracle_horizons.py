@@ -318,7 +318,7 @@ TASKS = {
         {"fuel": 0.02, "feedwater": 2 * 2.0 / 200.0},
         {
             "level": _s("level", "level_trip_low", "level_trip_high"),
-            "pressure": _s("pressure", "pressure_min", "pressure_max"),
+            "pressure": _s("pressure"),  # v5 trips on the level alone
         },
         {"level": "feedwater", "pressure": "fuel"},
     ),
