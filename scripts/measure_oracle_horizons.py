@@ -317,7 +317,7 @@ TASKS = {
     "boiler_drum": (
         {"fuel": 0.02, "feedwater": 2 * 2.0 / 200.0},
         {
-            "level": ((lambda o, s, p: s.level), lambda p: -p.level_trip, "level_trip"),
+            "level": _s("level", "level_trip_low", "level_trip_high"),
             "pressure": _s("pressure", "pressure_min", "pressure_max"),
         },
         {"level": "feedwater", "pressure": "fuel"},
