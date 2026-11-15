@@ -364,10 +364,46 @@ holding the bath must move its target correctly or lose the fining.
   count is noisier the fewer defects there are.
 - `scripts/generate_env_pages.py` stops on a `cstr` mismatch that predates this work,
   so the glass furnace's docs page was patched by hand for the new channel.
-- The reference: the ladder has not been rerun on this plant, and none of its rungs can
-  hold the bath.
+- The reference: rerun on this plant (next section); none of its rungs can hold the
+  bath.
 - The ceiling and every recorded row for the task are stale.
 - How much foam varies: no figure found; the sulfate walk stays `ours`.
+
+## The reference ladder on the new plant (2026-11-15)
+
+`scripts/reference_ladder.py --tasks glass_furnace --nulls`, as it stands, on the plant
+with its defects: ten seeds, the five scenarios, a week from the reset. Median cost per
+seed, weighted over the scenarios:
+
+| | On the plant of 2026-11-13 | On the new plant |
+|---|---|---|
+| PI on the fining share | 73.15 | 76.35 |
+| With the balance feedforward | 62.66 | 65.43 |
+| Cascade through the crown, kept | 46.49 | 49.43 |
+| Null: valve at mid range | 55.12 | 70.09 |
+| Null: valve wide open, the crown on its override | 48.50 | 73.48 |
+| Null: valve held where the reset put it | 78.63 | 77.72 |
+
+The kept rung by scenario: normal 49.52, pull up 52.18, pull down 47.15, gas rich 49.09,
+gas lean 50.04. It loses 0.74 % of its glass to defects and none to a mark.
+
+- **Same tuning, same rung.** Every fit and the placed setpoint (0.5523) come out to
+  the digit, since the old fields are untouched. No rung trips. No null beats the kept
+  rung on any seed (J2).
+- **Firing hard is no longer nearly as good as the reference.** The best null was 4 %
+  above the kept rung and is now 42 % above it. Running hot costs plates.
+- **A lower bound on the room, on the ladder's own suite and seeds: 1.7 %.** A loop on
+  the bath's true mean temperature costs 48.59 (`ladder_suite_bath.py`). It holds the
+  reset state's bath, which is hotter than the reference needs, so it burns 0.4 more in
+  fuel than it has to. From a settled start the same loop gave 4.7 %.
+- **The window still flatters the reference.** The week starts with a tank free of
+  defects, and the reference spends its first days cooling from the design state to its
+  setpoint, which sheds nothing.
+- **Fixing the row's feedforward changes nothing here.** With the crown setpoint
+  following the pull the cascade costs 49.49 (`ladder_suite.py`): the suite's pull
+  changes are 10 %.
+- **What stays wrong with the reference:** its back-off is still the PI rung's spread,
+  and no rung of the ladder can hold the bath.
 
 ## What else the furnace lacks
 
