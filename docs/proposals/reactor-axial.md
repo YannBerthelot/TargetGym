@@ -55,15 +55,79 @@ Dollars a day, sensor noise on, means over the ten seeds (`study/measure.py`, on
   baseload days against the reference's $39, and trips on the load-follow days
   ($1.35M on `krsko_shallow`, 14 trips over ten seeds).
 
+### The day planner, and what it found in the plant (2026-11-15)
+
+The oracle slot gets a planner of the whole day (`reactor/oracle_day.py`, on the
+knot model of `reactor/oracle_model.py`): 5 min knots carrying xenon, boron, rods,
+the turbine's load and the offset's penalty time, with the temperatures at the
+reactivity balance, solved by the shared interior-point solver over the next 24 h
+plus a 3 h tail, again every half hour from the true state, and followed in between
+on straight lines between knots. Followed for a whole day with no solve, the plant
+stays within 0.68 K of Tavg and 0.2 % of rated delta I of the model.
+
+**Tavg under its program.** Left free, the planner let Tavg run up to 5.6 K under
+its program on the return and paid $4,596 on `edf_daily`, seed 100, at 80 % of the
+cycle, where the reference pays $26,370 waiting for its boron. The plant charged
+that only as lost efficiency, $1.9 a kelvin a step, where a kelvin buys $16 a step
+of load late in the cycle. A unit of the family cannot do it, for two reasons the
+plant did not carry:
+
+- Colder water makes steam at a lower pressure, and a turbine takes no more than
+  its valves pass wide open. The planner had the turbine at 97 % of rated load on
+  steam 8 K colder than its program's. **Added to the plant** (PHYSICS.md section
+  1): 105 % of rated flow at rated steam, in proportion to the steam's pressure
+  off it. It binds 3.5 K under the program at full load and 5.2 K at 97 %, so it
+  trims the lever and does not close it.
+- The safety case is proved from a Tavg on its program, and an interlock (C-16)
+  stops automatic turbine loading when Tavg falls a set amount under its
+  reference. Its setpoint was not read (PHYSICS.md, D14), so **the plant does not
+  carry it yet**, and the planner keeps Tavg inside its free band on its own
+  account (owner, 2026-11-15). The room below is therefore a lower bound on the
+  plant's as it stands, and the plant stays open to a policy that runs Tavg cold.
+
+How much the lever is worth, same day, the planner's Tavg held within a room of
+its program: no limit $4,596; 5.6 K $4,635; 2.8 K $7,195; the free band $10,600.
+
+**The solver.** Three things were needed for every solve to converge with Tavg
+held to its band. The shared solver hands back its start when a line search fails,
+so a solve runs in segments that keep what the last one reached. The offset's hour
+and the tight band together stalled it (either alone converges), so a cold solve
+first finds where the hour goes with Tavg's room wide, and every later solve gets
+those knots as data, the band a limit on the others. And a plan on the wobble's
+mean path rode the band's edge and paid for every crossing on replay (one baseload
+day lost to the reference), so the plan pays the mean of Tavg's cost over the
+wobble.
+
+**Reference against planner, dollars a day, seeds 100 to 104 of the scored task**
+(the cycle point drawn, sensor noise on, the plan on the wobble's mean path: the MPC
+line, not the ceiling):
+
+| Scenario | Reference | Planner | Ratio |
+|---|---:|---:|---:|
+| edf_daily | 19,231 | 7,840 | 2.45 |
+| edf_short_hold | 21,610 | 8,380 | 2.58 |
+| krsko_slow | 2,736 | 1,672 | 1.64 |
+| krsko_shallow | 1,710 | 675 | 2.53 |
+| fast_return | 25,674 | 11,039 | 2.33 |
+| baseload | 29 | 24 | 1.21 |
+
+Weighted over the suite: $1,558 a day against $661, a room of 2.36 on five seeds.
+The planner costs no more than the reference on any of the 30 days (three baseload
+days tie at $0). No trip, the penalty time at most 0.81 h, every one of the 1,440
+solves converged, about 130 s of solver a day.
+
 ### Not measured yet
 
-- The ceiling and the room on this plant. A two-number foresight search on a
-  prototype of it at 80 % of the cycle (diluting 30 to 45 min before the return,
-  the rod program holding Tavg) cost $16,580 on `edf_daily` against $26,218 for a
-  comparable classical controller, on seeds 100 to 104; the reference here costs
-  $28,858 on those seeds at 80 % of the cycle, on slightly different coefficients.
+- The ceiling and seeds 105 to 109. With the day's wobble foreseen at the knots
+  the planner did no better than on its mean path: $8,021 against $7,840 on
+  `edf_daily` and $45 against $24 on baseload, seeds 100 to 104. It chases a
+  5 min sample of a noise that turns over in 5 min, with a boron line 5 to 15 min
+  late, and pays the effluent for it. A ceiling needs the wobble averaged over
+  each knot, or is the planner's own run where that is cheaper.
+- The planner is not registered: the oracle slot still plans 5 min ahead with the
+  turbine on its plan.
+- The turbine loading stop's setpoint, and the plant with it.
 - Acceptance (J2), the family sweep (B7) and a learning check (J7).
-- The oracle slot still plans 5 min ahead with the turbine on its plan.
 
 ## Starting tilt and the family sweep, 2026-11-10 (reactor-v9)
 
