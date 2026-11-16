@@ -60,10 +60,11 @@ class Line:
         return np.full((1, 1), a), carry
 
 
-def main():
+def main(make=O.GlassOracle, tag=""):
+    """One episode of the oracle ``make(env, params)`` builds; ``tag`` names its files."""
     name, seed, out = sys.argv[1], int(sys.argv[2]), pathlib.Path(sys.argv[3])
     cap = int(sys.argv[4]) if len(sys.argv) > 4 else ITER_CAP
-    tag = f"{name}_{seed}"
+    tag = f"{name}_{seed}{tag}"
     if len(sys.argv) > 5:
         O.FINING_BACKOFF = float(sys.argv[5])
         tag += f"_b{O.FINING_BACKOFF:g}"
@@ -85,7 +86,7 @@ def main():
     O.solve = logged
     p = L.scenario_params(name)
     n = int(p.max_steps_in_episode)
-    line = Line(O.GlassOracle(L.ENV, plan_params(L.SPEC, p)), p)
+    line = Line(make(L.ENV, plan_params(L.SPEC, p)), p)
     t0 = time.time()
     run = run_policy(
         line, L.ENV, p, task_info(L.SPEC.name, L.ENV, p, 1), seeds=[seed],
@@ -118,6 +119,8 @@ def main():
         "glass": float(glass.mean()),
         "glass_under_a_mark": float(glass[under].sum() / n),
         "lost": int(under.sum()), "trips": int(run["tripped"][0].sum()),
+        "fining_mean": float(rec["fining"].mean()), "fining_low": float(rec["fining"].min()),
+        "plans_kept": getattr(line.mpc, "kept", 0),
         "plans": plans,
     }  # fmt: skip
     np.savez(

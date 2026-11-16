@@ -5,6 +5,12 @@ A study of `glass_furnace-v6` as it stands on `rec/charter-records` (4be0ab9), d
 below was measured on the registered plant with the scripts in `scripts/glass_room/`;
 their outputs are in `study/glass_room/out/`. Costs are EUR per 120 s step.
 
+**Since then (2026-11-15 and 16)** the plant on this branch has one more loss: defects
+released by the tank's blocks when their temperature rises. The sections from "In the
+plant" on rerun everything on it. The reference costs 49.23, a planner without
+foresight 48.24 and the ceiling 46.96: the room is 1.048, and 44 % of it is reached
+without foresight. The sections before describe the task as it was.
+
 ## The short answer
 
 The furnace, as modelled, is easy to run, and the recorded room of 1.14 % overstates what
@@ -368,7 +374,8 @@ holding the bath must move its target correctly or lose the fining.
   bath.
 - The ceiling: rerun on this plant (the section after next). The MPC line: rerun too
   (the section after that), and the shipped planner without foresight fails on this
-  plant. Every recorded row for the task is stale.
+  plant. A planner without foresight that keeps its marks is in the section after
+  (the fair line). Every recorded row for the task is stale.
 - How much foam varies: no figure found; the sulfate walk stays `ours`.
 
 ## The reference ladder on the new plant (2026-11-15)
@@ -451,7 +458,8 @@ The room recorded on the plant without defects was 1.0114.
   lowest, 0.522 on average). On the normal week the reference averages 0.557 and its
   lowest is 0.530 (0.514 on a pull rise): its back-off is still the PI rung's spread,
   as on the old plant (bug 1).
-- **The glass is the blocks, held by foresight.** Reboil costs the plans 0.01 EUR per
+- **The glass is the blocks, held by foresight and by a quick answer** (the fair line
+  holds half of it with no foresight). Reboil costs the plans 0.01 EUR per
   step and the reference nothing (`plan_mechanisms.py`). About 0.3 % of the block area
   sits at or over the release temperature, and over the week that area rises 60 K in
   all under the reference and 27 K under the plans. The plans' hot spot moves more, not
@@ -480,7 +488,8 @@ The room recorded on the plant without defects was 1.0114.
 - **What the ceiling knows and the reference does not:** the week's walks and events
   ahead, and the true state. How much the true state alone gives is what the MPC line
   (the oracle without a seed) was run for, in the next section; as shipped it does not
-  answer it. The loop on the bath's true mean gave 1.7 %.
+  answer it. The fair line, in the section after, does: 44 % of the gap, half of the
+  glass the plans keep. The loop on the bath's true mean gave 1.7 %.
 
 ## The MPC line on the new plant (2026-11-16)
 
@@ -523,19 +532,100 @@ Mean cost per step over the five seeds:
   is 45.84 against 46.04 and 45.47, lost glass 2.61 against 2.76 and 1.15. These are the
   episodes the walks spared, run without the margin the planner needs, so the fuel
   figure flatters it.
-- **What it says about the room.** The true state alone does not keep the glass: the
-  plates lost to the blocks are the reference's, a tenth of that gap closed. That part
-  of the room is foresight of the walks, or a faster answer to them than a plan a day.
-  It agrees with the loop on the bath's true mean (1.7 %). How much a competent planner
-  without foresight reaches is still not measured, because this one is not competent.
+- **What it says about the room.** With a plan a day, the true state does not keep the
+  glass: the plates lost to the blocks are the reference's, a tenth of that gap closed.
+  That part of the room is foresight of the walks, or a faster answer to them than a
+  plan a day. The next section shows it is partly the second. How much a competent
+  planner without foresight reaches is not measured by this line, because this one is
+  not competent.
 - **The library ships this line.** `make_oracle("glass_furnace")` and the runners build
   the oracle without a seed, so the task's oracle row would be this one.
-- **A fair line, which I would build next.** The same planner with four changes, none
-  of which gives it the future: each plan starts from the last plan's remainder; a new
-  plan every knot (4 h), so the lead it cannot correct is 16 h and not 36 h; a margin on
-  the fining limit of two sigma of the forecast error at that lead, read from this run
-  (0.01 to 0.02), which is the charter's own rule for a zone; and the limits softened
-  when no valve can meet them.
+
+## The fair line on the new plant (2026-11-16)
+
+`scripts/glass_room/fair_line.py`: the oracle without a seed, as in the last section
+(the true state, the walks' mean path, the events known), with three changes, none of
+which shows it the future:
+
+- **A plan every knot (4 h), started from the last plan's remainder.** The lead it
+  cannot correct is then the dead time plus one knot, 16 h, and not 36 h.
+- **No fining limit: the risk is priced.** Each planned step is charged the glass it
+  would lose (its whole pull at the lost-glass price, about 415 EUR) times the chance
+  that the fining comes out under its mark, the forecast's error taken as normal with
+  the spread measured at that lead. The spread is the shipped line's own, read from
+  the last section's run on the 154 days whose plan started inside its limits: nothing
+  before 4 h, then 0.0016 of share at 8 h, 0.0039 at 12 h, 0.0070 at 16 h. Past 16 h
+  it is held at 0.0070 (ours), since a later plan can still answer.
+- **When the returned plan breaks the canal or the headroom limit, the last plan goes
+  on.**
+
+I had announced a margin of two sigma and softened limits. Two sigma loses about 2 % of
+the steps by construction, on a limit priced at nine times a step's fuel, which is the
+ladder's bug 2 again, and softening a limit needs a constant with no source. Pricing
+the chance puts the margin where one more step toward the mark saves as much fuel as
+the glass it risks.
+
+It ran through the benchmark's runner on the ceiling's five scenarios and seeds, 100
+iterations at most per plan: 1050 plans, 82 hours of solving on bob, 2.8 to 3.6 hours
+and 1.3 to 1.5 GB an episode. Mean cost per step over the five seeds:
+
+| Scenario | Weight | Reference | Fair line | Ceiling | Share of the gap closed | Steps under a mark |
+|---|---|---|---|---|---|---|
+| Normal | 0.70 | 49.21 | 48.23 | 46.95 | 43 % | 0 |
+| Pull up | 0.05 | 51.89 | 51.14 | 49.68 | 34 % | 0 |
+| Pull down | 0.05 | 46.72 | 45.53 | 44.32 | 50 % | 0 |
+| Gas rich | 0.10 | 48.83 | 47.76 | 46.55 | 47 % | 0 |
+| Gas lean | 0.10 | 49.66 | 48.68 | 47.45 | 44 % | 0 |
+| Weighted (J) | | 49.23 | 48.24 | 46.96 | 44 % | 0 |
+
+- **It keeps every mark and beats the reference on all 25 episodes,** by 0.4 to 4.1 %
+  on its episode. No step is under a mark and nothing trips. The reference costs 1.0205
+  times the fair line, and the fair line 1.0271 times the ceiling.
+- **It closes 44 % of the gap between the reference and the ceiling:** 0.18 of the 0.51
+  EUR per step in fuel and 0.81 of the 1.75 in glass.
+- **The margin that came out is 0.025 of fining share.** The lowest fining of an
+  episode is 0.522 to 0.531, which is 3.2 to 4.4 times the spread at 16 h, and after
+  the first two days the fining averages 0.538. On the normal week the reference
+  averages 0.557 with a lowest of 0.530, and the foresight plans 0.522 and 0.5002.
+- **It keeps half the glass the foresight plans keep, without foresight.** On the
+  normal week the hot blocks rise 45 K in all, against 60 K under the reference and
+  27 K under the plans, and it loses 0.50 % of its glass to defects against 0.70 % and
+  0.28 %. Reboil costs it 0.001 EUR per step. So the blocks are not held by foresight
+  alone: a plan a day was too slow to answer the walks, and a plan every 4 h from the
+  true state answers about half of what they do to the blocks.
+- **The valve is calm.** It stays between 0.41 and 0.54 kg/s over the 25 episodes and
+  moves 0.30 to 0.41 kg/s in all over the week (a scenario's mean), in 4 h holds, as
+  the foresight plans do. The reference moves 2.8.
+- **From a warm start the solver has an easy job.** Of the 1050 plans, 1044 stop on the
+  solver's own tolerance, after 25 iterations at the median. Six stop at the cap. Five
+  of them are an episode's first plan, the only cold start, and were played inside
+  their limits. The sixth (pull up, seed 103, day 6) was outside a limit by 6e-4,
+  scaled, and the last plan was kept.
+- **The week still starts clean.** Lost glass by day on the normal week, EUR per step:
+  0.37, 1.28, 1.95, 2.39, 2.71, 2.94, 3.10, beside the reference's 0.45 to 4.11 and
+  the plans' 0.08 to 1.87 (the ceiling's section). Its loss is still rising when the
+  week ends.
+- **What it says about the room.** Of the 4.8 %, at least 2.0 % is within reach of a
+  controller with no foresight that reads the true state and knows the plant. The other
+  2.7 % is foresight of the walks, or a better planner than this one: it plans on the
+  walks' mean path, and one planning on sampled paths could hedge the blocks as well as
+  the fining. An agent on the sensors has more to do than this line: it must also work
+  out the state (the blocks, the bath, where each walk stands), which this line is
+  given.
+
+**What this does not show.**
+
+- The spread was measured on the 25 episodes the line is scored on. It is one curve of
+  17 numbers from 154 days, and its halves agree (0.0071 and 0.0069 at 16 h). The same
+  planner is running on seeds 105 to 109, where the ladder has the reference's costs
+  and there is no ceiling.
+- The spread is the shipped line's (a plan a day from a cold start), not this planner's
+  own, which was not measured.
+- The 16 h hold, the spread's floor (2e-4, the oracle's own back-off) and the cap of
+  100 iterations are ours. The canal and headroom limits stay hard; the canal never
+  came nearer than 0.7 K to its target.
+- It is a study script. It swaps the oracle's scan and back-off around each solve. In
+  the library it needs a hook in `solve` and its tests written first.
 
 ## What else the furnace lacks
 
@@ -610,10 +700,10 @@ it is.
    takes a third start per seed.
 6. The reference's back-off again (decisions 1 and 2): a quarter of the new room is the
    distance the reference keeps from the fining mark.
-7. The MPC line: whether to build the fair planner without foresight (a start from the
-   last plan, a plan every 4 h, a two-sigma margin from the measured forecast error,
-   soft limits when none can be met), and whether the library's oracle without a seed
-   becomes that planner for this task.
+7. The fair planner: whether the library's oracle without a seed becomes it for this
+   task (a plan every 4 h from the last plan, the chance of a lost step priced from a
+   measured forecast spread), with a hook in `solve` and tests first; and where its
+   spread table comes from, since a table measured on the scored seeds is a tuning.
 
 ## Sources seen today
 
@@ -643,5 +733,6 @@ and, from the ceiling run's output directory, `reference_split.py`, `plan_traces
 six minutes each on one server core). The ceiling itself is 25 chains of
 `scripts/glass_slow_oracle.py solve`, each a design start and a restart, up to
 100 minutes and 3 GB a solve. The MPC line is 25 runs of `mpc_line.py`, one per scenario
-and seed, 0.8 to 3.7 hours and up to 3.2 GB each.
+and seed, 0.8 to 3.7 hours and up to 3.2 GB each. The fair line is 25 runs of
+`fair_line.py`, 2.8 to 3.6 hours and 1.5 GB each.
 
