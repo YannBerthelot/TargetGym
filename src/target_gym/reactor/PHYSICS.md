@@ -153,6 +153,17 @@ there because a planner free of Tavg's band loaded the turbine at 97 % of rated
 load on steam 8 K colder than its program's, which no turbine takes
 (docs/proposals/reactor-axial.md).
 
+The turbine does not load while Tavg is 10 F (5.556 K) or more under its program
+at the turbine's load, and loads again once Tavg is back (interlock C-16; owner,
+2026-11-16). The stop holds the load: it does not unload the turbine, and a
+turbine on a flat plan stays on it. It is the stop for a return to power on the
+moderator alone, faster than the dilution follows: at the start of the cycle, with
+the rods and the boron still, Tavg falls 109.6 K under its program per unit of
+load, so the stop sits 5.07 % of rated load up, and the plant's heat lags the
+turbine by some 80 s, so a turbine loading at 5 %/min overshoots it by a few
+percent before it stops. Below about 96.5 % of load the stop comes before the
+valves' limit, and above it the valves' limit comes first.
+
 **Left out:** the second axial harmonic and radial modes, grey rods, samarium, decay
 heat, loop transport delay, and the cycle's effect on the axial mode (D11).
 
@@ -209,6 +220,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `turbine_rate` | 5 | %/min | The turbine's fastest loading and unloading: the EUR's fastest return (REALITY.md section 6) | read |
 | `valve_margin` | 1.05 | of rated steam flow | What the turbine's valves pass wide open at rated steam: 105 % of the manufacturer's guaranteed rating at Wolf Creek, 105 % of rated steam flow at River Bend and Clinton (REALITY.md section 3, [S19]: search summaries, the reports not opened) | read (summaries) |
 | `steam_slope` | 4618.5 | K | Saturated steam, `ln p = a - b / T` through the steam table's 5.503 MPa at 270 C and 8.588 MPa at 300 C ([S20], opened). It gives 6.417 and 7.443 MPa at 280 and 290 C, the table's 6.417 and 7.442 | derived |
+| `loading_stop` | 5.556 | K | The turbine's loading stop (interlock C-16): no loading while Tavg is this far under its program at the turbine's load. What it does is Vogtle's safety report's ([S21], read in full); the 10 F is a training card's for a plant it does not name ([S22], opened), not a plant document | source, setpoint flagged |
 | `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
 | `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
@@ -453,14 +465,17 @@ unit late in its cycle would be dispatched within what it can carry. The plan he
 is what the grid would take, and what the unit does not deliver is priced as lost
 output: that is the family's own account of the stake (REALITY.md section 1).
 
-**D14: no turbine loading stop on low Tavg.** Units of the family stop automatic
-turbine loading when Tavg falls a set amount under its reference (interlock C-16),
-there for a return to power faster than the dilution follows, and their safety case
-is proved from a Tavg on its program (REALITY.md section 4). The setpoint was not
-read (the reports were seen through search summaries only), so the plant does not
-carry the stop yet: below the valves' limit, Tavg under its program still costs
-only its lost efficiency, down to its floor. The oracle keeps Tavg inside its free
-band on its own account until the stop is in (`oracle_day.TAVG_MARGIN`).
+**D14: the loading stop's setpoint is a training card's, and its second condition
+is left out.** The turbine does not load while Tavg is 10 F (5.556 K) or more under
+its program at the turbine's load, and loads again once Tavg is back (interlock
+C-16, section 1; owner, 2026-11-16). What the interlock does is read from Vogtle's
+safety report, which gives no number; the 10 F is from a training card for a plant
+it does not name, whose vocabulary is a newer design's (REALITY.md section 4). The
+card's second condition, a Tavg at or under 552 F (562.0 K) whatever the program,
+is left out: it is the stricter one only below 18 % of load. The stop reads the one
+Tavg the model has, where a unit reads its coldest loop's. Units count a return on
+colder water as a design transient (2,000 over a unit's life, a search summary):
+the plant does not count them.
 
 **D10: no steam relief.** At part power the hot side of a PWR is bounded by its steam
 side: a Tavg high enough to lift the steam relief and safety valves (1176 psig, 570.0 K

@@ -43,6 +43,7 @@ WIDE = dict(
     ril_allowed=1.0e9,
     dnb_allowed=1.0e9,
     valve_margin=1.0e9,  # nor does cold steam hold the turbine back
+    loading_stop=1.0e9,  # nor a cold Tavg stop its loading
 )
 
 

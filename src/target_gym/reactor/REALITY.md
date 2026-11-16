@@ -93,13 +93,23 @@ achieve, as flexibility can be limited by the core control system" [S2, section 
 | rod insertion limit | timed | straight lines in power; KAIST's lead gives 22 % of the bank in at full power to 78 % at half; 2 h to restore (STS 3.1.6, from memory) | S4, review |
 | power, fuel, hot leg | trip | reactor protection | general |
 
-- **The turbine loading stop on low Tavg (C-16).** An interlock stops automatic
-  turbine loading when the lowest loop's Tavg falls a set amount under the reference
-  from the turbine's impulse pressure, so the cooling "does not reach cooldown
-  accident limits", and loading resumes once dilution has raised the temperature
-  [S21]. It is what keeps a return to power from outrunning the boron on colder
-  water. Seen through search summaries only; the setpoint was not read, and the
-  plant does not carry the stop (PHYSICS.md, D14).
+- **The turbine loading stop on low Tavg (C-16).** In a rapid loading, a drop in
+  the coolant's temperature is sometimes used to raise the core's power, when the
+  rods are not deep enough to supply the reactivity and the boron is too slow: the
+  turbine keeps loading past the rods' full withdrawal, and a dilution afterwards
+  recovers the temperature. Interlock C-16 bounds that drop. It compares the
+  coldest loop's Tavg with the reference programmed from the turbine's impulse
+  pressure and stops the turbine's loading once the drop reaches its setpoint, so
+  that the cooling stays clear of the cooldown accident's limits; loading resumes
+  once the dilution has raised the temperature [S21, read in full]. The report
+  gives no setpoint. A training card for a plant it does not name gives two
+  conditions for C-16, Tavg at or under 552 F or Tavg 10 F under Tref [S22,
+  opened]; its vocabulary is a newer design's, so the number is flagged, and it is
+  the tighter of the figures seen: a 1982 demonstration at Tihange gained 230 MWe
+  on a 9 K drop, and units count the return on colder water as a design
+  transient, 2,000 over a unit's life [S23, search summaries]. The plant carries
+  the stop at 10 F under the program (PHYSICS.md section 1 and D14; owner,
+  2026-11-16).
 
 ## 5. Costs
 
@@ -239,13 +249,21 @@ rest.
 - [S20] Saturation pressures of water, IAPWS-IF97 values as tabulated at
   <https://roymech.org/Related/Fluids/Fluids_Water_Props.html>, opened 2026-11-15;
   a second table gave the same four values in a search summary.
-- [S21] Interlock C-16, the turbine loading stop on low Tavg: Vogtle FSAR section
-  7.7 (NRC ML21102A348) and ML16330A412. Search summaries of 2026-11-15 only: it
-  "limits the reduction in coolant temperature so that it does not reach cooldown
-  accident limits and preserves satisfactory steam generator operating conditions",
-  on the gap between the lowest loop Tavg and a reference from the turbine's
-  impulse pressure, and clears once dilution has raised the temperature. Its
-  setpoint was not read.
+- [S21] Vogtle Electric Generating Plant units 1 and 2, Updated Final Safety
+  Analysis Report, revision 20 (9/16), section 7.7 (NRC ML16330A412): 7.7.1.4.3
+  "Turbine Loading Stop", 7.7.2.4 "Loading and Unloading" and Table 7.7.1-1. Read
+  in full from the file on 2026-11-16 (the owner saved it; nrc.gov refuses
+  fetches). 7.7.2.4 also gives loading and unloading ramps of 5 %/min over 15 to
+  100 % of power, and points to paragraph 3.9.N.1.1.1.5 for the transient, which
+  is in another file and was not read.
+- [S22] "Setpoints Turbine Trips Ps and Cs combined", a set of training cards at
+  <https://knowt.com/flashcards/63bfb8d3-fc46-40f5-b153-97fb19acdfa0>, opened
+  2026-11-16 (seen first in a search summary, then fetched): card 11, C16. No plant
+  is named; other cards speak of the "PLS" and of "AO" rods, a newer design's.
+- [S23] Search summaries of 2026-11-16, not opened: "Reduced Temperature
+  Return-to-Power Demonstration", Nuclear Technology 59(1), 1982 (Tihange, 230 MWe
+  on a 9 K drop); an EPRI materials report and V.C. Summer's licence renewal
+  update listing "Reduced Temperature Return to Power" at 2,000 design cycles.
 
 Not opened, and not bypassed: NRC technical specifications and course chapters on
 nrc.gov, EDF's HAL documents and ScienceDirect, which block automated readers.

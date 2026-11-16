@@ -140,11 +140,13 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         eps = rod_tilt(rod_in, p)
         load = load_at(i, pickup)
         capacity = turbine_capacity(plant[10], p)  # on the steam before the step
+        stopped = tavg_program(load, p) - 0.5 * (plant[8] + plant[9]) >= p.loading_stop
         plant, _ = _reactor_stiff_step(plant, rho, core, substeps, load, eps)
         # The env's turbine with the third action at +1.
         held = jnp.where(pickup > 0.5 * NOT_RELOADING, day_at(i), pickup)
         climb = jnp.where(held < p.reload_knee, p.reload_fast_rate, p.reload_rate)
         fastest = jnp.where(conditioning > 0.5, climb, p.turbine_rate)
+        fastest = jnp.where(stopped, 0.0, fastest)  # the loading stop
         pickup = jnp.maximum(
             held + fastest * p.delta_t, jnp.minimum(held, p.restart_load)
         )

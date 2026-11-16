@@ -183,6 +183,12 @@ class ReactorParams(EnvParams):
     #: program's.
     valve_margin: float = 1.05
     steam_slope: float = 4618.5  # K
+    #: The turbine's loading stops while Tavg is this far or further under its
+    #: program at the turbine's load (interlock C-16), and resumes when Tavg is back:
+    #: the stop for a return to power on the moderator alone, faster than the
+    #: dilution follows (Vogtle UFSAR 7.7.1.4.3 and 7.7.2.4). It stops the loading
+    #: only. 10 F, from a training card, not a plant document (REALITY.md section 4).
+    loading_stop: float = 10.0 / 1.8  # K
 
     # ---- Two-point core: Mastroianni (1979), Table III-1 ----
     sigma_x: float = _SIGMA_X  # cm2
@@ -501,6 +507,7 @@ PARAM_UNITS = {
     "standby_steps": "steps",
     "valve_margin": "fraction of rated steam flow",
     "steam_slope": "K",
+    "loading_stop": "K",
     "restart_load": "fraction of rated load",
     "reload_knee": "fraction of rated load",
     "reload_fast_rate": "1/s",
@@ -1171,8 +1178,9 @@ def compute_next_state(
     # plan's load if it was on its plan. After a trip's restart it loads no faster
     # than the conditioning ramps (``ReactorParams.restart_load``), and it does not
     # unload below the restart load, nor take more than its valves pass wide open
-    # on the steam it has. The plan is the most it takes: once it meets the plan it
-    # is on it, and the conditioning is over.
+    # on the steam it has, nor load while Tavg is its stop's setpoint under its
+    # program (``ReactorParams.loading_stop``). The plan is the most it takes: once
+    # it meets the plan it is on it, and the conditioning is over.
     on_plan = state.pickup > 0.5 * NOT_RELOADING
     held = jnp.where(
         on_plan, planned_load(plan_seconds(state.physics_time, state, p), state),
@@ -1180,6 +1188,8 @@ def compute_next_state(
     )  # fmt: skip
     climb = jnp.where(held < p.reload_knee, p.reload_fast_rate, p.reload_rate)
     most = jnp.where(state.conditioning > 0.5, climb, p.turbine_rate)
+    T_avg = 0.5 * (state.T_coolant + state.T_cold)
+    most = jnp.where(state.T_ref - T_avg >= p.loading_stop, 0.0, most)
     rate = jnp.clip(action[2] * p.turbine_rate, -p.turbine_rate, most)
     pickup = jnp.maximum(held + rate * p.delta_t, jnp.minimum(held, p.restart_load))
     pickup = jnp.minimum(pickup, turbine_capacity(state.T_sg, p))

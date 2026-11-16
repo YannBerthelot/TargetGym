@@ -61,6 +61,11 @@ The next release is 0.8.0, because these changes break code written for
     (`valve_margin`, `steam_slope`, `env.turbine_capacity`). On Tavg's program it
     never binds; with Tavg 3.5 K under it at full load the turbine falls under its
     plan, and what it does not take is lost output.
+  - The turbine does not load while Tavg is 10 F (5.556 K) or more under its
+    program at the turbine's load, and loads again once Tavg is back
+    (`loading_stop`, the units' interlock C-16). It holds the load and unloads
+    nothing. What it does is Vogtle's safety report's; the setpoint is a training
+    card's, flagged in `REALITY.md`.
   - The offset's band is 5 % of rated delta I at every power (it was 5 % of
     offset, so half as wide at half power). Penalty time counts in full at 50 %
     of rated power and above, by half from 15 % to 50 % and not below; at 90 %
