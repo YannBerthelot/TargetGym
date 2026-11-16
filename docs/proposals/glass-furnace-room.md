@@ -366,7 +366,8 @@ holding the bath must move its target correctly or lose the fining.
   so the glass furnace's docs page was patched by hand for the new channel.
 - The reference: rerun on this plant (next section); none of its rungs can hold the
   bath.
-- The ceiling and every recorded row for the task are stale.
+- The ceiling: rerun on this plant (the section after next). The MPC line and every
+  recorded row for the task are stale.
 - How much foam varies: no figure found; the sulfate walk stays `ours`.
 
 ## The reference ladder on the new plant (2026-11-15)
@@ -404,6 +405,81 @@ gas lean 50.04. It loses 0.74 % of its glass to defects and none to a mark.
   changes are 10 %.
 - **What stays wrong with the reference:** its back-off is still the PI rung's spread,
   and no rung of the ladder can hold the bath.
+
+## The ceiling on the new plant (2026-11-15)
+
+`scripts/glass_slow_oracle.py`: the oracle of `glass_furnace/oracle.py` plans each
+episode with its walks and events foreseen, on the five scenarios and seeds 100 to 104,
+from the design valve and then again from that plan, 300 iterations at most each. Every
+plan is replayed through the benchmark's runner at sensor noise 1, as the ladder scores
+its rungs. That is 51 solves (one seed had a third start), 21 hours of solving on bob in
+all, 1.1 to 3.1 GB each.
+
+Two changes came first, neither in the env's stamp:
+
+- The script counted a replayed step as lost whenever its lost-glass term was above
+  zero. On this plant nearly every step rejects a few plates, so every plan would have
+  been thrown out. It now counts the steps under the canal or the fining mark.
+- The oracle scaled its objective by a fixed hundredth, which suited the fuel alone. The
+  rejected plates make the gradient 88 EUR per step per kg/s on its largest knot against
+  2.4 (`oracle_scale.py`), and the solver's first steps threw the valve between 0.25 and
+  0.54 kg/s. The scale is now set at each solve's start so that the first step moves no
+  knot by more than 0.025 kg/s (`FIRST_STEP`), which is the old hundredth on fuel alone.
+  The nine oracle tests pass unmodified.
+
+Mean cost per step over the five seeds, and what the plans save of each term:
+
+| Scenario | Weight | Reference | Ceiling | Room | Fuel saved | Glass saved |
+|---|---|---|---|---|---|---|
+| Normal | 0.70 | 49.21 | 46.95 | 1.048 | 0.51 | 1.75 |
+| Pull up | 0.05 | 51.89 | 49.68 | 1.045 | 0.39 | 1.82 |
+| Pull down | 0.05 | 46.72 | 44.32 | 1.054 | 0.62 | 1.78 |
+| Gas rich | 0.10 | 48.83 | 46.55 | 1.049 | 0.50 | 1.79 |
+| Gas lean | 0.10 | 49.66 | 47.45 | 1.047 | 0.52 | 1.70 |
+| Weighted (J) | | 49.23 | 46.96 | 1.048 | | |
+
+The room recorded on the plant without defects was 1.0114.
+
+- **Every plan beats the reference, by 3.8 to 7.1 % on its seed.** No replayed plan has
+  a step under a mark or a trip, and a plan's own cost and its replayed cost differ by
+  0.0006 at most.
+- **Three quarters of the room is glass, one quarter fuel.** On the normal week the
+  plans lose 0.28 % of their glass to defects against the reference's 0.70 %, and burn
+  1.1 % less fuel (`reference_split.py`, `plan_traces.py`).
+- **The fuel is the margin.** The plans rest on the fining limit (0.5002 at their
+  lowest, 0.522 on average). On the normal week the reference averages 0.557 and its
+  lowest is 0.530 (0.514 on a pull rise): its back-off is still the PI rung's spread,
+  as on the old plant (bug 1).
+- **The glass is the blocks, held by foresight.** Reboil costs the plans 0.01 EUR per
+  step and the reference nothing (`plan_mechanisms.py`). About 0.3 % of the block area
+  sits at or over the release temperature, and over the week that area rises 60 K in
+  all under the reference and 27 K under the plans. The plans' hot spot moves more, not
+  less (standard deviation 12 K against 5.5 K) and runs 9 K cooler: they let it fall and
+  keep the hot blocks from rising.
+- **The reference's loss is not its own valve movement.** Reading without noise, the
+  cascade loses the same glass (2.91 against 2.90 EUR per step) and its hot blocks rise
+  the same 60 K. The walks move the blocks under a held crown, and no rung reads them.
+- **These are plans a furnace could run.** The valve stays between 0.40 and 0.54 kg/s
+  and moves 0.30 to 0.46 kg/s in all over the week, in 4 h holds. On the old plant the
+  plans slammed it between its floor and the override every 12 to 20 h.
+- **The week starts clean, which understates the gap.** Lost glass by day on the normal
+  week, EUR per step: the reference 0.45, 1.61, 2.96, 3.49, 3.87, 3.82, 4.11; the plans
+  0.08, 0.34, 0.88, 1.43, 1.68, 1.79, 1.87. The gap is 2.2 on the last day against 1.75
+  over the week, and the plans' loss is still rising when the week ends.
+- **Not converged by the certificate, so the room is a lower bound, but the plans are
+  close.** None of the 25 kept plans meets the certificate's 1e-3, and it reads 1 on 24
+  of them. That 1 is mechanical: the certificate counts a limit as active within 1e-6
+  of its edge (scaled), under one float32 step of the canal and headroom rows, so it
+  finds no active limit and nothing to set against the gradient. Read again with a band
+  of 1e-4 (`plan_certificate.py`), the normal plans' stationarity is 0.003 to 0.04 of
+  their largest gradient. The solver's log agrees: 46 of 51 solves stop on its own
+  tolerance, 14 of 25 restarts after one iteration, and 23 restarts move the cost by
+  0.003 or less. Two found 0.48 and 1.86 (gas rich, seeds 104 and 101), so a poor stop
+  does happen, and a third start per seed would be the cheap insurance.
+- **What the ceiling knows and the reference does not:** the week's walks and events
+  ahead, and the true state. How much the true state alone gives is the MPC line (the
+  oracle without a seed), which is not rerun. The loop on the bath's true mean gave
+  1.7 %.
 
 ## What else the furnace lacks
 
@@ -473,6 +549,11 @@ it is.
 3. What stops a ceiling from cycling the crown: a firing-rate limit from a source, a
    priced wear, or a tie-break toward the smoothest plan.
 4. A, B, C or D.
+5. On the new plant's ceiling: whether the certificate's active band goes from 1e-6 to
+   1e-4, so that it reads the plans instead of returning 1; and whether the ceiling
+   takes a third start per seed.
+6. The reference's back-off again (decisions 1 and 2): a quarter of the new room is the
+   distance the reference keeps from the fining mark.
 
 ## Sources seen today
 
@@ -493,3 +574,13 @@ reference and ceiling traces. 3: crown held, steps and walks. 4: faster fining. 
 pulls. 7: job changes, margins and plan reading. 8: where the delay sits. 9: inside one
 pull-change transient. 10: how far the furnace moves against the sourced marks. `proto.py` and its
 runs (`proto_check`, `proto_run`, `proto_bath`, `proto_bath_rise`): the prototype.
+
+On the plant with its defects: `plant_runs.py`, `ladder_suite.py` and
+`ladder_suite_bath.py` (the controllers of the prototype on the registered plant and on
+the ladder's suite); `oracle_scale.py` (the gradient behind the oracle's `FIRST_STEP`);
+and, from the ceiling run's output directory, `reference_split.py`, `plan_traces.py`,
+`plan_mechanisms.py` and `plan_certificate.py` (the plans beside the cascade, one to
+six minutes each on one server core). The ceiling itself is 25 chains of
+`scripts/glass_slow_oracle.py solve`, each a design start and a restart, up to
+100 minutes and 3 GB a solve.
+

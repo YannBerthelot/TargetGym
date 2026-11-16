@@ -11,8 +11,8 @@ constant ``START`` kg/s, ("restart") the seed's last plan, or the knots saved in
 its rungs, and writes the solver's certificate and the replayed cost. ``MAX_ITER`` 0
 repairs ``START``'s knots without iterating. ``room`` reads those files and the ladder's
 reference JSON: each seed's ceiling is the replayed cost of its solve cheapest by the
-plan's own objective (the episode's and the tail's fuel), among those that lost no
-glass and tripped nothing; room per scenario is the kept rung's mean cost per step over
+plan's own objective (the episode's and the tail's fuel and rejected plates), among
+those that kept both marks on every step and tripped nothing; room per scenario is the kept rung's mean cost per step over
 the ceiling on the same seeds, room on J the same on the scenario-weighted costs. It
 writes ``data/oracle_ceilings/glass_furnace.json``.
 """
@@ -34,17 +34,27 @@ from target_gym.benchmark import run_policy, task_info  # noqa: E402
 from target_gym.experts.mpc import plan_params  # noqa: E402
 from target_gym.glass_furnace import env_jax as E  # noqa: E402
 from target_gym.glass_furnace import oracle as O  # noqa: E402
+from target_gym.glass_furnace import physical as P  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 
 SPEC = REGISTRY["glass_furnace"]
 SEEDS = tuple(range(100, 110))
 NOISE = 1.0  # the ladder's sensor noise scale
-ITER_CAP = 300  # SLSQP iterations per episode solve (ours: about 50 min on bob)
+ITER_CAP = 300  # SLSQP iterations per episode solve (ours: about 100 min on bob)
 
 
 def scenario_params(name):
     s = {x.name: x for x in scenarios.suite(SPEC)}[name]
     return scenarios.params_for(SPEC, s, sensor_noise_scale=NOISE)
+
+
+def under_a_mark(state, params, tripped):
+    """Whether the step's whole pull is lost, the canal under its target or the glass
+    leaving under its fining mark, by the env's own ``costs`` with no defects. A step
+    over both marks loses only the plates its defects reject, which is no lost step."""
+    read = P.sensors(state.plant, params.grid, params.plant)
+    whole = E.costs(0.0, read["canal"], read["fining"], state.pull, params)["tracking"]
+    return whole > 0.0
 
 
 class Replay:
@@ -94,7 +104,7 @@ def solve(name, seed, knot_hours, start, out, max_iter=ITER_CAP):
     np.save(pathlib.Path(out, f"{tag}_plan.npy"), plan.knots)
     rollout = run_policy(
         Replay(plan.valve, params), env, params, task_info(SPEC.name, env, params, 1),
-        seeds=[seed],
+        seeds=[seed], record={"under": under_a_mark},
     )  # fmt: skip
     terms = rollout["terms"]
     row = {
@@ -105,7 +115,9 @@ def solve(name, seed, knot_hours, start, out, max_iter=ITER_CAP):
         "violation": plan.violation, "active": plan.active, "how": plan.how,
         "planned_cost": plan.cost, "planned_lost": plan.lost_steps,
         "replayed_cost": float(-rollout["reward"][0].mean()),
-        "replayed_lost": int((terms["tracking"][0] > 0).sum()),
+        "replayed_lost": int(rollout["records"]["under"][0].sum()),
+        "replayed_fuel": float(terms["running"][0].mean()),
+        "replayed_glass": float(terms["tracking"][0].mean()),
         "replayed_trips": int(rollout["tripped"][0].sum()),
         "knots": [float(v) for v in plan.knots],
     }  # fmt: skip
@@ -115,8 +127,9 @@ def solve(name, seed, knot_hours, start, out, max_iter=ITER_CAP):
 
 def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
     """Each seed's ceiling is the replayed cost of its solve cheapest by the plan's own
-    objective, the episode's and the tail's fuel, over every start whose replay lost no
-    glass and tripped nothing; it is converged only if that solve is."""
+    objective, the episode's and the tail's fuel and rejected plates, over every start
+    whose replay kept both marks on every step and tripped nothing; it is converged only
+    if that solve is."""
     ref = json.loads(pathlib.Path(ladder).read_text())
     kept = ref["rungs"][ref["kept"]]
     weights = scenarios.weights(SPEC)
@@ -138,7 +151,7 @@ def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
             solves[f"{name} {seed}"] = {
                 k: r[k] for k in ("status", "message", "iterations", "capped", "kkt",
                                   "active", "how", "planned_cost", "tail_running",
-                                  "replayed_cost")
+                                  "replayed_cost", "replayed_fuel", "replayed_glass")
             }  # fmt: skip
             solves[f"{name} {seed}"]["start"] = (
                 r["start"] and pathlib.Path(r["start"]).name
@@ -165,10 +178,11 @@ def room(out, ladder, knot_hours=O.KNOT_HOURS, seeds=SEEDS):
         "seeds": list(seeds),
         "knot_hours": knot_hours,
         "tail_hours": O.TAIL_HOURS,
-        "tail": "the last knot held past the episode under the limits, its fuel charged "
-        "in the plan's objective, not in the ceiling",
+        "tail": "the last knot held past the episode under the limits, its fuel and "
+        "rejected plates charged in the plan's objective, not in the ceiling",
         "ceiling": "each seed's replayed cost of its solve cheapest by the plan's own "
-        "objective (episode and tail fuel), among those that lost no glass",
+        "objective (episode and tail fuel and rejected plates), among those that kept "
+        "both marks on every step",
         "units": "EUR per step, mean over each episode, then over seeds",
         "scenarios": rows,
         "J": {

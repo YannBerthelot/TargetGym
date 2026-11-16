@@ -43,21 +43,29 @@ differentiation through the episode. Convergence is shown by a certificate the
 solver does not grade itself: the KKT stationarity of the plan, from non-negative
 multipliers on its active limits and bounds (``kkt``), and its worst violation.
 
-On the registered plant it does not converge (measured 2026-11-10 with the charged
-tail, seeds 100 to 104, ``data/oracle_ceilings/glass_furnace.json``): none of 50 starts
-did, two per seed, 300 iterations each. SLSQP stops at its iteration cap or on a failed
-line search, with the KKT certificate near 1.
-The plant is not smooth in the valve: the fining band has two ends
-(``physical.fining_done``), and the refiner's cooling loop clamps at zero, so the
-limits' Jacobians jump. The iterates drop the valve for a knot every 12 to 20 h, and
-the last one mostly loses glass. A solve's plan is then its cheapest iterate that loses
-no glass, or its last one repaired, whichever costs less. The repair raises the knots
-cheapest to first order, or every knot alike, whichever costs less. On the 50 starts the
-first was kept on 47, at most 0.07 EUR per step over the last iterate, where raising
-alike had cost 0.7 to 4.4 EUR on 26 of them; the other three last iterates lost glass
-far past the limits and were raised alike. The plan is replayed and its replayed cost reported, an upper bound on the ceiling, so the room
-from it is a lower bound. On no scenario-seed does it cost more than the reference
-ladder's kept rung.
+On the registered plant it does not converge by that certificate (measured 2026-11-15 on
+the plant with its defects, the five scenarios on seeds 100 to 104,
+``data/oracle_ceilings/glass_furnace.json``): none of 51 solves did, a start from the
+design valve and a restart from its plan on each seed, and a third start on one. On 24
+of the 25 kept plans it reads 1 for want of an active limit: ``ACTIVE`` is under one
+float32 step of the canal and headroom rows. Read with a band of 1e-4, the normal plans'
+stationarity is 0.003 to 0.04 (``scripts/glass_room/plan_certificate.py``), still over
+``KKT_TOL``. The plant is not smooth in the valve: the fining band has two ends
+(``physical.fining_done``), the refiner's cooling loop clamps at zero and the blocks
+release on a rise only, so the Jacobians jump. SLSQP stops on its own tolerance (46
+solves, after 1 to 233 iterations) or at its cap of 300 (5). Past its best plan its
+iterates wander, up to 8 EUR per step dearer and outside the limits, and what it returns
+is, on every solve, no dearer than the cheapest iterate its log shows inside the limits.
+A last iterate that loses glass is repaired: the knots cheapest to first order raised,
+or every knot alike, whichever costs less, and the cheaper stands against the best
+iterate that lost none. Four last iterates lost glass and were raised alike, by under
+1e-6 kg/s. Of 25 restarts, 23 moved the replayed cost by 0.003 EUR per step or less and
+two found 0.5 and 1.9. The plan is replayed and its replayed cost reported, an upper
+bound on the ceiling, so the room from it is a lower bound. On every scenario and seed
+it costs less than the reference ladder's kept rung, by 3.8 to 7.1 %, and it holds the
+valve between 0.40 and 0.54 kg/s. On the plant without defects (measured 2026-11-10) the
+iterates dropped the valve for a knot every 12 to 20 h, since a temperature move cost
+nothing, and the last one mostly lost glass.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
 plan made with full foresight. Without one it plans on the walks' mean path from the
@@ -87,16 +95,21 @@ FINING_BACKOFF, CANAL_BACKOFF = 2e-4, 0.05
 #: Limit rows' scale for the solver: fining shares to tenths, the canal in K, the
 #: valve's headroom under the override in hundredths of a kg/s.
 FINING_SCALE, CANAL_SCALE, HEADROOM_SCALE = 10.0, 0.1, 100.0
-#: The objective's scale for the solver: SLSQP's first quasi-Newton step is the
-#: scaled gradient itself, about 1 kg/s per knot unscaled, which slams every knot to a
-#: bound; a hundredth makes it about 0.01 kg/s.
-OBJECTIVE_SCALE = 0.01
+#: The objective's scale for the solver: SLSQP's first quasi-Newton step is the scaled
+#: gradient itself, so the objective is scaled at each solve's start to move no knot by
+#: more than this, kg/s (ours). On the fuel alone the gradient is 2.4 EUR per step per
+#: kg/s on its largest knot and the scale comes to the hundredth the first ceilings ran
+#: with. With the rejected plates it is 88 on a knot whose blocks are rising (normal,
+#: seed 100, measured 2026-11-15, scripts/glass_room/oracle_scale.py): at a hundredth
+#: the first steps threw the knots between the valve's minimum and 0.54 kg/s, and the
+#: solve took three times the iterations to come back to the same plan.
+FIRST_STEP = 0.025
 #: A limit or bound within this of its edge counts as active in the certificate.
 ACTIVE = 1e-6
-#: SLSQP's cap, and its stop on the change in the scaled objective, 1e-6 EUR per step,
-#: about float32's resolution of a mean near 46 EUR; convergence is judged by the KKT
+#: SLSQP's cap, and its stop on the change in the objective, EUR per step, about
+#: float32's resolution of a mean near 46 EUR; convergence is judged by the KKT
 #: certificate, not by this.
-MAX_ITER, FTOL = 400, 1e-8
+MAX_ITER, FTOL = 400, 1e-6
 #: Stationarity a converged float32 plan reaches (ours, float32 Jacobians).
 KKT_TOL = 1e-3
 #: The first-order repair of a last iterate that loses glass: at most this many rounds,
@@ -255,6 +268,8 @@ def solve(
         return cache[key]
 
     z0 = np.full(k, float(state.fuel)) if start is None else np.asarray(start)
+    z0 = np.clip(z0, lo, hi)
+    scale = FIRST_STEP / max(float(np.max(np.abs(at(z0, True)[0]))), 1e-12)
     count = [0]
 
     best = {}
@@ -271,12 +286,12 @@ def solve(
             log(count[0], z, float(f), float(rows.min()))
 
     res = minimize(
-        lambda z: OBJECTIVE_SCALE * at(z, False)[0], np.clip(z0, lo, hi),
-        method="SLSQP", jac=lambda z: OBJECTIVE_SCALE * at(z, True)[0],
+        lambda z: scale * at(z, False)[0], z0,
+        method="SLSQP", jac=lambda z: scale * at(z, True)[0],
         bounds=[(lo, hi)] * k,
         constraints=[{"type": "ineq", "fun": lambda z: at(z, False)[1],
                       "jac": lambda z: at(z, True)[1]}],
-        options={"maxiter": max_iter, "ftol": FTOL}, callback=progress,
+        options={"maxiter": max_iter, "ftol": FTOL * scale}, callback=progress,
     )  # fmt: skip
     z, how = np.clip(res.x, lo, hi), "final"
     if not keeps(at(z, False)[1]):
