@@ -26,7 +26,7 @@ warms on the power the core makes over the load, which closes the gap in 76 s at
 the start of the cycle and 22 s at 80 % of it. A first-order correction for it was
 tried and did not bring the model nearer the env on a followed plan (0.80 K worst
 with it, 0.68 K without), so the planner backs its Tavg limits off by the gap
-instead (``oracle_day.TAVG_BACKOFF``).
+instead (``oracle.TAVG_BACKOFF``).
 ``tests/reactor/test_reactor_oracle_model.py`` holds the model to the env at the
 knots.
 """

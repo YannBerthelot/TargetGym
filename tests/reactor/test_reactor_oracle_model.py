@@ -33,7 +33,7 @@ settled, and stay inside the env's limits where it rounds them:
 - Fidelity (medium tier). The plant follows a plan as the model says. A plan (the
   planner's own first guess for the day, by the model's inverse) is followed on
   the env with the wobble off, every move on a straight line between its knots
-  (``oracle_day.action``), with no solve in between; at every knot the env is
+  (``oracle.action``), with no solve in between; at every knot the env is
   within the planner's back-offs of the model: Tavg within ``TAVG_BACKOFF``,
   delta I within ``OFFSET_BACKOFF``; the boron within 0.5 ppm and the xenon
   within 0.1 % of full power's (the same rates, a knot apart). The mixing is the
@@ -54,7 +54,7 @@ from target_gym.oracles.controller import enable_x64, float64
 from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor import oracle_model as M
 from target_gym.reactor.env import offset_limit, penalty_rate
-from target_gym.reactor.oracle_day import (
+from target_gym.reactor.oracle import (
     OFFSET_BACKOFF,
     TAVG_BACKOFF,
     Followed,

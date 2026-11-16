@@ -1,13 +1,44 @@
-"""The reactor's oracle, on the shared solver.
+"""The reactor's day planner (``reactor/oracle.py``).
 
-Contract, from the smoothing protocol (T1, T1r, T2, T3, K8) and the env: a demand
-past the rods' travel over the hold moves them as a demand at it does, so bounding
-the plan there loses nothing; with the rate corner exact the planner's model and
-the env agree on a plan, on the load's ramp and with its wobble, and in a sub-step's
-Tavg error and the rods' travel.
+Contract, written before the runs.
 
-By hand, for the reach: 72 steps/min over 228 steps is 1.2 / 228 of the stroke per
-second, 0.0105 raw units/s on a span of 2, so 0.3158 raw units over 30 s.
+- A knot's cost is the env's, by hand: the turbine 10 % of rated load under its
+  plan through a knot loses 0.1 x 1 GWe x 80 $/MWh x 300 s = 666.67 $; ten rod
+  steps of travel cost 10 $; a knot of full dilution arriving is 10 kg/s x 300 s
+  of effluent at 0.0628 $/kg, 188.40 $, of full boration 3 kg/s, 56.52 $. (Tavg's
+  band is set wide for these, so its term is out of the way.)
+- And Tavg past its free band is charged as the env charges it, 0.0639 $/s a
+  kelvin, 19.17 $ a knot: a plant lined out on its program pays nothing; with
+  10 ppm more boron its Tavg sits 10 x 8 / 15 = 5.33 K under its program at the
+  start of the cycle, 3.73 K past the band, 71.56 $. (A quiet plant, its xenon
+  balanced with full load: a drawn reset sits a few tenths of a kelvin off.)
+  Under the load's wobble, 0.5 % of rated, Tavg's error wobbles by 0.005 x (15.4
+  + 3 x 471.2 / 15) = 0.548 K, so a plan with 3 ppm more boron, its Tavg on the
+  band's edge (3 x 8 / 15 = 1.6 K), pays the mean crossing, 0.548 / sqrt(2 pi) =
+  0.2187 K, 4.19 $.
+- Tavg's room. The plant's turbine stops loading with Tavg 10 F, 5.556 K, under
+  its program (the loading stop), so a plan keeps Tavg no further under it than
+  that less the planner's back-off on Tavg, 0.8 K: 4.756 K. Over its program a
+  plan stays 0.1 K inside the free band, 1.5 K, on its own account: the plant has
+  no steam relief to hold a hot excursion (PHYSICS.md, D10). By hand on a plant
+  lined out at 50 % at the start of the cycle, boron moving Tavg 8 / 15 K a ppm:
+  8.4375 ppm more puts Tavg 4.5 K under its program (inside) and 9.375 ppm 5.0 K
+  under (outside); 2.25 ppm less puts it 1.2 K over (inside) and 3.75 ppm less
+  2.0 K over (outside). And on the scored plant the oracle never runs its
+  turbine into the stop: Tavg stays within 5.556 K of its program all day.
+- The boron line. The planner sends a flow ``committed`` control steps before the
+  knot it plans it for, so that must be the env's delay: a command sent on a
+  control step first moves the core's boron ``committed`` steps later, and the
+  commands already in the line arrive in the order the planner reads them.
+- Foresight. The wobble the planner foresees is the one the env draws.
+- The oracle on the scored plant (the plan on the wobble's mean path, the plant
+  with its wobble and sensor noise), against the reference on the same seed, as the
+  records gate asks of an oracle: it never trips, its actions stay in the box, its
+  solves all converge, the offset's penalty time stays inside its hour, and it
+  costs no more than the reference. On a baseload hour (medium tier) both cost
+  next to nothing, so a dollar of slack; on a day of load follow late in the cycle
+  (large tier) the reference waits hours for its boron and the oracle must cost
+  under half as much.
 """
 
 import jax
@@ -15,132 +46,236 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import registry
+from target_gym import scenarios
 from target_gym.experts.mpc import plan_params
-from target_gym.oracles.controller import Oracle, enable_x64, float64
+from target_gym.oracles.controller import enable_x64, float64
 from target_gym.reactor import Reactor, ReactorParams
-from target_gym.reactor.env import scheduled_load
-from target_gym.reactor.oracle import boron_step, reach_scale, reactor_model
+from target_gym.reactor import oracle_model as M
+from target_gym.reactor.experts import make_reactor_pid_controller
+from target_gym.reactor.oracle import (
+    DayOracle,
+    look_ahead,
+    plant_x,
+    stage_model,
+    wobble_path,
+)
+from target_gym.registry import REGISTRY
 
-SPEC = registry.get("reactor")
-
-
-def test_the_registry_builds_the_shared_oracle():
-    assert isinstance(SPEC.make_mpc(SPEC.make_env(), SPEC.make_test_params()), Oracle)
-
-
-def test_the_rods_reach_over_a_step_is_their_speed_for_thirty_seconds():
-    env, p = SPEC.make_env(), SPEC.make_test_params()
-    assert reach_scale(env, p, 1)[0] / 2.0 == pytest.approx(0.31579, rel=1e-4)
-
-
-@pytest.mark.parametrize("sign", [1.0, -1.0])
-def test_a_demand_past_the_rods_reach_moves_them_as_one_at_it(sign):
-    """From the reset: a demand at the reach keeps the rods at full speed for
-    every sub-step, as one at the far end of their travel does. Float32 env:
-    equal to 1e-5 relative."""
-    env, p = SPEC.make_env(), SPEC.make_test_params()
-    key = jax.random.PRNGKey(0)
-    _, state = env.reset_env(key, p)
-    state = state.replace(rod_in=jnp.asarray(0.5, state.n.dtype))
-    raw = 1.0 - 2.0 * float(state.rod_in)
-    reach = reach_scale(env, p, 1)[0] / 2.0
-    at = env.step_env(key, state, jnp.array([raw + sign * reach, 0.0, 1.0]), p)[1]
-    past = env.step_env(key, state, jnp.array([sign, 0.0, 1.0]), p)[1]
-    moved = 2.0 * (float(state.rod_in) - float(at.rod_in))
-    assert moved == pytest.approx(sign * reach, rel=1e-3)
-    for field in ("rod_in", "n", "T_coolant", "T_cold"):
-        np.testing.assert_allclose(
-            getattr(past, field), getattr(at, field), rtol=1e-5, err_msg=field
-        )
+START = ReactorParams(cycle_range=(0.0, 0.0))
+#: The same with Tavg's free band out of the way.
+NO_BAND = ReactorParams(cycle_range=(0.0, 0.0), e_tol=50.0)
+#: A plant that resets lined out on its program at full load, and stays there.
+QUIET = ReactorParams(
+    cycle_range=(0.0, 0.0),
+    demand_sigma=0.0,
+    burnup_range=(0.0, 0.0),
+    carried_days_range=(0.0, 0.0),
+    initial_tilt_share=0.0,
+    initial_xenon_power_range=(1.0, 1.0),
+    ramp_down_range=(1e6, 1e6),
+)
 
 
-@pytest.mark.medium
-@pytest.mark.parametrize("start_of_ramp", [-3000.0, 20.0])
-def test_a_plan_on_the_loads_ramp_replays_on_the_env(start_of_ramp):
-    """Ten steps from the reset with the day's ramp moved to ``start_of_ramp`` s
-    and a wobble of 0.01, the rods moved by a sine inside their reach: the plan and
-    the env differ only in rounding, so 1e-10 and 1e-6 sit many decades above it,
-    unless the load's path, a sub-step's error or the travel is off. The widths are
-    0, as K5's corner is not exact."""
-    env = SPEC.make_env()
-    params = SPEC.make_test_params()
-    oracle = SPEC.make_mpc(env, plan_params(SPEC, params))
-    with enable_x64():
-        _, state = env.reset_env(jax.random.PRNGKey(100), oracle.params)
-        st = float64(state)
-        down = jnp.float64(start_of_ramp)
-        load = scheduled_load(0.0, down, st.ramp_up_at, oracle.params) + 0.01
-        # Rods mid-stroke: the plan drops the clip at the stops, so its demand stays
-        # inside them.
-        st = st.replace(
-            ramp_down_at=down, load_wobble=jnp.float64(0.01), target_n=load, rod_in=0.5
-        )
-        m = oracle.model
-        d = {"task": m.data(st), "end": 10, "widths": jnp.zeros(1)}
-        moves = m.hold(st)[None] + 0.1 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
-        cert = oracle._certify(d, st, m.state_x(st), moves, 10)
-    assert not bool(cert["replay_trip"])
-    assert float(cert["replay_gap"]) <= 1e-10
-    assert float(cert["output_gap"]) <= 1e-6
-
-
-@pytest.mark.medium
-def test_a_plan_mid_stream_and_reloading_replays_on_the_env():
-    """The env loads the turbine on the day it carries (its own rate and depth, on a
-    plan clock a stream rebased at ``plan_t0``), at most ``pickup`` while it reloads
-    after a restart, and burns boron since the last refuelling (``burn_t0``); the
-    plan must load and burn the same. A state 20000 sub-steps (27.8 h) into a
-    stream, refuelled now, its plan rebased 20 s ago on a day going down at twice
-    the window's rate to 0.7, and the turbine reloading at 0.9: the day falls below
-    0.9 at 150 s plan time, inside the ten steps (300 s), so the reload is met and
-    released mid-plan. Tolerances as on the window's replay above."""
-    env = SPEC.make_env()
-    params = SPEC.make_test_params()
-    oracle = SPEC.make_mpc(env, plan_params(SPEC, params))
-    with enable_x64():
-        _, state = env.reset_env(jax.random.PRNGKey(100), oracle.params)
-        st = float64(state)
-        now = 20000
-        st = st.replace(
-            physics_time=jnp.asarray(now, st.physics_time.dtype),
-            plan_t0=jnp.asarray(now - 4, st.plan_t0.dtype),
-            burn_t0=jnp.asarray(now, st.burn_t0.dtype),
-            plan_rate=jnp.float64(2.0 * oracle.params.load_ramp_rate),
-            plan_depth=jnp.float64(0.3),
-            ramp_down_at=jnp.float64(0.0),
-            pickup=jnp.float64(0.9),
-            conditioning=jnp.float64(1.0),  # as a restart leaves it (2026-11-15)
-            load_wobble=jnp.float64(0.0),
-            target_n=jnp.float64(0.9),
-            rod_in=0.5,
-        )
-        m = oracle.model
-        d = {"task": m.data(st), "end": 10, "widths": jnp.zeros(1)}
-        moves = m.hold(st)[None] + 0.1 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
-        cert = oracle._certify(d, st, m.state_x(st), moves, 10)
-    assert not bool(cert["replay_trip"])
-    assert float(cert["replay_gap"]) <= 1e-10
-    assert float(cert["output_gap"]) <= 1e-6
+def _reset(seed=3, p=START):
+    return Reactor().reset_env(jax.random.PRNGKey(seed), p)[1]
 
 
 @pytest.mark.parametrize(
-    "arriving, expected",
+    "move, size, dollars",
     [
-        (0.0, 1690.0),
-        # Clean water at 10 kg/s through 2.5e5 kg for 5 s.
-        (-1.0, 1690.0 * np.exp(-2e-4)),
-        # Acid at 7800 ppm and 3 kg/s through the same mass for 5 s.
-        (1.0, 7800.0 + (1690.0 - 7800.0) * np.exp(-6e-5)),
+        (None, 0.0, 666.67),
+        (M.ROD_IN, 10.0 / 228.0, 676.67),
+        (M.ROD_OUT, 10.0 / 228.0, 676.67),
+        (M.DILUTE, 1.0, 855.07),
+        (M.BORATE, 1.0, 723.19),
     ],
 )
-def test_the_planners_boron_is_the_plants_mixing_at_no_width(arriving, expected):
-    p = ReactorParams()
-    out = boron_step(jnp.asarray(arriving), jnp.asarray(1690.0), p, 0.0)
-    assert float(out) == pytest.approx(expected, rel=1e-5)
+def test_a_knot_costs_what_the_env_charges(move, size, dollars):
+    with enable_x64():
+        p, s = float64(NO_BAND), float64(_reset(p=NO_BAND))
+        model = stage_model(Reactor(), p, 4)
+        day = look_ahead(s, p, 5, jnp.zeros(6))
+        day = day._replace(committed=jnp.asarray(0))  # every flow is the plan's
+        x = jnp.asarray([s.I_hat, s.Xe_hat, 0.0, 0.0, s.boron / M.PPM, 0.1, 0.1, 0.0])
+        u = jnp.zeros(M.NU)
+        u = u if move is None else u.at[move].set(size)
+        d = {"day": day, "room": jnp.asarray(1.5), "sigma": jnp.asarray(0.0)}
+        cost = model.step(d, x, u, 0)[1]
+    assert float(cost) == pytest.approx(dollars, abs=0.01)
 
 
-def test_every_move_has_a_scale():
-    env, p = Reactor(), ReactorParams()
-    model = reactor_model(env, p)
-    assert len(model.move_scale(1)) == model.nu
+@pytest.mark.parametrize(
+    "ppm, wobble, dollars", [(0.0, 0.0, 0.0), (10.0, 0.0, 71.56), (3.0, 0.005, 4.19)]
+)
+def test_a_knot_charges_tavg_past_its_free_band(ppm, wobble, dollars):
+    quiet = _reset(p=QUIET)  # in the scored run's float32, as the env resets
+    with enable_x64():
+        p, s = float64(QUIET), float64(quiet)
+        model = stage_model(Reactor(), p, 4)
+        day = look_ahead(s, p, 5, jnp.zeros(6))
+        x = plant_x(s, p)
+        x = x.at[M.BORON].add(ppm / M.PPM)
+        d = {"day": day, "room": jnp.asarray(1.5), "sigma": jnp.asarray(wobble)}
+        cost = model.step(d, x, jnp.zeros(M.NU), 0)[1]
+    # float32 reset: a few mK of Tavg, 0.1 $.
+    assert float(cost) == pytest.approx(dollars, abs=0.2)
+
+
+#: Lined out at 50 % of load for the whole look-ahead, xenon balanced with it.
+HELD = ReactorParams(
+    cycle_range=(0.0, 0.0),
+    demand_sigma=0.0,
+    burnup_range=(0.0, 0.0),
+    carried_days_range=(0.0, 0.0),
+    initial_tilt_share=0.0,
+    initial_xenon_power_range=(0.5, 0.5),
+    ramp_down_range=(-3000.0, -3000.0),
+    hold_range=(1e6, 1e6),
+)
+
+
+def _inside(model, y):
+    """Whether a knot's outputs sit inside every limit of the plan, back-offs taken."""
+    return all(
+        lim.lo + lim.backoff <= q <= lim.hi - lim.backoff
+        for q, lim in zip(np.asarray(y), model.limits)
+    )
+
+
+@pytest.mark.parametrize(
+    "ppm, inside",
+    [(0.0, True), (8.4375, True), (9.375, False), (-2.25, True), (-3.75, False)],
+)
+def test_a_plan_keeps_tavg_between_the_loading_stop_and_its_band(ppm, inside):
+    held = _reset(p=HELD)
+    with enable_x64():
+        p, s = float64(HELD), float64(held)
+        model = stage_model(Reactor(), p, 4)
+        day = look_ahead(s, p, 5, jnp.zeros(6))
+        x = plant_x(s, p).at[M.BORON].add(ppm / M.PPM)
+        d = {"day": day, "room": jnp.asarray(p.loading_stop), "sigma": jnp.asarray(0.0)}
+        y = model.step(d, x, jnp.zeros(M.NU), 0)[2]
+    assert _inside(model, y) == inside
+
+
+def test_the_oracles_room_under_the_program_is_the_plants_loading_stop():
+    spec = REGISTRY["reactor"]
+    oracle = DayOracle(Reactor(), plan_params(spec, ReactorParams()))
+    assert oracle.room == pytest.approx(10.0 / 1.8)
+
+
+def test_a_flow_sent_now_reaches_the_core_when_the_planner_says():
+    env, p = Reactor(), START
+    s = _reset()
+    with enable_x64():
+        line = int(look_ahead(float64(s), float64(p), 4, jnp.zeros(5)).committed)
+    assert 9 <= line <= 29  # the env draws 10 to 30 steps, the last one the core's
+    hold = 1.0 - 2.0 * float(s.rod_in)
+    key, boron = jax.random.PRNGKey(0), [float(s.boron)]
+    step = jax.jit(env.step_env)
+    for t in range(line + 2):
+        flow = -1.0 if t == 0 else 0.0
+        s = step(key, s, jnp.array([hold, flow, 1.0]), p)[1]
+        boron.append(float(s.boron))
+    moved = np.abs(np.diff(boron)) > 0.0
+    assert not moved[:line].any()
+    assert moved[line]
+    assert not moved[line + 1]
+
+
+def test_the_line_is_read_in_the_order_it_arrives():
+    env, p = Reactor(), START
+    s = _reset()
+    key, step = jax.random.PRNGKey(0), jax.jit(env.step_env)
+    hold = 1.0 - 2.0 * float(s.rod_in)
+    sent = [-0.1, 0.2, -0.3, 0.4, -0.5]
+    for flow in sent:
+        s = step(key, s, jnp.array([hold, flow, 1.0]), p)[1]
+    with enable_x64():
+        day = look_ahead(float64(s), float64(p), 4, jnp.zeros(5))
+    line = int(day.committed)
+    arriving = np.asarray(day.arriving)[:line]
+    # The five commands are the last to arrive, in the order they were sent.
+    np.testing.assert_allclose(arriving[line - 5 :], sent, atol=1e-6)
+    np.testing.assert_allclose(arriving[: line - 5], 0.0, atol=1e-6)
+
+
+def test_the_foreseen_wobble_is_the_one_the_env_draws():
+    env, p = Reactor(), START
+    s0 = _reset(seed=11)
+    key, step = jax.random.PRNGKey(5), jax.jit(env.step_env)
+    hold, s, drawn = 1.0 - 2.0 * float(s0.rod_in), s0, []
+    for _ in range(20):
+        s = step(key, s, jnp.array([hold, 0.0, 1.0]), p)[1]
+        drawn.append(float(s.load_wobble))
+    path = wobble_path(
+        s0.demand_key, jnp.asarray(s0.physics_time, jnp.int32), s0.load_wobble, 120,
+        jnp.float32(p.demand_theta), jnp.float32(p.demand_sigma),
+        jnp.float32(p.delta_t),
+    )  # fmt: skip
+    assert np.std(drawn) > 0.0
+    np.testing.assert_allclose(np.asarray(path)[5::6], drawn, rtol=1e-5, atol=1e-8)
+
+
+# --- the oracle on the scored plant ---
+
+
+def _run(scenario, cycle, steps, seed=100, under=None):
+    """``steps`` control steps of ``scenario`` under the oracle and under the
+    reference, on the same seed: each one's (cost, trips, penalty time in h), the
+    oracle's actions and its solver report. ``under`` collects how far under its
+    program the oracle's Tavg is after each step (K)."""
+    spec, env = REGISTRY["reactor"], Reactor()
+    (sc,) = [s for s in scenarios.suite(spec) if s.name == scenario]
+    p = scenarios.params_for(spec, sc, cycle_range=(cycle, cycle))
+    keys = jax.random.split(jax.random.PRNGKey(seed + 7), steps)
+    step = jax.jit(env.step_env)
+
+    def play(act, under=None):
+        obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+        cost, trips, actions = 0.0, 0, []
+        for k in keys:
+            a = act(obs, s)
+            actions.append(np.asarray(a, float))
+            obs, s, r, _, info = step(k, s, jnp.asarray(a, jnp.float32), p)
+            cost, trips = cost - float(r), trips + int(info["tripped"])
+            if under is not None:
+                under.append(float(s.T_ref - 0.5 * (s.T_coolant + s.T_cold)))
+        return (cost, trips, float(s.ao_outside) / 3600.0), np.array(actions)
+
+    oracle = DayOracle(env, plan_params(spec, p))
+    expert, memory = make_reactor_pid_controller(), {}
+
+    def reference(obs, _s):
+        m = memory.get("m", expert.init_state)
+        a, memory["m"] = expert.step(expert.params, m, obs)
+        return a
+
+    planned, actions = play(oracle.step, under)
+    return planned, play(reference)[0], actions, oracle.solver_report()
+
+
+def _well_run(planned, actions, report):
+    cost, trips, penalty = planned
+    assert trips == 0
+    assert np.all(np.abs(actions) <= 1.0) and actions.shape[1] == 3
+    assert report["solver_failures"] == 0 and report["solver_capped"] == 0
+    assert penalty < 1.0
+
+
+@pytest.mark.medium
+def test_the_oracle_holds_a_baseload_hour_as_cheaply_as_the_reference():
+    planned, reference, actions, report = _run("baseload", 0.8, 120)
+    _well_run(planned, actions, report)
+    assert np.all(actions[:, 2] == 1.0)  # the turbine stays on its plan
+    assert planned[0] <= reference[0] + 1.0
+
+
+@pytest.mark.large
+def test_the_oracle_halves_the_references_cost_late_in_the_cycle():
+    under = []
+    planned, reference, actions, report = _run("edf_daily", 0.8, 2880, under=under)
+    _well_run(planned, actions, report)
+    assert max(under) < 10.0 / 1.8  # the turbine never runs into its stop
+    assert reference[1] == 0  # the reference does not trip either
+    assert planned[0] < 0.5 * reference[0]

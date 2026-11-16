@@ -77,8 +77,14 @@ The next release is 0.8.0, because these changes break code written for
     carries. `ReferenceParams` lost `t_Kc`, `t_Ti`, `ff` and `dead_band` and
     gained `theta`, `backoff` and `longest`; the helpers `curve_book`,
     `ppm_per_load`, `tavg_per_ppm`, `tavg_spread`, `carried_rate` and
-    `turbine_demand` are new. The oracle still asks the turbine to follow the
-    plan and is rebuilt next.
+    `turbine_demand` are new.
+  - The oracle is rebuilt too: `make_oracle("reactor")` now plans the whole day
+    ahead on a 5 min knot model, with the turbine's load as one of its moves, and
+    solves again every half hour (`reactor/oracle.py`, `reactor/oracle_model.py`).
+    It replaces the five-minute plan of the rods and the boron, which kept the
+    turbine on its plan. Its first step of an episode solves for a minute or
+    two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
+    gone with the model it described.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
