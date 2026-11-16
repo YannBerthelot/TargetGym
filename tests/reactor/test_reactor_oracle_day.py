@@ -16,6 +16,16 @@ Contract, written before the runs.
   + 3 x 471.2 / 15) = 0.548 K, so a plan with 3 ppm more boron, its Tavg on the
   band's edge (3 x 8 / 15 = 1.6 K), pays the mean crossing, 0.548 / sqrt(2 pi) =
   0.2187 K, 4.19 $.
+- Tavg's room. The plant's turbine stops loading with Tavg 10 F, 5.556 K, under
+  its program (the loading stop), so a plan keeps Tavg no further under it than
+  that less the planner's back-off on Tavg, 0.8 K: 4.756 K. Over its program a
+  plan stays 0.1 K inside the free band, 1.5 K, on its own account: the plant has
+  no steam relief to hold a hot excursion (PHYSICS.md, D10). By hand on a plant
+  lined out at 50 % at the start of the cycle, boron moving Tavg 8 / 15 K a ppm:
+  8.4375 ppm more puts Tavg 4.5 K under its program (inside) and 9.375 ppm 5.0 K
+  under (outside); 2.25 ppm less puts it 1.2 K over (inside) and 3.75 ppm less
+  2.0 K over (outside). And on the scored plant the oracle never runs its
+  turbine into the stop: Tavg stays within 5.556 K of its program all day.
 - The boron line. The planner sends a flow ``committed`` control steps before the
   knot it plans it for, so that must be the env's delay: a command sent on a
   control step first moves the core's boron ``committed`` steps later, and the
@@ -111,6 +121,49 @@ def test_a_knot_charges_tavg_past_its_free_band(ppm, wobble, dollars):
     assert float(cost) == pytest.approx(dollars, abs=0.2)
 
 
+#: Lined out at 50 % of load for the whole look-ahead, xenon balanced with it.
+HELD = ReactorParams(
+    cycle_range=(0.0, 0.0),
+    demand_sigma=0.0,
+    burnup_range=(0.0, 0.0),
+    carried_days_range=(0.0, 0.0),
+    initial_tilt_share=0.0,
+    initial_xenon_power_range=(0.5, 0.5),
+    ramp_down_range=(-3000.0, -3000.0),
+    hold_range=(1e6, 1e6),
+)
+
+
+def _inside(model, y):
+    """Whether a knot's outputs sit inside every limit of the plan, back-offs taken."""
+    return all(
+        lim.lo + lim.backoff <= q <= lim.hi - lim.backoff
+        for q, lim in zip(np.asarray(y), model.limits)
+    )
+
+
+@pytest.mark.parametrize(
+    "ppm, inside",
+    [(0.0, True), (8.4375, True), (9.375, False), (-2.25, True), (-3.75, False)],
+)
+def test_a_plan_keeps_tavg_between_the_loading_stop_and_its_band(ppm, inside):
+    held = _reset(p=HELD)
+    with enable_x64():
+        p, s = float64(HELD), float64(held)
+        model = stage_model(Reactor(), p, 4)
+        day = look_ahead(s, p, 5, jnp.zeros(6))
+        x = plant_x(s, p).at[M.BORON].add(ppm / M.PPM)
+        d = {"day": day, "room": jnp.asarray(p.loading_stop), "sigma": jnp.asarray(0.0)}
+        y = model.step(d, x, jnp.zeros(M.NU), 0)[2]
+    assert _inside(model, y) == inside
+
+
+def test_the_oracles_room_under_the_program_is_the_plants_loading_stop():
+    spec = REGISTRY["reactor"]
+    oracle = DayOracle(Reactor(), plan_params(spec, ReactorParams()))
+    assert oracle.room == pytest.approx(10.0 / 1.8)
+
+
 def test_a_flow_sent_now_reaches_the_core_when_the_planner_says():
     env, p = Reactor(), START
     s = _reset()
@@ -167,17 +220,18 @@ def test_the_foreseen_wobble_is_the_one_the_env_draws():
 # --- the oracle on the scored plant ---
 
 
-def _run(scenario, cycle, steps, seed=100):
+def _run(scenario, cycle, steps, seed=100, under=None):
     """``steps`` control steps of ``scenario`` under the oracle and under the
     reference, on the same seed: each one's (cost, trips, penalty time in h), the
-    oracle's actions and its solver report."""
+    oracle's actions and its solver report. ``under`` collects how far under its
+    program the oracle's Tavg is after each step (K)."""
     spec, env = REGISTRY["reactor"], Reactor()
     (sc,) = [s for s in scenarios.suite(spec) if s.name == scenario]
     p = scenarios.params_for(spec, sc, cycle_range=(cycle, cycle))
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), steps)
     step = jax.jit(env.step_env)
 
-    def play(act):
+    def play(act, under=None):
         obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
         cost, trips, actions = 0.0, 0, []
         for k in keys:
@@ -185,6 +239,8 @@ def _run(scenario, cycle, steps, seed=100):
             actions.append(np.asarray(a, float))
             obs, s, r, _, info = step(k, s, jnp.asarray(a, jnp.float32), p)
             cost, trips = cost - float(r), trips + int(info["tripped"])
+            if under is not None:
+                under.append(float(s.T_ref - 0.5 * (s.T_coolant + s.T_cold)))
         return (cost, trips, float(s.ao_outside) / 3600.0), np.array(actions)
 
     oracle = DayOracle(env, plan_params(spec, p))
@@ -195,7 +251,7 @@ def _run(scenario, cycle, steps, seed=100):
         a, memory["m"] = expert.step(expert.params, m, obs)
         return a
 
-    planned, actions = play(oracle.step)
+    planned, actions = play(oracle.step, under)
     return planned, play(reference)[0], actions, oracle.solver_report()
 
 
@@ -217,7 +273,9 @@ def test_the_oracle_holds_a_baseload_hour_as_cheaply_as_the_reference():
 
 @pytest.mark.large
 def test_the_oracle_halves_the_references_cost_late_in_the_cycle():
-    planned, reference, actions, report = _run("edf_daily", 0.8, 2880)
+    under = []
+    planned, reference, actions, report = _run("edf_daily", 0.8, 2880, under=under)
     _well_run(planned, actions, report)
+    assert max(under) < 10.0 / 1.8  # the turbine never runs into its stop
     assert reference[1] == 0  # the reference does not trip either
     assert planned[0] < 0.5 * reference[0]

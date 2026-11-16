@@ -55,7 +55,7 @@ Dollars a day, sensor noise on, means over the ten seeds (`study/measure.py`, on
   baseload days against the reference's $39, and trips on the load-follow days
   ($1.35M on `krsko_shallow`, 14 trips over ten seeds).
 
-### The day planner, and what it found in the plant (2026-11-15)
+### The day planner, and what it found in the plant (2026-11-15 and 16)
 
 The oracle slot gets a planner of the whole day (`reactor/oracle_day.py`, on the
 knot model of `reactor/oracle_model.py`): 5 min knots carrying xenon, boron, rods,
@@ -78,55 +78,81 @@ plant did not carry:
   1): 105 % of rated flow at rated steam, in proportion to the steam's pressure
   off it. It binds 3.5 K under the program at full load and 5.2 K at 97 %, so it
   trims the lever and does not close it.
-- The safety case is proved from a Tavg on its program, and an interlock (C-16)
-  stops automatic turbine loading when Tavg falls a set amount under its
-  reference. Its setpoint was not read (PHYSICS.md, D14), so **the plant does not
-  carry it yet**, and the planner keeps Tavg inside its free band on its own
-  account (owner, 2026-11-15). The room below is therefore a lower bound on the
-  plant's as it stands, and the plant stays open to a policy that runs Tavg cold.
+- A unit's turbine stops loading when Tavg has fallen a set amount under its
+  reference (interlock C-16). A return on colder water is a real mode, used when
+  the rods and the boron cannot supply the reactivity fast enough, and the
+  interlock is what bounds it (Vogtle's safety report, read in full on
+  2026-11-16). **Added to the plant** (PHYSICS.md section 1 and D14; owner,
+  2026-11-16): no loading while Tavg is 10 F (5.556 K) or more under its program.
+  The report gives no setpoint; the 10 F is a training card's for a plant it does
+  not name, flagged in REALITY.md, and the tighter of the figures seen.
+
+With both in, the plan's room under the program is the plant's own: the stop less
+the planner's back-off on Tavg, 4.76 K, and above 96.5 % of load the valves' limit.
+Over the program the planner still keeps Tavg inside its free band on its own
+account: the plant has no steam relief (D10), and a plan free there would warm the
+water ahead of a return to have more of it to cool.
 
 How much the lever is worth, same day, the planner's Tavg held within a room of
 its program: no limit $4,596; 5.6 K $4,635; 2.8 K $7,195; the free band $10,600.
 
 **The solver.** Three things were needed for every solve to converge with Tavg
-held to its band. The shared solver hands back its start when a line search fails,
-so a solve runs in segments that keep what the last one reached. The offset's hour
-and the tight band together stalled it (either alone converges), so a cold solve
-first finds where the hour goes with Tavg's room wide, and every later solve gets
-those knots as data, the band a limit on the others. And a plan on the wobble's
-mean path rode the band's edge and paid for every crossing on replay (one baseload
-day lost to the reference), so the plan pays the mean of Tavg's cost over the
-wobble.
+held to its band, and they stay with the stop in. The shared solver hands back its
+start when a line search fails, so a solve runs in segments that keep what the last
+one reached. The offset's hour and a tight band together stalled it (either alone
+converges), so a cold solve first finds where the hour goes with Tavg's room wide,
+and every later solve gets those knots as data, the band a limit on the others. And
+a plan on the wobble's mean path rode the band's edge and paid for every crossing
+on replay (one baseload day lost to the reference), so the plan pays the mean of
+Tavg's cost over the wobble.
 
 **Reference against planner, dollars a day, seeds 100 to 104 of the scored task**
 (the cycle point drawn, sensor noise on, the plan on the wobble's mean path: the MPC
-line, not the ceiling):
+line, not the ceiling), on the plant with the valves' limit and the loading stop:
 
 | Scenario | Reference | Planner | Ratio |
 |---|---:|---:|---:|
-| edf_daily | 19,231 | 7,840 | 2.45 |
-| edf_short_hold | 21,610 | 8,380 | 2.58 |
-| krsko_slow | 2,736 | 1,672 | 1.64 |
-| krsko_shallow | 1,710 | 675 | 2.53 |
-| fast_return | 25,674 | 11,039 | 2.33 |
+| edf_daily | 19,231 | 5,266 | 3.65 |
+| edf_short_hold | 21,610 | 5,594 | 3.86 |
+| krsko_slow | 2,736 | 1,585 | 1.73 |
+| krsko_shallow | 1,710 | 643 | 2.66 |
+| fast_return | 25,674 | 7,291 | 3.52 |
 | baseload | 29 | 24 | 1.21 |
 
-Weighted over the suite: $1,558 a day against $661, a room of 2.36 on five seeds.
+Weighted over the suite: $1,558 a day against $461, a room of 3.38 on five seeds.
 The planner costs no more than the reference on any of the 30 days (three baseload
-days tie at $0). No trip, the penalty time at most 0.81 h, every one of the 1,440
-solves converged, about 130 s of solver a day.
+days tie at $0). No trip, the penalty time at most 0.82 h, every solve converged.
+On the returns Tavg runs up to 5.1 K under its program and the stop never holds
+the turbine; Tavg reached the stop's setpoint on one step in 86,400, in a ramp
+down. The reference's cost is the same with and without the stop: it waits at the
+band's cold edge, 1.6 K under.
+
+Before the stop was in, with the planner holding Tavg to its band on both sides
+(owner, 2026-11-15), the same days cost it $661, a room of 2.36: $7,840, $8,380,
+$1,672, $675, $11,039 and $24 by scenario.
+
+**What the room is made of.** Most of the gap between 2.36 and 3.38 is the return
+on colder water, which the plant now allows down to the stop and the reference
+does not use. Vogtle's report says the drop is sometimes used in a rapid loading,
+and units count it as a design transient (2,000 over a unit's life, a search
+summary), so it is neither everyday practice nor forbidden. Whether the reference
+may use it is the owner's call; nothing was changed in it.
 
 ### Not measured yet
 
 - The ceiling and seeds 105 to 109. With the day's wobble foreseen at the knots
-  the planner did no better than on its mean path: $8,021 against $7,840 on
-  `edf_daily` and $45 against $24 on baseload, seeds 100 to 104. It chases a
-  5 min sample of a noise that turns over in 5 min, with a boron line 5 to 15 min
-  late, and pays the effluent for it. A ceiling needs the wobble averaged over
-  each knot, or is the planner's own run where that is cheaper.
+  the planner did no better than on its mean path (before the stop was in: $8,021
+  against $7,840 on `edf_daily` and $45 against $24 on baseload, seeds 100 to
+  104). It chases a 5 min sample of a noise that turns over in 5 min, with a boron
+  line 5 to 15 min late, and pays the effluent for it. A ceiling needs the wobble
+  averaged over each knot, or is the planner's own run where that is cheaper.
 - The planner is not registered: the oracle slot still plans 5 min ahead with the
   turbine on its plan.
-- The turbine loading stop's setpoint, and the plant with it.
+- The stop's setpoint from a plant document: Vogtle's report points to its
+  paragraph 3.9.N.1.1.1.5 for the transient, which is in another file.
+- The hot side: the planner holds it to the band on its own account, and the plant
+  would let a policy warm the water ahead of a return (no steam relief, D10).
+- Whether the reference may use the return on colder water.
 - Acceptance (J2), the family sweep (B7) and a learning check (J7).
 
 ## Starting tilt and the family sweep, 2026-11-10 (reactor-v9)
