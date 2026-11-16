@@ -30,7 +30,17 @@ Contract, written before the runs.
   knot it plans it for, so that must be the env's delay: a command sent on a
   control step first moves the core's boron ``committed`` steps later, and the
   commands already in the line arrive in the order the planner reads them.
-- Foresight. The wobble the planner foresees is the one the env draws.
+- Foresight. The wobble the planner foresees is the one the env draws. The plan
+  holds one load a knot, so the ceiling's plan is given the wobble's mean over the
+  knot centred on each knot (half a knot at the first and the last), by the
+  trapezoid rule. By hand, knots four samples apart: a constant path gives the
+  constant; a ramp gives its value at the knot, and a quarter knot inside at the
+  two ends; a step up at a knot gives (0 + 0 + 1 + 1 + 0.5) / 4 = 0.625 there, 0
+  before and 1 after. What the mean
+  leaves of the wobble about it is the spread the plan still pays for: over a
+  window of one reversion time the mean of the wobble keeps 2 / e of its
+  variance, so sqrt(1 - 2 / e) = 0.5140 of its spread is left; over a window a
+  hundredth of that, sqrt(0.01 / 3) = 0.0577.
 - The oracle on the scored plant (the plan on the wobble's mean path, the plant
   with its wobble and sensor noise), against the reference on the same seed, as the
   records gate asks of an oracle: it never trips, its actions stay in the box, its
@@ -198,6 +208,27 @@ def test_the_line_is_read_in_the_order_it_arrives():
     # The five commands are the last to arrive, in the order they were sent.
     np.testing.assert_allclose(arriving[line - 5 :], sent, atol=1e-6)
     np.testing.assert_allclose(arriving[: line - 5], 0.0, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "path, means",
+    [
+        ([2.0] * 13, [2.0, 2.0, 2.0, 2.0]),
+        (list(range(13)), [1.0, 4.0, 8.0, 11.0]),
+        ([0.0] * 4 + [1.0] * 9, [0.0, 0.625, 1.0, 1.0]),
+    ],
+)
+def test_the_ceilings_plan_reads_the_wobble_averaged_over_each_knot(path, means):
+    from target_gym.reactor.oracle import knot_means
+
+    np.testing.assert_allclose(knot_means(path, 4), means, atol=1e-12)
+
+
+@pytest.mark.parametrize("window, left", [(1.0, 0.5140), (0.01, 0.0577)])
+def test_the_spread_left_about_a_knots_mean(window, left):
+    from target_gym.reactor.oracle import spread_left
+
+    assert spread_left(window) == pytest.approx(left, abs=2e-4)
 
 
 def test_the_foreseen_wobble_is_the_one_the_env_draws():

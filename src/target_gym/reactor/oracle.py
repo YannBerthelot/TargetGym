@@ -33,7 +33,9 @@ The planner problem:
   their allowances could be cheaper, so this bounds the best cost from above;
 - the future: the plan's load from the state (the day it carries), the burnup, and
   the load's wobble: its mean path, or with ``seed`` the path the episode's key
-  draws (the ceiling's foresight);
+  draws, averaged over each knot (the ceiling's foresight). Foreseen only at the
+  knots it did worse than on its mean path (2026-11-15): it chased a 5 min sample
+  of a noise that turns over in 5 min;
 - the tail: a window is a cut in a plant that runs on, so the plan runs
   ``TAIL_HOURS`` past the cut under the same costs, as the glass furnace's does.
 
@@ -344,6 +346,26 @@ def _floats(state):
     return type("Plan", (), {k: float(getattr(state, k)) for k in names})
 
 
+def knot_means(path, sub: int):
+    """The mean of ``path`` over the knot centred on each knot, by the trapezoid
+    rule; the knots are ``sub`` samples apart, the first on the first sample, and
+    the first and the last have the half knot inside the path. A plan holds one
+    load a knot, so this is what it can follow of a wobble it foresees."""
+    path, half, out = np.asarray(path, float), sub // 2, []
+    for k in range(0, len(path), sub):
+        w = path[max(k - half, 0) : min(k + half, len(path) - 1) + 1]
+        out.append((w.sum() - 0.5 * (w[0] + w[-1])) / (len(w) - 1))
+    return np.array(out)
+
+
+def spread_left(window: float) -> float:
+    """Of a wobble's spread, the share left about its mean over ``window``
+    reversion times. The mean of an Ornstein-Uhlenbeck path over a window keeps
+    ``2 (w - 1 + exp(-w)) / w^2`` of its variance, and the rest is about it."""
+    kept = 2.0 * (window - 1.0 + np.exp(-window)) / window**2
+    return float(np.sqrt(1.0 - kept))
+
+
 @functools.partial(jax.jit, static_argnames=("n",))
 def wobble_path(key, physics_time, wobble, n: int, theta, sigma, dt):
     """The load's wobble over the next ``n`` sub-steps as the env will draw it
@@ -398,13 +420,14 @@ class DayOracle:
             self._roll = jax.jit(lambda d, x, u: roll(p, d, x, u, per))
         # The wobble's spread about the plan's path. ``plan_params`` zero its
         # noise for the model's mean path, so its size is the task's own; with the
-        # wobble foreseen at the knots, what is left between two of them.
+        # wobble foreseen, the plan is given its mean over each knot
+        # (``knot_means``) and pays for what that leaves (``spread_left``).
         task = params if float(params.demand_sigma) > 0.0 else type(params)()
         theta = float(task.demand_theta)
         self.sigma = float(task.demand_sigma) / (2.0 * theta) ** 0.5
         if self.foresight:
-            half = np.exp(-theta * KNOT * self.period * float(params.delta_t) / 2.0)
-            self.sigma *= float((1.0 - half**2) / (1.0 - half**4) ** 0.5)
+            knot = KNOT * self.period * float(params.delta_t)
+            self.sigma *= spread_left(theta * knot)
         self.certificates: list[dict] = []
         self.reset()
 
@@ -426,7 +449,7 @@ class DayOracle:
                     jnp.float32(p.delta_t),
                 )  # fmt: skip
             path = np.concatenate([[float(state.load_wobble)], np.asarray(path)])
-            return path[::sub][:n].astype(float)
+            return knot_means(path, sub)[:n]
         decay = (1.0 - float(p.demand_theta) * float(p.delta_t)) ** sub
         return float(state.load_wobble) * decay ** np.arange(n)
 

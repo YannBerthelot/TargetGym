@@ -57,7 +57,7 @@ Dollars a day, sensor noise on, means over the ten seeds (`study/measure.py`, on
 
 ### The day planner, and what it found in the plant (2026-11-15 and 16)
 
-The oracle slot gets a planner of the whole day (`reactor/oracle_day.py`, on the
+The oracle slot gets a planner of the whole day (`reactor/oracle.py`, on the
 knot model of `reactor/oracle_model.py`): 5 min knots carrying xenon, boron, rods,
 the turbine's load and the offset's penalty time, with the temperatures at the
 reactivity balance, solved by the shared interior-point solver over the next 24 h
@@ -131,6 +131,21 @@ Before the stop was in, with the planner holding Tavg to its band on both sides
 (owner, 2026-11-15), the same days cost it $661, a room of 2.36: $7,840, $8,380,
 $1,672, $675, $11,039 and $24 by scenario.
 
+**Seeds 105 to 109**, the same run: reference $18,752, $22,202, $2,635, $1,651,
+$24,552 and $49 by scenario, planner $4,999, $5,296, $1,550, $618, $7,245 and $41;
+weighted $1,551 against $463, a room of 3.35. Over the ten seeds: $1,555 against
+$462, a room of 3.36, the planner no worse than the reference on any of the 60
+days, no trip, every solve converged. Tavg reached the stop's setpoint on 3 steps
+in 172,800, each at the start of a fast ramp down.
+
+**The ceiling.** Given the day's wobble ahead of time, averaged over each knot
+(the plan holds one load a knot; `oracle.knot_means`), and paying only for the
+spread that leaves (0.514 of the wobble's, `oracle.spread_left`), the planner
+costs $460 a day on seeds 100 to 104 where it costs $461 without: $5,365, $5,475,
+$1,595, $659, $7,241 and $24 by scenario. Foresight of the wobble is worth nothing
+that five seeds can show, so the planner's own run is the ceiling candidate, and
+the room is all in the plan of the day.
+
 **What the room is made of.** Most of the gap between 2.36 and 3.38 is the return
 on colder water, which the plant now allows down to the stop and the reference
 does not use. Vogtle's report says the drop is sometimes used in a rapid loading,
@@ -140,14 +155,15 @@ may use it is the owner's call; nothing was changed in it.
 
 ### Not measured yet
 
-- The ceiling and seeds 105 to 109. With the day's wobble foreseen at the knots
-  the planner did no better than on its mean path (before the stop was in: $8,021
-  against $7,840 on `edf_daily` and $45 against $24 on baseload, seeds 100 to
-  104). It chases a 5 min sample of a noise that turns over in 5 min, with a boron
-  line 5 to 15 min late, and pays the effluent for it. A ceiling needs the wobble
-  averaged over each knot, or is the planner's own run where that is cheaper.
-- The planner is not registered: the oracle slot still plans 5 min ahead with the
-  turbine on its plan.
+- A ceiling that is certified: the candidate above is the planner's own plan
+  with the wobble foreseen, and a plan from given knots bounds the best cost from
+  above. Foreseen only at the knots, before the stop was in, the planner did
+  worse than on its mean path ($8,021 against $7,840 on `edf_daily`): it chased a
+  5 min sample of a noise that turns over in 5 min.
+- The planner is the registered oracle since 2026-11-16 (`reactor/oracle.py`); the
+  five-minute plan it replaced left the package, and its model stays under
+  `scripts/reactor_rods_model.py` for the study scripts built on it. Its recorded
+  rows are the old oracle's until the re-record.
 - The stop's setpoint from a plant document: Vogtle's report points to its
   paragraph 3.9.N.1.1.1.5 for the transient, which is in another file.
 - The hot side: the planner holds it to the band on its own account, and the plant
