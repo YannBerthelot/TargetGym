@@ -173,6 +173,16 @@ class ReactorParams(EnvParams):
     #: scale: 5 % of rated load a minute, the EUR's fastest return (REALITY.md
     #: section 6). It does not unload below ``restart_load``.
     turbine_rate: float = 0.05 / 60.0  # 1/s
+    #: The turbine takes no more load than its valves pass wide open: 105 % of its
+    #: rated flow at its rated steam (Wolf Creek's valves-wide-open heat balance),
+    #: and in proportion to the steam's pressure over the square root of its
+    #: temperature off it (Stodola's cone law, a condensing turbine). The steam is
+    #: saturated at the steam generator's temperature, ``ln p = a - steam_slope /
+    #: T`` through the steam table's 5.503 MPa at 270 C and 8.588 MPa at 300 C
+    #: (REALITY.md section 3; the fit is ours). Rated steam is the full-load
+    #: program's.
+    valve_margin: float = 1.05
+    steam_slope: float = 4618.5  # K
 
     # ---- Two-point core: Mastroianni (1979), Table III-1 ----
     sigma_x: float = _SIGMA_X  # cm2
@@ -489,6 +499,8 @@ PARAM_UNITS = {
     "failure_cost": "reward",
     "restart_steps": "steps",
     "standby_steps": "steps",
+    "valve_margin": "fraction of rated steam flow",
+    "steam_slope": "K",
     "restart_load": "fraction of rated load",
     "reload_knee": "fraction of rated load",
     "reload_fast_rate": "1/s",
@@ -797,6 +809,23 @@ def required_power(state, params: ReactorParams, xp=jnp):
     return xp.where(
         to_half, p.derate_to, xp.where(to_strict, p.ao_strict_power, NO_REDUCTION)
     )
+
+
+def steam_pressure(T_sg, params: ReactorParams, xp=jnp):
+    """The steam's pressure at steam generator temperature ``T_sg`` (K) against the
+    full-load program's: saturated steam, ``ln p = a - steam_slope / T``."""
+    rated = steady_state_temperatures(1.0, params)[3]
+    return xp.exp(params.steam_slope * (1.0 / rated - 1.0 / T_sg))
+
+
+def turbine_capacity(T_sg, params: ReactorParams, xp=jnp):
+    """The most load the turbine takes on steam at ``T_sg``, of rated load: its
+    valves wide open pass ``valve_margin`` of rated flow at rated steam, and flow
+    in proportion to the steam's pressure over the square root of its temperature
+    (``ReactorParams.valve_margin``)."""
+    rated = steady_state_temperatures(1.0, params)[3]
+    pressure = steam_pressure(T_sg, params, xp)
+    return params.valve_margin * pressure * xp.sqrt(rated / T_sg)
 
 
 def rod_worth(rod_in, params: ReactorParams):
@@ -1141,8 +1170,9 @@ def compute_next_state(
     # The turbine's load moves at the rate the third action asks for, from the
     # plan's load if it was on its plan. After a trip's restart it loads no faster
     # than the conditioning ramps (``ReactorParams.restart_load``), and it does not
-    # unload below the restart load. The plan is the most it takes: once it meets
-    # the plan it is on it, and the conditioning is over.
+    # unload below the restart load, nor take more than its valves pass wide open
+    # on the steam it has. The plan is the most it takes: once it meets the plan it
+    # is on it, and the conditioning is over.
     on_plan = state.pickup > 0.5 * NOT_RELOADING
     held = jnp.where(
         on_plan, planned_load(plan_seconds(state.physics_time, state, p), state),
@@ -1152,6 +1182,7 @@ def compute_next_state(
     most = jnp.where(state.conditioning > 0.5, climb, p.turbine_rate)
     rate = jnp.clip(action[2] * p.turbine_rate, -p.turbine_rate, most)
     pickup = jnp.maximum(held + rate * p.delta_t, jnp.minimum(held, p.restart_load))
+    pickup = jnp.minimum(pickup, turbine_capacity(state.T_sg, p))
     meets = pickup >= day - ON_PLAN
     pickup = jnp.where(meets, NOT_RELOADING, pickup)
     conditioning = jnp.where(meets, 0.0, state.conditioning)

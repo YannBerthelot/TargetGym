@@ -92,8 +92,9 @@ def test_the_load_wobbles_inside_its_day():
     # Well before any ramp: the day says 1, and the wobble moves about it.
     targets = [float(state.target_n)]
     _jstep = jax.jit(env.step_env)
+    hold = jnp.array([1.0 - 2.0 * float(state.rod_in), 0.0, 1.0])  # rods as they are
     for _ in range(30):
-        _, state, _, _, _ = _jstep(key, state, jnp.array([0.0, 0.0, 1.0]), params)
+        _, state, _, _, _ = _jstep(key, state, hold, params)
         targets.append(float(state.target_n))
     assert max(targets) < 1.05
     assert min(targets) > 0.95

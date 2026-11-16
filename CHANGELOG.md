@@ -56,6 +56,11 @@ The next release is 0.8.0, because these changes break code written for
     coefficient and boron worth. `ReactorParams(cycle_range=(0.0, 0.0))` is the
     start-of-cycle core of before. `renewal_days` is gone: a stream's core burns
     through the range and refuels at its end (`refuels`).
+  - The turbine takes no more load than its valves pass wide open on the steam
+    it has: 105 % of rated flow at rated steam, less on colder steam
+    (`valve_margin`, `steam_slope`, `env.turbine_capacity`). On Tavg's program it
+    never binds; with Tavg 3.5 K under it at full load the turbine falls under its
+    plan, and what it does not take is lost output.
   - The offset's band is 5 % of rated delta I at every power (it was 5 % of
     offset, so half as wide at half power). Penalty time counts in full at 50 %
     of rated power and above, by half from 15 % to 50 % and not below; at 90 %

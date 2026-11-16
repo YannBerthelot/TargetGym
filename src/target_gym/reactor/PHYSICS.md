@@ -134,6 +134,25 @@ d(load)/dt = action x 5 %/min        never above the dispatch's plan,
 At +1 it follows the plan. After a trip's restart the fuel's conditioning ramps cap
 the loading until the turbine meets its plan (section 4, the stream).
 
+The turbine takes no more load than its valves pass wide open on the steam it has
+(owner, 2026-11-15). The steam is saturated at the steam generator's temperature,
+a condensing turbine passes flow in proportion to its inlet pressure over the square
+root of its inlet temperature (Stodola's cone law), and wide open the valves pass
+105 % of rated flow at rated steam, the full-load program's 558.2 K (6.92 MPa):
+
+```
+load <= 1.05 x p(T_sg) / p(558.2 K) x sqrt(558.2 K / T_sg),     ln p = a - 4618.5 K / T
+```
+
+On its program the limit never binds: the steam is warmer at part load, so the
+valves pass 1.134 at 15 % of load, 1.099 at half load and 1.05 at full load. It
+binds when Tavg runs under its program: 3.5 K under at full load, 5.2 K at 97 %,
+11 K at 90 %. The load then follows the steam's pressure, the plan not taken is
+lost output, and the turbine reloads at the rate asked once the steam is back. It is
+there because a planner free of Tavg's band loaded the turbine at 97 % of rated
+load on steam 8 K colder than its program's, which no turbine takes
+(docs/proposals/reactor-axial.md).
+
 **Left out:** the second axial harmonic and radial modes, grey rods, samarium, decay
 heat, loop transport delay, and the cycle's effect on the axial mode (D11).
 
@@ -188,6 +207,8 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `alpha_coolant_end` | -60e-5 | 1/K | The MTC at the end of the cycle, 0 ppm, with a straight line from the start's. The family's runs from 0 to -80 pcm/K "depending on the concentration of boron", -80 being a typical specification limit (nuclear-power.com, opened); no hot-full-power end-of-cycle figure was opened | ours, range -45 to -75 pcm/K |
 | `boron_worth_end` | -10.9e-5 | 1/ppm | The worth at the end of the cycle, with a straight line from the start's: BEAVRS's 10.8 to 10.9 pcm/ppm at lower boron, the top of the range above. It moves with the MTC on the cycle's one coordinate | ours, with `boron_worth` |
 | `turbine_rate` | 5 | %/min | The turbine's fastest loading and unloading: the EUR's fastest return (REALITY.md section 6) | read |
+| `valve_margin` | 1.05 | of rated steam flow | What the turbine's valves pass wide open at rated steam: 105 % of the manufacturer's guaranteed rating at Wolf Creek, 105 % of rated steam flow at River Bend and Clinton (REALITY.md section 3, [S19]: search summaries, the reports not opened) | read (summaries) |
+| `steam_slope` | 4618.5 | K | Saturated steam, `ln p = a - b / T` through the steam table's 5.503 MPa at 270 C and 8.588 MPa at 300 C ([S20], opened). It gives 6.417 and 7.443 MPa at 280 and 290 C, the table's 6.417 and 7.442 | derived |
 | `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
 | `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
@@ -376,8 +397,9 @@ once in established operation, as `reset_env` would.
 
 ## 5. Known deviations
 
-**D1: the load goes straight to heat.** Steam pressure, valves and the secondary's
-controls are left out.
+**D1: the load goes straight to heat, under one limit.** The turbine's valves wide
+open are in (section 1). The governor, the steam's moisture, the steam generator's
+level and the rest of the secondary's controls are left out.
 
 **D2: the halves' coupling is not the thesis's.** D is set from Ringhals-4's eigenvalue
 separation, not from the thesis's one-group constants, which coupled the halves 12
@@ -430,6 +452,15 @@ its scenario's ramp rate, up to 5 %/min, whatever the core's cycle point, though
 unit late in its cycle would be dispatched within what it can carry. The plan here
 is what the grid would take, and what the unit does not deliver is priced as lost
 output: that is the family's own account of the stake (REALITY.md section 1).
+
+**D14: no turbine loading stop on low Tavg.** Units of the family stop automatic
+turbine loading when Tavg falls a set amount under its reference (interlock C-16),
+there for a return to power faster than the dilution follows, and their safety case
+is proved from a Tavg on its program (REALITY.md section 4). The setpoint was not
+read (the reports were seen through search summaries only), so the plant does not
+carry the stop yet: below the valves' limit, Tavg under its program still costs
+only its lost efficiency, down to its floor. The oracle keeps Tavg inside its free
+band on its own account until the stop is in (`oracle_day.TAVG_MARGIN`).
 
 **D10: no steam relief.** At part power the hot side of a PWR is bounded by its steam
 side: a Tavg high enough to lift the steam relief and safety valves (1176 psig, 570.0 K

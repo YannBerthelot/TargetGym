@@ -53,6 +53,7 @@ from target_gym.reactor.env import (
     rod_worth,
     tavg_dnb_limit,
     tavg_program,
+    turbine_capacity,
 )
 from target_gym.reward import trip_cost
 
@@ -138,6 +139,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         rho = rho + core.boron_worth * burnt
         eps = rod_tilt(rod_in, p)
         load = load_at(i, pickup)
+        capacity = turbine_capacity(plant[10], p)  # on the steam before the step
         plant, _ = _reactor_stiff_step(plant, rho, core, substeps, load, eps)
         # The env's turbine with the third action at +1.
         held = jnp.where(pickup > 0.5 * NOT_RELOADING, day_at(i), pickup)
@@ -146,6 +148,7 @@ def reactor_step(env, p, x, u, t, task, width, deltas=None, boron_width=0.0):
         pickup = jnp.maximum(
             held + fastest * p.delta_t, jnp.minimum(held, p.restart_load)
         )
+        pickup = jnp.minimum(pickup, capacity)
         meets = pickup >= day_at(i + 1) - ON_PLAN
         pickup = jnp.where(meets, NOT_RELOADING, pickup)
         conditioning = jnp.where(meets, 0.0, conditioning)

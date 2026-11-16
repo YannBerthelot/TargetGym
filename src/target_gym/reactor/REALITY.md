@@ -57,6 +57,16 @@ achieve, as flexibility can be limited by the core control system" [S2, section 
   "has to set the power target and the power variation rate of the turbine according
   to the grid dispatcher instructions" [S2, section 1.2]. The reactor's power "will
   naturally follow the turbine power until they balance out again" [S2, section 2.1].
+- **The turbine's valves.** A turbine's rating is guaranteed short of its valves
+  wide open: Wolf Creek's heat balances are at the manufacturer's guaranteed rating
+  and at valves wide open, 105 % of the manufacturer's guaranteed rating, and
+  River Bend and Clinton give valves wide open as 105 % of rated steam flow [S19].
+  For a condensing turbine the flow against its design flow is the inlet pressure
+  against its design pressure, times the square root of the inverse temperature
+  ratio (Stodola's cone law with a negligible outlet pressure) [S18]. Saturated
+  steam is at 5.503, 6.417, 7.442 and 8.588 MPa at 270, 280, 290 and 300 C [S20].
+  So a unit whose Tavg runs under its program, on colder steam, cannot take its
+  full load.
 - **What boron allows through the cycle.** "The effectiveness of dilutions decreases
   over the fuel burnup cycle because the boron concentration of the primary coolant
   is gradually reduced to counterbalance uranium depletion (the lower the boron
@@ -82,6 +92,14 @@ achieve, as flexibility can be limited by the core control system" [S2, section 
 | Tavg minimum for criticality | timed | 15 to 30 min to restore in the family's specifications (older custom specs 15 min, STS 3.4.2 30 min, from the reviewer's memory, not opened) | review |
 | rod insertion limit | timed | straight lines in power; KAIST's lead gives 22 % of the bank in at full power to 78 % at half; 2 h to restore (STS 3.1.6, from memory) | S4, review |
 | power, fuel, hot leg | trip | reactor protection | general |
+
+- **The turbine loading stop on low Tavg (C-16).** An interlock stops automatic
+  turbine loading when the lowest loop's Tavg falls a set amount under the reference
+  from the turbine's impulse pressure, so the cooling "does not reach cooldown
+  accident limits", and loading resumes once dilution has raised the temperature
+  [S21]. It is what keeps a return to power from outrunning the boron on colder
+  water. Seen through search summaries only; the setpoint was not read, and the
+  plant does not carry the stop (PHYSICS.md, D14).
 
 ## 5. Costs
 
@@ -211,6 +229,23 @@ rest.
   <https://iea.blob.core.windows.net/assets/imports/events/260/Session3.3_Mercel_Philippe.pdf>
 - [S16] Castro Monteiro et al., KNS Spring 2020, 20A-065, APR1400 restart.
   <https://www.kns.org/files/pre_paper/44/20A-065-Rafael-Castro-Monteiro.pdf>
+- [S18] Stodola's cone law, <https://en.wikipedia.org/wiki/Stodola%27s_cone_law>,
+  opened 2026-11-15: for condensing turbines the flow ratio is the inlet pressure
+  ratio; the temperature term is the general formula's. It cites Cooke, *J. Eng.
+  Gas Turbines Power* 107 (1985), doi:10.1115/1.3239778.
+- [S19] Wolf Creek USAR chapter 10 (NRC ML16203A425), River Bend USAR chapter 10
+  (ML24340A015), Clinton USAR chapter 10 (ML13016A339): valves wide open at 105 %.
+  Search summaries of 2026-11-15; nrc.gov refused the fetch, so none was opened.
+- [S20] Saturation pressures of water, IAPWS-IF97 values as tabulated at
+  <https://roymech.org/Related/Fluids/Fluids_Water_Props.html>, opened 2026-11-15;
+  a second table gave the same four values in a search summary.
+- [S21] Interlock C-16, the turbine loading stop on low Tavg: Vogtle FSAR section
+  7.7 (NRC ML21102A348) and ML16330A412. Search summaries of 2026-11-15 only: it
+  "limits the reduction in coolant temperature so that it does not reach cooldown
+  accident limits and preserves satisfactory steam generator operating conditions",
+  on the gap between the lowest loop Tavg and a reference from the turbine's
+  impulse pressure, and clears once dilution has raised the temperature. Its
+  setpoint was not read.
 
 Not opened, and not bypassed: NRC technical specifications and course chapters on
 nrc.gov, EDF's HAL documents and ScienceDirect, which block automated readers.
