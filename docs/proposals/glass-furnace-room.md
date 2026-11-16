@@ -366,8 +366,9 @@ holding the bath must move its target correctly or lose the fining.
   so the glass furnace's docs page was patched by hand for the new channel.
 - The reference: rerun on this plant (next section); none of its rungs can hold the
   bath.
-- The ceiling: rerun on this plant (the section after next). The MPC line and every
-  recorded row for the task are stale.
+- The ceiling: rerun on this plant (the section after next). The MPC line: rerun too
+  (the section after that), and the shipped planner without foresight fails on this
+  plant. Every recorded row for the task is stale.
 - How much foam varies: no figure found; the sulfate walk stays `ours`.
 
 ## The reference ladder on the new plant (2026-11-15)
@@ -477,9 +478,64 @@ The room recorded on the plant without defects was 1.0114.
   0.003 or less. Two found 0.48 and 1.86 (gas rich, seeds 104 and 101), so a poor stop
   does happen, and a third start per seed would be the cheap insurance.
 - **What the ceiling knows and the reference does not:** the week's walks and events
-  ahead, and the true state. How much the true state alone gives is the MPC line (the
-  oracle without a seed), which is not rerun. The loop on the bath's true mean gave
-  1.7 %.
+  ahead, and the true state. How much the true state alone gives is what the MPC line
+  (the oracle without a seed) was run for, in the next section; as shipped it does not
+  answer it. The loop on the bath's true mean gave 1.7 %.
+
+## The MPC line on the new plant (2026-11-16)
+
+`scripts/glass_room/mpc_line.py`: the oracle as the library ships it without a seed
+(`make_oracle("glass_furnace")`, the runners' MPC row). It reads the true state, plans
+the rest of the week on the walks' mean path with the events known, and plans again
+every 24 h, starting from the valve it is holding. It ran through the benchmark's runner
+on the ceiling's five scenarios and seeds, 300 iterations at most per plan: 175 plans,
+48 hours of solving on bob, 1.3 to 3.2 GB an episode.
+
+Mean cost per step over the five seeds:
+
+| Scenario | Weight | Reference | MPC line | Ceiling | Episodes with a step under a mark | Steps under a mark |
+|---|---|---|---|---|---|---|
+| Normal | 0.70 | 49.21 | 99.45 | 46.95 | 3 of 5 | 12.4 % |
+| Pull up | 0.05 | 51.89 | 116.83 | 49.68 | 3 of 5 | 14.4 % |
+| Pull down | 0.05 | 46.72 | 91.97 | 44.32 | 1 of 5 | 12.8 % |
+| Gas rich | 0.10 | 48.83 | 74.61 | 46.55 | 2 of 5 | 6.1 % |
+| Gas lean | 0.10 | 49.66 | 58.66 | 47.45 | 2 of 5 | 1.9 % |
+| Weighted (J) | | 49.23 | 93.38 | 46.96 | 11 of 25 | 10.8 % |
+
+- **It costs 1.9 times the reference.** Of its 93.38, the fuel is 45.90 and 44.88 is
+  whole steps lost under the fining mark, on 11 of the 25 episodes (39 to 3215 of an
+  episode's 5040 steps). Nothing trips.
+- **The cause is the missing margin.** The plan rests 2e-4 of fining share over the
+  mark, which covers float32 rounding, on a forecast that leaves out the walks'
+  innovations. Over the day a plan is played the fining comes out under its forecast by
+  up to 0.023. The spread of that error grows through the day: 0.001 after 4 to 8 h,
+  0.005 after 12 to 16 h, 0.012 after 20 to 24 h. On 36 of the 175 days the fining ends
+  more than 0.01 under its forecast.
+- **It cannot recover.** Once the state is bound to cross the mark inside the fining's
+  dead time (11.8 h), no valve meets the limits. The solver stops on incompatible limits
+  or a failed line search (17 plans), and what it returns is played. On pull down,
+  seed 102, the fuel bill falls to 36 EUR a step and 64 % of the week is under the mark.
+- **Each day starts cold.** A plan starts from the valve held, not from the last plan's
+  remainder, and 33 of the 175 plans stop at the cap.
+- **Where it keeps the marks it is the reference, not the ceiling.** On the 12 episodes
+  with no step under a mark and no plan outside its limits it costs 48.45, against the
+  reference's 48.81 and the ceiling's 46.62 on the same episodes: 16 % of the gap. Fuel
+  is 45.84 against 46.04 and 45.47, lost glass 2.61 against 2.76 and 1.15. These are the
+  episodes the walks spared, run without the margin the planner needs, so the fuel
+  figure flatters it.
+- **What it says about the room.** The true state alone does not keep the glass: the
+  plates lost to the blocks are the reference's, a tenth of that gap closed. That part
+  of the room is foresight of the walks, or a faster answer to them than a plan a day.
+  It agrees with the loop on the bath's true mean (1.7 %). How much a competent planner
+  without foresight reaches is still not measured, because this one is not competent.
+- **The library ships this line.** `make_oracle("glass_furnace")` and the runners build
+  the oracle without a seed, so the task's oracle row would be this one.
+- **A fair line, which I would build next.** The same planner with four changes, none
+  of which gives it the future: each plan starts from the last plan's remainder; a new
+  plan every knot (4 h), so the lead it cannot correct is 16 h and not 36 h; a margin on
+  the fining limit of two sigma of the forecast error at that lead, read from this run
+  (0.01 to 0.02), which is the charter's own rule for a zone; and the limits softened
+  when no valve can meet them.
 
 ## What else the furnace lacks
 
@@ -554,6 +610,10 @@ it is.
    takes a third start per seed.
 6. The reference's back-off again (decisions 1 and 2): a quarter of the new room is the
    distance the reference keeps from the fining mark.
+7. The MPC line: whether to build the fair planner without foresight (a start from the
+   last plan, a plan every 4 h, a two-sigma margin from the measured forecast error,
+   soft limits when none can be met), and whether the library's oracle without a seed
+   becomes that planner for this task.
 
 ## Sources seen today
 
@@ -582,5 +642,6 @@ and, from the ceiling run's output directory, `reference_split.py`, `plan_traces
 `plan_mechanisms.py` and `plan_certificate.py` (the plans beside the cascade, one to
 six minutes each on one server core). The ceiling itself is 25 chains of
 `scripts/glass_slow_oracle.py solve`, each a design start and a restart, up to
-100 minutes and 3 GB a solve.
+100 minutes and 3 GB a solve. The MPC line is 25 runs of `mpc_line.py`, one per scenario
+and seed, 0.8 to 3.7 hours and up to 3.2 GB each.
 
