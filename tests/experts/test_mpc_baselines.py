@@ -36,11 +36,16 @@ HEAVY_COMPILE = {"formation"}
 # cold cache (measured 2026-10-28), more than a small test's share of a machine.
 AIRCRAFT = {spec.name for spec in specs_in_group("aircraft")} - HEAVY_COMPILE
 
+# The reactor's oracle plans a whole day. Even on this test's 20 steps it compiles
+# a 38-knot problem (two knots and its 3 h tail) and solves it cold twice: 144 s
+# on a loaded server (2026-11-16, marked medium with the owner's approval).
+SLOW_COLD_START = {"reactor"}
+
 
 def _size(name):
     if name in HEAVY_COMPILE:
         return pytest.mark.large
-    return pytest.mark.medium if name in AIRCRAFT else ()
+    return pytest.mark.medium if name in AIRCRAFT | SLOW_COLD_START else ()
 
 
 def _bounds(space, shape):

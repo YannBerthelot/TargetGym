@@ -26,18 +26,23 @@ from target_gym.reactor import Reactor, ReactorParams
 K_PER_PPM = 8.0 / 15.0
 
 
+#: The hand values here are the start of the cycle's (1690 ppm, -12 pcm/K, -8 pcm/ppm);
+#: the task draws the cycle point since 2026-11-15 (test_reactor_cycle.py).
+START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
+
+
 def reset(seed=0, **changes):
     changes.setdefault("demand_sigma", 0.0)
     changes.setdefault("initial_xenon_power_range", (1.0, 1.0))
     changes.setdefault("ramp_down_range", (1e6, 1e6))
-    env, p = Reactor(), ReactorParams(**changes)
+    env, p = Reactor(), ReactorParams(**{**START_OF_CYCLE, **changes})
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     return env, p, obs, s
 
 
 def hold(env, p, s, steps):
     """Rods where they are, no boron: the Tavg error, program minus Tavg."""
-    rods = np.array([1.0 - 2.0 * float(s.rod_in), 0.0], np.float32)
+    rods = np.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0], np.float32)
     for k in range(steps):
         obs, s, _, _, _ = env.step_env(jax.random.PRNGKey(k), s, rods, p)
     return float(s.T_ref - 0.5 * (s.T_coolant + s.T_cold))

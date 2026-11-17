@@ -1,5 +1,5 @@
 {
-  "fingerprint": "51e2c63c0ad9ffe6",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "67d4215133b5c233",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). reactor, 2026-11-15 to 2026-11-17 (owner): the turbine loading rate is a third action; the core sits at a drawn point of its fuel cycle, with its boron, moderator coefficient and boron worth, and a stream refuels at the end of the range, not every 30 days; the offset limits are NUREG-1431 B 3.2.3A (band in delta I, penalty time by the power, the rule above 90 %, the outer limits); observations 13 to 15 joined; the turbine takes no more load than its valves pass wide open on the steam it has (105 % of rated flow at rated steam), and does not load while Tavg is 10 F or more under its program (the loading stop, interlock C-16); the steam generators safety valves relieve the steam over 1176 psig (570.0 K). Every record is redone in the re-record pass.",
+  "stamped": "2026-11-17T02:59:22+00:00"
 }
