@@ -292,3 +292,10 @@ def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
 def test_one_draw_that_fails_fails_the_sweep():
     sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
+
+
+def test_the_distillation_oracle_is_not_measured_until_its_rebuild_lands():
+    """Owner's decision, 2026-11-13: the distillation oracle is rebuilt in its
+    own PR, so its MPC line stays out of the record until then, with the reason
+    J3 prints."""
+    assert "rebuil" in charter.MPC_NOT_MEASURED.get("distillation", "")

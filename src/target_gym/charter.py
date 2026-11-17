@@ -57,9 +57,13 @@ ANCHOR_SEEDS = tuple(range(200, 210))
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
 EXPERT_REFERENCE = ("reactor",)
-#: Tasks whose oracle may not be run, with the reason J3 prints. None since the pH
-#: oracle was rebuilt on the shared solver (#199).
-MPC_NOT_MEASURED: dict[str, str] = {}
+#: Tasks whose oracle may not be run, with the reason J3 prints.
+MPC_NOT_MEASURED: dict[str, str] = {
+    "distillation": (
+        "the oracle is being rebuilt in its own PR (owner, 2026-11-13); its "
+        "MPC line is recorded when that lands"
+    ),
+}
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
