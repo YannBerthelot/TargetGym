@@ -207,12 +207,21 @@ the band's hot edge on the hardest day (seed 101, late in the cycle), so the
 return has that much more to cool. It pays the Tavg charge for it, $1.9 a kelvin
 a step past 1.6 K.
 
+**Seeds 105 to 109**, the same run: reference $18,752, $22,202, $2,635, $1,651,
+$24,552 and $49 by scenario, planner $3,913, $3,928, $1,491, $579, $4,602 and $44;
+weighted $1,551 against $353, a room of 4.40. Over the ten seeds: $1,555 against
+$349, a room of 4.46, the planner no worse than the reference on any of the 60
+days, no trip, every solve converged, the stop never reached, Tavg up to 8.9 K
+over its program and up to 3.7 h past the band's hot edge in a day. The
+reference's days cost the same with the valves as without, to within $0.22. The
+owner took the lever as the task's (2026-11-17), as the cold return is.
+
 **Whether a unit would.** Nothing physical stops it short of the valves, and the
 standard's Tavg limit is one value for full power, which a hot half-load primary
 stays under. But a unit's rod control inserts on a Tavg over its reference when
 in automatic (Vogtle 7.7.2.4), and its safety analyses start from the normal
 envelope (B 3.4.1). Here the rods are the agent's. It is the cold return's
-question again, and the owner's call.
+question again.
 
 ### Not measured yet
 
@@ -227,10 +236,9 @@ question again, and the owner's call.
   rows are the old oracle's until the re-record.
 - The stop's setpoint from a plant document: Vogtle's report points to its
   paragraph 3.9.N.1.1.1.5 for the transient, which is in another file.
-- The hot side on seeds 105 to 109, and whether a policy that blows steam
-  through the valves on purpose can pay: the planner never lifts them, and the
-  steam they blow is free, though it takes a Tavg at least 7.7 K hot at half
-  load, $11.7 a step in Tavg charge.
+- Whether a policy that blows steam through the valves on purpose can pay: the
+  planner never lifts them, and the steam they blow is free, though it takes a
+  Tavg at least 7.7 K hot at half load, $11.7 a step in Tavg charge.
 - Whether the reference may use the return on colder water.
 - Acceptance (J2), the family sweep (B7) and a learning check (J7).
 
