@@ -89,9 +89,10 @@ plant did not carry:
 
 With both in, the plan's room under the program is the plant's own: the stop less
 the planner's back-off on Tavg, 4.76 K, and above 96.5 % of load the valves' limit.
-Over the program the planner still keeps Tavg inside its free band on its own
-account: the plant has no steam relief (D10), and a plan free there would warm the
-water ahead of a return to have more of it to cool.
+Over the program the planner still kept Tavg inside its free band on its own
+account for these runs: the plant had no steam relief then, and a plan free there
+would warm the water ahead of a return to have more of it to cool. The hot side
+is taken up below (2026-11-17).
 
 How much the lever is worth, same day, the planner's Tavg held within a room of
 its program: no limit $4,596; 5.6 K $4,635; 2.8 K $7,195; the free band $10,600.
@@ -153,6 +154,66 @@ and units count it as a design transient (2,000 over a unit's life, a search
 summary), so it is neither everyday practice nor forbidden. Whether the reference
 may use it is the owner's call; nothing was changed in it.
 
+### The hot side (2026-11-17)
+
+The planner's own band over the program left the plant winnable by a move the
+oracle did not make, so the hot side got its physics (owner, 2026-11-17).
+
+**What bounds a hot primary.** Heat the reactor makes beyond what the turbine
+takes raises the steam's pressure until the steam generators' safety valves open
+(the standard specifications' Bases, B 3.7.1, read in full). The condenser steam
+dump acts on a Tavg over its reference only after a load rejection has unblocked
+it, and the atmospheric valves are opened by hand (Vogtle 7.7.1.8, B 3.7.4). So
+the plant now carries the safety valves: one bank at the lowest set pressure,
+1176 psig (two plants', from search summaries, flagged), 570.0 K of steam,
+opening in proportion to the overpressure (PHYSICS.md section 1 and D10). On the
+program the steam never reaches them. At half load they hold Tavg to 7.7 K over
+its program; reactivity added past that raises the power and blows steam.
+
+**What it found on the way.**
+
+- The reference's bump test for boron on Tavg was sized to end at the DNB limit,
+  which at half load is past the valves: the bump lifted them and read 23 % low.
+  The step now also keeps the steam under the valves' set temperature, counted
+  from the boron line's shortest delay (`tavg_bump`). It reads the hand slope
+  again on every seed, and the dead times are the same as before (390 to 900 s),
+  so the reference's numbers stand. Its 30 days cost the same to within $0.22.
+- The planner's xenon model handed the plant's rates a steam temperature of 0 K,
+  which they never read. The relief's formula has no derivative there, every
+  solve failed, and a first sweep was lost to it. The slot now holds a real
+  temperature, and a small test asks every derivative of a knot to be finite.
+- The planner's first guess for a fast ramp down outruns its boron for a knot and
+  lifts the valves, which the model does not play. A solved plan keeps its steam
+  clear of them, so the fidelity test compares the plant and the model there.
+
+**The planner with the hot side its own to use**, the steam kept under the valves
+by its back-off, dollars a day, seeds 100 to 104 (reference, planner with the band
+held over the program as on 2026-11-16, planner free up to the valves):
+
+| Scenario | Reference | Band held | Free | Ratio |
+|---|---:|---:|---:|---:|
+| edf_daily | 19,231 | 5,266 | 4,100 | 4.69 |
+| edf_short_hold | 21,610 | 5,594 | 3,933 | 5.49 |
+| krsko_slow | 2,736 | 1,585 | 1,490 | 1.84 |
+| krsko_shallow | 1,710 | 643 | 594 | 2.88 |
+| fast_return | 25,674 | 7,291 | 4,829 | 5.32 |
+| baseload | 29 | 24 | 24 | 1.21 |
+
+Weighted: $1,558 against $344, a room of 4.53 (3.38 with the band held). No day
+worse than the reference, no trip, every solve converged, the penalty time at most
+0.82 h, the stop never reached. What the planner does with it: it warms the water
+before a return, up to 8.9 K over its program, and spends as long as 3.7 h past
+the band's hot edge on the hardest day (seed 101, late in the cycle), so the
+return has that much more to cool. It pays the Tavg charge for it, $1.9 a kelvin
+a step past 1.6 K.
+
+**Whether a unit would.** Nothing physical stops it short of the valves, and the
+standard's Tavg limit is one value for full power, which a hot half-load primary
+stays under. But a unit's rod control inserts on a Tavg over its reference when
+in automatic (Vogtle 7.7.2.4), and its safety analyses start from the normal
+envelope (B 3.4.1). Here the rods are the agent's. It is the cold return's
+question again, and the owner's call.
+
 ### Not measured yet
 
 - A ceiling that is certified: the candidate above is the planner's own plan
@@ -166,8 +227,10 @@ may use it is the owner's call; nothing was changed in it.
   rows are the old oracle's until the re-record.
 - The stop's setpoint from a plant document: Vogtle's report points to its
   paragraph 3.9.N.1.1.1.5 for the transient, which is in another file.
-- The hot side: the planner holds it to the band on its own account, and the plant
-  would let a policy warm the water ahead of a return (no steam relief, D10).
+- The hot side on seeds 105 to 109, and whether a policy that blows steam
+  through the valves on purpose can pay: the planner never lifts them, and the
+  steam they blow is free, though it takes a Tavg at least 7.7 K hot at half
+  load, $11.7 a step in Tavg charge.
 - Whether the reference may use the return on colder water.
 - Acceptance (J2), the family sweep (B7) and a learning check (J7).
 

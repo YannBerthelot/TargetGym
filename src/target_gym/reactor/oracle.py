@@ -27,7 +27,7 @@ The planner problem:
   (or its conditioning ramps) and under what its valves pass wide open on the
   steam it has, the rods inside their insertion limit, Tavg between
   its floor and its DNB limit, no further under its program than the turbine's
-  loading stop and inside its free band over it (``TAVG_MARGIN``), delta I inside
+  loading stop, the steam under the safety valves' set temperature, delta I inside
   the acceptable-operation limits, and the offset's penalty time inside its hour. The timed limits (floor, DNB,
   insertion, the 30 min at 90 % and above) are planned as hard: a plan that used
   their allowances could be cheaper, so this bounds the best cost from above;
@@ -100,23 +100,20 @@ TAVG_BACKOFF, OFFSET_BACKOFF = 0.8, 0.005
 CLOCK_BACKOFF = 10.0
 #: The rounding of the penalty time's corners, of a knot.
 WIDTH = 0.1
-#: How far inside Tavg's free band the plan keeps Tavg over its program (K).
-#: Under its program the plant holds a plan itself: its turbine stops loading
-#: 10 F under (``ReactorParams.loading_stop``, the family's interlock C-16), so
-#: that is the plan's room there, backed off by ``TAVG_BACKOFF``; ``tavg_room``
-#: overrides it. Over its program the plant has no steam relief to hold a hot
-#: excursion (PHYSICS.md, D10), and a plan free of the band there would warm the
-#: water ahead of a return to have more of it to cool. So the plan keeps the hot
-#: side inside the band both cited procedures keep (owner, 2026-11-15), a tenth
-#: of a kelvin inside its charged edge so the limit and the reward's corner do
-#: not coincide.
-TAVG_MARGIN = 0.1
+#: Tavg's room is the plant's own on both sides. Under its program the turbine
+#: stops loading 10 F under (``ReactorParams.loading_stop``, the family's
+#: interlock C-16): that is the plan's room there (``tavg_room`` overrides it).
+#: Over its program the steam generators' safety valves relieve the steam at
+#: their set pressure (``ReactorParams.relief_temperature``), which the model
+#: does not play, so the plan keeps the steam under it. Both are backed off by
+#: ``TAVG_BACKOFF``. Until the plant carried the valves (2026-11-17) the plan
+#: kept Tavg inside its free band over the program on its own account.
 #: The offset's hour is planned in two solves. With Tavg held close the plan
 #: leans on the rods, rides the offset's band for hours, and the count of the
 #: time past it is too sharp there for the solver, which stalls (2026-11-15: the
 #: hour and a band of 1.5 K together; either alone converges). So a cold solve
-#: first finds where the hour goes, with Tavg's room this wide on both sides (K)
-#: and the time counted (it converges); the knots that plan spends outside the
+#: first finds where the hour goes, with Tavg's room under its program at least
+#: this wide (K) and the time counted (it converges); the knots that plan spends outside the
 #: band are then given to every later solve as data, the band a limit on all the
 #: others, and no time counted. A plan from given knots bounds the best cost
 #: from above.
@@ -128,10 +125,9 @@ PERCENT = 100.0
 def stage_model(env, p, stages: int) -> StageModel:
     """The day's planner problem for the shared solver, ``stages`` knots long.
     Its data ``d`` holds the ``day`` ahead (``oracle_model.Day``), ``room``, the
-    most the plan lets Tavg sit under its program before its back-off (K), ``hot``,
-    the most over it (the band less ``TAVG_MARGIN`` if not given), and ``sigma``,
-    the standard deviation of the load's wobble about the path the plan has for
-    it."""
+    most the plan lets Tavg sit under its program before its back-off (K), and
+    ``sigma``, the standard deviation of the load's wobble about the path the plan
+    has for it."""
     period = env.control_period
     seconds = KNOT * period * float(p.delta_t)
     per_K = p.imbalance_multiple * p.spot_price_per_MWh * p.P_electric_GW / 3.6
@@ -139,13 +135,12 @@ def stage_model(env, p, stages: int) -> StageModel:
     rod_price = float(p.rod_step_price * p.rod_stroke_steps)
     flow_price = float(p.effluent_price * period * p.delta_t)  # $ per kg/s a step
     full = float(p.T_avg_full_load)
-    band = float(p.e_tol) - TAVG_MARGIN
 
     def step(d, x, u, k):
         x1, rows = M.knot_step(
             p, d["day"], x, u, k, OFFSET_BACKOFF, WIDTH, period=period
         )
-        error, T_avg, off, room, inside, under, steam, sway, _relief = rows
+        error, T_avg, off, room, inside, under, steam, sway, relief = rows
         # Tavg wobbles with the load about the plan's, no finer than it is read.
         spread = jnp.maximum(d["sigma"] * sway, p.e_floor)
         flows = u[DILUTE] * p.dilution_flow + u[BORATE] * p.boration_flow
@@ -158,7 +153,7 @@ def stage_model(env, p, stages: int) -> StageModel:
         y = jnp.stack([
             under, x1[M.RODS], inside, T_avg - full,
             PERCENT * (room - off), PERCENT * (room + off), x1[M.CLOCK],
-            d["room"] - error, d.get("hot", band) + error, steam,
+            d["room"] - error, relief, steam,
         ])  # fmt: skip
         return x1, cost, y
 
@@ -172,12 +167,13 @@ def stage_model(env, p, stages: int) -> StageModel:
         Limit(lo=0.0, price=price, backoff=PERCENT * OFFSET_BACKOFF),
         Limit(lo=0.0, price=price, backoff=PERCENT * OFFSET_BACKOFF),
         Limit(hi=(float(p.ao_allowed) - 60.0 * CLOCK_BACKOFF) / 3600.0, price=price),
-        # Tavg's room under its program (the loading stop, which the model does
-        # not play, so the plan stays clear of it) and over it. A kelvin past
-        # either costs the plant's whole output for the knot: more than any load
-        # it buys, and not a trip, which noise must not be planned as.
+        # Tavg's room under its program (the loading stop) and the steam's under
+        # the safety valves' set temperature: the model plays neither, so the
+        # plan stays clear of both. A kelvin past either costs the plant's whole
+        # output for the knot: more than any load it buys, and not a trip, which
+        # noise must not be planned as.
         Limit(lo=0.0, price=float(per_load * seconds), backoff=TAVG_BACKOFF),
-        Limit(lo=0.0, price=float(per_load * seconds)),
+        Limit(lo=0.0, price=float(per_load * seconds), backoff=TAVG_BACKOFF),
         Limit(lo=0.0, price=price),  # the turbine under what its valves pass
     )  # fmt: skip
     return StageModel(
@@ -413,7 +409,7 @@ class DayOracle:
                 stage_model(env, p, self.S), self.S, M.NX, max_iter=segment
             )
             room = float(p.loading_stop) if tavg_room is None else tavg_room
-            self.room, self.hot = float(room), float(p.e_tol) - TAVG_MARGIN
+            self.room = float(room)
             self._x = jax.jit(lambda s: plant_x(s, p))
             self._day = jax.jit(lambda s, w, f=None: look_ahead(s, p, n, w, per, f))
             self._guess = jax.jit(lambda d, x: first_guess(p, d, x, n, per))
@@ -470,7 +466,7 @@ class DayOracle:
             if cold:
                 self._discover(st, wobble, t, active)
             day = self._day(st, wobble, self._free(t, x0))
-            d = {"day": day, "room": room, "hot": jnp.asarray(self.hot), "sigma": sigma}
+            d = {"day": day, "room": room, "sigma": sigma}
             # The free knots are already counted: this plan carries no clock.
             x0 = x0.at[M.CLOCK].set(0.0)
             self._at = (x0, self._at[1])
@@ -509,7 +505,6 @@ class DayOracle:
         d = {
             "day": self._day(st, wobble),
             "room": jnp.asarray(max(self.room, DISCOVERY_ROOM + TAVG_BACKOFF)),
-            "hot": jnp.asarray(max(self.hot, DISCOVERY_ROOM)),
             "sigma": jnp.asarray(self.sigma),
         }
         plan = self._segments(d, active, COLD_SEGMENTS)

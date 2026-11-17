@@ -16,16 +16,18 @@ Contract, written before the runs.
   + 3 x 471.2 / 15) = 0.548 K, so a plan with 3 ppm more boron, its Tavg on the
   band's edge (3 x 8 / 15 = 1.6 K), pays the mean crossing, 0.548 / sqrt(2 pi) =
   0.2187 K, 4.19 $.
-- Tavg's room. The plant's turbine stops loading with Tavg 10 F, 5.556 K, under
-  its program (the loading stop), so a plan keeps Tavg no further under it than
-  that less the planner's back-off on Tavg, 0.8 K: 4.756 K. Over its program a
-  plan stays 0.1 K inside the free band, 1.5 K, on its own account: the plant has
-  no steam relief to hold a hot excursion (PHYSICS.md, D10). By hand on a plant
-  lined out at 50 % at the start of the cycle, boron moving Tavg 8 / 15 K a ppm:
-  8.4375 ppm more puts Tavg 4.5 K under its program (inside) and 9.375 ppm 5.0 K
-  under (outside); 2.25 ppm less puts it 1.2 K over (inside) and 3.75 ppm less
-  2.0 K over (outside). And on the scored plant the oracle never runs its
-  turbine into the stop: Tavg stays within 5.556 K of its program all day.
+- Tavg's room is the plant's own. The plant's turbine stops loading with Tavg
+  10 F, 5.556 K, under its program (the loading stop), so a plan keeps Tavg no
+  further under it than that less the planner's back-off on Tavg, 0.8 K:
+  4.756 K. Over its program the steam generators' safety valves relieve the
+  steam at 570.0 K, so a plan keeps the steam under that less the same back-off;
+  at half load the steam is 11 K under Tavg, so Tavg may sit up to 580.2 K, 7.7 K
+  over its program. By hand on a plant lined out at 50 % at the start of the
+  cycle, boron moving Tavg 8 / 15 K a ppm: 8.4375 ppm more puts Tavg 4.5 K under
+  its program (inside) and 9.375 ppm 5.0 K under (outside); 3.75 ppm less puts it
+  2.0 K over and 13.125 ppm less 7.0 K over (both inside), and 15 ppm less 8.0 K
+  over (outside). And on the scored plant the oracle never runs its turbine into
+  the stop: Tavg stays within 5.556 K of its program all day.
 - The boron line. The planner sends a flow ``committed`` control steps before the
   knot it plans it for, so that must be the env's delay: a command sent on a
   control step first moves the core's boron ``committed`` steps later, and the
@@ -154,9 +156,16 @@ def _inside(model, y):
 
 @pytest.mark.parametrize(
     "ppm, inside",
-    [(0.0, True), (8.4375, True), (9.375, False), (-2.25, True), (-3.75, False)],
+    [
+        (0.0, True),
+        (8.4375, True),
+        (9.375, False),
+        (-3.75, True),
+        (-13.125, True),
+        (-15.0, False),
+    ],
 )
-def test_a_plan_keeps_tavg_between_the_loading_stop_and_its_band(ppm, inside):
+def test_a_plan_keeps_tavg_between_the_loading_stop_and_the_steam_relief(ppm, inside):
     held = _reset(p=HELD)
     with enable_x64():
         p, s = float64(HELD), float64(held)
