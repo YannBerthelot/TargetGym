@@ -189,6 +189,17 @@ class ReactorParams(EnvParams):
     #: dilution follows (Vogtle UFSAR 7.7.1.4.3 and 7.7.2.4). It stops the loading
     #: only. 10 F, from a training card, not a plant document (REALITY.md section 4).
     loading_stop: float = 10.0 / 1.8  # K
+    #: The steam generators' safety valves hold the steam at the saturation
+    #: temperature of the lowest one's set pressure: 1176 psig, 8.21 MPa, 570.0 K
+    #: on the steam curve above. They are the heat sink when the reactor makes more
+    #: heat than the turbine takes, so they bound how hot the primary can sit at
+    #: part load (NUREG-1431 Bases B 3.7.1; the set pressure is two plants', from
+    #: search summaries, REALITY.md section 4). They open in proportion to the
+    #: pressure over it and pass the full-power steam ``relief_accumulation`` over
+    #: it (3 %, the code's accumulation for steam safety valves, from the
+    #: reviewer's memory, not opened).
+    relief_temperature: float = 570.0  # K
+    relief_accumulation: float = 0.03
 
     # ---- Two-point core: Mastroianni (1979), Table III-1 ----
     sigma_x: float = _SIGMA_X  # cm2
@@ -508,6 +519,8 @@ PARAM_UNITS = {
     "valve_margin": "fraction of rated steam flow",
     "steam_slope": "K",
     "loading_stop": "K",
+    "relief_temperature": "K",
+    "relief_accumulation": "fraction of the set pressure",
     "restart_load": "fraction of rated load",
     "reload_knee": "fraction of rated load",
     "reload_fast_rate": "1/s",
@@ -825,6 +838,16 @@ def steam_pressure(T_sg, params: ReactorParams, xp=jnp):
     return xp.exp(params.steam_slope * (1.0 / rated - 1.0 / T_sg))
 
 
+def steam_relief(T_sg, params: ReactorParams, xp=jnp):
+    """The steam the safety valves relieve at steam generator temperature ``T_sg``,
+    of the full-power steam: none under their set pressure, and in proportion to
+    the pressure over it above (``ReactorParams.relief_temperature``)."""
+    over = steam_pressure(T_sg, params, xp) / steam_pressure(
+        params.relief_temperature, params, xp
+    )
+    return xp.maximum(over - 1.0, 0.0) / params.relief_accumulation
+
+
 def turbine_capacity(T_sg, params: ReactorParams, xp=jnp):
     """The most load the turbine takes on steam at ``T_sg``, of rated load: its
     valves wide open pass ``valve_margin`` of rated flow at rated steam, and flow
@@ -915,6 +938,7 @@ def _slow_rates(slow, n, load, rod_eps, p: ReactorParams):
     to_coolant = p.UA * (T_f - T_h)
     around_loop = p.m_dot_cp * (T_h - T_c)
     to_steam = p.UA_sg * (0.5 * (T_h + T_c) - T_s)
+    relieved = steam_relief(T_s, p)
     lam_sum = LAMBDA_XENON + p.sigma_phi0
     feeds = lam_sum * (p.gamma_ratio * n + I_h) / (1.0 + p.gamma_ratio)
     eps = rod_eps + moderator_tilt(T_h, T_c, p)
@@ -925,7 +949,7 @@ def _slow_rates(slow, n, load, rod_eps, p: ReactorParams):
             (p.P_thermal_ref * n - to_coolant) / p.C_fuel,
             (to_coolant - around_loop) / p.C_coolant,
             (around_loop - to_steam) / p.C_cold,
-            (to_steam - p.P_thermal_ref * load) / p.C_sg,
+            (to_steam - p.P_thermal_ref * (load + relieved)) / p.C_sg,
             LAMBDA_IODINE * (n - I_h),
             feeds - (LAMBDA_XENON + p.sigma_phi0 * n * (1.0 + A * Xe_t / Xe)) * Xe,
             dI_t,

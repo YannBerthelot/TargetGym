@@ -30,6 +30,9 @@ settled, and stay inside the env's limits where it rounds them:
   delta I, and reaching a free one the acceptable-operation line (30 % at half
   power). It then counts no penalty time of its own; a plan given no knots may
   spend any and counts them: a knot spent outside at half power is 5 min, 0.0833 h.
+- Derivatives. The solver plans on the model's first and second derivatives, so
+  a knot's state and rows have finite ones in its state and its moves, whatever
+  the env's rates compute on the inputs the model does not use.
 - Fidelity (medium tier). The plant follows a plan as the model says. A plan (the
   planner's own first guess for the day, by the model's inverse) is followed on
   the env with the wobble off, every move on a straight line between its knots
@@ -40,7 +43,10 @@ settled, and stay inside the env's limits where it rounds them:
   env's own, so the boron's gap is the env's float32: a sub-step closes
   ``1 - exp(-z)`` of the way to the feed with z near 1e-5 for a small flow, known
   to 6e-8 / 2 of 1e-5, 0.3 % of the step, and a day moves some 150 ppm. The model
-  runs the whole day open loop, so its errors add up.
+  runs the whole day open loop, so its errors add up. The model does not play
+  the steam generators' safety valves: a solved plan keeps its steam clear of
+  them, and the knots where the first guess does not (at most two, at the bottom
+  of a fast ramp down) are left out of the comparison.
 """
 
 import jax
@@ -193,6 +199,24 @@ def test_a_plan_given_no_knots_may_spend_any_and_counts_them():
     assert clock == pytest.approx(300.0 / 3600.0, rel=1e-3)
 
 
+def test_a_knots_derivatives_are_finite():
+    _, s = Reactor().reset_env(jax.random.PRNGKey(3), ReactorParams())
+    with enable_x64():
+        p, st = float64(ReactorParams()), float64(s)
+        day = look_ahead(st, p, 3, jnp.zeros(4))
+        x = plant_x(st, p)
+
+        def knot(z):
+            x1, rows = M.knot_step(p, day, z[: M.NX], z[M.NX :], 0, OFFSET_BACKOFF, 0.1)
+            return jnp.concatenate([x1, rows])
+
+        z = jnp.concatenate([x, jnp.zeros(M.NU)])
+        first = jax.jacobian(knot)(z)
+        second = jax.hessian(lambda z: jnp.sum(knot(z)))(z)
+    assert np.all(np.isfinite(np.asarray(first)))
+    assert np.all(np.isfinite(np.asarray(second)))
+
+
 # --- the model against the env, a whole day open loop ---
 
 
@@ -227,8 +251,15 @@ def test_the_plant_follows_a_plan_as_the_model_says(scenario, cycle):
                 states[k, M.BORON] * M.PPM - float(s.boron),
                 states[k, M.XENON] - float(s.Xe_hat),
                 states[k, M.IODINE] - float(s.I_hat),
+                rows[k - 1, 8],
             ])  # fmt: skip
-    T_avg, off, boron, xenon, iodine = np.abs(np.array(gaps)).max(axis=0)
+    gaps = np.array(gaps)
+    # The model does not play the safety valves, and a plan of the solver's keeps
+    # its steam clear of them by the back-off; the first guess does not always (a
+    # fast ramp down outruns its boron for a knot), so those knots are left out.
+    inside = gaps[:, 5] >= TAVG_BACKOFF
+    assert inside.sum() >= len(gaps) - 2
+    T_avg, off, boron, xenon, iodine = np.abs(gaps[inside, :5]).max(axis=0)
     assert T_avg < TAVG_BACKOFF
     assert off < OFFSET_BACKOFF
     assert boron < 0.5

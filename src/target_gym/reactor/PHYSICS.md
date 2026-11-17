@@ -164,6 +164,23 @@ turbine by some 80 s, so a turbine loading at 5 %/min overshoots it by a few
 percent before it stops. Below about 96.5 % of load the stop comes before the
 valves' limit, and above it the valves' limit comes first.
 
+The steam generators' safety valves relieve the steam over their set pressure
+(owner, 2026-11-17): the lowest valve's 1176 psig, 8.21 MPa, which on the steam
+curve above is 570.0 K. They are the heat sink when the reactor makes more heat
+than the turbine takes, so they bound how hot the primary can sit at part load:
+
+```
+steam relieved = (p(T_sg) / p(570.0 K) - 1) / 0.03   of the full-power steam, never under 0
+```
+
+They open in proportion to the pressure over the set pressure and pass the
+full-power steam 3 % over it, so the steam sits 2.1 K over 570.0 K per unit of
+power relieved. On its program the steam never reaches them: 564.8 K at no load,
+558.2 K at full load. With the steam held there, Tavg is at most 570.0 K plus 22 K
+per unit of the power the steam generator carries: 7.7 K over its program at half
+load, and reactivity added past that raises the power and blows steam, not Tavg.
+The steam relieved is heat the turbine does not take; it is not charged.
+
 **Left out:** the second axial harmonic and radial modes, grey rods, samarium, decay
 heat, loop transport delay, and the cycle's effect on the axial mode (D11).
 
@@ -221,6 +238,8 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `valve_margin` | 1.05 | of rated steam flow | What the turbine's valves pass wide open at rated steam: 105 % of the manufacturer's guaranteed rating at Wolf Creek, 105 % of rated steam flow at River Bend and Clinton (REALITY.md section 3, [S19]: search summaries, the reports not opened) | read (summaries) |
 | `steam_slope` | 4618.5 | K | Saturated steam, `ln p = a - b / T` through the steam table's 5.503 MPa at 270 C and 8.588 MPa at 300 C ([S20], opened). It gives 6.417 and 7.443 MPa at 280 and 290 C, the table's 6.417 and 7.442 | derived |
 | `loading_stop` | 5.556 | K | The turbine's loading stop (interlock C-16): no loading while Tavg is this far under its program at the turbine's load. What it does is Vogtle's safety report's ([S21], read in full); the 10 F is a training card's for a plant it does not name ([S22], opened), not a plant document | source, setpoint flagged |
+| `relief_temperature` | 570.0 | K | The steam's saturation temperature at the lowest safety valve's set pressure, 1176 psig (8.21 MPa): 569.96 K on the steam curve above. What the valves do is the standard specifications' ([ST1] Bases B 3.7.1, read in full); the set pressure is North Anna 1's and V.C. Summer's, from search summaries ([S24]), units whose no-load Tavg is this plant's 557 F | source, set pressure flagged |
+| `relief_accumulation` | 0.03 | of the set pressure | The valves pass the full-power steam this far over their set pressure. The code's accumulation for steam safety valves, from the reviewer's memory, not opened | ours |
 | `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
 | `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
@@ -477,13 +496,17 @@ Tavg the model has, where a unit reads its coldest loop's. Units count a return 
 colder water as a design transient (2,000 over a unit's life, a search summary):
 the plant does not count them.
 
-**D10: no steam relief.** At part power the hot side of a PWR is bounded by its steam
-side: a Tavg high enough to lift the steam relief and safety valves (1176 psig, 570.0 K
-of steam at V.C. Summer, a search summary) relieves heat and then trips. The model
-has no relief and no steam trip. The two-sided dead band prices any time past 1.6 K
-over the program, which at the 50 % hold is about 1065 psig of steam (interpolated in the review's IAPWS-IF97 table), so a hot
-excursion costs output long before it would lift a valve, and the DNB limit stays as
-the timed bound (physics review, finding 1, option B not taken).
+**D10: one bank of safety valves, and the steam they blow is free.** The steam
+generators' safety valves relieve the steam over 1176 psig (section 1; owner,
+2026-11-17), which bounds a hot primary at part load. A unit has five valves a
+steam generator on staggered set pressures and atmospheric valves an operator can
+open below them; the model has one bank at the lowest set pressure, opening in
+proportion to the overpressure. A lift is not counted and the steam lost is not
+charged, where a unit loses feedwater inventory and reports the lift. Under the
+valves a Tavg over its program is priced by the two-sided dead band past 1.6 K and
+bounded by the DNB limit, as before. The condenser steam dump is left out: it is
+unblocked only by a load rejection of 10 % in a step or 5 %/min sustained
+(REALITY.md section 4).
 
 **D9: burnup by the clock.** The fuel's burnup is worth boron at the day's drawn rate
 for every second since reset, as if at full power. Real burnup follows the energy

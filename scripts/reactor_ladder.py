@@ -399,14 +399,24 @@ def tavg_bump(q, s):
     """The dilution step for the Tavg bump, sized from the curve book (owner,
     2026-11-10): an operator knows the boron worth and the MTC, and steps so that
     the predicted rise over the hour after the line's delay ends at the DNB limit,
-    never more than ``BORON_BUMP``. A ppm moves Tavg ``-boron_worth / (alpha_coolant
-    + alpha_fuel)`` K; a unit of dilution takes ``dilution_flow * boron /
-    primary_mass`` ppm a second."""
+    never more than ``BORON_BUMP``. Since the plant has its safety valves
+    (2026-11-17) the step also keeps the steam under their set temperature, which
+    at part load comes first: a bump that lifts the valves reads the valves. That
+    room is counted from the line's shortest delay, so it holds on any day's
+    draw. A ppm moves Tavg ``-boron_worth / (alpha_coolant + alpha_fuel)`` K; a
+    unit of dilution takes ``dilution_flow * boron / primary_mass`` ppm a second."""
     per_ppm = -q.boron_worth / (q.alpha_coolant + q.alpha_fuel)
     per_unit = per_ppm * q.dilution_flow * float(s.boron) / q.primary_mass  # K/s
-    room = float(tavg_dnb_limit(q)) - float(tavg(s))
+    now = float(tavg(s))
     hour = (BUMP_STEPS - LEAD_STEPS) * DT
-    return -min(abs(BORON_BUMP), room / (abs(per_unit) * hour))
+    longest = (BUMP_STEPS - q.boron_delay_range[0]) * DT
+    relief = q.relief_temperature + q.P_thermal_ref * float(s.n) / q.UA_sg - now
+    dnb = float(tavg_dnb_limit(q)) - now
+    return -min(
+        abs(BORON_BUMP),
+        dnb / (abs(per_unit) * hour),
+        relief / (abs(per_unit) * longest),
+    )
 
 
 def boron_on_tavg(env, q, s):

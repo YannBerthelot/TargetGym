@@ -111,6 +111,22 @@ achieve, as flexibility can be limited by the core control system" [S2, section 
   the stop at 10 F under the program (PHYSICS.md section 1 and D14; owner,
   2026-11-16).
 
+- **The steam side bounds a hot primary.** The steam generators' safety valves
+  protect the secondary side from overpressure and are the heat sink when the
+  condenser is not: heat the reactor makes beyond what the turbine takes raises
+  the steam's pressure until they open, and they are sized to hold it under 110 %
+  of the steam generators' design pressure, on staggered set pressures so that
+  only the valves needed lift [ST1, Bases B 3.7.1, read in full on 2026-11-17].
+  The atmospheric valves below them are for cooldown and are opened by hand [ST1,
+  Bases B 3.7.4]. The condenser steam dump (40 % of the full-load steam) acts on
+  Tavg over its reference only once a load rejection has unblocked it, a 10 %
+  step or 5 %/min sustained, and the control system is designed to take 10 %
+  steps and 5 %/min ramps with no steam dump and no relief [S21, 7.7.1.8 and
+  7.7.1.1]. The lowest valve's set pressure is 1176 psig at North Anna 1 and V.C.
+  Summer [S24, search summaries], units whose no-load Tavg is this plant's 557 F;
+  Indian Point 2's is 1065 psig, an older design's. The plant carries one bank at
+  1176 psig (PHYSICS.md section 1 and D10; owner, 2026-11-17).
+
 ## 5. Costs
 
 - Lost production at $80 to $100/MWh on 1 GWe [owner's range].
@@ -264,6 +280,13 @@ rest.
   Return-to-Power Demonstration", Nuclear Technology 59(1), 1982 (Tihange, 230 MWe
   on a 9 K drop); an EPRI materials report and V.C. Summer's licence renewal
   update listing "Reduced Temperature Return to Power" at 2,000 design cycles.
+- [S24] Search summaries of 2026-11-15 and 2026-11-17, not opened (nrc.gov):
+  main steam safety valve lift settings in the plants' technical specifications,
+  Table 3.7.1-2 or its older form: North Anna 1, 1176 psig the lowest; V.C.
+  Summer, 1176 psig; Indian Point 2, 1065 psig the lowest. [ST1]'s copy
+  (NUREG-1431 Bases, the naygn.org file) was read again on 2026-11-17 for B 3.7.1,
+  B 3.7.4 and B 3.4.1; it gives no set pressure, which is in the specifications'
+  own volume.
 
 Not opened, and not bypassed: NRC technical specifications and course chapters on
 nrc.gov, EDF's HAL documents and ScienceDirect, which block automated readers.

@@ -145,7 +145,7 @@ def stage_model(env, p, stages: int) -> StageModel:
         x1, rows = M.knot_step(
             p, d["day"], x, u, k, OFFSET_BACKOFF, WIDTH, period=period
         )
-        error, T_avg, off, room, inside, under, steam, sway = rows
+        error, T_avg, off, room, inside, under, steam, sway, _relief = rows
         # Tavg wobbles with the load about the plan's, no finer than it is read.
         spread = jnp.maximum(d["sigma"] * sway, p.e_floor)
         flows = u[DILUTE] * p.dilution_flow + u[BORATE] * p.boration_flow

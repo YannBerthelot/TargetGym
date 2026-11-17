@@ -66,6 +66,11 @@ The next release is 0.8.0, because these changes break code written for
     (`loading_stop`, the units' interlock C-16). It holds the load and unloads
     nothing. What it does is Vogtle's safety report's; the setpoint is a training
     card's, flagged in `REALITY.md`.
+  - The steam generators' safety valves relieve the steam over 1176 psig
+    (570.0 K; `relief_temperature`, `relief_accumulation`, `env.steam_relief`).
+    On Tavg's program they never lift. They bound how hot the primary can sit
+    at part load: 7.7 K over its program at half load, past which added
+    reactivity raises the power and blows steam.
   - The offset's band is 5 % of rated delta I at every power (it was 5 % of
     offset, so half as wide at half power). Penalty time counts in full at 50 %
     of rated power and above, by half from 15 % to 50 % and not below; at 90 %

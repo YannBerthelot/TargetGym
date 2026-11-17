@@ -118,7 +118,11 @@ def offset(n, rod_in, xenon, xe_tilt, p):
 def xenon_rates(X, n, rod_in, p):
     """Rates of ``[I, Xe, I_tilt, Xe_tilt]`` at power ``n``: the env's."""
     rise = 0.5 * p.P_thermal_ref * n / p.m_dot_cp
-    slow = jnp.concatenate([jnp.stack([0.0 * n, rise, -rise, 0.0 * n]), X])
+    # The fuel's and the steam's temperatures are not read by these rates. The
+    # steam's slot holds a real temperature all the same: the env's relief is not
+    # differentiable at 0 K, and the solver differentiates everything.
+    steam = 0.0 * n + p.T_avg_no_load
+    slow = jnp.concatenate([jnp.stack([0.0 * n, rise, -rise, steam]), X])
     return _slow_rates(slow, n, n, rod_tilt(rod_in, p), p)[4:]
 
 
@@ -187,8 +191,9 @@ def knot_step(p, d: Day, x, u, k, backoff, width, knot=KNOT, period=6):
     rows)``, with ``rows`` the next knot's (Tref - Tavg, Tavg, delta I less its
     target, the offset's room, the rods' room inside their insertion limit, the
     turbine's room under its cap, and under what its valves pass wide open on the
-    steam the balance makes, and how far a unit of load moves Tavg's error). ``backoff`` is the planner's error on delta I
-    and ``width`` the corners' (``time_outside``)."""
+    steam the balance makes, how far a unit of load moves Tavg's error, and the
+    steam's room under the safety valves' set temperature). ``backoff`` is the
+    planner's error on delta I and ``width`` the corners' (``time_outside``)."""
     step = period * p.delta_t  # a control step, s
     seconds = knot * step
     X0 = jnp.stack([x[IODINE], x[XENON], x[I_TILT] / TILT, x[XE_TILT] / TILT])
@@ -242,7 +247,7 @@ def knot_step(p, d: Day, x, u, k, backoff, width, knot=KNOT, period=6):
     rows = jnp.stack([
         tavg_program(n1, p) - T_avg, T_avg, off1, room,
         rod_insertion_limit(n1, p) - r1, d.cap[k + 1] - L1,
-        turbine_capacity(steam, p) - L1, sway,
+        turbine_capacity(steam, p) - L1, sway, p.relief_temperature - steam,
     ])  # fmt: skip
     return x1, rows
 
