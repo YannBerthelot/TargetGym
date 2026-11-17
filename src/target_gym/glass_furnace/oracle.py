@@ -68,9 +68,24 @@ iterates dropped the valve for a knot every 12 to 20 h, since a temperature move
 nothing, and the last one mostly lost glass.
 
 With an episode's ``seed`` (``benchmark.run_policy``'s keys for it), ``step`` plays the
-plan made with full foresight. Without one it plans on the walks' mean path from the
-true state (the innovations unseen, the events known, since the state holds their
-times) and plans again every ``replan_hours``.
+plan made with full foresight.
+
+Without one the oracle is shown no future draw. It plans on the walks' mean path from
+the true state (the innovations unseen, the events known, since the state holds their
+times), a new plan each knot, started from the rest of the plan in force. On that
+forecast a limit on the fining is met in the plan and lost on the plant: with a plan a
+day resting ``FINING_BACKOFF`` over the mark, the fining came out up to 0.023 under its
+forecast and a tenth of the steps were lost (measured 2026-11-16,
+docs/proposals/glass-furnace-room.md). So this planner prices the mark as the reward
+does, in expectation: each planned step is charged, over its fuel and plates, the bill
+of a lost step times the chance that the fining comes out under the mark, the
+forecast's error taken as normal (ours) with the spread the model's own walks give at
+that lead (``forecast_spread``: sampled paths from the state of the episode's first
+plan, the valve held, on keys of the planner's own). The margin is then where one more
+step toward the mark saves as much fuel as the glass it risks. The spread is read over
+the fining's dead time and a knot and held past them (ours): what comes out later, a
+later plan can still answer. The canal and the override's cap stay limits; when no
+valve meets them, the plan in force goes on.
 """
 
 from __future__ import annotations
@@ -80,6 +95,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.scipy.stats import norm
 
 from target_gym.glass_furnace import env_jax as E
 from target_gym.glass_furnace import physical as P
@@ -122,6 +138,11 @@ REPAIR_ROUNDS, REPAIR_INSIDE = 5, 1e-3
 #: 2026-11-09). Industrial MPC predicts past its last move until the moves' effects have
 #: settled (Qin and Badgwell 2003, p. 747); decision D4 lines out at the horizon's end.
 TAIL_HOURS = 24.0
+#: The fining's dead time, h (scripts/ladder_rows/glass_furnace.py, its step test).
+DEAD_HOURS = 11.8
+#: Sampled paths of the walks the forecast's spread is read from (ours): its estimate
+#: is then within 6 % at one sigma, a quarter of a point of the fining's margin.
+SPREAD_PATHS = 128
 
 
 class Plan(NamedTuple):
@@ -138,7 +159,7 @@ class Plan(NamedTuple):
     kkt: float  # stationarity, relative to the gradient
     violation: float  # worst limit violation, in the scaled rows
     active: int  # active limit rows
-    how: str  # "final": SLSQP's last iterate; else how a plan losing no glass was had
+    how: str  # "final": SLSQP's last iterate; else how the plan played was had
 
 
 def rollout(env, params, state, keys, valve):
@@ -147,11 +168,12 @@ def rollout(env, params, state, keys, valve):
     (``running`` the fuel and the rejected plates, what a step that keeps both marks
     costs), the reward's own readings, and kg/s between the override's cap and the
     valve."""
-    return _scan(env, params, state, keys, valve)[1]
+    return _scan(env, params, state, keys, valve)[1][:5]
 
 
 def _scan(env, params, state, keys, valve):
-    """``rollout``'s readings and the state it ends in."""
+    """``rollout``'s readings, what losing each step would add to its bill (EUR), and
+    the state the rollout ends in."""
 
     def f(s, x):
         k, u = x
@@ -172,8 +194,11 @@ def _scan(env, params, state, keys, valve):
             read["defects"],
         )["tracking"]
         run = E.compute_reward_terms(s1, params)["running"] + plates
+        # The same step lost: its whole charged pull (a fining share of 0 is under
+        # the mark), by the same ``costs``.
+        whole = E.costs(0.0, params.canal_target, 0.0, s1.pull, params)["tracking"]
         headroom = jnp.maximum(cap, params.fuel_min) - u
-        return s1, (-r, run, read["fining"], read["canal"], headroom)
+        return s1, (-r, run, read["fining"], read["canal"], headroom, whole - plates)
 
     return jax.lax.scan(f, state, (keys, valve))
 
@@ -184,6 +209,32 @@ def episode_keys(seed: int, n_steps: int):
     so the oracle's fingerprint covers it (a test holds the two equal)."""
     k_reset, k_steps = jax.random.split(jax.random.PRNGKey(seed))
     return jax.random.split(k_reset, 1)[0], jax.random.split(k_steps, n_steps)
+
+
+def chance_under(fining, mark, spread):
+    """The chance that a fining share forecast at ``fining`` comes out under ``mark``,
+    the forecast's error taken as normal with ``spread``."""
+    return norm.cdf((mark - fining) / spread)
+
+
+def forecast_spread(env, params, state, n_steps: int, paths: int = SPREAD_PATHS):
+    """How far the fining share comes out from its forecast, at each of the next
+    ``n_steps`` steps. The forecast is the walks' mean path from ``state`` with the
+    valve held; the spread is the root mean square, over ``paths`` sampled paths of
+    the walks, of what came out against it. The paths run on keys of the planner's
+    own, which no episode is run on."""
+    mean_p = params.replace(walk_sd=(0.0,) * len(E.WALKS))
+    told_keys = jax.random.split(jax.random.PRNGKey(0), n_steps)
+    own = jax.random.split(jax.random.fold_in(jax.random.PRNGKey(0), 1), paths)
+    path_keys = jax.vmap(lambda k: jax.random.split(k, n_steps))(own)
+
+    def spread(s):
+        valve = jnp.full(n_steps, s.fuel)
+        told = _scan(env, mean_p, s, told_keys, valve)[1][2]
+        came = jax.vmap(lambda ks: _scan(env, params, s, ks, valve)[1][2])(path_keys)
+        return jnp.sqrt(jnp.mean((came - told) ** 2, axis=0))
+
+    return jax.jit(spread)(state)
 
 
 def kkt(grad, rows, jac, lo_gap, hi_gap):
@@ -207,7 +258,7 @@ def kkt(grad, rows, jac, lo_gap, hi_gap):
 
 def solve(
     env, params, state, keys, knot_steps: int, start=None, max_iter=MAX_ITER, log=None,
-    tail_hours=TAIL_HOURS, charge_tail=True,
+    tail_hours=TAIL_HOURS, charge_tail=True, fining_spread=None,
 ):  # fmt: skip
     """The plan from ``state`` over the steps ``keys`` cover, one valve per
     ``knot_steps``, its last knot held ``tail_hours`` past them on the walks' mean path,
@@ -216,6 +267,12 @@ def solve(
     ``log(iteration, knots, objective, worst row)`` called after each iteration if
     given. The objective is the fuel bill over the episode and the tail, per episode
     step; the plan's ``cost`` is the episode's alone.
+
+    With ``fining_spread`` (share, one per step of lead, its last value held past its
+    end and through the tail, ``FINING_BACKOFF`` at least) the fining mark is priced and
+    not limited: each step is charged, over its fuel and plates, what losing it would
+    add times its ``chance_under`` the mark. The plan's ``cost`` and ``running`` stay
+    the env's, without that charge.
     """
     from scipy.optimize import linprog, minimize
 
@@ -226,29 +283,40 @@ def solve(
     n_tail = int(round(tail_hours * 3600.0 / float(p.delta_t)))
     tail_p = p.replace(walk_sd=(0.0,) * len(E.WALKS))
     tail_keys = jax.random.split(jax.random.PRNGKey(0), n_tail)
+    priced = fining_spread is not None
+    if priced:
+        lead = np.minimum(np.arange(n + n_tail), len(fining_spread) - 1)
+        sd = np.maximum(np.asarray(fining_spread, np.float32)[lead], FINING_BACKOFF)
+    m = (1 if priced else 2) * (n + n_tail)  # the rows a step losing glass breaks
 
     def valve(z):
         return jnp.repeat(z, knot_steps)[:n]
 
     def outs(z):
-        end, (cost, run, fining, canal, headroom) = _scan(env, p, st, keys, valve(z))
+        end, (cost, run, fining, canal, headroom, at_risk) = _scan(
+            env, p, st, keys, valve(z)
+        )
         run_t = jnp.zeros(1)
         if n_tail:
-            _, (_, run_t, f_t, c_t, h_t) = _scan(
+            _, (_, run_t, f_t, c_t, h_t, r_t) = _scan(
                 env, tail_p, end, tail_keys, jnp.full(n_tail, z[-1])
             )
-            fining, canal, headroom = (jnp.concatenate(v) for v in
-                                       ((fining, f_t), (canal, c_t), (headroom, h_t)))  # fmt: skip
-        rows = jnp.concatenate([
-            FINING_SCALE * (fining - p.fining_pass - FINING_BACKOFF),
+            fining, canal, headroom, at_risk = (jnp.concatenate(v) for v in (
+                (fining, f_t), (canal, c_t), (headroom, h_t), (at_risk, r_t)))  # fmt: skip
+        rows = [
             CANAL_SCALE * (canal - p.canal_target - CANAL_BACKOFF),
             HEADROOM_SCALE * headroom,
-        ])  # fmt: skip
+        ]
+        spent, spent_t = jnp.sum(run), jnp.sum(run_t)
+        if priced:
+            risk = at_risk * chance_under(fining, p.fining_pass, sd)
+            spent, spent_t = spent + jnp.sum(risk[:n]), spent_t + jnp.sum(risk[n:])
+        else:
+            rows.insert(0, FINING_SCALE * (fining - p.fining_pass - FINING_BACKOFF))
         lost = (fining[:n] < p.fining_pass) | (canal[:n] < p.canal_target)
-        spent = jnp.sum(run) + (jnp.sum(run_t) if charge_tail else 0.0)
         return (
-            spent / n,
-            rows,
+            (spent + (spent_t if charge_tail else 0.0)) / n,
+            jnp.concatenate(rows),
             jnp.mean(cost),
             jnp.sum(lost),
             jnp.mean(run),
@@ -275,7 +343,7 @@ def solve(
     best = {}
 
     def keeps(rows):  # no step of the episode or the tail loses glass
-        return bool(np.all(rows[: 2 * (n + n_tail)] >= 0.0))
+        return bool(np.all(rows[:m] >= 0.0))
 
     def progress(z):
         count[0] += 1
@@ -300,7 +368,7 @@ def solve(
         # limit, from the Jacobians, repeated from there; and the least raise of every
         # knot alike, by bisection. The cheaper stands against the best iterate that
         # lost none.
-        m, lifted = 2 * (n + n_tail), z
+        lifted = z
         for _ in range(REPAIR_ROUNDS):
             rows = at(lifted, False)[1][:m]
             if np.all(rows >= 0.0):
@@ -347,38 +415,72 @@ def solve(
 
 
 class GlassOracle:
-    """The registry's oracle: ``step(obs, state)`` reads the true state."""
+    """The registry's oracle: ``step(obs, state)`` reads the true state.
+
+    With an episode's ``seed`` it plays the plan made with full foresight of it.
+    Without one it is shown no future draw: it plans on the walks' mean path, a new
+    plan each knot, the fining mark priced (the module's docstring). ``spread`` hands
+    it the fining forecast's spread per step of lead; left out, it is read from the
+    model at each episode's first plan, on ``paths`` sampled paths. ``kept`` counts
+    the plans that went on because no valve met the limits.
+    """
 
     oracle = True
 
     def __init__(
-        self, env, params, seed=None, knot_hours=KNOT_HOURS, replan_hours=24.0
-    ):
+        self, env, params, seed=None, knot_hours=KNOT_HOURS, spread=None,
+        paths=SPREAD_PATHS,
+    ):  # fmt: skip
         self.env, self.params, self.seed = env, params, seed
         hour = 3600.0 / float(params.delta_t)
         self.knot = max(1, int(round(knot_hours * hour)))
-        self.replan = max(1, int(round(replan_hours * hour)))
+        #: Steps of lead the spread is read over: the fining's dead time and a knot.
+        self.lead = int(round(DEAD_HOURS * hour)) + self.knot
+        self.spread, self.paths = spread, paths
         self.plans: list[Plan] = []
+        self.kept = 0
         self.reset()
 
     def reset(self):
-        self._valve, self._t0 = None, 0
+        self._valve, self._t0, self._spread = None, 0, self.spread
 
     def _plan(self, state, t: int):
         n = int(self.params.max_steps_in_episode)
         if self.seed is not None:
-            p, keys = self.params, episode_keys(self.seed, n)[1][t:]
-        else:  # the walks' mean path: no innovation, the events where the state has them
-            p = self.params.replace(walk_sd=(0.0,) * len(E.WALKS))
-            keys = jax.random.split(jax.random.PRNGKey(0), n - t)
-        plan = solve(self.env, p, state, keys, self.knot)
+            keys = episode_keys(self.seed, n)[1][t:]
+            plan = solve(self.env, self.params, state, keys, self.knot)
+        else:
+            plan = self._without_foresight(state, t, n - t)
         self.plans.append(plan)
         self._valve, self._t0 = plan.valve, t
+
+    def _without_foresight(self, state, t: int, n: int):
+        """The plan from ``state`` over the ``n`` steps left, on the walks' mean path:
+        no innovation, the events where the state has them."""
+        if self._spread is None:
+            self._spread = np.asarray(
+                forecast_spread(self.env, self.params, state, self.lead, self.paths)
+            )
+        p = self.params.replace(walk_sd=(0.0,) * len(E.WALKS))
+        keys = jax.random.split(jax.random.PRNGKey(0), n)
+        again = self._valve is not None and t - self._t0 == self.knot
+        # The plan in force, less the knot just played: where the solve starts.
+        rest = self.plans[-1].knots[1:] if again else None
+        plan = solve(
+            self.env, p, state, keys, self.knot, start=rest, fining_spread=self._spread
+        )
+        if again and plan.violation > 0.0:  # no valve meets the canal and the cap
+            self.kept += 1
+            plan = plan._replace(
+                knots=np.asarray(rest), valve=np.repeat(rest, self.knot)[:n],
+                how="the plan in force kept",
+            )  # fmt: skip
+        return plan
 
     def step(self, _obs, state):
         t = int(state.time)
         stale = self._valve is None or t < self._t0 or t - self._t0 >= len(self._valve)
-        if stale or (self.seed is None and t - self._t0 >= self.replan):
+        if stale or (self.seed is None and t - self._t0 >= self.knot):
             self._plan(state, t)
         u = self._valve[t - self._t0]
         return float(np.clip(np.asarray(E.to_action(u, self.params))[0], -1.0, 1.0))

@@ -7,9 +7,9 @@ their outputs are in `study/glass_room/out/`. Costs are EUR per 120 s step.
 
 **Since then (2026-11-15 and 16)** the plant on this branch has one more loss: defects
 released by the tank's blocks when their temperature rises. The sections from "In the
-plant" on rerun everything on it. The reference costs 49.23, a planner without
-foresight 48.24 and the ceiling 46.96: the room is 1.048, and 44 % of it is reached
-without foresight. The sections before describe the task as it was.
+plant" on rerun everything on it. The reference costs 49.23, the library's planner
+without foresight 48.25 and the ceiling 46.96: the room is 1.048, and 43 % of it is
+reached without foresight. The sections before describe the task as it was.
 
 ## The short answer
 
@@ -616,16 +616,91 @@ and 1.3 to 1.5 GB an episode. Mean cost per step over the five seeds:
 **What this does not show.**
 
 - The spread was measured on the 25 episodes the line is scored on. It is one curve of
-  17 numbers from 154 days, and its halves agree (0.0071 and 0.0069 at 16 h). The same
-  planner is running on seeds 105 to 109, where the ladder has the reference's costs
-  and there is no ceiling.
+  17 numbers from 154 days, and its halves agree (0.0071 and 0.0069 at 16 h).
+- **On seeds the spread was not measured on, the line holds.** The same planner on
+  seeds 105 to 109 of the five scenarios, where the ladder has the reference's costs
+  and there is no ceiling: no step under a mark, no trip, and it is under the
+  reference on 25 of 25 episodes, by 0.7 to 6.6 %. Weighted, it costs 48.46 against
+  the reference's 49.86 on those seeds (1.029). Its margin was thinnest on pull up,
+  seed 107: on day 5 the solver stopped at its cap outside a limit three plans
+  running, the plan in force went on for 12 h, and the fining came down to 0.515.
+  Elsewhere an episode's lowest was 0.518 to 0.531.
 - The spread is the shipped line's (a plan a day from a cold start), not this planner's
-  own, which was not measured.
+  own. Measured since (the next section), its own is a fifth wider.
 - The 16 h hold, the spread's floor (2e-4, the oracle's own back-off) and the cap of
   100 iterations are ours. The canal and headroom limits stay hard; the canal never
   came nearer than 0.7 K to its target.
-- It is a study script. It swaps the oracle's scan and back-off around each solve. In
-  the library it needs a hook in `solve` and its tests written first.
+- It was a study script, which swapped the oracle's scan and back-off around each
+  solve. The next section takes it into the library.
+
+## The planner in the library (2026-11-16)
+
+At the owner's ask the fair planner is now the library's oracle without a seed
+(`glass_furnace/oracle.py`), which is what `make_oracle("glass_furnace")` and the
+runners build. The oracle with a seed, the ceiling's, is unchanged.
+
+- **What moved.** `solve` takes the fining forecast's spread per step of lead. Given
+  one, it drops the fining limit and charges each step what losing it would add, by
+  the env's own `costs` (the whole pull less the plates), times its chance of ending
+  under the mark. The oracle plans each knot from the rest of the plan in force, and
+  that plan goes on when no valve meets the canal's limit or the override's cap.
+- **The spread comes from the model, not from a table.** At each episode's first plan
+  the oracle samples 128 paths of the walks from the state it is shown, the valve held,
+  on keys of its own, and takes the root mean square of the fining against the mean
+  path, over the dead time and a knot (15.8 h). No scored seed enters it.
+- **That spread is wider than the table the fair line ran on.** From five states (two
+  resets, three mid-week states of the fair line) it is 0.0083 to 0.0096 at 16 h,
+  against the table's 0.0070. The table was read on the shipped line's states, which
+  sat nearer the mark: its first days, starting at a fining of 0.586, give 0.0082, and
+  its days 4 to 7, starting at 0.548, give 0.0068. So the fair line ran on a spread a
+  fifth narrower than its own forecasts had, and its lowest fining was 2.5 to 3.5 of
+  its own sigmas over the mark.
+- **Tests first.** Seven new tests in `tests/glass_furnace/test_glass_oracle.py`,
+  written from the contract at the file's head and failing on the old oracle: the
+  chance against the normal table; the spread nil without walks and halving with
+  them; a priced plan staying further over the mark the wider the spread, at least
+  two spreads, at no less than the limit plan's bill; a plan each knot; the plan in
+  force kept from a bath made 20 K colder; and the spread read from the model at the
+  first plan. Each fails when its behaviour is broken (seven breaks, one at a time).
+  The nine earlier tests pass unmodified. The file takes about 8 minutes on a loaded
+  bob, the new tests up to 80 s each.
+- **The port is the study's planner.** Handed the table (`fair_line.py` as it now
+  stands), a two-day episode costs 46.390 against the study's 46.400, with the valve
+  within 0.0004 kg/s at every knot. Reading the model's spread it costs 46.526: the
+  wider spread is paid in fuel.
+- **Stamps.** The env's stamp is unchanged (1495ad0c77e3469b). The oracle's
+  fingerprint moves, and its recorded rows were stale already.
+
+The library's planner as it ships (`mpc_line.py`, 400 iterations at most per plan) on
+the ceiling's five scenarios and seeds, mean cost per step over the five seeds:
+
+| Scenario | Weight | Reference | Library planner | Ceiling | Share of the gap closed | Steps under a mark |
+|---|---|---|---|---|---|---|
+| Normal | 0.70 | 49.21 | 48.25 | 46.95 | 42 % | 0 |
+| Pull up | 0.05 | 51.89 | 51.16 | 49.68 | 33 % | 0 |
+| Pull down | 0.05 | 46.72 | 45.56 | 44.32 | 49 % | 0 |
+| Gas rich | 0.10 | 48.83 | 47.76 | 46.55 | 47 % | 0 |
+| Gas lean | 0.10 | 49.66 | 48.68 | 47.45 | 44 % | 0 |
+| Weighted (J) | | 49.23 | 48.25 | 46.96 | 43 % | 0 |
+
+- **It keeps every mark and beats the reference on all 25 episodes,** by 0.3 to 4.0 %.
+  Nothing trips. The reference costs 1.0201 times the planner and the planner 1.0275
+  times the ceiling: 0.17 of the 0.51 EUR per step in fuel and 0.81 of the 1.75 in
+  glass.
+- **The wider spread cost 0.02 EUR per step** against the fair line's 48.24, and the
+  lowest fining of an episode is 0.525 to 0.532 against 0.522 to 0.531.
+- **The solver.** Of 1050 plans, 1049 stop on the solver's own tolerance, after 25
+  iterations at the median and 221 at most, none at the cap. One (pull up, seed 100)
+  stopped on limits it could not meet together, and the plan in force went on. It took
+  67 hours of solving on bob, 2.4 to 3.1 hours and 1.3 to 1.6 GB an episode.
+
+**Not done.**
+
+- Memory in the library's own runners. The study's runner clears JAX's caches after
+  each plan; a runner that does not would hold 42 compiled horizons an episode.
+- A week costs about 2.7 hours of one core an episode, so the task's oracle row is
+  about 70 core-hours for 25 episodes.
+- The registry's note on the task and the changelog do not mention the planner yet.
 
 ## What else the furnace lacks
 
@@ -700,10 +775,9 @@ it is.
    takes a third start per seed.
 6. The reference's back-off again (decisions 1 and 2): a quarter of the new room is the
    distance the reference keeps from the fining mark.
-7. The fair planner: whether the library's oracle without a seed becomes it for this
-   task (a plan every 4 h from the last plan, the chance of a lost step priced from a
-   measured forecast spread), with a hook in `solve` and tests first; and where its
-   spread table comes from, since a table measured on the scored seeds is a tuning.
+7. The fair planner is in the library since 2026-11-16 (the owner's go), its spread
+   read from the model. Left to rule: the normal error it assumes, the hold of the
+   spread past the dead time and a knot, and 128 sampled paths, all ours.
 
 ## Sources seen today
 
@@ -733,6 +807,8 @@ and, from the ceiling run's output directory, `reference_split.py`, `plan_traces
 six minutes each on one server core). The ceiling itself is 25 chains of
 `scripts/glass_slow_oracle.py solve`, each a design start and a restart, up to
 100 minutes and 3 GB a solve. The MPC line is 25 runs of `mpc_line.py`, one per scenario
-and seed, 0.8 to 3.7 hours and up to 3.2 GB each. The fair line is 25 runs of
-`fair_line.py`, 2.8 to 3.6 hours and 1.5 GB each.
+and seed, 0.8 to 3.7 hours and up to 3.2 GB each (the script at 7143497, when the
+library's oracle without a seed was that planner). The fair line is 25 runs of
+`fair_line.py` at 5108011, 2.8 to 3.6 hours and 1.5 GB each. Since then `mpc_line.py`
+runs the library's planner, and `fair_line.py` hands it the measured table.
 

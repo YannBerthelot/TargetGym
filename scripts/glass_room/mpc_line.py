@@ -1,10 +1,11 @@
 """Glass room study: the MPC line, what the true state gives without foresight. The
-shipped oracle without a seed (``glass_furnace/oracle.py``: it reads the true state,
-plans on the walks' mean path with the events known, and plans again every 24 h) on one
-scenario and seed of the ladder's suite, run through ``benchmark.run_policy`` at sensor
-noise 1 as the ceiling's plans are replayed. Beside its cost: the steps under a mark,
-and how far the fining share and the canal came out from each plan's own forecast over
-the day it was played, which is what a margin on the limits would have to cover.
+oracle without a seed as the library ships it (``glass_furnace/oracle.py``: it reads
+the true state and plans on the walks' mean path with the events known) on one scenario
+and seed of the ladder's suite, run through ``benchmark.run_policy`` at sensor noise 1
+as the ceiling's plans are replayed. At 7143497 that oracle planned once a day on hard
+limits, which is the report's MPC line; it now plans every knot and prices the chance
+of a lost step. Beside its cost: the steps under a mark, and how far the fining share
+and the canal came out from each plan's own forecast over the steps it was played.
 ``FINING_BACKOFF`` (share) and ``CANAL_BACKOFF`` (K) replace the oracle's own.
 
 Run: PYTHONPATH=src python scripts/glass_room/mpc_line.py SCENARIO SEED OUT_DIR
