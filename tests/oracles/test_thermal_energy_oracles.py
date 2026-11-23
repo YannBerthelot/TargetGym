@@ -296,13 +296,19 @@ def test_ceiling_weather_is_the_float32_episodes_under_x64(task):
     np.testing.assert_allclose(planned, scored, rtol=1e-5, atol=1e-6)
 
 
-def test_boiler_oracle_backs_off_no_limit():
-    """K11 backs a limit off by the planner's smoothing error and by the noise
-    it cannot foresee. The boiler's planner smooths nothing (no width sites)
-    and its plant draws nothing after the reset (the load plan and its upset
-    are drawn there), so no limit is backed off in the receding slot."""
+def test_boiler_oracle_backs_the_trip_levels_off_by_the_level_reading():
+    """K11 backs a limit off by the planner's smoothing error, by the noise it
+    cannot foresee, and by the plant's precision. The boiler's planner smooths
+    nothing (no width sites) and its plant draws nothing after the reset, but
+    a plan riding a trip level exactly is tripped by the float32 plant, which
+    ends about 1e-6 m off the float64 plan; the inclusive trip timer then runs.
+    Like the ceiling, the receding slot plans one sigma of the level's reading
+    inside both trip levels, and nothing off the floor of the steam under the
+    water, which the env clips."""
     from target_gym import records
 
+    env = REGISTRY["boiler_drum"].make_env()
+    (sigma,) = [r.sigma for r in env.readings if r.field == "level"]
     row = records.load_row("oracle_widths", "boiler_drum")
     assert row["sites"] == {}
-    assert not any(row.get("limit_backoffs") or [])
+    assert row["limit_backoffs"] == pytest.approx([sigma, 0.0])

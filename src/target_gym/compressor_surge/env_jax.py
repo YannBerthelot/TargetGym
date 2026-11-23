@@ -8,6 +8,7 @@ from gymnax.environments import environment, spaces
 from target_gym.base import (
     FieldReading,
     actuate,
+    canonical_dtypes,
     canonical_reset,
     finish_step,
     measured_obs,
@@ -17,17 +18,16 @@ from target_gym.compressor_surge.env import (
     CompressorSurgeParams,
     CompressorSurgeState,
     _substeps,
-    characteristic,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
     demand_opening,
     draw_schedule,
-    equilibrium_phi,
+    established_point,
     get_obs,
     renew_schedule,
-    suction_density,
+    schedule_ramp,
 )
 from target_gym.compressor_surge.rendering import _render
 from target_gym.expert_access import RegistryExperts
@@ -39,7 +39,7 @@ class CompressorSurge(
     SavesVideo,
     environment.Environment[CompressorSurgeState, CompressorSurgeParams],
 ):
-    """Compressor feeding a header, with surge as the trip.
+    """Compressor feeding a header; three counted surges trip it.
 
     Action (2,): [speed command, recycle command], raw in [-1, 1] -> [N_min, N_max] of rated and [0, 1] opening.
     """
@@ -173,10 +173,10 @@ class CompressorSurge(
         self, key: chex.PRNGKey, params: CompressorSurgeParams = None
     ) -> Tuple[jnp.ndarray, CompressorSurgeState]:
         """A fresh schedule, the initial deviation drawn from its stationary law
-        clipped at ``demand_dev_reset_clip`` sd, and the plant at its
-        equilibrium at ``N_reset`` and ``x_reset`` for the drifted first
-        opening, with the schedule clock at 0. The target opens on the reset's
-        own pressure and ramps onto the first level (PHYSICS.md, task design)."""
+        clipped at ``demand_dev_reset_clip`` sd, and the plant in established
+        operation for the drifted first opening (charter B5,
+        ``established_point``): at rest at the header setpoint, on or right of
+        the ``reset_margin`` control line, with the schedule clock at 0."""
         if params is None:
             params = self.default_params
 
@@ -187,54 +187,56 @@ class CompressorSurge(
             jax.random.normal(dev_key), -clip, clip
         )
         opening = demand_opening(demand_levels, 0.0, demand_dev, params)
-        rho = suction_density(params)
-
-        # Established operation (charter rule 17): the speed that holds the
-        # header setpoint at the reset's recycle and first opening, by
-        # bisection on the equilibrium's pressure, which rises with speed.
-        def header_at(N):
-            phi = equilibrium_phi(
-                N, params.x_reset, opening, params, params.reset_newton_iters
-            )
-            return rho * (N * params.U_r) ** 2 * characteristic(phi, params)
-
-        def bisect(bounds, _):
-            lo, hi = bounds
-            mid = 0.5 * (lo + hi)
-            low = header_at(mid) < params.header_setpoint
-            return (jnp.where(low, mid, lo), jnp.where(low, hi, mid)), None
-
-        (lo, hi), _ = jax.lax.scan(
-            bisect,
-            (jnp.asarray(params.N_min), jnp.asarray(params.N_max)),
-            None,
-            length=24,
-        )
-        N0 = 0.5 * (lo + hi)
-        phi = equilibrium_phi(
-            N0, params.x_reset, opening, params, params.reset_newton_iters
-        )
-        U = N0 * params.U_r
-        dp = rho * U**2 * characteristic(phi, params)
+        m_c, dp, N0, x0, phi = established_point(opening, params)
 
         state = CompressorSurgeState(
             time=0,
-            m_c=rho * params.A_c * U * phi,
+            m_c=m_c,
             dp=dp,
             N=N0,
             N_ramp=N0,
-            x=params.x_reset,
+            x=x0,
             demand_dev=demand_dev,
             phi_min=phi,
             setpoint_levels=setpoint_levels,
             demand_levels=demand_levels,
             block_clock=0,
-            valve_cmds=jnp.full((VALVE_HISTORY,), params.x_reset),
+            valve_cmds=jnp.full((VALVE_HISTORY,), x0),
             demand_ramp=jnp.asarray(params.demand_ramp_s, jnp.float32),
         )
 
         obs = self.get_obs(state, params)
         return obs, state
+
+    def restart_plant(self, key, state, params: CompressorSurgeParams):
+        """A trip's restart (``base.failure_kernel``): the plant back in
+        established operation for the demand the outside world carries on
+        with, which is ``state``'s, not a fresh draw's. A machine restarted on
+        another demand's balance would meet its consumers off its header zone,
+        or left of its line."""
+        fresh = self.reset_env(key, params)[1]
+        opening = demand_opening(
+            state.demand_levels,
+            state.block_clock * params.delta_t,
+            state.demand_dev,
+            params,
+            ramp=schedule_ramp(state, params),
+        )
+        m_c, dp, N0, x0, phi = established_point(opening, params)
+        return canonical_dtypes(
+            fresh.replace(
+                m_c=m_c,
+                dp=dp,
+                N=N0,
+                N_ramp=N0,
+                x=x0,
+                phi_min=phi,
+                valve_cmds=jnp.full((VALVE_HISTORY,), x0),
+                actuator_held=self.initial_action(
+                    fresh.replace(N_ramp=N0, x=x0), params
+                ),
+            )
+        )
 
     def start_event(self, state, key, params: CompressorSurgeParams):
         """The stream's event hook (docs/proposals/long-strata.md, S1): the
