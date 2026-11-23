@@ -599,9 +599,10 @@ def fuel_flow(thrust, air_speed, z, params, xp=jnp, sound=None):
     with speed and falls with the air's temperature, where a constant figure
     put the max-range Mach above the cruise Mach at every weight.
 
-    An aircraft whose parameters do not carry the law's two numbers (the 3D
-    airliner and the Hornet, until they take it) keeps its constant
-    ``specific_fuel_consumption``, kg/(kN s).
+    An aircraft that has not taken the law keeps its constant
+    ``specific_fuel_consumption``, kg/(kN s): one whose parameters do not carry
+    the law's two numbers, or carry them at zero (the Hornet, which has no
+    numbers of its own for it, shares the 3D airliner's parameter set).
     """
     if not hasattr(params, "fuel_static"):
         return params.specific_fuel_consumption * 1e-3 * thrust
@@ -611,7 +612,10 @@ def fuel_flow(thrust, air_speed, z, params, xp=jnp, sound=None):
     per_thrust = params.fuel_speed_slope * air_speed + params.fuel_static * xp.sqrt(
         theta
     )
-    return per_thrust * thrust
+    if not hasattr(params, "specific_fuel_consumption"):
+        return per_thrust * thrust
+    constant = params.specific_fuel_consumption * 1e-3
+    return xp.where(params.fuel_static > 0.0, per_thrust, constant) * thrust
 
 
 def economy_cost(power, z, tas, target_tas, params, xp=jnp):

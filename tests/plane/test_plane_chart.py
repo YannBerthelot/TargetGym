@@ -203,6 +203,22 @@ def test_fuel_per_thrust_follows_the_published_law():
     )
 
 
+def test_law_numbers_at_zero_mean_the_aircraft_keeps_its_constant_figure():
+    """An aircraft that carries the law's two numbers at zero has not taken the
+    law, as the Hornet has not (no numbers of its own for it): it burns its
+    constant figure. 22.9 mg/(N s) on 10 kN is 0.229 kg/s, whatever the speed."""
+    from types import SimpleNamespace
+
+    from target_gym.plane.dynamics import fuel_flow
+
+    hornet = SimpleNamespace(
+        fuel_static=0.0, fuel_speed_slope=0.0, specific_fuel_consumption=0.0229
+    )
+    assert float(fuel_flow(10_000.0, 190.0, 8_000.0, hornet)) == pytest.approx(
+        0.229, rel=1e-6
+    )
+
+
 def test_the_plant_burns_what_the_law_gives_over_a_trimmed_second():
     """One second of established cruise in calm air burns the law's flow at the
     thrust the engines make (1 %: the thrust barely moves inside the step)."""
