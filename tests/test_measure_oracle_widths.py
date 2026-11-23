@@ -19,7 +19,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: The state field each env's step drives with its noise, and how the planner
 #: data restates it (cited from each env's step).
 NOISE_FIELD = {
-    "reactor": ("load_wobble", 0.0),  # reactor/env.py, the load's OU wobble
     "compressor_surge": ("demand_dev", 0.0),  # the consumers' OU deviation
     "wind_turbine": ("v_turb", 0.0),  # the Kaimal turbulence about v_mean
     "cement_kiln": ("raw_meal", "raw_meal_nominal"),  # feed OU about nominal

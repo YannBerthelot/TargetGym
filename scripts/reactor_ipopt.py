@@ -30,11 +30,11 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import reactor_foresight as foresight  # noqa: E402
 import reactor_ladder as ladder  # noqa: E402
+from reactor_rods_model import reactor_model  # noqa: E402
 
 from target_gym.oracles.controller import enable_x64, float64  # noqa: E402
 from target_gym.oracles.shooting import Shooting, StageModel  # noqa: E402
 from target_gym.reactor import Reactor, ReactorParams  # noqa: E402
-from target_gym.reactor.oracle import reactor_model  # noqa: E402
 
 WIDTH = 0.0010526315789473686  # the rod corner's, data/oracle_widths/reactor.json
 SCALE = 0.10526315789473685

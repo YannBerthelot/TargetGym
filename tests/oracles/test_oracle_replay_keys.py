@@ -22,8 +22,9 @@ pytestmark = pytest.mark.medium
 
 #: The thermal and energy oracles. Other families' oracles fail these checks
 #: on int/amendment3 (glass_furnace's step reads its key on the planner's
-#: params; reactor's and unstable_cstr's records hold more back-offs than their
-#: models have limits), reported to their owners rather than fixed here.
+#: params; unstable_cstr's record holds more back-offs than its model has
+#: limits), reported to their owners rather than fixed here. The reactor's
+#: oracle is its own planner since 2026-11-16 and has no widths record.
 ORACLES = ["battery", "boiler_drum", "hvac", "wind_turbine"]
 
 
