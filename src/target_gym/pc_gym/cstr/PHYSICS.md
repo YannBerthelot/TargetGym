@@ -222,6 +222,11 @@ levels 0.5 and 2 have gains of their own (`pid_gains_0.5x.json`,
 
 - Tracking of the reactor temperature, no zone; scenarios as section 5.
 - Bump tests on the water from the reset steady state with the event off.
+- A bumpless start (the row's `bumpless`, 2026-11-23): the reset stands on the
+  steady state of the day's feed temperature, which no reading shows, so each
+  rung re-bases its bias on the valve and the jacket's rest on its reading at
+  the reset. Without it the cascade's normal day cost 3.52 per step, with it
+  0.24 (seeds 100 to 109).
 - PI by SIMC on T, then feedforward: none measured (feed temperature and
   activity are hidden); then the cascade on the jacket outlet (obs 1, 2 min
   late); the expert above is the PI rung.
