@@ -3,8 +3,12 @@
 Run with ``uv run python scripts/compressor_surge_margin_causes.py OUT.json``
 (about 15 min on one core; run it on a server). It registers nothing and writes
 no record: each variant is a params override or a subclass with lagged readings,
-built here. Findings and the open decision are in
+built here. Findings and the decision they led to are in
 ``docs/proposals/compressor-surge-margin.md``.
+
+The plant has since gained both causes (owner, 2026-11-23). The script therefore
+starts from the plant without them, the map's own machine read by instant
+transmitters (``BARE``), and adds one cause at a time, as it was first run.
 
 One cause at a time, from ``compressor_surge/REALITY.md`` ("Why the margin is
 kept"):
@@ -51,6 +55,8 @@ from target_gym.registry import REGISTRY  # noqa: E402
 
 TASK, SEEDS = "compressor_surge", tuple(range(100, 110))
 LINE_RIGHT, LINE_LEFT = {"W": 0.2625}, {"W": 0.2375}  # the true line 5 % off the map
+#: The plant before it had a hidden line: every variant starts from the map's machine.
+BARE = {"line_shift_max": 0.0}
 #: (name, params override, lag on the dp and flow readings in s, control margins).
 VARIANTS = (
     ("plant as it is", {}, 0.0, (0.10, 0.08, 0.07, 0.06, 0.05)),
@@ -67,8 +73,6 @@ VARIANTS = (
 def env_with(lag: float):
     """The task's env, its flow and pressure readings behind ``lag`` seconds."""
     base = type(REGISTRY[TASK].make_env())
-    if not lag:
-        return base()
     lagged = tuple(
         (
             dataclasses.replace(r, lag=lag)
@@ -136,7 +140,7 @@ def run(spec, env, rung, row, override) -> dict:
     out = {}
     for s in scenarios.suite(spec):
         p = scenarios.params_for(
-            spec, s, sensor_noise_scale=1.0, **row.score, **override
+            spec, s, sensor_noise_scale=1.0, **row.score, **BARE, **override
         )
         steps = int(p.max_steps_in_episode)
         task = task_info(TASK, env, p, len(SEEDS))
@@ -180,6 +184,7 @@ def main(out_path: str) -> None:
         spec_v = dataclasses.replace(spec, env_factory=lambda lag=lag: env_with(lag))
         for margin in margins:
             row = row_at(margin)
+            row.test.update(BARE)  # commissioned on the map's machine too
             rung = L.build(TASK, row, spec=spec_v)["override"]
             per = run(spec, env, rung, row, override)
             entry = {

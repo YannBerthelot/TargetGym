@@ -1,6 +1,7 @@
 # compressor_surge: a margin the plant earns
 
-Status: prototype, nothing registered. Open for the owner (2026-11-23).
+Status: the owner chose option 1, the lag and the hidden line shift (2026-11-23). It is
+built in the plant; its values wait on four choices ("Still open" below).
 
 ## The finding
 
@@ -66,6 +67,10 @@ points. And on the header pressure itself the reference leaves its zone on about
 the fast-day seeds even at the zone's centre, so there the rule has no grid point
 without an exit.
 
+The table was measured on the plant before the change, on the branch of the ceiling
+fixes. The script now starts from that plant (`BARE`); on a later head of the
+integration branch its rows come out within 2 % of these, with the same surges.
+
 ## The decision
 
 1. **Lag and a hidden line shift (recommended).** A first-order lag on the flow and
@@ -78,3 +83,46 @@ without an exit.
 
 Not decided here: the shift's law and range, whether a restart redraws it, and
 whether the observation gains a suction temperature channel [C4, C5].
+
+## As built, and what it gives (2026-11-23)
+
+The plant has a first-order lag of 0.15 s on its flow reading and 0.3 s on its
+pressure reading [C10], and each episode's machine has its true surge line a hidden
+fraction off the map, uniform within 5 % either side. The model computes the
+machine's characteristic as the map's stretched in Phi by one plus that fraction. A
+trip's restart keeps the machine. The oracle and the ceiling know the true line.
+
+The reference's margin by the owner's rule, on seeds 100 to 109: no surge on any seed
+from 0.15 down to 0.09, one fast-day seed at 0.08. So 0.09.
+
+Room on held-out seeds 200 to 209, the reference at 0.09 against the ceiling on the
+true line, paired by seed, kJ per step, with a 95 % interval from a bootstrap over
+seeds within each scenario:
+
+| scenario | reference | ceiling | balance floor | room |
+|---|---|---|---|---|
+| normal | 0.722 | 0.129 | 0.103 | 5.57 [3.13, 14.70] |
+| slow_approach | 11.10 | 8.83 | 8.64 | 1.26 [1.20, 1.32] |
+| fast_approach | 12.59 | 9.45 | 9.34 | 1.33 [1.27, 1.40] |
+| load_swings | 5.24 | 3.48 | 3.40 | 1.51 [1.37, 1.75] |
+| J | 3.03 | 1.97 | 1.91 | 1.54 [1.45, 1.65] |
+
+- The ceiling costs less than the reference on 40 seeds of 40, trips on none, and
+  sits 3 % above the balance floor on J.
+- The reference surges once, on the one held-out machine near the top of the range
+  (line 4.9 % right of its map). A margin placed on ten machines is not safe on an
+  eleventh: that is the margin being the plant's.
+
+## Still open
+
+1. The shift's size and law (built: uniform within 5 %).
+2. Whether a restart keeps the machine (built: it does).
+3. Whether the observation gains a suction temperature channel (built: no).
+4. The lags' values (built: 0.15 s and 0.3 s).
+5. **The shift can be read off the readings.** Because the whole characteristic is
+   stretched, the speed that holds 24 kPa at a given flow differs by about 0.7 % for a
+   5 % shift, seventy steps of the speed reading. A controller that knew the map's
+   shape could invert it and find the line without going near it, which the sources
+   say a plant cannot do [C10]. Keeping the stretch local to the line would hide it;
+   no source gives that shape.
+

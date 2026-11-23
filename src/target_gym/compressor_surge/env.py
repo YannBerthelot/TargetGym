@@ -19,7 +19,8 @@ the consumers' valve against their static head and through the recycle valve
 back to suction. The drive follows a rate-limited speed setpoint through a
 first-order lag; the recycle valve is rate limited, faster opening than
 closing. The consumers' opening follows a hidden schedule plus an
-Ornstein-Uhlenbeck deviation. A surge is a flow reversal; the plant trips on
+Ornstein-Uhlenbeck deviation. Each episode's machine has its true surge line a
+hidden fraction off the map (``line_shift``). A surge is a flow reversal; the plant trips on
 the third within ``surge_window`` (version 4). It starts, and restarts after a
 trip, in established operation (``established_point``).
 
@@ -166,6 +167,13 @@ class CompressorSurgeParams(EnvParams):
     #: flow at speed, at the header setpoint (``established_point``). Ours, the
     #: family's low end: about 10 % [C6], 10 to 15 % [C1].
     reset_margin: float = 0.10
+    #: The machine's true surge line against the map the controller reads
+    #: (``surge_flow_per_speed``): each episode's machine has its line a hidden
+    #: fraction left or right of the map's, drawn uniformly within this at the
+    #: reset. Field and shop curves differ, the line drifts with the machine's
+    #: condition [C1; C10], and invariant coordinates leave 2.6 to 7 % at low
+    #: suction pressure [C14]. Ours, inside that range.
+    line_shift_max: float = 0.05
     #: Version 2's reset point (rated speed, recycle 0.35), which the reset no
     #: longer reads: with it a normal day's demand started the plant below its
     #: header zone at top speed, a capture. Kept for section 2's check of the
@@ -241,6 +249,7 @@ PARAM_UNITS = {
     "demand_theta": "1/s",
     "demand_dev_reset_clip": "-",
     "reset_margin": "-",
+    "line_shift_max": "-",
     "N_reset": "-",
     "x_reset": "-",
     "reset_newton_iters": "-",
@@ -303,6 +312,11 @@ class CompressorSurgeState(EnvState):
     #: state built by hand has none and reads the params'.
     demand_ramp: float = struct.field(default=-1.0, kw_only=True)
 
+    #: The machine: its true surge line sits at Phi = 2W (1 + ``line_shift``).
+    #: Hidden, drawn at the reset, kept through a trip's restart. 0 on a state
+    #: built by hand: the map's own machine.
+    line_shift: float = struct.field(default=0.0, kw_only=True)
+
     actuator_held: jax.Array = actuator_field(2)
 
 
@@ -357,10 +371,17 @@ def surge_constant(params: CompressorSurgeParams):
 # ---------------------------------------------------------------------------
 
 
-def characteristic(phi, params: CompressorSurgeParams, xp=jnp):
+def characteristic(phi, params: CompressorSurgeParams, xp=jnp, shift=0.0):
     """Psi_c(Phi): the Moore-Greitzer cubic for Phi <= ``phi_join``, and its
     tangent line beyond, so the head keeps falling past the reachable range
-    without the cubic's turn."""
+    without the cubic's turn.
+
+    ``shift`` is the machine's (``state.line_shift``): its characteristic is
+    the map's stretched in Phi by 1 + shift, so its head peaks, and its surge
+    line sits, at Phi = 2W (1 + shift), at the map's peak head. At 0 it is the
+    map.
+    """
+    phi = phi / (1.0 + shift)
     y = phi / params.W - 1.0
     cubic = params.psi_c0 + params.H * (1.0 + 1.5 * y - 0.5 * y**3)
     y_j = params.phi_join / params.W - 1.0
@@ -519,7 +540,7 @@ def draw_schedule(key, params: CompressorSurgeParams):
 
 
 def compute_velocity(
-    position, action, N_ramp, x, dev, demand_levels, params, ramp=None
+    position, action, N_ramp, x, dev, demand_levels, params, ramp=None, shift=0.0
 ):
     """d/dt of ``[m_c, dp, N, tau]``.
 
@@ -536,7 +557,7 @@ def compute_velocity(
     rho = suction_density(params)
     U = N * params.U_r
     phi = m_c / (rho * params.A_c * U)
-    dp_c = rho * U**2 * characteristic(phi, params)
+    dp_c = rho * U**2 * characteristic(phi, params, shift=shift)
     opening = demand_opening(demand_levels, tau, dev, params, ramp=ramp)
     outflow = consumer_flow(dp, opening, params) + recycle_flow(dp, x, params)
     return (
@@ -564,7 +585,9 @@ def _substeps(integration_method: str) -> int:
     return int(n)
 
 
-def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp):
+def equilibrium_phi(
+    N, x, opening, params: CompressorSurgeParams, iters, xp=jnp, shift=0.0
+):
     """The right-branch equilibrium flow coefficient at speed ``N``, recycle
     ``x`` and consumer opening ``opening``, by ``iters`` Newton steps from Phi
     0.70 on rho01 A_c U Phi - m_d(dp) - m_r(dp) with dp = rho01 U^2 Psi_c(Phi).
@@ -577,7 +600,7 @@ def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp)
     U = N * params.U_r
 
     def residual(phi):
-        dp = rho * U**2 * characteristic(phi, params)
+        dp = rho * U**2 * characteristic(phi, params, shift=shift)
         return (
             rho * params.A_c * U * phi
             - consumer_flow(dp, opening, params)
@@ -593,7 +616,7 @@ def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp)
     return np.asarray(phi) if xp is np else phi
 
 
-def established_point(opening, params: CompressorSurgeParams):
+def established_point(opening, params: CompressorSurgeParams, shift=0.0):
     """Established operation (charter B5) for the consumers' ``opening``:
     ``(m_c, dp, N, x, Phi)`` at rest at the header setpoint.
 
@@ -604,6 +627,10 @@ def established_point(opening, params: CompressorSurgeParams):
     setpoint, by bisection on the equilibrium's pressure, which rises with
     speed. With the valve on the line the bisection lands on the line's own
     speed; with it shut, the plant sits right of the line.
+
+    The line is the map's, the one the plant's control system knows; the
+    equilibrium is the machine's own (``shift``), so a machine whose true line
+    is right of its map starts closer to it than its controller reads.
     """
     p = params
     rho, sp = suction_density(p), p.header_setpoint
@@ -615,8 +642,8 @@ def established_point(opening, params: CompressorSurgeParams):
     )
 
     def header_at(N):
-        phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters)
-        return rho * (N * p.U_r) ** 2 * characteristic(phi, p)
+        phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters, shift=shift)
+        return rho * (N * p.U_r) ** 2 * characteristic(phi, p, shift=shift)
 
     def bisect(bounds, _):
         lo, hi = bounds
@@ -628,9 +655,10 @@ def established_point(opening, params: CompressorSurgeParams):
         bisect, (jnp.asarray(p.N_min), jnp.asarray(p.N_max)), None, length=24
     )
     N = 0.5 * (lo + hi)
-    phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters)
+    phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters, shift=shift)
     U = N * p.U_r
-    return rho * p.A_c * U * phi, rho * U**2 * characteristic(phi, p), N, x, phi
+    dp = rho * U**2 * characteristic(phi, p, shift=shift)
+    return rho * p.A_c * U * phi, dp, N, x, phi
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
@@ -704,6 +732,7 @@ def compute_next_state(
             demand_levels=state.demand_levels,
             params=params,
             ramp=ramp,
+            shift=state.line_shift,
         )
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, tau_0 + j * h]),

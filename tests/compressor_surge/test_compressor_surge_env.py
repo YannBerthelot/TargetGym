@@ -16,6 +16,7 @@ order, and a pair episode in float32. The heuristic policies come from
 scripts/compressor_surge_numbers.py, which holds their only copy.
 """
 
+import dataclasses
 import functools
 import importlib.util
 import math
@@ -63,14 +64,23 @@ except ImportError:  # JAX 0.6; 0.10 removed the experimental name
     from jax.experimental import enable_x64
 
 
+class MapMachine(CompressorSurge):
+    """The map's own machine read by ideal transmitters. This file's numbers
+    are the map's, and its hand-built states carry no transmitter history; the
+    hidden line and the lags have their own tests
+    (test_compressor_surge_hidden_line.py)."""
+
+    readings = tuple(dataclasses.replace(r, lag=0.0) for r in CompressorSurge.readings)
+
+
 @pytest.fixture(scope="module")
 def env():
-    return CompressorSurge()
+    return MapMachine()
 
 
 @pytest.fixture(scope="module")
 def params():
-    return CompressorSurgeParams()
+    return CompressorSurgeParams(line_shift_max=0.0)
 
 
 @pytest.fixture(scope="module")
@@ -819,7 +829,7 @@ def test_integrator_is_converged(params):
 
     runs = {}
     for method in ("rk4_10", "rk4_40"):
-        env = CompressorSurge(integration_method=method)
+        env = MapMachine(integration_method=method)
         states, _, tripped = _rollout(env, p, state, action, key, 80)
         assert not np.asarray(tripped).any(), method
         runs[method] = states

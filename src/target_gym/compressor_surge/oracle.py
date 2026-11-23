@@ -106,7 +106,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     phi_min, the substep Phis, the rate limits' arguments)``. ``widths`` are
     the drive's and the valve's (0.0 is the exact clip), and ``deltas[i, j]``
     is added to site i's output at substep j (K5's probe)."""
-    _, demand, clock, drift = task
+    _, demand, clock, drift, shift = task
     n, K = _substeps(env.integration_method), history(p)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
@@ -135,7 +135,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
         xv = xv + softplus_clip(args[1], -lo_x, hi_x, widths[1]) + deltas[1, j]
         velocity = partial(
             compute_velocity, action=None, N_ramp=N_ramp, x=xv, dev=dev,
-            demand_levels=demand, params=p,
+            demand_levels=demand, params=p, shift=shift,
         )  # fmt: skip
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, (clock + t) * p.delta_t + j * h]),
@@ -157,7 +157,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _ = d["task"]
+        setpoints, _, clock, _, shift = d["task"]
         target = scheduled_setpoint(setpoints, 0.0, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
@@ -169,8 +169,10 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         e, w = target - dp, ZONE_WIDTH
         past = jax.nn.softplus((e - band) / w) + jax.nn.softplus((-e - band) / w)
         cost = cost + p.zone_price * p.delta_t * (w / KPA) * past
-        y = jnp.stack([phi_min])  # against the line 2W, the limit's bound
-        return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
+        # Against the machine's true line, 2W (1 + shift): scaled so that the
+        # limit's bound stays the map's 2W.
+        y = jnp.stack([phi_min / (1.0 + shift)])
+        return x1, cost, y, (dp / KPA)[None], p.phi_join - phis / (1.0 + shift)
 
     K = history(p)
     return TaskModel(
@@ -180,6 +182,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         ),
         data=lambda s: (
             s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
+            s.line_shift,
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
@@ -219,7 +222,8 @@ def ceiling_margins(state, p):
     - The header inside its zone, where ``zone`` charges nothing
       (``|target - dp| <= header_band``), in tenths of a kPa, backed off a
       tenth of one.
-    - The plant on or right of the surge line, Phi = 2W, as the step's soft
+    - The plant on or right of its true surge line, Phi = 2W (1 +
+      ``line_shift``), which the ceiling knows, as the step's soft
       minimum of Phi, which is below every substep's, in hundredths. A surge
       is a flow reversal, far left of the line; but left of the line the model
       has no rotating stall (PHYSICS.md, D1), so a plan there costs less than
@@ -233,7 +237,7 @@ def ceiling_margins(state, p):
     """
     e = live_target(state, p) - state.dp
     zone = jnp.stack([p.header_band - e, p.header_band + e]) / ZONE_UNIT - 0.1
-    surge = (state.phi_min - 2.0 * p.W) / PHI_UNIT
+    surge = (state.phi_min - 2.0 * p.W * (1.0 + state.line_shift)) / PHI_UNIT
     N_cmd, _ = commands(p, state.actuator_held)
     drive = REACH_SLACK - jnp.abs(N_cmd - state.N_ramp) / (p.drive_rate * p.delta_t)
     move = state.valve_cmds[0] - state.valve_cmds[1]

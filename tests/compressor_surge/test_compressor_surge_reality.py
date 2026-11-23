@@ -43,7 +43,6 @@ from target_gym.compressor_surge.env import (
     demand_opening,
     recycle_flow,
     schedule_ramp,
-    surge_flow_per_speed,
 )
 from target_gym.compressor_surge.env_jax import CompressorSurge
 from target_gym.registry import REGISTRY
@@ -239,22 +238,21 @@ def test_the_header_setpoint_is_constant():
 #: The pressure transmitter's own sigma is 9.17 Pa (PHYSICS.md, Readings): the
 #: reset holds the setpoint to what the plant can read.
 AT_SETPOINT = 10.0  # Pa
-#: A hundredth of the 10 % margin, in flow coefficient over the line's.
-ON_LINE = 1e-3
 SCENARIOS = ("normal", "slow_approach", "fast_approach", "load_swings")
 
 
-def _margin(s, p):
-    """Flow over the surge line's flow at the state's speed, less 1."""
-    return np.asarray(s.m_c) / (surge_flow_per_speed(p) * np.asarray(s.N)) - 1.0
+#: The map's 10 % line passes 11.711 kg/s at 24 kPa (hand-derived below).
+MAP_LINE_FLOW = 11.711
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_each_scenario_starts_in_established_operation(scenario):
     """Charter B5: a scenario starts in established operation. Over 32 resets
-    of the scenario's own demand: the header is at its setpoint, the plant is
-    on or right of the 10 % control line [C6; C1], and the recycle is shut
-    unless the plant sits on that line [C3, p. 2]."""
+    of the scenario's own demand: the header is at its setpoint, the compressor
+    passes at least the flow of the map's 10 % control line [C6; C1], and the
+    recycle is shut unless the compressor passes just that flow [C3, p. 2].
+    The line is the map's: each machine's true line is a hidden fraction off it
+    (test_compressor_surge_hidden_line.py)."""
     spec = REGISTRY["compressor_surge"]
     suite = {x.name: x for x in scenarios.suite(spec)}
     p = scenarios.params_for(spec, suite[scenario])
@@ -262,9 +260,9 @@ def test_each_scenario_starts_in_established_operation(scenario):
     keys = jax.random.split(jax.random.PRNGKey(0), 32)
     s = jax.vmap(lambda k: env.reset_env(k, p)[1])(keys)
     np.testing.assert_allclose(np.asarray(s.dp), p.header_setpoint, atol=AT_SETPOINT)
-    margin = _margin(s, p)
-    assert margin.min() >= 0.10 - ON_LINE
-    on_line = np.abs(margin - 0.10) <= ON_LINE
+    flow = np.asarray(s.m_c)
+    assert flow.min() >= MAP_LINE_FLOW - 0.01
+    on_line = np.abs(flow - MAP_LINE_FLOW) <= 0.01
     assert np.all(on_line | (np.asarray(s.x) <= 1e-6))
 
 
@@ -279,7 +277,10 @@ def test_the_reset_recycles_what_the_ten_percent_line_needs():
     23.238 = 0.2596. At opening 0.9 the consumers take 12.779 kg/s, more than
     the line's flow: the recycle is shut and the plant right of the line."""
     env = CompressorSurge()
-    low = CompressorSurgeParams(demand_range=(0.4, 0.4), demand_sigma=0.0)
+    # The map's own machine: the speed derived above is the map's.
+    low = CompressorSurgeParams(
+        demand_range=(0.4, 0.4), demand_sigma=0.0, line_shift_max=0.0
+    )
     _, s = env.reset_env(jax.random.PRNGKey(0), low)
     assert float(s.x) == pytest.approx(0.2596, abs=1e-3)
     assert float(s.N) == pytest.approx(0.8691, abs=1e-3)
@@ -290,7 +291,7 @@ def test_the_reset_recycles_what_the_ten_percent_line_needs():
     _, s = env.reset_env(jax.random.PRNGKey(0), high)
     assert float(s.x) == 0.0
     assert float(s.dp) == pytest.approx(24000.0, abs=AT_SETPOINT)
-    assert float(_margin(s, high)) > 0.10
+    assert float(s.m_c) > MAP_LINE_FLOW
 
 
 def test_the_reset_is_at_rest():
@@ -325,7 +326,7 @@ def test_a_trip_puts_the_plant_back_in_established_operation_for_its_demand():
             break
     assert bool(info["tripped"])
     assert float(s.dp) == pytest.approx(p.header_setpoint, abs=AT_SETPOINT)
-    assert float(_margin(s, p)) >= 0.10 - ON_LINE
+    assert float(s.m_c) >= MAP_LINE_FLOW - 0.01
     opening = demand_opening(
         s.demand_levels, s.block_clock * p.delta_t, s.demand_dev, p,
         ramp=schedule_ramp(s, p),

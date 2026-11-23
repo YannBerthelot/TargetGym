@@ -28,10 +28,35 @@ the surge line, with as little recycle as possible and no counted surge.
 | `zone_price` | 1000 | kJ/s | ours: a second outside the zone costs about 16 s of the hold's recycle power |
 | `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
 | `reset_margin` | 0.10 | of surge flow at speed | ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1] (2026-11-23) |
+| `line_shift_max` | 0.05 | of the map's surge flow | ours, family: the machine's true surge line against the map, drawn uniformly either side at the reset; 2.6 to 7 % at low suction pressure [C14] (2026-11-23) |
+| flow and pressure reading lags | 0.15, 0.3 | s | read: flow dP transmitters at 100 to 150 ms, 200 ms at most; 300 to 400 ms acceptable on pressure [C10, pp. 29-30] (2026-11-23) |
 
 The hidden surge-line offset, the moving setpoint
 schedule (`p_ref_range`) and the travel, tracking and running terms are gone:
 none had a source.
+
+### The hidden line and the transmitters (2026-11-23)
+
+Until this change the plant asked for no surge margin: its controller read the surge
+line exactly and its readings had no lag, so the reference placed on the line itself
+never surged on normal and slow days (`docs/proposals/compressor-surge-margin.md`).
+The sources say what the margin is for [C10, p. 11]: the line's position and the
+transmitters' response, with the disturbance's speed. The plant now has both.
+
+- **The machine.** Each episode's machine has its true surge line a hidden fraction
+  `line_shift` off the map, drawn uniformly within `line_shift_max` either side at
+  the reset. The model computes the machine's characteristic as the map's stretched
+  in Phi by `1 + line_shift`: the head peaks at Phi = 2W (1 + `line_shift`), at the
+  map's peak head. The map (`surge_flow_per_speed`, the margin a controller reads off
+  the observation) is unchanged, and no observation channel carries the shift. A
+  trip's restart keeps the machine: the sources tie the line's position to the
+  machine's condition and to the map's error [C10; C1], which a trip does not change.
+- **Established operation** is on the map's 10 % line, the one the plant's control
+  system knows. A machine whose line is right of its map therefore starts closer to
+  its true line than its controller reads, 4.8 % from it at the largest shift.
+- **The transmitters.** The flow and pressure readings lag first order, 0.15 s and
+  0.3 s [C10, pp. 29-30]. The score reads the true state.
+- **The oracle and the ceiling** know the machine: their limit is its true line.
 
 ### Limits (rule 14)
 
@@ -1099,7 +1124,7 @@ outside world (`OUTSIDE_WORLD`), which depends on the seed and the time only.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 90 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 94 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

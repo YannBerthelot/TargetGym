@@ -357,11 +357,12 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 
 
 def test_the_compressors_planned_surge_limit_is_the_surge_line():
-    """The surge line is Phi = 2W (compressor_surge/PHYSICS.md; env.py's
-    ``psi_surge``). One step from the reset under the held move: the plan's
-    surge margin, its output less the limit's bound, is the env's phi_min
-    less 2W after the same step. Float32 env against the float64 model on
-    a margin of order 0.1: 1e-5."""
+    """The surge line is the machine's own, Phi = 2W (1 + shift)
+    (compressor_surge/PHYSICS.md), which the oracle knows. One step from the
+    reset under the held move: the plan's surge margin, its output less the
+    limit's bound, is the env's phi_min over 1 + shift, less 2W, after the same
+    step: zero exactly on the true line. Float32 env against the float64 model
+    on a margin of order 0.1: 1e-5."""
     env, params, oracle = _oracle("compressor_surge")
     m, (limit,) = oracle.model, oracle.model.limits
     key = jax.random.PRNGKey(0)
@@ -373,7 +374,11 @@ def test_the_compressors_planned_surge_limit_is_the_surge_line():
         d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
         y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
     planned = float(y[0]) - limit.lo
-    assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+    shift = float(state.line_shift)
+    assert abs(shift) > 1e-3  # a machine off its map
+    assert planned == pytest.approx(
+        float(after.phi_min) / (1.0 + shift) - 2.0 * params.W, abs=1e-5
+    )
 
 
 def test_the_compressors_planned_zone_cost_has_no_kink_at_the_setpoint():
