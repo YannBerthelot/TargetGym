@@ -429,6 +429,12 @@ def drivetrain_inertia(params: WindTurbineParams):
     return params.J_rotor + params.N_gear**2 * params.J_gen
 
 
+def power_limit_torque(omega, power, params: WindTurbineParams):
+    """The generator torque that delivers ``power`` (W, electrical) at rotor
+    speed ``omega``: the converter's limit at that set point."""
+    return power / (params.eta_gen * params.N_gear * jnp.maximum(omega, 1e-3))
+
+
 def rated_generator_torque(params: WindTurbineParams):
     """Generator torque that delivers rated power at rated speed."""
     return params.P_rated / (params.eta_gen * params.N_gear * omega_rated(params))
@@ -579,10 +585,14 @@ def count_half_cycles(state, moment, params):
     return moment, turn, direction, damage
 
 
-def compute_velocity(position, action, v_wind, params: WindTurbineParams):
+def compute_velocity(
+    position, action, v_wind, params: WindTurbineParams, power_limit=None
+):
     """RHS for ``[omega, pitch, torque, x_tower, v_tower]``, and the induced
     velocity as a sixth state when given. ``action`` is the step's ``(pitch
-    rate, torque rate)``, constant over the step.
+    rate, torque rate)``, constant over the step. With ``power_limit`` (W) the
+    converter loads the rotor with no more torque than delivers it at this
+    speed, wherever the torque's ramp has got to.
 
     With the sixth state the tables, which hold equilibrium induction, are read
     at the wind that gives the rotor plane its lagging inflow, ``v_rel - (w -
@@ -602,7 +612,12 @@ def compute_velocity(position, action, v_wind, params: WindTurbineParams):
         v_eff = v_rel
     tau_aero, _ = aerodynamic_torque(omega, v_eff, pitch, p)
     thrust = rotor_thrust(omega, v_eff, pitch, p)
-    domega = (tau_aero - p.N_gear * torque) / drivetrain_inertia(p)
+    load = (
+        torque
+        if power_limit is None
+        else jnp.minimum(torque, power_limit_torque(omega, power_limit, p))
+    )
+    domega = (tau_aero - p.N_gear * load) / drivetrain_inertia(p)
     accel = (
         thrust - tower_damping(p) * xdot - tower_stiffness(p) * x
     ) / p.tower_modal_mass
@@ -637,6 +652,19 @@ def compute_next_state(
     # The safety system, once tripped, feathers whatever the controller sends [S4].
     tripped = state.feathered > 0.5
     pitch_cmd = jnp.where(tripped, p.pitch_max, pitch_cmd)
+    # The converter holds electrical power at or under the set point this step
+    # ends on, the rating or a curtailment's level (owner, 2026-11-23; S1 holds
+    # constant power in Region 3 and gives only a torque margin): through the
+    # step it loads the rotor with no more torque than that (``compute_velocity``),
+    # and the torque the step ends on is the one it delivers.
+    t_derate = (state.time + 1 - state.derate_c0) * p.delta_t
+    derated = (
+        (state.derate_t0 >= 0.0)
+        & (t_derate >= state.derate_t0)
+        & (t_derate < state.derate_until)
+    )
+    rating = jnp.where(derated, state.derate_level, p.rating)
+    set_point = rating * p.P_rated
 
     # Normal turbulence about the mean at the hub: an Ornstein-Uhlenbeck process
     # with the Kaimal integral time scale and IEC's sigma, stepped exactly. Drawn
@@ -675,26 +703,24 @@ def compute_next_state(
         ),
         delta_t=p.delta_t,
         compute_velocity=partial(
-            compute_velocity, action=rates, v_wind=v_wind, params=p
+            compute_velocity,
+            action=rates,
+            v_wind=v_wind,
+            params=p,
+            power_limit=set_point,
         ),
         method=integration_method,
     )
     omega = jnp.maximum(new[0], 1e-3)  # numerical floor: tau_aero = P / omega
     pitch = jnp.clip(new[1], p.pitch_min, p.pitch_max)
     torque = jnp.clip(new[2], 0.0, p.torque_max)
+    torque = jnp.minimum(torque, power_limit_torque(omega, set_point, p))
     position = jnp.stack([omega, pitch, torque, new[3], new[4], new[5]])
     accel = compute_velocity(position, (0.0, 0.0), v_wind, p)[0][4]
     over = omega >= p.overspeed_factor * omega_rated(p)
     moment, turn, direction, damage = count_half_cycles(
         state, tower_base_moment(new[3], p), p
     )
-    t_derate = (state.time + 1 - state.derate_c0) * p.delta_t
-    derated = (
-        (state.derate_t0 >= 0.0)
-        & (t_derate >= state.derate_t0)
-        & (t_derate < state.derate_until)
-    )
-    rating = jnp.where(derated, state.derate_level, p.rating)
     v_mean_z, v_mean, v_mean_lo, v_mean_hi = mean_wind(state, key, p)
 
     return (
@@ -716,7 +742,7 @@ def compute_next_state(
             v_mean_hi=v_mean_hi,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
-            target_power=rating * p.P_rated,
+            target_power=set_point,
             feathered=jnp.where(tripped | over, 1.0, 0.0),
             moment=moment,
             moment_turn=turn,

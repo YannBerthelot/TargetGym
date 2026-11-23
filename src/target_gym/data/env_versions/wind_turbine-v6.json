@@ -1,5 +1,5 @@
 {
-  "fingerprint": "a64621c751c52a20",
-  "note": "Re-stamped in place, unreleased v6: the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7; owner, 2026-11-23, wind_turbine review). The plant's wind changed; no release carries v6, and its records are superseded.",
-  "stamped": "2026-11-23T17:40:34+00:00"
+  "fingerprint": "55d1f0308c4b8765",
+  "note": "Re-stamped in place, unreleased v6 (owner's choices of 2026-11-23, wind_turbine review): the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7), and the converter holds electrical power at the set point. No release carries v6, and its records are superseded.",
+  "stamped": "2026-11-23T17:50:01+00:00"
 }

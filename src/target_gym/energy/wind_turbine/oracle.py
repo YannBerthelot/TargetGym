@@ -32,6 +32,12 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   (G12); the ceiling plans the score alone;
 - limit: the rotor speed under the safety system's overspeed level on every
   visited state, elastic at the trip cost per unit (T3);
+- the converter's power limit: the env loads the rotor with no more torque than
+  delivers the set point (``env.compute_velocity``). The model keeps its torque
+  free and pays for power above the set point at ten times the energy price, a
+  surrogate (the env charges nothing there: it never delivers it), so a plan
+  stays where the model and the env agree. Ten times is ours: an exact penalty
+  only has to exceed what shedding power can buy;
 - dropped guards (T4): the speed and wind floors, and the pitch and torque
   clips after the step, since a ramp toward an in-range command stays in range.
 
@@ -250,6 +256,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
     per_deg = float(pitch_system_cost(p) / (p.pitch_travel_design * life_steps(p)))
     # $ per (MN m)^m of a half-cycle's range (``compute_reward_terms``).
     per_range = float(0.5 * tower_cost(p) / (p.tower_damage_design * life_steps(p)))
+    # $ per W above the set point for a step: the plan's price for power the
+    # converter will not deliver.
+    per_excess = 10.0 * per_W * float(p.energy_price)
 
     def step(d, x, u, t):
         task = d["task"]
@@ -266,7 +275,7 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             z1 = jnp.where(hit, moment, z)
         else:
             half, z1 = jnp.zeros((), x.dtype), x[6]
-        y = jnp.stack([available - power, x1[1] - x[1], half, x1[0]])
+        y = jnp.stack([available - power, x1[1] - x[1], half, power - rating, x1[0]])
         x1 = jnp.concatenate([x1, z1[None]])
         return x1, jnp.zeros((), x.dtype), y, power[None], ()
 
@@ -290,6 +299,7 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             Hinge(
                 weight=per_range, absolute=True, power=int(p.fatigue_exponent)
             ),
+            Hinge(weight=per_excess, surrogate=True),
         ),
         limits=(Limit(hi=p.overspeed_factor * rated, price=float(trip_cost(p))),),
         move_rows=lambda x, v, steps: reach(p, x[1:3], v, steps),

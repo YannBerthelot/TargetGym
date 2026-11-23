@@ -7,9 +7,10 @@ turbines; the NREL 5 MW is the member it is built on. Tags such as [S1] point to
 Nothing is anchored on an earlier version of the task (rule 11).
 
 2026-11-23, after the task review (owner's choices of that day): the rotor sees the
-hub's turbulence through its spatial filter, and the expert's gains are fitted with the
-wake frozen. The power limit, the rainflow count and the tower's price follow in their
-own changes; until they land, sections 3 and 5 describe the score as it still is.
+hub's turbulence through its spatial filter, the converter holds electrical power at
+the set point, and the expert's gains are fitted with the wake frozen. The rainflow
+count and the tower's price follow in their own changes; until they land, sections 3
+and 5 describe the score as it still is.
 
 ## 1. The job
 
@@ -155,7 +156,8 @@ a year. Left as stored: changing it changes the score, which is the owner's call
 |---|---|---|---|
 | Overspeed, 1.20 x rated | Trip (safety system) | feather at 8 deg/s whatever the agent sends; restart priced at `restart_steps` x `failure_cost` = $1,600 | [S4], [S17], [S21] |
 | Pitch, torque and their rates | Protected (actuator) | saturation, no cost | [S1 Table 7-2] |
-| Rated power | regulated set point | shortfall against what the wind makes available is lost production; more is free | [S1 p. 19] |
+| Electrical power above the set point (the rating, or a curtailment's level) | Protected (converter) | the converter loads the rotor with no more torque than delivers the set point at the speed it is at, whatever torque is asked; no cost (owner, 2026-11-23) | [S1 Sec. 7.2, Table 7-2] |
+| Rated power | regulated set point | shortfall against what the wind makes available is lost production | [S1 p. 19] |
 | Tower fatigue | cost | DEL priced at the tower's cost share | [S5 Sect. 1], [S20] |
 | Pitch wear | cost | travel priced at the pitch system's cost share | [S20] |
 | Low rotor speed, cut-out, grid frequency, ramp rates | not modelled | no source makes them trips here | REALITY.md sec. 3 |
@@ -192,7 +194,8 @@ Scenarios (rule 20), `scenarios.py`, each with its source:
 
 Score (rule 15), dollars per step, each term >= 0:
 - `lost`: MWh short of the available power, min(rating, the wind's power at the
-  table's peak Cp), at `energy_price`. Over-production is free. The wind's own lulls
+  table's peak Cp), at `energy_price`. Nothing is charged above the set point, and
+  nothing is delivered there: the converter holds it (section 4). The wind's own lulls
   cost nothing a controller could save.
 - `tower`: the tower's cost (1750 $/kW x 5000 kW x 0.75 x 0.263 = $1,726,031) times
   the step's damage over the design damage of 20 years. Damage closes per half-cycle of
@@ -278,6 +281,12 @@ the scenario suite.
 - D7. Cut-out at 25 m/s is not modelled.
 - D8. The sensor sigmas other than the anemometer's are not in REALITY.md.
 - D9. No sensor delays (not found).
+- D11. The converter's limit acts within the step: at a curtailment the generator
+  torque falls 10 % in one step, past S1's 15 kN m/s, which is the limit on the
+  controller's command (a converter's own loop is far faster: CART's is 500 rad/s
+  [S3]). Before 2026-11-23 the plant had no electrical limit and the score charged
+  nothing above the rating, so the ceiling ran the 5 MW turbine at 5.3 MW on average
+  and 6.6 MW at its peak.
 - D10. One violent tower half-cycle (about 130 MN m under random bang-bang pitch)
   costs $0.46, more than a step of trip downtime ($0.056). The owner restated the
   trip bound per episode on 2026-11-08 (`tests/test_failure_cost_bound.py`): an

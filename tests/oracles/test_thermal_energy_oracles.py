@@ -133,6 +133,47 @@ def test_wind_plan_costs_what_the_env_charges_bar_the_tower():
     np.testing.assert_allclose(planned, replayed - terms["tower"], rtol=1e-9)
 
 
+def test_wind_plan_pays_for_power_the_converter_will_not_deliver():
+    """The converter holds power at the set point (owner, 2026-11-23), so the
+    env charges nothing above it: it is never delivered. The model keeps its
+    torque free and pays for power above the set point instead, a surrogate
+    priced at ten times the energy price (ours: an exact penalty needs only to
+    exceed what shedding power can buy, and at one times it the review's
+    ceiling stayed within 0.04 % of the set point), so that a plan stays where
+    model and env agree. Three steps of full torque rise from the reset, which
+    sits on the set point: the env's power stays on it, the model's passes it,
+    and the plan pays 10 x 60 $/MWh for every MWh of the excess."""
+    from target_gym.energy.wind_turbine.env import electrical_power
+    from target_gym.energy.wind_turbine.oracle import ceiling_data, wind_model
+
+    spec = REGISTRY["wind_turbine"]
+    env, p = spec.make_env(), spec.make_test_params()
+    moves = [[0.0, 1.0]] * 3
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    keys = steps[:, 0]
+    with enable_x64():
+        p64 = float64(p)
+        st = float64(env.reset_env(resets[0], p)[1])
+        tm = wind_model(env, p64)
+        d = {"task": float64(ceiling_data(env, p64, st, keys, run_as=as_called)),
+             "widths": jnp.zeros(5)}  # fmt: skip
+        x, s_env, excess, paid = tm.state_x(st), st, 0.0, 0.0
+        for t, u in enumerate(moves):
+            u = jnp.asarray(u, jnp.float64)
+            x, c, y, power = tm.step(d, x, u, t)[:4]
+            with_it = float(hinge_costs(tm.hinges, jnp.asarray(y)))
+            without = float(hinge_costs(tm.hinges, jnp.asarray(y), surrogates=False))
+            paid += with_it - without
+            _, s_env, _, _, _ = env.step_env(keys[t], s_env, tm.action(s_env, u), p64)
+            set_point = float(s_env.target_power)
+            excess += max(float(power[0]) - set_point, 0.0)
+            delivered = float(electrical_power(s_env.omega, s_env.torque, p64))
+            assert delivered <= set_point * (1.0 + 1e-9)
+    assert excess > 1.0e5  # W: the model's torque did pass the limit
+    mwh = excess * float(p.delta_t) / 3600.0 / 1.0e6
+    assert paid == pytest.approx(10.0 * 60.0 * mwh, rel=1e-9)
+
+
 def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
     """The outer loop's contract (Loew and Bottasso 2022, online rainflow): with
     the tower's turning points frozen at the plan's own, the planned fatigue is
