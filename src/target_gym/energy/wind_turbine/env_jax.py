@@ -21,10 +21,12 @@ from target_gym.energy.wind_turbine.env import (
     compute_reward,
     compute_reward_terms,
     electrical_power,
+    established_lags,
     get_obs,
     gust_magnitude,
     induction,
     omega_rated,
+    rotor_blend,
     rotor_thrust,
     tower_base_moment,
     tower_stiffness,
@@ -64,6 +66,8 @@ class WindTurbine(
         "derate_until",
         "gust_c0",
         "derate_c0",
+        "v_lag_fast",
+        "v_lag_slow",
     )
     #: Runs as a continuing plant (``target_gym.stream``): its gust and its
     #: curtailment start through ``start_event`` and carry their size, the
@@ -174,7 +178,12 @@ class WindTurbine(
         share = jnp.where(hi > lo, (v_mean - lo) / jnp.maximum(hi - lo, 1e-9), 0.5)
         v_mean_z = jax.scipy.special.ndtri(jnp.clip(share, 1e-6, 1.0 - 1e-6))
         v_turb = turbulence_sigma(v_mean, params) * jax.random.normal(turb_key)
-        v_wind = jnp.maximum(v_mean + v_turb, 0.1)
+        # The rotor's filter as a long run leaves it, given the hub's turbulence.
+        lag_fast, lag_slow = established_lags(
+            jax.random.fold_in(turb_key, 1), v_turb, v_mean, params
+        )
+        v_rotor = rotor_blend(lag_fast, lag_slow, v_turb, v_mean, params)
+        v_wind = jnp.maximum(v_mean + v_rotor, 0.1)
         target_power = params.rating * params.P_rated
         w0 = jnp.asarray(omega_rated(params))
         torque0 = jnp.clip(
@@ -218,6 +227,8 @@ class WindTurbine(
             w_induced=induction(w0, v_wind, pitch0, params)[0],
             a_tower=jnp.zeros_like(x0),
             v_turb=v_turb,
+            v_lag_fast=lag_fast,
+            v_lag_slow=lag_slow,
             feathered=jnp.zeros_like(x0),
             gust_t0=gust_t0,
             derate_t0=derate_t0,

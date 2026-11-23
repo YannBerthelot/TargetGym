@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f5a12e6ff030327b",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "a64621c751c52a20",
+  "note": "Re-stamped in place, unreleased v6: the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7; owner, 2026-11-23, wind_turbine review). The plant's wind changed; no release carries v6, and its records are superseded.",
+  "stamped": "2026-11-23T17:40:34+00:00"
 }

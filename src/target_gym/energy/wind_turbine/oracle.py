@@ -12,9 +12,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   clip never binds and the move rows keep the command in its range (T1r);
   ROSCO's Cp and Ct tables read through K2's clip, cell by cell, which is their
   bilinear lookup at width 0 (``table_weights``); the wind after every step:
-  on its noise-free mean path in the registry's receding slot, and on the
-  episode's own path for the ceiling (``ceiling_data``), which knows the
-  turbulence ahead as a ceiling may;
+  on its noise-free mean path in the registry's receding slot, the hub's
+  turbulence decaying and the rotor's spatial filter following it
+  (``rotor_ahead``), and on the episode's own path for the ceiling
+  (``ceiling_data``), which knows the turbulence ahead as a ceiling may;
 - objective: the score's lost production against the available power (the
   rating, timed curtailment included, or the wind at peak Cp), a one-sided
   epigraph row, and the pitch system's wear, an absolute row on the pitch's
@@ -57,6 +58,8 @@ from target_gym.energy.wind_turbine.env import (
     omega_rated,
     pitch_system_cost,
     rotor_area,
+    rotor_blend,
+    rotor_filter,
     tower_base_moment,
     tower_cost,
     tower_damping,
@@ -172,15 +175,33 @@ def velocity(position, action, v_wind, widths, p):
     ]), None  # fmt: skip
 
 
+def rotor_ahead(turb, steps, v_mean, p):
+    """The turbulence the rotor sees ``steps`` steps on, with no draw to come:
+    ``turb`` is (the hub's turbulence, the filter's fast lag, its slow lag) now.
+    The hub's decays by d a step, and each lag's recursion ``lag' = e lag + (1 -
+    e) u'`` sums in closed form, ``e^k lag + (1 - e) u d (e^k - d^k) / (e - d)``."""
+    hub, lag_fast, lag_slow = turb[0], turb[1], turb[2]
+    t_fast, t_slow, _ = rotor_filter(v_mean, p)
+    d = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
+
+    def ahead(lag, t_lag):
+        e = jnp.exp(-p.delta_t / t_lag)
+        return e**steps * lag + (1.0 - e) * hub * d * (e**steps - d**steps) / (e - d)
+
+    return rotor_blend(
+        ahead(lag_fast, t_fast), ahead(lag_slow, t_slow), hub * d**steps, v_mean, p
+    )
+
+
 def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
+    v_mean, turb, now, gust_t0, derate_t0, path = task[1:7]
     after = (now + t + 1) * p.delta_t
     if path is None:
-        decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
-        v_wind = v_mean + v_turb * decay ** (t + 1) + gust(after, v_mean, gust_t0, p)
+        seen = rotor_ahead(turb, t + 1, v_mean, p)
+        v_wind = v_mean + seen + gust(after, v_mean, gust_t0, p)
         derated = (derate_t0 >= 0.0) & (after >= derate_t0)
         rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
     else:  # the episode's own wind and rating, t + 1 steps after the start
@@ -194,6 +215,12 @@ def wind_step(env, p, x, v, t, task, widths):
         ),
     )  # fmt: skip
     return x1, v_wind, rating
+
+
+def turbulence_of(state):
+    """The wind's own state, for the plan's data: (the hub's turbulence, the
+    spatial filter's fast lag, its slow lag)."""
+    return jnp.stack([state.v_turb, state.v_lag_fast, state.v_lag_slow])
 
 
 def turning_points(m0, turn0, dir0, moments):
@@ -250,8 +277,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             s.moment_turn,
         ]),  # fmt: skip
         data=lambda s: (
-            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0, None
-        ),
+            s.target_power, s.v_mean, turbulence_of(s), s.time, s.gust_t0,
+            s.derate_t0, None,
+        ),  # fmt: skip
         hold=lambda s: jnp.zeros(2, s.omega.dtype),
         action=lambda s, v: raw_command(p, jnp.stack([s.pitch, s.torque]), v),
         tracked=lambda s: electrical_power(s.omega, s.torque, p)[None],
@@ -305,8 +333,8 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
 
     path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
-        state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
-        state.derate_t0, path,
+        state.target_power, state.v_mean, turbulence_of(state), state.time,
+        state.gust_t0, state.derate_t0, path,
     )  # fmt: skip
 
 

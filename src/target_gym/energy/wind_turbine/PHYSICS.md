@@ -6,6 +6,11 @@ turbines; the NREL 5 MW is the member it is built on. Tags such as [S1] point to
 `REALITY.md`. Every number is cited, or marked ours with the family range it sits in.
 Nothing is anchored on an earlier version of the task (rule 11).
 
+2026-11-23, after the task review (owner's choices of that day): the rotor sees the
+hub's turbulence through its spatial filter, and the expert's gains are fitted with the
+wake frozen. The power limit, the rainflow count and the tower's price follow in their
+own changes; until they land, sections 3 and 5 describe the score as it still is.
+
 ## 1. The job
 
 Above rated wind, pitch holds rated speed and torque holds rated power, within the
@@ -28,6 +33,8 @@ wind it sees, the free wind less the tower top's velocity:
     dw_i/dt   = (w_qs - w_i) / tau1,   w_qs = a v_rel,   a from Ct by momentum theory
     tau1      = 1.1 / (1 - 1.3 min(a, 0.5)) R / v_rel                     (Oye, [S22])
     P_elec    = eta N tau_gen w
+    v         = V + SF[u] + gust,   u the hub's turbulence about the mean V
+    SF(s)     = (sqrt2 + b s) / ((sqrt2 + b sqrt(a) s)(1 + b s / sqrt(a))),  b = 1.3 R / V,  a = 0.55   ([S24])
 
 **Dynamic inflow** (owner, 2026-11-08). The tables hold equilibrium induction, so
 the rotor-average induced velocity w_i (the state's `w_induced`) is a state that lags its quasi-steady value
@@ -49,12 +56,26 @@ to tower motion. Pitch and torque move toward their commands at their rate limit
 and stop on them (S1's pitch actuator was set at 30 Hz "to be negligible" [S1 Sec. 7.4];
 CART's torque loop is 500 rad/s [S3]). Integration: RK4, two sub-steps per 0.25 s step.
 
-Wind: an Ornstein-Uhlenbeck deviation about the episode's mean with IEC's
+Wind at the hub: an Ornstein-Uhlenbeck deviation about the episode's mean with IEC's
 sigma1 = Iref (0.75 V + 5.6) [S13] and the Kaimal integral time scale L_u / V, L_u =
 8.1 x 42 m [S13, S19] (23 s at 15 m/s; an OU process and the Kaimal spectrum share
 their value at zero frequency, 4 sigma^2 T). A scenario may add one extreme operating
 gust, with IEC's magnitude and shape over 10.5 s [S13], or a 10 % curtailment, each at a
 time the seed draws.
+
+**The wind the rotor sees** (owner, 2026-11-23). A 126 m rotor averages the turbulence
+over its disc: the hub's deviation passes through the rotor's spatial filter SF [S24 Eq.
+5.7], kept as two exact first-order lags (`v_lag_fast`, `v_lag_slow`; 2.4 s and 6.1 s at
+18 m/s, blended 0.22 to 0.78). Its gain is 1 at rest, 0.52 at 0.05 Hz and 0.11 at the
+tower's 0.324 Hz at 18 m/s, so the rotor's wind changes by 0.07 m/s a step where the
+hub's changes by 0.43. The extreme operating gust is one coherent rise over the whole
+disc and is not filtered. The reset draws the two lags from the law a long run leaves
+them in, given the hub's turbulence (`established_lags`). `rotor_averaging = 0` gives
+the rotor the hub's wind. Before this the hub's point wind acted on the whole rotor:
+S1's controller then held speed to 2.8 to 4.8 % of rated and reached the trip in every
+above-rated scenario, against 1.7 to 3.7 % and maxima of +7 to +16 % published [S25,
+S26]; with the filter it holds 1.5 to 2.3 % and peaks at +7 to +10 % (+17 % in the
+extreme gust).
 
 Cost (rule 7): the tower adds two states and a second table lookup per evaluation,
 and no sub-stepping: 0.25 s is 12 steps per tower period, and RK4 at a 0.125 s
@@ -103,6 +124,8 @@ times slower.
 | `design_life_years` | 20 | [S20] |
 | `dynamic_inflow` | 1 | 1 the lag on, 0 the quasi-steady tables |
 | `oye_k1`, `oye_k2` | 1.1, 1.3 | [S22], Oye's tau1 |
+| `rotor_decay`, `rotor_filter_a` | 1.3, 0.55 | [S24 Eq. 5.7]: the decay factor over the disc and the filter's constant |
+| `rotor_averaging` | 1 | 1 the spatial filter on, 0 the hub's wind over the whole rotor |
 | `fatigue_exponent` | 4 | cited: the average slope of the two regimes, 3 and 5, of the DNV-RP-C203 type E curve (Eurocode 3 detail category 80) for welded tower joints, FLOAT's default [S23, sec. 3.5.1, 3.7.1]. The bilinear curve itself can't be used: the DEL is on the tower-top deflection's base moment, not on stress, so there is no stress level to place its knee at 1e7 cycles |
 | `tower_damage_design` | 2.126e5 (MN m)^4 per step | ours: measured once, S1's controller, published gains, seeds 100 to 107 of the normal scenario |
 | `pitch_travel_design` | 0.1754 deg per step | ours: the same runs |
@@ -204,6 +227,7 @@ restated as family ranges or properties, written in the test before the rerun.
 | 3 Region 3 hold, published gains | pass | |
 | 4 Wind-step peak time in 5.5 to 22 s (bandwidths 0.2 to 0.6 rad/s) | fail | 2.25 s with dynamic inflow (2.5 s without); overshoot passes |
 | 5 Sensitivity to pitch grows along Region 3, at least doubling | pass | |
+| 5b The wake-frozen sensitivity lies on S1's published line within 25 % | pass | 3 to 19 % |
 | 6 Actuator saturations | pass | |
 | 7 Tower mode 0.324 Hz | pass | 0.323 Hz |
 | 8 A tower-velocity loop takes power out of the tower band, more with gain, half at 10 % | pass | |
@@ -236,7 +260,15 @@ the scenario suite.
   1.26 % blade DEL is only half in the score; pitch wear stands in for the rest.
 - D3. Past 30 deg the tables are extrapolated (ours), so a feathered rotor brakes to a
   stop rather than idling.
-- D4. A single rotor-effective point wind, OU spectrum, no coherence.
+- D4. One wind for the whole rotor: the hub's turbulence (an OU spectrum) through the
+  spatial filter [S24], with its printed constants and nothing fitted (owner,
+  2026-11-23). No rotational sampling, shear or tower shadow, so no 1p or 3p loading
+  (D2). Effect on the score: the tower's load is under the published one, about 30 to
+  45 MN m as a 20-year, 2e6-cycle, m = 4 figure against 70 to 125 MN m [S25, class A],
+  and it is slow thrust swings, as on the M5000, where suppressing the tower's first
+  mode took 2.1 % off the tower-bottom load [S5]. The tower's price is measured on the
+  reference, so the level cancels; the half-cycle count of D5 undercounts these slow
+  swings 3 to 9 times and is to be replaced by rainflow.
 - D5. Half-cycles are counted between turning points step by step, not by full
   rainflow: a large slow swing broken by small ones is counted as smaller ranges. On the
   narrow-band tower signal the two agree closely; on wind-driven slow swings this
@@ -329,7 +361,7 @@ changes: a scored window is bit-identical to what it was.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 30 |
+| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 32 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

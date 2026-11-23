@@ -300,7 +300,8 @@ def test_a_tower_velocity_loop_takes_power_out_of_the_tower_band():
     assert powers[2] <= 0.5 * powers[0] and in_band < 0.5, (powers, in_band)
 
 
-def _wind(p, seconds, key, mean, hold=True):
+def _wind(p, seconds, key, mean, hold=True, hub=False):
+    """The wind the rotor sees, or with ``hub`` the hub's own point wind."""
     s = _reset(p).replace(v_mean=jnp.asarray(mean), v_wind=jnp.asarray(mean))
 
     def body(s, _):
@@ -308,21 +309,23 @@ def _wind(p, seconds, key, mean, hold=True):
             [2.0 * s.pitch / p.pitch_max - 1.0, 2.0 * s.torque / p.torque_max - 1.0]
         )
         s, _ = W.compute_next_state(a, s, p, key)
-        return s, s.v_wind
+        return s, jnp.where(hub, s.v_mean + s.v_turb, s.v_wind)
 
     return jax.lax.scan(body, s, None, length=int(seconds / DT))[1]
 
 
-# 9. Turbulence grows with wind. S13: sigma1 = Iref (0.75 Vhub + 5.6). Twenty
-# 10 min records at means 13.5 and 20 m/s; the ratio of the standard
-# deviations, expected 20.6 / 15.725 = 1.31. Tolerance 10 %.
+# 9. Turbulence grows with wind. S13: sigma1 = Iref (0.75 Vhub + 5.6), the
+# hub's point turbulence, so the records are the hub's wind (the rotor sees it
+# through its spatial filter). Twenty 10 min records at means 13.5 and 20 m/s;
+# the ratio of the standard deviations, expected 20.6 / 15.725 = 1.31.
+# Tolerance 10 %.
 @pytest.mark.medium
 def test_turbulence_grows_with_the_mean_wind_as_iec_scales_it():
     stds = {}
     for mean in (13.5, 20.0):
         p = _params(v_mean_range=(mean, mean))
         records = [
-            np.asarray(_wind(p, 600.0, jax.random.PRNGKey(seed), mean))
+            np.asarray(_wind(p, 600.0, jax.random.PRNGKey(seed), mean, hub=True))
             for seed in range(20)
         ]
         stds[mean] = np.sqrt(np.mean([r.var() for r in records]))

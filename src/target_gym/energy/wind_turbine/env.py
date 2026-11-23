@@ -16,6 +16,7 @@ free wind less the tower top's velocity::
     tau_aero  = 0.5 rho A v_rel^3 Cp(lambda, beta) / w      lambda = w R / v_rel
     F_thrust  = 0.5 rho A v_rel^2 Ct(lambda, beta)
     P_elec    = eta N tau_gen w
+    v         = mean + SF[hub turbulence] + gust     (the rotor's spatial filter, S24)
 
 Cp and Ct are ROSCO's published tables for this rotor (``cp_table``). The
 tower is S1's first fore-aft mode (0.3240 Hz, 1 % structural damping) on the
@@ -73,6 +74,15 @@ class WindTurbineParams(EnvParams):
     dynamic_inflow: float = 1.0
     oye_k1: float = 1.1
     oye_k2: float = 1.3
+
+    # ---- The rotor's spatial filter on the turbulence [S24 Eq. 5.7] ----
+    # H(s) = (sqrt2 + b s) / ((sqrt2 + b sqrt(a) s)(1 + b s / sqrt(a))), b =
+    # gamma R / V: the disc averages the hub's turbulence (``rotor_turbulence``).
+    # 1 on, 0 the hub's point wind over the whole rotor.
+    rotor_averaging: float = 1.0
+    #: gamma, the decay factor over the disc, and a [S24].
+    rotor_decay: float = 1.3
+    rotor_filter_a: float = 0.55
 
     # ---- Drivetrain [S1 Table 5-1] ----
     J_rotor: float = 38_759_228.0  # kg m^2
@@ -200,6 +210,9 @@ PARAM_UNITS = {
     "dynamic_inflow": "-",
     "oye_k1": "-",
     "oye_k2": "-",
+    "rotor_averaging": "-",
+    "rotor_decay": "-",
+    "rotor_filter_a": "-",
     "rho": "kg/m^3",
     "J_rotor": "kg m^2",
     "J_gen": "kg m^2",
@@ -252,7 +265,7 @@ class WindTurbineState(EnvState):
     pitch: float  # blade pitch (deg)
     torque: float  # generator torque (N m)
 
-    v_wind: float  # rotor-effective free wind (m/s)
+    v_wind: float  # the free wind the rotor sees, averaged over its disc (m/s)
     v_mean: float  # the episode's mean wind (m/s)
 
     torque_cmd: float
@@ -268,8 +281,13 @@ class WindTurbineState(EnvState):
     #: The rotor-average induced velocity (m/s), which lags its quasi-steady
     #: value by Oye's tau1 (``induction``).
     w_induced: float = 0.0
-    #: The turbulence's deviation from the mean (m/s), without the gust.
+    #: The hub's turbulence: the point wind's deviation from the mean (m/s),
+    #: without the gust.
     v_turb: float = 0.0
+    #: The spatial filter's two lags of it (m/s); the rotor sees their blend
+    #: (``rotor_turbulence``).
+    v_lag_fast: float = 0.0
+    v_lag_slow: float = 0.0
     #: 1 once the safety system has fed the blades to feather (a trip).
     feathered: float = 0.0
     #: When this episode's gust and curtailment start, s (-1 for none).
@@ -427,6 +445,64 @@ def turbulence_time_constant(v_mean, params: WindTurbineParams):
     return params.kaimal_factor * params.turbulence_lambda1 / v_mean
 
 
+def rotor_filter(v_mean, params: WindTurbineParams):
+    """The spatial filter [S24 Eq. 5.7] in partial fractions, ``share / (1 +
+    T_fast s) + (1 - share) / (1 + T_slow s)``: (T_fast, T_slow, share), the
+    times in s. At 18 m/s: 2.4 s, 6.1 s and 0.22."""
+    b = params.rotor_decay * params.R / v_mean
+    root = jnp.sqrt(params.rotor_filter_a)
+    t_fast, t_slow, t_lead = b * root / jnp.sqrt(2.0), b / root, b / jnp.sqrt(2.0)
+    return t_fast, t_slow, (t_fast - t_lead) / (t_fast - t_slow)
+
+
+def rotor_blend(lag_fast, lag_slow, v_turb, v_mean, params: WindTurbineParams):
+    """The turbulence the rotor sees (m/s) from the filter's two lags, or the
+    hub's own with ``rotor_averaging`` off."""
+    share = rotor_filter(v_mean, params)[2]
+    averaged = share * lag_fast + (1.0 - share) * lag_slow
+    return jnp.where(params.rotor_averaging > 0.5, averaged, v_turb)
+
+
+def rotor_turbulence(lag_fast, lag_slow, v_turb, v_mean, params: WindTurbineParams):
+    """One step of the spatial filter on the hub's turbulence ``v_turb``, each
+    lag stepped exactly with that value held over the step: (lag_fast,
+    lag_slow, the turbulence the rotor sees)."""
+    t_fast, t_slow, _ = rotor_filter(v_mean, params)
+    keep_fast = jnp.exp(-params.delta_t / t_fast)
+    keep_slow = jnp.exp(-params.delta_t / t_slow)
+    lag_fast = keep_fast * lag_fast + (1.0 - keep_fast) * v_turb
+    lag_slow = keep_slow * lag_slow + (1.0 - keep_slow) * v_turb
+    return lag_fast, lag_slow, rotor_blend(lag_fast, lag_slow, v_turb, v_mean, params)
+
+
+def established_lags(key, v_turb, v_mean, params: WindTurbineParams):
+    """The filter's two lags as a long run leaves them, given the hub's
+    turbulence ``v_turb``: the stepped turbulence and its two stepped lags are
+    jointly normal, so this is their stationary law conditioned on it. With c_i
+    = Cov(lag_i, u) / var and q_ij = Cov(lag_i, lag_j) / var, from the
+    recursions' own fixed point (d the turbulence's decay, e_i a lag's)::
+
+        c_i  = (1 - e_i) / (1 - e_i d)
+        q_ij = (e_i (1 - e_j) d c_i + e_j (1 - e_i) d c_j + (1 - e_i)(1 - e_j))
+               / (1 - e_i e_j)
+    """
+    p = params
+    t_fast, t_slow, _ = rotor_filter(v_mean, p)
+    d = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
+    e = jnp.exp(-p.delta_t / jnp.stack([t_fast, t_slow]))
+    c = (1.0 - e) / (1.0 - e * d)
+    cross = e[:, None] * (1.0 - e[None, :]) * d * c[:, None]
+    q = (cross + cross.T + (1.0 - e[:, None]) * (1.0 - e[None, :])) / (
+        1.0 - e[:, None] * e[None, :]
+    )
+    cov = turbulence_sigma(v_mean, p) ** 2 * (q - c[:, None] * c[None, :])
+    l11 = jnp.sqrt(jnp.maximum(cov[0, 0], 0.0))
+    l21 = jnp.where(l11 > 0.0, cov[0, 1] / jnp.maximum(l11, 1e-12), 0.0)
+    l22 = jnp.sqrt(jnp.maximum(cov[1, 1] - l21**2, 0.0))
+    z = jax.random.normal(key, (2,))
+    return c[0] * v_turb + l11 * z[0], c[1] * v_turb + l21 * z[0] + l22 * z[1]
+
+
 def gust_magnitude(v_hub, params: WindTurbineParams):
     """The extreme operating gust's V_gust, m/s [S13]."""
     v_e1 = 0.8 * 1.4 * params.v_ref
@@ -562,17 +638,22 @@ def compute_next_state(
     tripped = state.feathered > 0.5
     pitch_cmd = jnp.where(tripped, p.pitch_max, pitch_cmd)
 
-    # Normal turbulence about the mean: an Ornstein-Uhlenbeck process with the
-    # Kaimal integral time scale and IEC's sigma, stepped exactly. Drawn from a
-    # key folded with ``state.time``, so a constant key still gives a process.
+    # Normal turbulence about the mean at the hub: an Ornstein-Uhlenbeck process
+    # with the Kaimal integral time scale and IEC's sigma, stepped exactly. Drawn
+    # from a key folded with ``state.time``, so a constant key still gives a
+    # process. The rotor sees it through its spatial filter; the gust, one
+    # coherent rise over the whole disc, reaches it whole.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     decay = jnp.exp(-p.delta_t / turbulence_time_constant(state.v_mean, p))
     sigma = turbulence_sigma(state.v_mean, p)
     v_turb = state.v_turb * decay + sigma * jnp.sqrt(1.0 - decay**2) * noise
+    lag_fast, lag_slow, v_rotor = rotor_turbulence(
+        state.v_lag_fast, state.v_lag_slow, v_turb, state.v_mean, p
+    )
     t_gust = (state.time + 1 - state.gust_c0) * p.delta_t
     v_wind = jnp.maximum(
         state.v_mean
-        + v_turb
+        + v_rotor
         + gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size),
         0.1,
     )  # 0.1 m/s: a numerical floor, never reached
@@ -627,6 +708,8 @@ def compute_next_state(
             a_tower=accel,
             v_wind=v_wind,
             v_turb=v_turb,
+            v_lag_fast=lag_fast,
+            v_lag_slow=lag_slow,
             v_mean=v_mean,
             v_mean_z=v_mean_z,
             v_mean_lo=v_mean_lo,
