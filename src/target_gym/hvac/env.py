@@ -296,8 +296,8 @@ def is_occupied(time, params: HVACParams):
 
 
 def outdoor_temperature(time, weather_dev, params: HVACParams, level=None):
-    """Daily sinusoid (coldest ~05:00, warmest ~15:00) plus the OU deviation, about
-    the outdoor mean where it stands (``level``), the regime's by default."""
+    """Daily sinusoid (coldest at 03:00, warmest at 15:00) plus the OU deviation,
+    about the outdoor mean where it stands (``level``), the regime's by default."""
     h = hour_of_day(time, params)
     # +cos peaks at h = 15 (warmest mid-afternoon) and troughs 12 h later at
     # h = 3 (coldest before dawn). The sign was inverted originally, which put
