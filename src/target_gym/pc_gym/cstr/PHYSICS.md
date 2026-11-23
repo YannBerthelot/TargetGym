@@ -334,3 +334,71 @@ The reference is the ladder's, with its valve position rung
 water valve held by the feed. Set points are placed on a fixed grid by the
 owner's rule of 2026-11-23, the cheapest at which no deciding seed of the
 normal day leaves the band.
+
+### What was measured (2026-11-23, the prototype at its 95 % start)
+
+The reference: temperature on the water, Kc -0.119 raw per K and Ti 27.5 min;
+the water valve held by the feed, Kc 0.53 and Ti 46.5 min; placed with the
+temperature 0.9 K under the band's top and the valve at 99 %, no seed left out.
+Cost is lost nameplate production per step, seeds 100 to 109.
+
+| scenario | weight | reference | ceiling | room | reference off-spec, hottest |
+|---|---|---|---|---|---|
+| normal | 0.70 | 0.2637 | 0.2385 | 1.11 | 0 %, 59.0 C |
+| setpoint move | 0.10 | 0.2445 | 0.2174 | 1.13 | 0 %, 60.6 C |
+| catalyst loss | 0.10 | 0.6431 | 0.2790 | 2.31 | 51 %, 65.1 C |
+| feed build-up | 0.05 | 0.6835 | 0.3191 | 2.14 | 57 %, 67.6 C |
+| cooling loss | 0.05 | 0.5288 | 0.2540 | 2.08 | 36 %, 64.1 C |
+| J | | 0.3340 | 0.2453 | 1.36 (1.33 to 1.39) | no trip |
+
+The reference costs more than the ceiling on 10 of 10 seeds in every scenario.
+In product, 6.59 against 7.47 mol/min on-spec, 13.3 % more (11.9 to 14.8). The
+ceiling is never the reference's own moves; its two starts end 0.24 % apart at
+the median and 12.9 % at worst.
+
+J2's runs, on 30 seeds hashed from commit ad3b60f: the reference trips on none;
+holding the reset's valves costs less on 4 seeds (2 in the catalyst loss, 2 in
+the feed build-up), both valves wide open on 1 (cooling loss), the other nulls
+on none.
+
+### The sweep (charter B7) and J2's rule
+
+Eight Latin-hypercube draws of the project's own numbers over the ranges above,
+seeds 100 to 109. On every draw the ladder was rebuilt and placed with no seed
+left out, the reference tripped on no seed and cost less than every null on the
+median over seeds (0.276 to 0.397 against the best null's 0.323 to 0.709). On
+the two draws at the ends of the band the ceiling cost less than the reference
+on the same five seeds: 0.258 against 0.396 at 0.63 K, 0.225 against 0.314 at
+1.89 K.
+
+So J2's rule accepts the prototype: no trip in 30 seeds, no null ahead on more
+than half of them, the sweep holding. These are the prototype's own runs of the
+rule, not the charter's script from a tag, and the sweep ran no behaviour test
+of its own (the plant's are the task's above).
+
+Two earlier sweeps failed, and each was a fault found, not a number moved. With
+the window starting at the valve's top, no set point held a band under 0.9 K
+(the start is now the record's 95 %). With a placement grid that stopped 1 K
+under the band's top, none held the two widest bands (the grid now reaches the
+band's centre, as it was written to).
+
+### Cold review (charter B8, 2026-11-23)
+
+A fresh reader was given REALITY.md, then the task only. Its 13 findings, and
+what each is here:
+
+| finding | what it is here |
+|---|---|
+| The band is a cliff with no pull to the setpoint inside it; the record's job is the setpoint and it gives no tolerance (major) | open, the owner's: the band is the project's own number, and the score invites riding its upper edge |
+| A trip is a fee with an instant restart, where the record's runaways end in rupture (major) | as the task above: the trip's 4 h is ours |
+| The cooling loss is a 5 min ride-through, the trip 17 K away (major) | as the task above; here the reference still loses the band 36 % of the window and reaches 64 C |
+| The window started with the water valve at its top, no cooling left at the first step, where the record holds it short (major) | fixed from the record: the window now starts at 95 % [S13] |
+| Production is paid every step on a composition no analyser reads (unknown) | deviation: the score reads the true state, as every task's does; the agent reads no composition |
+| The feed moves in one step, with a fixed volume and a 40 g/s floor against S1's 0 (minor) | deviation: feed valve and level dynamics not found; the floor is ours |
+| The normal day rests on a hidden daily feed cycle the record does not give (unknown) | as the task above: the period is ours |
+| The setpoint move is a ramp where S1 stepped (minor) | deviation, derived |
+| The catalyst loss is a 90 min decay (minor) | as the task above (D5) |
+| The feed build-up is a step in feed strength, where Bayer's was unreacted material accumulating (unknown) | as the task above; its size is ours |
+| The water's top is 136 g/s where Table 1 says 110 (unknown) | as the task above [S1, Fig. 2] |
+| No circulation loss or fouling in the suite (unknown) | as the task above |
+| Flows are read exactly; the jacket's holdup is ours (unknown) | as the task above |
