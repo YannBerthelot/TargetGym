@@ -204,6 +204,7 @@
       "turbulence_sigma": 0.564,
       "amended": true,
       "e_tol_heading": 0.17453292519943295,
+      "holding_bank": 0.4363323129985824,
       "economy_weight": 1.0,
       "heading_clearance_period": 150.0
     },
@@ -333,11 +334,14 @@
         0.0,
         1200.0
       ],
-      "assigned_speed_mode": 1
+      "assigned_speed_mode": 1,
+      "cost_index": 0.0,
+      "economy_weight": 1.0,
+      "economy_scale": 1.0
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
