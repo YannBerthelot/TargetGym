@@ -1,7 +1,7 @@
 # compressor_surge: a margin the plant earns
 
-Status: the owner chose option 1, the lag and the hidden line shift (2026-11-23). It is
-built in the plant; its values wait on four choices ("Still open" below).
+Status: the owner chose option 1, the lag and the hidden line shift, and its four
+values (2026-11-23). It is built in the plant. One point is still open, at the end.
 
 ## The finding
 
@@ -113,16 +113,20 @@ seeds within each scenario:
   (line 4.9 % right of its map). A margin placed on ten machines is not safe on an
   eleventh: that is the margin being the plant's.
 
+## Decided by the owner (2026-11-23)
+
+1. The shift is uniform within 5 % either side of the map.
+2. A restart keeps the machine.
+3. The observation gains no suction temperature channel; the inlet stays fixed.
+4. The flow reading lags 0.15 s and the pressure reading 0.3 s.
+
 ## Still open
 
-1. The shift's size and law (built: uniform within 5 %).
-2. Whether a restart keeps the machine (built: it does).
-3. Whether the observation gains a suction temperature channel (built: no).
-4. The lags' values (built: 0.15 s and 0.3 s).
-5. **The shift can be read off the readings.** Because the whole characteristic is
-   stretched, the speed that holds 24 kPa at a given flow differs by about 0.7 % for a
-   5 % shift, seventy steps of the speed reading. A controller that knew the map's
-   shape could invert it and find the line without going near it, which the sources
-   say a plant cannot do [C10]. Keeping the stretch local to the line would hide it;
-   no source gives that shape.
-
+**The shift can be read off the readings.** Because the whole characteristic is
+stretched, the speed that holds 24 kPa at a given flow differs by about 0.7 % for a
+5 % shift, seventy steps of the speed reading. A controller that knew the map's shape
+could invert it and find the line without going near it, which the sources say a
+plant cannot do [C10]. Options: keep the stretch local to the line (the shape is
+ours, and with shifts up to 5 % it hides only part of the difference at the 10 %
+line); keep the whole-map stretch as a known deviation; or add a hidden head error
+of a few percent, so that one steady reading no longer gives the shift.
