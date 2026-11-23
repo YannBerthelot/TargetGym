@@ -398,6 +398,14 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     episode = int(params.max_steps_in_episode)
 
     out = [f"# {title}", ""]
+    if spec.extra is not None:
+        out += [
+            '!!! note "Extra task"',
+            f"    {title} is kept in the repository but is not part of the "
+            "benchmark, so it is out of the headline and the capability claims. "
+            f"The reason: {spec.extra}.",
+            "",
+        ]
     if video:
         out += [
             # ``../../``, not ``../``.

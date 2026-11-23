@@ -1,5 +1,8 @@
 # Four-tank
 
+!!! note "Extra task"
+    Four-tank is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: a lab rig with no industrial job: Johansson's teaching process tracks levels to 1 mm, and no plant family stands behind its flow-split zero (charter Amendment 3).
+
 <p align="center"><img src="../../videos/four_tank/pid_output.gif" width="480px"/></p>
 
 Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. Each pump fills the far upper tank more than its own lower one, so a level first moves the wrong way. The policy reads all four levels and both setpoints. Each step is charged the sum of the two squared level errors, counted in units of 1 mm. Nothing trips: an empty tank stops draining and a full one overflows.

@@ -1,7 +1,7 @@
 # Battery
 
-!!! note "Extra since 2026-11-15"
-    Battery is kept in the repository but is not part of the benchmark: it failed acceptance (J2), so it is out of the headline and the capability claims. The reasons are in its [physics contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md), Status.
+!!! note "Extra task"
+    Battery is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: failed acceptance (J2, 2026-11-15, owner's decision): null policies beat the reference on 16 of 30 seeds and the family sweep held on 0 of 8 draws; trading is the whole cost on the price scenarios and a wrong charge estimate costs nothing on most seeds (energy/battery/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/battery/pid_output.gif" width="480px"/></p>
 
