@@ -103,12 +103,14 @@ def _room_flux(states, params):
 # 1. [10, p. 7, Fig. 3]: concrete core TABS (type E), heating, 145 to 462 min to
 #    63.2 % of the step response; [6, p. 2] 4 to 8 h. Heat flux from the slab
 #    into the room after a step in supply temperature, from a steady state at
-#    0 C outdoor, no sun or gains. Tolerance: 145 to 462 min, no margin.
+#    0 C outdoor, no sun or gains. Tolerance: 145 to 462 min, no margin. The step
+#    is one the source can follow, +1 K (1.5 kW on the 3.3 kW it holds, under its
+#    5.7 kW): until 2026-11-23 the source had no size and the step was +5 K.
 def test_slab_heating_time_constant_is_a_concrete_core_tabs():
     params = _quiet(0.0, gain_occupied=0.0, gain_unoccupied=0.0)
     state, T_sup = _settled(params, 21.0)
     before = float(_room_flux(state, params))
-    states = _run(params, state, lambda obs, k: T_sup + 5.0, 10 * DAY)
+    states = _run(params, state, lambda obs, k: T_sup + 1.0, 10 * DAY)
     flux = _room_flux(states, params)
     final = flux[-1]
     k = int(np.argmax(flux - before >= 0.632 * (final - before)))

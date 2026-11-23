@@ -338,13 +338,18 @@ def test_reactor_measured_reward_carries_the_steps_one_reading():
     ``d`` above the plant takes ``1.917 * d`` off the step's cost, and ``d`` is what
     the observation of that step shows."""
     env, params, state = _setup("reactor")
+    # At the start of the cycle, where 8 K cold stays cold through the step: later
+    # in the cycle the stronger moderator feedback brings Tavg back inside its band
+    # within the step, and only part of the step is charged (2026-11-15).
+    params = params.replace(cycle_range=(0.0, 0.0))
+    state = env.reset_env(jax.random.PRNGKey(0), params)[1]
     hot = state.replace(T_coolant=state.T_coolant - 8.0, T_cold=state.T_cold - 8.0)
     key = jax.random.PRNGKey(3)
     for t in range(5):
         obs, new, reward, _, info = env.step_env(
             jax.random.fold_in(key, t),
             hot.replace(time=t),
-            jnp.array([1.0, 0.0]),
+            jnp.array([1.0, 0.0, 1.0]),
             params,
         )
         d = float(obs[4]) - 0.5 * float(new.T_coolant + new.T_cold)

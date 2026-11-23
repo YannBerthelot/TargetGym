@@ -2,12 +2,13 @@
 
 Contracts, from the family's sources, written before the code:
 
-- Offset band as a penalty clock (EDF scope, Westinghouse allowance): time with the
-  axial offset outside +-0.05 of its reference counts at every power during load
-  follow. 1 h in 24 h is allowed (D.C. Cook and RAOC technical specifications)
-  and costs nothing. Past it the plant must derate to 50 % (the same
-  specifications), priced as that derate's lost output: the power above 50 % at
-  the spot price, $80/MWh on 1 GWe. At 50 % or below there is nothing to give up.
+- Offset band as a penalty clock: 1 h of penalty time in 24 h is allowed and costs
+  nothing. Past it the plant must derate to 50 %, priced as that derate's lost
+  output: the power above 50 % at the spot price, $80/MWh on 1 GWe. At 50 % or
+  below there is nothing to give up. How the time counts, the band's width and
+  the outer limits are the standard specification's since 2026-11-15, in
+  test_reactor_offset.py; until then time outside +-0.05 of offset counted in
+  full at every power.
 - Rod insertion limit (family shape, KAIST's lead): a straight line in power, 22 %
   of the stroke in at full power, 78 % at half. Time deeper than the limit counts,
   resets once the rods are back above it, and 2 h of it (STS 3.1.6) ends the run
@@ -56,7 +57,7 @@ def at(s, **values):
 
 
 def step(env, p, s):
-    hold = np.array([1.0 - 2.0 * float(s.rod_in), 0.0])
+    hold = np.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0])
     s1, _ = compute_next_state(hold, s, p, integration_method=env.integration_method)
     return s1
 
@@ -64,19 +65,10 @@ def step(env, p, s):
 # --- the offset's penalty clock ---
 
 
-@pytest.mark.parametrize("n", [1.0, 0.5])
-def test_time_outside_the_offset_band_counts_at_every_power(n):
-    env, p, obs, s = reset()
-    s = at(s, n=n, ao_outside=100.0)
-    s1 = step(env, p, s.replace(Xe_tilt=s.Xe_tilt * 0 - 0.2))
-    assert abs(float(s1.delta_I) / float(s1.n)) > p.ao_band
-    assert float(s1.ao_outside) == pytest.approx(100.0 + p.delta_t)
-
-
-def test_time_inside_the_band_does_not_count():
-    env, p, obs, s = reset()
-    s1 = step(env, p, at(s, ao_outside=100.0))
-    assert float(s1.ao_outside) == pytest.approx(100.0)
+# test_time_outside_the_offset_band_counts_at_every_power and
+# test_time_inside_the_band_does_not_count moved to test_reactor_offset.py with the
+# standard specification's counting (owner, 2026-11-15): by the power, on a band in
+# delta I.
 
 
 @pytest.mark.parametrize(
@@ -166,7 +158,7 @@ def test_tavg_above_its_program_is_charged_past_the_band(hot, expected):
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_the_observation_carries_the_power_the_xenon_is_balanced_with(seed):
     env, p, obs, s = reset(seed)
-    assert obs.shape == (13,)
+    assert obs.shape == (16,)
     lo, hi = p.initial_xenon_power_range
     assert lo <= float(obs[10]) <= hi
     assert float(obs[10]) == pytest.approx(float(s.xenon_power))
@@ -179,7 +171,7 @@ def test_the_boron_reading_is_twenty_minutes_late():
     readings, core = [], []
     step = jax.jit(env.step_env)  # compiled once, not rebuilt on each of 70 steps
     for k in range(70):
-        dilute = np.array([rods, -1.0 if k < 4 else 0.0], np.float32)  # 2 min
+        dilute = np.array([rods, -1.0 if k < 4 else 0.0, 1.0], np.float32)  # 2 min
         obs, s, _, _, _ = step(jax.random.PRNGKey(0), s, dilute, p)
         readings.append(float(obs[7]))
         core.append(float(s.boron))
@@ -249,7 +241,7 @@ def test_a_plant_at_rest_needs_nothing_for_a_day():
         carried_days_range=(0.0, 0.0),
         sensor_noise_scale=0.0,
     )
-    null = jax.numpy.array([1.0 - 2.0 * p.rod_park, 0.0])
+    null = jax.numpy.array([1.0 - 2.0 * p.rod_park, 0.0, 1.0])
     keys = jax.random.split(jax.random.PRNGKey(1), p.max_steps_in_episode)
 
     def step(s, k):

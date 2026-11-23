@@ -225,17 +225,19 @@ class Table(NamedTuple):
 
 def _rod_integrator(obs):
     """The review's rod integrator: 0.0163 per step on the reactivity, whose
-    span is 0.015, moving the rod from where it is read."""
+    span is 0.015, moving the rod from where it is read. No boron, and the turbine
+    on its plan (the third action at +1)."""
     rod = obs[:, [2]] + 2.0 / 0.015 * 0.0163 * (obs[:, [3]] - obs[:, [0]])
-    return np.hstack([rod, np.zeros_like(rod)])
+    return np.hstack([rod, np.zeros_like(rod), np.ones_like(rod)])
 
 
 def _tavg_integrator(obs):
     """A plain integrator on what the rods control, moving the rod from where it is
     read. SIMC's gain on a hand bump test of the rebuilt plant: 19 K per unit of
-    action, a lag of one 30 s step and a step of delay, so 1 / (2 * 19 * 2)."""
+    action, a lag of one 30 s step and a step of delay, so 1 / (2 * 19 * 2). No
+    boron, and the turbine on its plan (the third action at +1)."""
     rod = obs[:, [2]] + 0.0132 * (obs[:, [5]] - obs[:, [4]])
-    return np.hstack([rod, np.zeros_like(rod)])
+    return np.hstack([rod, np.zeros_like(rod), np.ones_like(rod)])
 
 
 #: Per task, the policies a review found to beat the expert. The rebuild's
