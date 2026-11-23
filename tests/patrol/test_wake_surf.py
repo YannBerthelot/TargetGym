@@ -25,9 +25,10 @@ Contract, from the plant record and the owner's decisions of 2026-11-23:
   centreline inboard of the near vortex, ``b0 / 2 = pi b / 8`` = 14.06 m from the
   wake's centreline. The patrol does not trip on it, and with the wake switched
   off (``wake_strength`` 0) there is no vortex to cross.
-- Across the wake the station box is 30 m (ours, a span): free inside, then the
-  squared excess in box widths. Along track the tolerance is the +-250 ft the
-  Gulfstream's pilot was given [REALITY.md: N1 IV], priced the same way.
+- The score prices the along-track error past the +-250 ft the Gulfstream's
+  pilot was given [REALITY.md: N1 IV], the squared excess in tolerance widths,
+  and nothing across the wake: the 30 m there (ours, a span) is a reported band
+  (owner, 2026-11-23; ``tests/test_scoring.py``).
 - The follower starts in established operation, within 10 m of its place in the
   wake (charter B5: no capture).
 - A bank past 60 deg is an upset, a trip [EASA AMC 25.1329, A4.2: Hazardous]; the
@@ -36,8 +37,8 @@ Contract, from the plant record and the owner's decisions of 2026-11-23:
   M 0.78, at the A320's 73.5 t.
 - The reference surfs (large): on held-out seeds, with the station predicted and
   the wake drifting, it never trips, stays within 5 m of its place in the wake on
-  average, inside the box and the along-track tolerance past the scored burn-in,
-  and burns 3.5 to 10 % less fuel than on the same seeds with the wake off.
+  average, inside the reported band and the along-track tolerance past the scored
+  burn-in, and burns 3.5 to 10 % less fuel than on the same seeds with the wake off.
 """
 
 import functools
@@ -239,16 +240,17 @@ def test_the_station_saves_what_extended_formations_sustained(seed):
     "back, right, up, cost",
     [
         (0.0, 0.0, 0.0, 0.0),
-        (0.0, 0.0, 20.0, 0.0),
-        (0.0, 0.0, 60.0, 1.0),
-        (0.0, 60.0, 0.0, 1.0),
+        (0.0, 0.0, 60.0, 0.0),
+        (0.0, 60.0, 0.0, 0.0),
         (60.0, 0.0, 0.0, 0.0),
         (-60.0, 0.0, 0.0, 0.0),
         (2 * SPACING_M, 0.0, 0.0, 1.0),
         (-2 * SPACING_M, 0.0, 0.0, 1.0),
     ],
 )
-def test_the_box_is_30_m_across_the_wake_and_250_ft_along_it(back, right, up, cost):
+def test_the_score_prices_250_ft_along_the_track_and_nothing_across(
+    back, right, up, cost
+):
     env, params, state = _reset()
     state = _at_station(state, back, right, up)
     tracking = float(env.reward_terms(state, params)["tracking"])
@@ -318,7 +320,7 @@ def _flights(wake_strength):
 
 
 @pytest.mark.large
-def test_the_reference_surfs_inside_its_box_and_saves_fuel():
+def test_the_reference_surfs_on_its_station_and_saves_fuel():
     back, right, across, tripped, burned = _flights(1.0)
     *_, burned_alone = _flights(0.0)
     assert not tripped.any()

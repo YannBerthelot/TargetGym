@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/wake_surf/pid_output.gif" width="480px"/></p>
 
-Surf a lead airliner's wake: hold an A320 at a station 1.2 to 1.8 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The wake drifts with the air the lead left it in, and the station the follower is given is only a prediction, off by its wind estimate's error. Inside a 30 m box across the wake and 250 ft along it only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the near vortex, a span inboard, and passing through it trips the plant, as does a bank past 60 deg (REALITY.md).
+Surf a lead airliner's wake: hold an A320 at a station 1.2 to 1.8 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The wake drifts with the air the lead left it in, and the station the follower is given is only a prediction, off by its wind estimate's error. Within 250 ft of its distance in trail only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the near vortex, a span inboard, and passing through it trips the plant, as does a bank past 60 deg (REALITY.md).
 
 ```python
 import target_gym as tg
@@ -210,7 +210,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
 | `e_floor_slot` | 30 | m |
-| `e_tol_slot` | 30 | m |
+| `e_tol_slot` | 0 | m |
 | `lead_leg_seconds` | 300 | s |
 | `wake_strength` | 1 | - |
 | `wake_core_ratio` | 0.0582 | - |

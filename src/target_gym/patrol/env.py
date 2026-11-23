@@ -523,10 +523,10 @@ class WakeSurfParams(PatrolParams):
     #: vector over two axes [REALITY.md, M1]. Times the time in trail, it is
     #: how far the station the follower is given lies from the true one.
     wind_estimate_sigma: float = 1.0
-    #: The box across the wake about the station, m (ours, a span: no public
-    #: tolerance for a station was found). Inside it only the economy counts.
+    #: The band across the wake about the station, m (ours, a span: no public
+    #: tolerance for a station was found). It is reported, as the share of
+    #: time on station, and the reward does not read it (owner, 2026-11-23).
     e_floor_slot: float = 30.0
-    e_tol_slot: float = 30.0
     slot_tolerance: float = 30.0
     #: The along-track tolerance, m: the +-250 ft the Gulfstream's pilot held
     #: by throttle, the wake changing slowly along it [REALITY.md, N1 IV].
@@ -654,7 +654,7 @@ def slot_error(state: PatrolState):
 
 def station_distance(state: PatrolState):
     """Distance from the slot across the lead's track, sideways and in height
-    (metres): what ``wake_surf``'s box reads."""
+    (metres): ``wake_surf``'s tracked reading."""
     _, er, eu = slot_error_vector(state)
     return jnp.sqrt(er**2 + eu**2 + 1e-8)
 
@@ -744,19 +744,18 @@ def compute_reward_terms_patrol(
 def compute_reward_terms_wake_surf(
     state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
 ):
-    """``wake_surf``'s cost terms, each >= 0: the station box across the wake,
-    the along-track tolerance, and what the follower's operator pays, fuel and
-    time by the cost index per air distance (``plane.env.economy_cost``).
-    Inside both the economy is all that counts, so the cost falls where the
-    follower finds the lead's upwash."""
+    """``wake_surf``'s cost terms, each >= 0: the along-track tolerance, and
+    what the follower's operator pays, fuel and time by the cost index per air
+    distance (``plane.env.economy_cost``). Inside the tolerance the economy is
+    all that counts, so the cost falls where the follower finds the lead's
+    upwash. Nothing is priced across the wake: no source gives a station a
+    tolerance there, and passing through the vortex is a trip."""
     p = params
-    across = station_distance(state)
-    box = R.tracking_cost(across, p.e_floor_slot, p.e_tol_slot, 2.0, xp)
     back = slot_error_vector(state)[0]
     spacing = R.tracking_cost(back, p.spacing_tolerance, p.spacing_tolerance, 2.0, xp)
     follower = state.follower
     terms = {
-        "tracking": box + spacing,
+        "tracking": spacing,
         "economy": economy_cost(
             follower.power,
             follower.z,

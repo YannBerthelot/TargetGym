@@ -436,9 +436,9 @@ class WakeSurf(PlanePatrol):
     lead's track and the follower's wind estimate times the time in trail, so
     off across the track by that estimate's error, held over a window. The
     wake itself drifts with the air the lead left it in. The cost is the
-    station box across the wake, the along-track tolerance and the follower's
-    operator cost, fuel and time by the cost index: inside the box, the less
-    thrust the lead's upwash leaves the follower needing, the less it pays.
+    along-track tolerance and the follower's operator cost, fuel and time by
+    the cost index: the less thrust the lead's upwash leaves the follower
+    needing, the less it pays. The 30 m across the wake is a reported band.
     The upwash grows toward the near vortex, a span inboard of the station;
     passing through it trips the plant, as does a bank past 60 deg.
 

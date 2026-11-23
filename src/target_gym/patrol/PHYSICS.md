@@ -282,10 +282,10 @@ is charged too, and coming too close to the lead trips the plant.
 Surf a lead airliner's wake: hold an A320 at a station 1.2 to 1.8 km behind another,
 where the lead's upwash lifts it, and pay for fuel and time as an operator does. The
 wake drifts with the air the lead left it in, and the station the follower is given
-is only a prediction, off by its wind estimate's error. Inside a 30 m box across the
-wake and 250 ft along it only the economy counts, so the cost falls where the
-follower finds the upwash. The upwash grows toward the near vortex, a span inboard,
-and passing through it trips the plant, as does a bank past 60 deg (REALITY.md).
+is only a prediction, off by its wind estimate's error. Within 250 ft of its distance
+in trail only the economy counts, so the cost falls where the follower finds the
+upwash. The upwash grows toward the near vortex, a span inboard, and passing through
+it trips the plant, as does a bank past 60 deg (REALITY.md).
 
 **The station** (owner, 2026-11-23). In trail, 1.2 to 1.8 km: the trials' 4,000 ft at
 the near end, and at the far one the 50 spans NASA calls the larger end of the usable
@@ -324,13 +324,15 @@ passenger flights, and one ended a test point [REALITY.md, N4 III.D, VI.D; N1 V.
 the ride limit the sources name. The cabin vibration they measured sits at 16 to
 28 Hz and does not grow toward the core, so a plant stepped at 1 Hz does not carry it.
 
-**The score.** `tracking` is the box, on the distance across the wake from the true
-station (sideways and in height), plus the along-track error past +-250 ft, the
-tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], each the squared
-excess in its own width. Both read the two aircraft's relative position, good to 3 m
-(`slot_precision_floor`), so the tracking ceiling is one resolution past each,
-(3 / 30)^2 + (3 / 76.2)^2 = 0.0116 a step, and the settle band 2. `economy` is the
-follower's fuel and time by the cost index (plane/PHYSICS.md).
+**The score** (owner, 2026-11-23). `tracking` is the along-track error past +-250 ft,
+the tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], the squared
+excess in tolerance widths. It reads the two aircraft's relative position, good to
+3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past it,
+(3 / 76.2)^2 = 0.0016 a step, and the settle band 1. `economy` is the follower's fuel
+and time by the cost index (plane/PHYSICS.md). Nothing is priced across the wake: no
+source gives a station a tolerance there, and what stops the follower is the crossing.
+The 30 m across the wake (ours, a span, `e_floor_slot`) stays as a reported band, the
+share of time the tracked distance to the station as given is inside it.
 
 **The reference.** The formation hold's guidance cascade over the A320's own
 autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on
@@ -345,8 +347,8 @@ prototype; this one on none, at wind errors of 0.5, 1 and 2 m/s, where it stayed
 1.34 to 1.42 spans from the wake.
 
 **Known deviations from the record.** The wind estimate's error is held over a
-window, where the sources show it moving without giving a rate. The box across the
-wake is ours. The cabin's vibration in the wake is not modelled. No oracle ships:
+window, where the sources show it moving without giving a rate (owner, 2026-11-23:
+held). The cabin's vibration in the wake is not modelled. No oracle ships:
 it waits for the corrected A320, as do the savings, which are shares of its drag.
 
 | obs | meaning |
@@ -538,8 +540,8 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_slot` | 3 m; 30 m on `wake_surf`, its station box (ours, a span) | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
-| `e_tol_slot` | 0; 30 m on `wake_surf` | **provisional** on the patrol: the formation's station-keeping radius is a procedural number to be supplied. On `wake_surf` the station box, inside which only the economy counts (plane3d/PHYSICS.md, wake surfing) |
+| `e_floor_slot` | 3 m; 30 m on `wake_surf`, a reported band its reward does not read (ours, a span) | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
+| `e_tol_slot` | 0 | **provisional** on the patrol: the formation's station-keeping radius is a procedural number to be supplied. |
 | `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the oracle holds alignment below it (1.6e-3 rad, lowest per-seed hold in the test turbulence), so the instrument sets the scale |
 | `failure_cost` | 2 x ((1500 / 3)^2 + (pi / 0.0087)^2) = 7.6e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash, collision or lost formation loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |

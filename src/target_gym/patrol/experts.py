@@ -458,7 +458,7 @@ class WakeSurfHoldParams(FormationHoldParams):
     #: four times the filter, so each move settles before the next.
     trim_filter: float = 30.0  # s
     trim_rate: float = 3.5  # m/s per rad
-    trim_reach: float = 30.0  # m, the station box's width
+    trim_reach: float = 30.0  # m, the reported band's width
 
 
 @struct.dataclass
