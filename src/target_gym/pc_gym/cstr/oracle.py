@@ -13,7 +13,8 @@ charter Amendment 3), run by ``target_gym.oracles.controller.Oracle``:
 - limit: the interlock's temperature on every visited state, elastic at the
   trip cost per kelvin (T3).
 
-Not re-run since the rebuild.
+Last recorded on the normal day on 2026-11-12 (``data/baseline_returns/cstr.json``),
+before later changes to the shared solver.
 """
 
 import jax.numpy as jnp

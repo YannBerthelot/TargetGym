@@ -9,7 +9,9 @@
 > replacing the A320's 8.5 m "scaled by span". Where this document still speaks of
 > the A320, the 40 m separation, the 290 KCAS lead or the 8.5 m limit, read the
 > Hornet's. Both aircraft spawn in level trim; the air keeps 20 s. `wake_surf`
-> (plane3d/PHYSICS.md, "Wake surfing") is this module with A320s 3 km apart.
+> is this module with A320s 3 km apart: its plant record is REALITY.md, and its
+> task section below replaces plane3d/PHYSICS.md's "Wake surfing" where they differ
+> (the station, the box and the reference changed on 2026-11-23).
 >
 > The lead turns at up to 0.0303 rad/s, the parade turn's 30 deg of bank [CNATRA] at
 > 25 000 ft. The expert is NASA AFF's direct hold (figure 3 of the TM): on each axis a
@@ -276,10 +278,51 @@ is charged too, and coming too close to the lead trips the plant.
 
 Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where
 the lead's upwash lifts it, and pay for fuel and time as an operator does. The
-station sits 0.87 of a span outboard and below by the vortex's sink; inside a
-30 m box about it only the economy counts, so the cost falls where the follower
-finds the upwash, and the vortex core a span inboard can roll it past 60 deg, an
-upset (plane3d/PHYSICS.md, Amendment 4, wake surfing).
+station sits 1.2 to 1.3 spans from the lead's centreline, where the
+extended-formation trials flew, and on the vortex plane, below the lead by the
+pair's sink. Inside a 30 m box across the wake and 250 ft along it only the economy
+counts, so the cost falls where the follower finds the upwash. The upwash grows
+toward the vortex core, 0.8 to 0.9 span inboard, where a vortex can roll the
+follower past 60 deg, an upset (REALITY.md).
+
+**The station** (owner, 2026-11-23). Until then it sat 0.87 span out, the tip overlap
+of NASA's close-formation F/A-18s, at a height drawn apart from its distance, up to
+7 m off the vortex plane. No extended-formation trial held a point that close: the
+Gulfstream and the C-17 flew 0.94 to 1.8 spans out [REALITY.md, N1, N2]. At 0.87
+span the model saves 16.5 % of fuel flow (14.9 to 18.4 over ten seeds), above the 7
+to 10 % those trials report; at 1.2 to 1.3 spans it saves about 5 %, and from 1.0
+to 1.7 spans 9 to 2 %, in line with the Gulfstream's map. Its height is
+`-wake_sink`, `Gamma / (2 pi b0)` times the time in trail, 19 to 26 m; the lead's
+weight sets it, so a stream's sortie has its own. The follower starts within 2 m of
+it (ours, the reference's hold), established as the charter asks.
+
+**The score.** `tracking` is the box, on the distance across the wake (sideways and
+in height, the tracked observation), plus the along-track error past +-250 ft, the
+tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], each the
+squared excess in its own width. Both read the two aircraft's relative position, good
+to 3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past each,
+(3 / 30)^2 + (3 / 76.2)^2 = 0.0116 a step, and the settle band 2. `economy` is the
+follower's fuel and time by the cost index (plane/PHYSICS.md).
+
+**The reference.** The formation hold's guidance cascade over the A320's own
+autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on
+thrust. Its spacing loop is slow, 100 s, with no integral, since the tolerance along
+the track is wide and the trials left the throttle alone a minute at a time. On
+training seeds 100 to 109 (`scripts/wake_surf_review.py`) it holds 1.5 m across and
+in height with a bank under 8 deg, and saves 4.9 to 5.7 % of fuel against the same
+seeds with the wake off. It cannot hold 0.87 span: there it swings 41 m across and
+banks to 59 deg, as NASA's Gulfstream autopilot lost its tracking where the trim
+disturbance steepens near the core [REALITY.md, N1 V.A]. The reference shipped until
+2026-11-23, a TECS retuned on the 3D distance to the station, swung 62 m RMS in
+height with the wake on or off and met no upwash.
+
+**Known deviations from the record.** The wake is exactly where the model puts it
+and stays on the lead's ground track; in flight it drifts with the wind and is
+predicted, never measured. No ride limit is modelled; cabin vibration set the
+Gulfstream's. The station is 78 to 103 spans in trail against the trials' 20 to 50.
+The box across the wake is ours. No oracle ships: against the wake's best steady
+point, held perfectly, the reference's cost is 1.06 to 1.08 (a static bound, not a
+measured room).
 
 | obs | meaning |
 |---|---|
@@ -292,7 +335,7 @@ upset (plane3d/PHYSICS.md, Amendment 4, wake surfing).
 | 21 | throttle, 0 to 1 |
 | 22 | elevator deflection (rad) |
 | 23 | aileron deflection (rad) |
-| 24 | distance to the station (m) |
+| 24 | distance to the station across the wake (m) |
 | 25 | target distance, always 0 |
 
 ### Task: `patrol_range_bearing`

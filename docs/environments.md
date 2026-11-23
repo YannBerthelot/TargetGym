@@ -49,7 +49,7 @@ To pick one by what you want to test, see
 | `patrol` | `patrol-v6` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `patrol_range_bearing` | `patrol_range_bearing-v6` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `formation` | `formation-v5` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
-| `wake_surf` | `wake_surf-v3` | (26,) | (3,) | slot error (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `wake_surf` | `wake_surf-v3` | (26,) | (3,) | distance across the wake (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 > `plane` -- No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).
 
@@ -57,7 +57,7 @@ To pick one by what you want to test, see
 
 > `plane3d_heading` -- No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
-> `plane3d_racetrack` -- No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
+> `plane3d_racetrack` -- No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
 > `patrol_range_bearing` -- The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.
 
