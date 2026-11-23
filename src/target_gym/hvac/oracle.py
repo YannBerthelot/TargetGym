@@ -15,9 +15,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   hinges through epigraph rows on every occupied state (T2): the room below
   and above the band and the floor above its limit, each linear in
   kelvin-hours at the work-loss price;
-- smoothed site (T5): the slab heat's heating-only edge, ``max(T_sup -
-  T_core, 0)`` in ``slab_heat``, which enters the dynamics and so cannot be an
-  epigraph row: K2's softplus at the solve's width, the exact edge at width 0,
+- smoothed site (T5): the slab heat's two edges in ``slab_heat``, heating
+  only (``max(T_sup - T_core, 0)``) and the source's size [13], which enter the
+  dynamics and so cannot be epigraph rows: K2's softplus at the solve's width
+  on both, the exact edges at width 0,
   where the planned cost of a plan is the env's
   (``tests/oracles/test_thermal_energy_oracles.py``). Water at the valve's
   lowest setting, which the env counts as off, is below the core, so it gives
@@ -42,6 +43,7 @@ from target_gym.hvac.env import (
     slab_conductances,
     solar_gain,
     solve_air_and_surface,
+    source_size,
     split_gains,
     zone_conductances,
 )
@@ -57,9 +59,11 @@ from target_gym.oracles.shooting import Hinge
 
 
 def heat(T_supply, T_core, p, width):
-    """``slab_heat`` with its heating-only edge smoothed at ``width`` (K)."""
+    """``slab_heat`` with its two edges smoothed at ``width`` (K): heating only,
+    and no more than the source's size."""
     H_water = slab_conductances(p)["H_water"]
-    return H_water * softplus_clip(T_supply - T_core, 0.0, jnp.inf, width)
+    most = source_size(p) / H_water
+    return H_water * softplus_clip(T_supply - T_core, 0.0, most, width)
 
 
 def velocity(position, action, time, weather_dev, width, p):
@@ -112,8 +116,11 @@ def hvac_model(env, p) -> TaskModel:
             ),
             -1.0,
         )
-        # The env scores the step's heat on the core it ends at.
-        kwh = heat(T_sup, x1[1], p, width) / heat_pump_cop(T_sup, p) / 1000.0 * hours
+        # The env scores the step's heat on the core it ends at, at the COP of
+        # the water the source made (``env.supply_made``).
+        q = heat(T_sup, x1[1], p, width)
+        made = jnp.minimum(T_sup, x1[1] + q / slab_conductances(p)["H_water"])
+        kwh = q / heat_pump_cop(made, p) / 1000.0 * hours
         return x1, electricity_price(start + t, p) * kwh, y, T_air[None], ()
 
     weight = float(p.comfort_price * hours)
