@@ -329,3 +329,11 @@ def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
 def test_one_draw_that_fails_fails_the_sweep():
     sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
+
+
+def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
+    """The ladder rows live in the repository's ``scripts/``, which an installed
+    package does not have. Asked there, the list is not silently the
+    expert-reference tasks alone."""
+    with pytest.raises(FileNotFoundError, match="source checkout"):
+        charter.charter_tasks(tmp_path / "absent")

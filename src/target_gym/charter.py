@@ -67,6 +67,11 @@ _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
     """Every task with a ladder row, less the fixtures, plus the expert-reference
     tasks."""
+    if not rows_dir.is_dir():
+        raise FileNotFoundError(
+            f"{rows_dir} is absent: the charter's ladder rows ship in the "
+            "repository's scripts/, so this needs a source checkout"
+        )
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
     return sorted((rows - set(FIXTURES)) | set(EXPERT_REFERENCE))
 
