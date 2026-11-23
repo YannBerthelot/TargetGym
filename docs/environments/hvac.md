@@ -119,6 +119,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `c_water` | 4186 | J/(kg K) |
 | `T_supply_max` | 49 | degC |
 | `T_supply_min` | 15 | degC |
+| `source_capacity` | 38 | W/m^2 |
 | `cop_carnot_fraction` | 0.52 | - |
 | `T_brine` | 0 | degC |
 | `frost_on` | 4.4 | degC |
