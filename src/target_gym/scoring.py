@@ -121,7 +121,9 @@ TRACKED_TERMS = {
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
     "patrol_range_bearing": (_SLOT, _HEADING),
-    "wake_surf": (_SLOT,),
+    # The box across the wake and the along-track tolerance: one relative
+    # fix reads both, so one resolution (patrol/PHYSICS.md, wake_surf).
+    "wake_surf": (_SLOT, ("slot_precision_floor", "spacing_tolerance", 1)),
     "formation": (
         _ALTITUDE,
         _HEADING,
@@ -181,7 +183,7 @@ SPEC_BAND = {
     "plane3d_racetrack": ((_RVSM,), _RVSM_BAND),
     "patrol": ((3.048,), _SLOT_BAND),
     "patrol_range_bearing": ((3.048,), _SLOT_BAND),
-    "wake_surf": ((30.0,), "ours: the station box, a span (plane3d/PHYSICS.md)"),
+    "wake_surf": ((30.0,), "ours: the box across the wake, a span (patrol/PHYSICS.md)"),
     "formation": ((20.0, 3.048, 3.048), _ALTITUDE_BAND + "; " + _SLOT_BAND),
     "ph_neutralization": (
         (1.0,),
