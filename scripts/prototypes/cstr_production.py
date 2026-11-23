@@ -232,8 +232,8 @@ class Reference:
 
     oracle, name = False, "reference"
 
-    def __init__(self, p, valve, lift=0.0, vpc_min=75.0, cut=1.0, guard=0.3):
-        self.p, self.valve, self.lift = p, valve, lift
+    def __init__(self, p, valve, lift=0.0, vpc_min=75.0, cut=1.0, guard=0.3, gain=1.0):
+        self.p, self.valve, self.lift, self.gain = p, valve, lift, gain
         self.ki, self.cut, self.guard = 1.0 / (1.36 * vpc_min), cut, guard
 
     def reset(self, key, obs, task):
@@ -244,7 +244,7 @@ class Reference:
         o, dt = np.asarray(obs, float), float(self.p.delta_t)
         e = o[:, 0] - (o[:, 4] + self.lift)  # a hot reactor opens the water
         integral = m["i"] + e * dt
-        asked = m["w"] + 0.105366 * (e + integral / 15.40763)
+        asked = m["w"] + self.gain * 0.105366 * (e + integral / 15.40763)
         water = np.clip(asked, -1.0, 1.0)
         integral = np.where(asked == water, integral, m["i"])
         feed = np.clip(m["f"] + self.ki * dt * (self.valve - water), -1.0, 1.0)
@@ -348,5 +348,24 @@ def main():
     print("done", flush=True)
 
 
+def grid():
+    """How much the hand-built reference's own settings move its production: the
+    valve it holds, how far above the setpoint it runs, and its water loop's gain.
+    Closed loop only, so it says what a classical loop reaches, not a ceiling."""
+    out = pathlib.Path(sys.argv[1])
+    seeds, env, result = tuple(range(100, 110)), ProductionCSTR(), {}
+    base = ProdParams(sensor_noise_scale=1.0)
+    for name, (over, _) in SCENARIOS.items():
+        p = base.replace(**over)
+        for valve in (0.9, 0.95, 0.98):
+            for lift in (0.0, 0.5):
+                for gain in (1.0, 8.0):
+                    ref = Reference(p, 2 * valve - 1, lift=lift, gain=gain)
+                    label = f"valve {valve}, lift {lift}, gain x{gain:g}"
+                    result[f"{name}: {label}"], _, _ = run(env, p, ref, seeds)
+                    show(name, label, result[f"{name}: {label}"])
+    (out / "cstr_production_grid.json").write_text(json.dumps(result, indent=1))
+
+
 if __name__ == "__main__":
-    main()
+    grid() if sys.argv[2:3] == ["grid"] else main()
