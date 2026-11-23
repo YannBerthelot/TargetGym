@@ -324,13 +324,19 @@ was fetched twice; the chart was read from its vector paths, not by eye.
 - **[EASA IM.E.069]** EASA type-certificate data sheet IM.E.069, IAE V2500-A5, -D5 and
   -E5 series, issue 05, 20 December 2022, section 6: take-off thrust of the V2527-A5,
   V2527E-A5 and V2527M-A5, 11 031 daN; maximum continuous, 9 892 daN; "ratings are based
-  on Sea Level Static test stand operation". <https://www.easa.europa.eu/en/downloads/7687/en>
+  on Sea Level Static test stand operation". Note 1: "The take-off thrust, with the
+  associated limits, shall not be used continuously more than 5 minutes." Note 2: "The
+  Maximum Continuous rating is available at and below ISA+10 deg C ambient temperatures."
+  <https://www.easa.europa.eu/en/downloads/7687/en>
 - **[EASA E.003]** EASA type-certificate data sheet E.003, CFM56-5B and -5C series,
   issue 06, 9 January 2023, 6.1: CFM56-5B4 take-off thrust 12 010 daN.
   <https://www.easa.europa.eu/en/downloads/7797/en>
 - **[HAMMAMI]** M. O. Hammami, "Turbofan Specific Fuel Consumption, Size, and Mass from
   Correlated Engine Parameters", master thesis, HAW Hamburg, 2021, p. 21 and 22.
   <https://www.fzt.haw-hamburg.de/pers/Scholz/arbeiten/TextHammami.pdf>
+- **[WILDMANN]** Wildmann et al., "In Situ Measurements of Wind and Turbulence by a
+  Motor Glider in the Andes", J. Atmos. Oceanic Technol. 38, April 2021, p. 921.
+  <https://elib.dlr.de/142139/1/wildmann_21.pdf>
 - **[BENSEL]** A. Bensel, "Characteristics of the Specific Fuel Consumption for Jet
   Engines", study thesis, HAW Hamburg, 2018, p. 21.
   <https://reposit.haw-hamburg.de/bitstream/20.500.12738/13156/3/2018_Bensel_Specific_Fuel_Consumption_for_Jet_Engines.pdf>
@@ -381,8 +387,18 @@ Mach against altitude in feet, each curve's points as drawn:
 - Below the speed where max thrust equals drag, "there is no thrust margin available to
   accelerate while maintaining a stabilized level flight. Then the only way to stop the
   deceleration is to lose altitude". "The crew should not fly below GD."
-- How large, how long and how often such downdrafts, wind changes and temperature rises
-  are: not found yet.
+- Vertical air velocity in mountain waves, by the Sierra Wave Project's classes
+  (Holmboe and Klieforth 1957; Grubisic and Lewis 2004): "strong" 9 to 18 m/s,
+  "moderate" 4.5 to 9 m/s, "weak" 1.5 to 4.5 m/s. On a motor glider's soaring flights in
+  the Andes, "40.6% are in weak, 14.1% in moderate and 0.4% in strong wave conditions",
+  with more than 10 m/s "occasionally recorded" [WILDMANN]. Those are wave-seeking
+  flights low in the troposphere, not an airliner's cruise.
+- How long a downdraft lasts at cruise speed, and how often an airliner in cruise
+  meets one: not found. The FAA's advisory circulars on mountain winds and on clear air
+  turbulence (AC 00-57, AC 00-30C, AC 91-85B's appendix on mountain wave activity)
+  answer 403 to automated readers; for the owner to open by hand.
+- How large and how fast the wind and temperature changes are: [AC00-30C] above gives
+  40 kt per 150 miles for the wind; for the temperature, not found.
 
 ### Fuel per unit of thrust
 
