@@ -769,6 +769,13 @@ and 2 674 to 2 633 kg/h, at a lift over drag of 16.8; its residual climb falls f
 1 218 to 497 ft/min and its throttle rises from 0.69 to 0.85. The 300 ft/min ceiling
 at M 0.78 is 40 300 ft at 60 t, 36 400 at 70 t, 35 200 at 73.5 t and 33 600 at 78 t.
 
+**The scored levels stay under the recommended maximum altitude**, "REC MAX = Min
+[Service ceiling; Aerodynamic ceiling; Max certified ceiling]" [SF21 p. 5], which the
+plant's 300 ft/min ceiling sets at these masses: `plane` cruises from FL290 to FL350
+(it went to FL370), `heavy_high` flies 78 t at FL320 to 330 (it flew FL340 to 350, the
+1.3 g buffet limit alone), and the stream's `ceiling_levels` are FL350 at 73.5 t and
+FL330 at 78 t.
+
 **Known deviations of this amendment** (owner, 2026-11-23).
 - The chart's top speed in level flight at max climb thrust, where the residual climb
   is zero, is 700 to 1 700 ft under the plant's from M 0.77 to 0.82. Effect: at the top

@@ -148,9 +148,10 @@ class Airplane2D(
         # cruise (ours: long enough for one turbulence zone of up to 30 min
         # with calm on either side when it is shorter [BEA447 Figure 24]).
         band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
-        # Cruise levels FL290 to FL370 (Amendment 3): RVSM airspace, where the
-        # band applies [RVSM], clear of the 39 100 ft maximum altitude [TCDS].
-        levels = (29_000.0 * 0.3048, 37_000.0 * 0.3048)
+        # Cruise levels FL290 to FL350: RVSM airspace, where the band applies
+        # [RVSM], up to the recommended maximum altitude of 73.5 t, where the
+        # plant keeps 300 ft/min at full thrust [SF21 p. 5; Amendment 5].
+        levels = (29_000.0 * 0.3048, 35_000.0 * 0.3048)
         return PlaneParams(
             max_steps_in_episode=1800,
             target_altitude_range=levels,

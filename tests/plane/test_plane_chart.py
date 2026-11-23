@@ -30,6 +30,12 @@ Contract, at 70 t in the standard atmosphere:
   airframe's is within 5 % of it (ours: the tail's lift and its induced drag,
   which the polar leaves out).
 
+- Recommended maximum altitude. "REC MAX = Min [Service ceiling; Aerodynamic
+  ceiling; Max certified ceiling]" [SF21 p. 5]: the service ceiling is the
+  300 ft/min one, the aerodynamic ceiling leaves 1.3 g to the buffet onset, the
+  certified one is 39 100 ft [TCDS]. Every level a scenario of ``plane`` assigns,
+  and every level the stream lets a sortie's mass fly, is at or under it.
+
 Residual climb is ``V (T_max - D) / W`` with D the level-trim thrust: the
 definition, as in test_plane_energy_reality.py. Tolerances are one division of the
 chart's own grid, written before the plant was changed.
@@ -56,12 +62,15 @@ import pytest
 import target_gym as tg
 from target_gym.plane.dynamics import (
     aero_coefficients,
+    buffet_line,
     compute_air_density_from_altitude,
     compute_speed_of_sound_from_altitude,
     compute_thrust_output,
+    scheduled_airspeed,
     trim_level,
 )
 from target_gym.plane.env import PlaneParams
+from target_gym.plane.scenarios import suite
 
 FT, FPM = 0.3048, 0.3048 / 60.0
 MASS = 70_000.0  # the chart's gross weight
@@ -100,20 +109,20 @@ ONE_MACH_LINE = 0.02  # the chart's horizontal grid
 
 
 @jax.jit
-def _level_flight(mach, altitude_ft):
-    """``(trim thrust N, max thrust N, true airspeed m/s)`` at 70 t."""
+def _level_flight(mach, altitude_ft, mass=MASS):
+    """``(trim thrust N, max thrust N, true airspeed m/s)``, at 70 t by default."""
     z = altitude_ft * FT
     speed = mach * compute_speed_of_sound_from_altitude(z)
-    _, _, power = trim_level(speed, z, MASS, P)
+    _, _, power = trim_level(speed, z, mass, P)
     rho = compute_air_density_from_altitude(z)
     full = compute_thrust_output(1.0, P.thrust_output_at_sea_level, mach, rho)
     return power * full, full, speed
 
 
-def _residual_climb(mach, altitude_ft):
+def _residual_climb(mach, altitude_ft, mass=MASS):
     """Residual climb at full thrust, ft/min."""
-    trim, full, speed = (float(x) for x in _level_flight(mach, altitude_ft))
-    return speed * (full - trim) / (MASS * P.gravity) / FPM
+    trim, full, speed = (float(x) for x in _level_flight(mach, altitude_ft, mass))
+    return speed * (full - trim) / (mass * P.gravity) / FPM
 
 
 def _altitude_where_climb_is(rate, mach, low=28_000.0, high=41_000.0):
@@ -213,3 +222,28 @@ def test_the_plant_burns_what_the_law_gives_over_a_trimmed_second():
     )
     expected = float(fuel_flow(thrust, speed, state.z, params)) * params.delta_t
     assert float(state.fuel - after.fuel) == pytest.approx(expected, rel=0.01)
+
+
+def _under_the_recommended_maximum(level_m, mass):
+    """Whether ``level_m`` is at or under REC MAX for ``mass`` on the schedule."""
+    speed = float(scheduled_airspeed(level_m, P.target_cas, P.target_mach))
+    mach = speed / float(compute_speed_of_sound_from_altitude(level_m))
+    rho = float(compute_air_density_from_altitude(level_m))
+    lift_at_one_g = mass * P.gravity / (0.5 * rho * speed**2 * P.wings_surface)
+    return (
+        _residual_climb(mach, level_m / FT, mass) >= 300.0
+        and 1.3 * lift_at_one_g <= float(buffet_line(mach, P))
+        and level_m / FT <= 39_100.0
+    )
+
+
+@pytest.mark.parametrize("scenario", suite(), ids=lambda s: s.name)
+def test_every_scenarios_top_level_is_under_the_recommended_maximum(scenario):
+    _, params = tg.make("plane", **dict(scenario.overrides))
+    top = float(params.target_altitude_range[1])
+    assert _under_the_recommended_maximum(top, float(params.initial_mass))
+
+
+def test_the_streams_ceiling_by_mass_is_under_the_recommended_maximum():
+    for mass, level in zip(P.ceiling_masses, P.ceiling_levels):
+        assert _under_the_recommended_maximum(float(level), float(mass))

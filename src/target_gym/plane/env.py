@@ -448,11 +448,12 @@ class PlaneParams(EnvParams):
     #: 78 t (MTOW [TCDS]).
     sortie_mass_range: Tuple[float, float] = (60_000.0, 78_000.0)
     #: The highest level a sortie's mass allows, m, linear in the mass between
-    #: two scored corners and flat outside them: FL370 at 73.5 t (``plane``'s
-    #: top level) and FL350 at 78 t (``heavy_high``: the highest it keeps 1.3 g
-    #: to buffet). A heavy aircraft still flies high, on thin margins (S1b).
+    #: two scored corners and flat outside them: FL350 at 73.5 t (``plane``'s
+    #: top level) and FL330 at 78 t (``heavy_high``), the recommended maximum
+    #: altitude of each, where the plant keeps 300 ft/min at full thrust [SF21
+    #: p. 5]. A heavy aircraft still flies high, on a thin margin (S1b).
     ceiling_masses: Tuple[float, float] = (73_500.0, 78_000.0)
-    ceiling_levels: Tuple[float, float] = (37_000.0 * 0.3048, 35_000.0 * 0.3048)
+    ceiling_levels: Tuple[float, float] = (35_000.0 * 0.3048, 33_000.0 * 0.3048)
     #: A clearance event's chance of being a level change rather than a speed
     #: change: three of ``plane_energy``'s five clearances move the level; its
     #: stream sets the share ATC's recorded instructions give (plane/scenarios.py).

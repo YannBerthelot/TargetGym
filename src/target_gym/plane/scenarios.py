@@ -15,8 +15,9 @@ from target_gym.scenarios import Scenario
 # recorded zone and a zone over the whole window are rare (ours, 0.05 each,
 # family range 0.01 to 0.1: Figure 24 shows most zones at 0.2 g or below). The
 # mass and level corners (ours, 0.075 each, family range 0.05 to 0.2). The
-# heavy corner stops at FL350: past it 78 t keeps under 1.3 g to the buffet
-# line, the margin the recommended maximum altitude holds (pprune, secondary).
+# heavy corner stops at FL330: past it 78 t keeps under 300 ft/min at full
+# thrust, the service ceiling that sets the recommended maximum altitude
+# [SF21 p. 5 and 6]; the 1.3 g buffet margin would allow FL350.
 # Severe turbulence (ours, 1e-4: between MIL-F-8785C's 1e-5 exceedance of the
 # severe intensity and its 1e-3 of the moderate one).
 
@@ -117,11 +118,11 @@ def suite():
             "heavy_high",
             {
                 "initial_mass": 78_000.0,
-                "target_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
-                "initial_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
+                "target_altitude_range": (32_000.0 * FT, 33_000.0 * FT),
+                "initial_altitude_range": (32_000.0 * FT, 33_000.0 * FT),
             },
-            source="TCDS (MTOW 78 t); recommended maximum altitude, 0.3 g to buffet",
-            description="78 t at FL340 to 350, the highest it keeps 1.3 g to buffet",
+            source="TCDS (MTOW 78 t); SF21 p. 5 (REC MAX, the 300 ft/min service ceiling)",
+            description="78 t at FL320 to 330, the highest it keeps 300 ft/min of climb",
             weight=0.075,
             **_mass_stratum(78_000.0),
         ),
