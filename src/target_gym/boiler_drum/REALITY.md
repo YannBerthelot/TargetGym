@@ -212,6 +212,32 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   (power) Plant (HRSG/BOP) area" [S12, Background]. A patent's statement, with
   no count. A count per unit-year, or a share of forced outages: not found
   (searched NERC GADS cause codes, EPRI, Combined Cycle Journal).
+- **What a boiler's controls hold besides level and pressure (added
+  2026-11-23, read twice by OCR of the scan).** [S3]'s model "predicts process
+  response in terms of measurable outputs (drum pressure, drum water level,
+  and excess oxygen in flue gas) to the major controllable inputs (air/fuel
+  flow rates, feedwater flow rate)". The mixture of fuel and air "must meet
+  standards for safety, efficiency, and protection of the environment. This
+  is accomplished by maintaining a desired percentage of oxygen in the stack
+  in excess of that required for stoichiometric combustion", and a model for
+  control system testing "must contain at the very least these subsystems"
+  [S3, pp. 57 and 58]. The load is not measured: "a measurement of the load is
+  physically nonexistent", and "the changes in the unmeasurable load
+  disturbance, referred to as user steam demand, have a significant effect on
+  the operation of the system" [S3, pp. 60 and 62]. [S3]'s oxygen equation is
+  a first-order lag on the oxygen left by complete combustion, from the air
+  and fuel flows, with its coefficients in Table I.
+- **What excess air costs (added 2026-11-23, read in two copies).** "Inadequate
+  excess air results in unburned combustibles (fuel, soot, smoke, and carbon
+  monoxide) while too much results in heat lost due to the increased flue gas
+  flow". For natural gas, combustion efficiency at 2.0, 3.0, 5.0, 7.0 and
+  10.0 % oxygen (9.5, 15.0, 28.1, 44.9, 81.6 % excess air): 85.4, 85.2, 84.7,
+  84.1, 82.8 % with the flue gas 200 F above the combustion air; 83.1, 82.8,
+  82.1, 81.2, 79.3 % at 300 F; 80.8, 80.4, 79.5, 78.2, 75.6 % at 400 F. "On
+  well-designed natural gas-fired systems, an excess air level of 10% is
+  attainable", and "boiler efficiency can be increased by 1% for each 15%
+  reduction in excess air or 40°F reduction in stack gas temperature" [S25].
+  A low-oxygen limit with its value and kind: not found (not searched).
 - **Bad day, swell at low load.** "most trips occur due to high-level trip
   events", because fixed setpoints at low flow and pressure leave too little
   room for swell [S11]. Swell is larger at low load: "a given change in input
@@ -386,6 +412,11 @@ Sources for this section:
   The same table's hot start row, C&M cost per MW of capacity, median with the
   25th to 75th centile: small subcritical coal $94 (79 to 131), large
   subcritical coal $59 (39 to 68), gas-fired steam $36 (25 to 42).
+- [S25] US Department of Energy, "Improve Your Boiler's Combustion
+  Efficiency", Steam Tip Sheet #4. Two copies read on 2026-11-23:
+  https://docs.nlr.gov/docs/fy02osti/31496.pdf (2002) and
+  https://www.energy.gov/sites/prod/files/2014/05/f16/steam4_boiler_efficiency.pdf
+  (2012); the table and both sentences match.
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

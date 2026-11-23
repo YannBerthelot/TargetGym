@@ -285,6 +285,16 @@ controller sets were looked for, and neither is priced:
   formula could not be fetched (it is sold, and the worked examples found
   were not reachable), so no limit is added.
 
+A third cost was found on 2026-11-23, and it lies outside this plant: fuel
+through excess air. [S3] holds that a boiler model for control testing "must
+contain at the very least" the excess oxygen subsystem beside pressure and
+level, and [S25]'s table puts a point of flue gas oxygen at 0.2 to 0.4 points
+of combustion efficiency on natural gas (85.4 against 85.2 % at 2 and 3 %
+oxygen with a 200 F stack rise, 80.8 against 80.4 % at 400 F). The model has
+no air side: firing is heat, and in the long run the fuel is the steam's
+enthalpy rise whatever the controller does. So this cost cannot be priced
+here without adding that side of the plant (REALITY.md section 5).
+
 Nothing unsourced is added. The boiler's room stays as measured: this family
 is close to solved by a three-element controller on its normal days, and its
 cost lies in rare upsets.
@@ -369,7 +379,18 @@ low trip than [S14] reports.
   pressure sags (3.6 to 13.4 bar on 64 seeds) and the score charges it as steam
   off the plan. Effect: `id_fan_runback` carries five sixths of the room on
   `J` in money (above), for a pressure error that the real unit's turbine
-  removes (review of 2026-11-23).
+  removes. With the plan's valve running back at 40 to 60, 100 to 120 and
+  300 %/min in place of 12 to 25, the reference's cost on that scenario falls
+  from GBP 58 an hour to 23, 13 and 7 (128 seeds; review of 2026-11-23).
+- The turbine valve is the plan's, not the agent's, where REALITY.md's job
+  sentence gives the operator "the boiler and turbine masters" (section 6).
+  The standby pump's 30 to 60 s is ours above [S11]'s "more than 30 seconds".
+  In that range the reference never trips (128 seeds); with 60 to 90, 90 to
+  120 and 120 to 180 s it trips on 1, 23 and 35 seeds of 128, the level
+  already at the trip when the pump delivers. No seed trips at any of those
+  delays once the plan runs back at 40 %/min or faster. Effect: the upsets
+  carry no trip risk as scored, and the move that would remove one, shedding
+  load faster at the price of steam off the plan, is not the agent's.
 - The level has no price between the trips and the oracle reads it true, so
   the cheapest plan spends the drum's water: the ceiling's plan on
   `id_fan_runback` stays 0.5 mm inside a trip level, its back-off (the
