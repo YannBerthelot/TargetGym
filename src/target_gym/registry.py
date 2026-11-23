@@ -1021,6 +1021,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v8: light key lost to the bottoms is priced at 100 kmol of boilup a
         # kmol, Column A's distillate over bottoms price and energy [D8].
         # v9: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Still v9, unreleased (owner, 2026-11-23): the distillate's give-away
+        # priced at its premium over the bottoms [D8], and off-spec distillate
+        # sold a grade down [D9] in place of a second pass.
         version=9,
         scenarios=_scenarios(
             "distillation_scenarios", module="target_gym.pc_gym.distillation.scenarios"

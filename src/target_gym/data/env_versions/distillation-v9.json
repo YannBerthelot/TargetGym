@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c80527b6f15e06f2",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "f60240c1b7af9423",
+  "note": "Re-stamped in place, the version is unreleased (owner, 2026-11-23): the score now prices the distillate's give-away at its premium over the bottoms [D8], and off-spec distillate a grade down [D9] in place of a second pass. The plant, its scenarios and its readings are unchanged.",
+  "stamped": "2026-11-23T16:31:00+00:00"
 }
