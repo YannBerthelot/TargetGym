@@ -199,6 +199,19 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   inventory [S11]. All boiler feed pumps off is a boiler trip; if the level
   falls out of sight on feedwater failure, the operator trips fuel at once
   [S9].
+- **Who holds pressure in a runback (added 2026-11-23 by the task review,
+  read twice).** "If you are in coordinated mode, the boiler should go to
+  manual control and turbine-following mode for the steam turbine" [S10,
+  "Runbacks and Rundowns"]. Of the 95 MW unit's ID fan runback: "notice how
+  the turbine pushes the throttle pressure back to the setpoint", and "Drum
+  level also dropped slightly before it recovered" [S10, Fig. 5 text]. The
+  article gives no pressure figure in psi for these tests.
+- **How common drum level trips are (added 2026-11-23, read twice).** "Drum
+  level trips are the most common cause of trips and disruptions in a power
+  station, especially from the Heat Recovery Steam Generator/Balance of
+  (power) Plant (HRSG/BOP) area" [S12, Background]. A patent's statement, with
+  no count. A count per unit-year, or a share of forced outages: not found
+  (searched NERC GADS cause codes, EPRI, Combined Cycle Journal).
 - **Bad day, swell at low load.** "most trips occur due to high-level trip
   events", because fixed setpoints at low flow and pressure leave too little
   room for swell [S11]. Swell is larger at low load: "a given change in input
@@ -368,6 +381,11 @@ Sources for this section:
   steam units and $3.34/MW for small subcritical coal (2011 $); faster-ramp
   multipliers preliminary (footnote 5).
   https://docs.nlr.gov/docs/fy12osti/55433.pdf (fetched once, 2026-11-09).
+  Read again on 2026-11-23 from the OSTI copy,
+  https://www.osti.gov/servlets/purl/1046269: the load follow medians match.
+  The same table's hot start row, C&M cost per MW of capacity, median with the
+  25th to 75th centile: small subcritical coal $94 (79 to 131), large
+  subcritical coal $59 (39 to 68), gas-fired steam $36 (25 to 42).
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 
