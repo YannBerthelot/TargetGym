@@ -29,6 +29,7 @@ import numpy as np
 import pytest
 from scipy.special import ndtr
 
+from target_gym.energy.wind_turbine.env import rotor_blend
 from target_gym.stream import make_stream
 
 RATING = 4  # observation channel: the rating's power, MW
@@ -54,8 +55,10 @@ def wind():
 
         def body(s, k):
             obs, s1, *_ = env.step_env(k, s, action, p)
-            # The wind's departure from its mean and turbulence: the gust.
-            return s1, (obs, s1.v_wind - s.v_mean - s1.v_turb, s1.v_mean)
+            # The wind's departure from its mean and from the turbulence the
+            # rotor sees through its spatial filter: the gust.
+            seen = rotor_blend(s1.v_lag_fast, s1.v_lag_slow, s1.v_turb, s.v_mean, p)
+            return s1, (obs, s1.v_wind - s.v_mean - seen, s1.v_mean)
 
         return jax.lax.scan(body, state, jax.random.split(key, N))[1]
 

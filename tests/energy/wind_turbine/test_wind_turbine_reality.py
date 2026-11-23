@@ -165,6 +165,73 @@ def test_power_sensitivity_grows_as_the_blades_feather():
     assert size[-1] >= 2.0 * size[0], size
 
 
+# 5b. The published sensitivity, with the wake frozen. S1 linearises with the
+# wake frozen and publishes KP(0) = 0.01882681 s for 0.6 rad/s and damping 0.7
+# (Table 7-2), which is dP/dtheta(0) = 2 I W0 zeta wn / (N KP(0)) = -25.5 MW/rad,
+# doubling at 6.302336 deg (pp. 22-25, Fig. 7-4). On this plant Oye's lag holds
+# the induced velocity through a pitch move, so the dynamics' own right-hand
+# side gives that sensitivity: at rated speed, 12 to 25 m/s, a 0.5 deg move
+# either side of the rated-power pitch with the wake left where it was.
+# Tolerance 25 %: S1's line is a fit through scattered points (Fig. 7-4), and
+# the table here is ROSCO's, not S1's own AeroDyn run.
+def test_the_wake_frozen_sensitivity_lies_on_the_published_line():
+    p = _params()
+    w0 = RATED_ROTOR
+    inertia = float(W.drivetrain_inertia(p))
+    at_fine_pitch = -2.0 * inertia * w0 * 0.7 * 0.6 / (float(p.N_gear) * 0.01882681)
+
+    def power(v, theta, wake_of):
+        w_induced, _ = W.induction(w0, v, wake_of, p)
+        state = jnp.stack([w0, theta, 0.0, 0.0, 0.0, w_induced]).astype(jnp.float32)
+        return float(W.compute_velocity(state, (0.0, 0.0), v, p)[0][0]) * inertia * w0
+
+    for v in np.arange(12.0, 25.5, 1.0):
+        grid = np.arange(0.0, 30.0, 0.01)
+        _, steady = W.aerodynamic_torque(jnp.asarray(w0), v, jnp.asarray(grid), p)
+        theta = float(grid[int(np.argmax(np.asarray(steady) < 5.296610e6))])
+        seen = (power(v, theta + 0.5, theta) - power(v, theta - 0.5, theta)) / (
+            math.radians(1.0)
+        )
+        published = at_fine_pitch * (1.0 + theta / 6.302336)
+        assert seen == pytest.approx(published, rel=0.25), (v, theta)
+
+
+# The design rates (PHYSICS.md sec. 3): the tower's and the pitch system's prices
+# are set so that 20 years at these rates use each up exactly, and the rates are
+# what S1's controller with its published gains does on the normal scenario:
+# the mean rainflow damage and the mean pitch travel per step over 2400 steps of
+# seeds 100 to 107, the plant stepped without sensor noise. The travel is stored
+# to four digits, 1e-3. The damage is a fourth power, and S1's torque law
+# switches regions on a comparison: on seed 101 that switch falls the other way
+# on an x86 server than on the ARM machine the rate was measured on, one swing of
+# about 40 MN m is counted or not, and the eight-seed mean moves 7 % (1041 against
+# 965). Tolerance 20 %: three times that, and under half of the 43 % by which the
+# stored rate was stale after the inflow lag went in.
+@pytest.mark.medium
+def test_the_design_rates_are_what_s1s_controller_does_on_the_normal_scenario():
+    p = _params()
+    cp = _published(p)
+    from target_gym.energy.wind_turbine.env_jax import WindTurbine
+
+    env = WindTurbine()
+
+    def one(seed):
+        key = jax.random.PRNGKey(seed)
+        s0 = env.reset_env(key, p)[1]
+
+        def body(carry, _):
+            s, c = carry
+            a, c = nrel_baseline_step(cp, c, W.get_obs(s, p))
+            s, _ = W.compute_next_state(a, s, p, key)
+            return (s, c), (s.damage, s.pitch_travel)
+
+        return jax.lax.scan(body, (s0, NRELBaselineState()), None, length=2400)[1]
+
+    damage, travel = jax.jit(jax.vmap(one))(jnp.arange(100, 108))
+    assert float(damage.mean()) == pytest.approx(p.tower_damage_design, rel=0.20)
+    assert float(travel.mean()) == pytest.approx(p.pitch_travel_design, rel=1e-3)
+
+
 # 6. Actuator limits are hard saturations. S1 Table 7-2: pitch rate 8 deg/s,
 # torque 47,402.91 N m, torque rate 15,000 N m/s; pitch 0 to 90 deg (S1 p. 26).
 # Full-range step commands. No excess at all on the rates and the torque;
@@ -269,7 +336,8 @@ def test_a_tower_velocity_loop_takes_power_out_of_the_tower_band():
     assert powers[2] <= 0.5 * powers[0] and in_band < 0.5, (powers, in_band)
 
 
-def _wind(p, seconds, key, mean, hold=True):
+def _wind(p, seconds, key, mean, hold=True, hub=False):
+    """The wind the rotor sees, or with ``hub`` the hub's own point wind."""
     s = _reset(p).replace(v_mean=jnp.asarray(mean), v_wind=jnp.asarray(mean))
 
     def body(s, _):
@@ -277,21 +345,23 @@ def _wind(p, seconds, key, mean, hold=True):
             [2.0 * s.pitch / p.pitch_max - 1.0, 2.0 * s.torque / p.torque_max - 1.0]
         )
         s, _ = W.compute_next_state(a, s, p, key)
-        return s, s.v_wind
+        return s, jnp.where(hub, s.v_mean + s.v_turb, s.v_wind)
 
     return jax.lax.scan(body, s, None, length=int(seconds / DT))[1]
 
 
-# 9. Turbulence grows with wind. S13: sigma1 = Iref (0.75 Vhub + 5.6). Twenty
-# 10 min records at means 13.5 and 20 m/s; the ratio of the standard
-# deviations, expected 20.6 / 15.725 = 1.31. Tolerance 10 %.
+# 9. Turbulence grows with wind. S13: sigma1 = Iref (0.75 Vhub + 5.6), the
+# hub's point turbulence, so the records are the hub's wind (the rotor sees it
+# through its spatial filter). Twenty 10 min records at means 13.5 and 20 m/s;
+# the ratio of the standard deviations, expected 20.6 / 15.725 = 1.31.
+# Tolerance 10 %.
 @pytest.mark.medium
 def test_turbulence_grows_with_the_mean_wind_as_iec_scales_it():
     stds = {}
     for mean in (13.5, 20.0):
         p = _params(v_mean_range=(mean, mean))
         records = [
-            np.asarray(_wind(p, 600.0, jax.random.PRNGKey(seed), mean))
+            np.asarray(_wind(p, 600.0, jax.random.PRNGKey(seed), mean, hub=True))
             for seed in range(20)
         ]
         stds[mean] = np.sqrt(np.mean([r.var() for r in records]))
