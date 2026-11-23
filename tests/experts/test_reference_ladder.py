@@ -303,6 +303,51 @@ def test_a_zones_sigma_is_the_spread_where_its_loop_holds(ladder):
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
 
 
+def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
+    """Charter B5: a scenario starts in established operation. cstr's reset stands
+    on the steady state of the day's feed temperature, which no reading shows, so
+    its row starts bumpless: on a still feed with the noise off the reactor stays
+    on its setpoint, within a fifth of the score's 0.1 K. The same loop without the
+    start hold moves it, because its balance assumes the middle feed temperature.
+    The claim is about the start, so the gains are any stable ones."""
+    import jax
+    import numpy as np
+
+    from target_gym.experts.ladder import Pi, Rung, ladder_controller
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY["cstr"]
+    env = spec.make_env()
+    row = ladder.ROWS["cstr"]()
+    assert row.bumpless
+    p = spec.make_test_params(sensor_noise_scale=0.0, feed_T_period=0.0)
+    rung = Rung("pi", (Pi(0, -0.1, 15.0),), np.eye(1))
+    plant = jax.jit(env.step_env)
+
+    def worst(start):
+        ctrl = ladder_controller(
+            rung,
+            lambda o, xp: xp.stack([o[0]]),
+            lambda o, xp: xp.stack([o[3]]),
+            row.balance,
+            float(p.delta_t),
+            start,
+        )
+        law = jax.jit(lambda m, o: ctrl.step(ctrl.params, m, o))
+        off = 0.0
+        for seed in (0, 1, 2):  # three days, each with its own feed temperature
+            obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+            memory = ctrl.init_state
+            for k in range(240):
+                action, memory = law(memory, obs)
+                obs, s, *_ = plant(jax.random.PRNGKey(k), s, action, p)
+                off = max(off, abs(float(s.T) - float(p.T_setpoint)))
+        return off
+
+    assert worst(row.rest) < 0.02
+    assert worst(None) > 0.1
+
+
 def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):
     # A plant's bump tests run in a quiet period: the slow wander of the monomer
     # feed's temperature (unstable_cstr-v6) is off while the row steps the
