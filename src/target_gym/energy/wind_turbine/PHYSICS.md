@@ -289,9 +289,16 @@ ASTM count written from the standard.
   (D2). Effect on the score: the tower's load is under the published one, about 30 to
   45 MN m as a 20-year, 2e6-cycle, m = 4 figure against 70 to 125 MN m [S25, class A],
   and it is slow thrust swings, as on the M5000, where suppressing the tower's first
-  mode took 2.1 % off the tower-bottom load [S5]. The tower's price is measured on the
-  reference, so the level cancels for a controller like the reference and not for one
-  that shakes the tower (section 3).
+  mode took 2.1 % off the tower-bottom load [S5]. The tower's price follows the
+  reference's own damage and so does not depend on the load's level (owner,
+  2026-11-23, who was shown the other choice, a price on the published 70 to 125 MN m,
+  under which the tower would be about 1 % of the reference's cost): 20 years at the
+  design rate, 1041 (MN m)^4 a step, cost the tower exactly, and that rate is what S1's
+  controller with its published gains does on seeds 100 to 107 of the normal scenario
+  (section 3; `test_the_design_rates_are_what_s1s_controller_does_on_the_normal_scenario`
+  pins the recipe). So the tower is about nine tenths of the reference's cost, and a
+  controller that shakes the tower pays for it steeply: a unit of damage costs about 200
+  times what it did at the rate measured on the point wind.
 - D5. The rainflow count keeps 16 open turning points. A 17th closes the innermost
   pair as a cycle: after a ring-down at the tower's 5 to 8 % damping that pair's range
   is under a tenth of the outer one, a ten-thousandth of its damage. A trip's restart
