@@ -277,58 +277,71 @@ def gains(out):
         "T on feed", lambda o, xp: o[0], float(p.T_setpoint + p.T_band), False, 1,
         "T", 0.1, window,
     )  # fmt: skip
+    # The jacket as the cstr row tests it: its dead time and five of its lags.
+    jacket = RL.Inner(
+        0, "T_j on water", lambda o, xp: o[1], None, "T_j", 0.1,
+        int(np.ceil((2.0 + 5 * 2.2) / float(p.delta_t))), 0.5, window,
+    )  # fmt: skip
     row = RL.Row(
-        240, hold, (T,), test={"valve_rest": 0.8}, limits=(top,),
+        240, hold, (T,), test={"valve_rest": 0.8}, limits=(top,), cascades=(jacket,),
         points=({"feed_T_range": (lo, lo)}, {"feed_T_range": (hi, hi)}),
-        why={"feedforward": "prototype", "cascade": "prototype", "decoupler": "prototype"},
+        why={"feedforward": "in Loops", "decoupler": "prototype"},
     )  # fmt: skip
     RL.build("cstr", row)
-    fits = {k: v for k, v in models.items() if k.endswith("point 0")}
+    inst_T, inst_j = (RL.Instrument.of(env, p, tag) for tag in ("T", "T_j"))
+
+    def least(prefix, inst, db):
+        """The design asking the smallest gain over the points (``most_sensitive``)."""
+        fits = [m for k, m in models.items() if k.startswith(prefix + " at point")]
+        return min((RL.design(m, inst, db) for m in fits), key=lambda d: abs(d["Kc"]))
+
     g = {
-        "water": min(
-            (RL.design(m, RL.Instrument.of(env, p, "T"), RL.RAW_BAND) | {"k": m["k"]}
-             for k, m in models.items() if k.startswith("T on water")),
-            key=lambda d: abs(d["Kc"]),
-        ),
-        "feed": min(
-            (RL.design(m, RL.Instrument(float(p.delta_t)), None) | {"k": m["k"]}
-             for k, m in models.items() if k.startswith("T on feed")),
-            key=lambda d: abs(d["Kc"]),
-        ),
-        "fits": fits,
-    }  # fmt: skip
-    # The valve on the feed, temperature loop closed: a feed step of 0.1 raw down
-    # after an hour, read against the same seeds' unstepped run.
-    q = ProdParams(sensor_noise_scale=1.0, valve_rest=0.8)
-    seeds, n0, du = tuple(range(100, 110)), 240, -0.1
-
-    def valve(step):
-        loop = Loops(q, g, "two", float(q.T_band), extra=None, feed_step=(n0, step))
-        return run(env, q, loop, seeds)[1][:, :, 0]
-
-    dy = np.median(valve(du) - valve(0.0), axis=0)[n0:]
-    m = fit("fopdt", float(q.delta_t), dy, np.full(len(dy), du))
-    k, tau, theta = (
-        float(m["k"]),
-        float(m["tau"]),
-        float(m["theta"]) + float(q.delta_t) / 2,
+        "water": least("T on water", inst_T, RL.RAW_BAND),
+        "feed": least("T on feed", RL.Instrument(float(p.delta_t)), None),
+        "inner": least("T_j on water", inst_j, RL.RAW_BAND),
+    }
+    g["outer"] = least(
+        "T on water over T_j on water", inst_T, RL.RAW_BAND / abs(g["inner"]["Kc"])
     )
-    g["valve"] = {"k": k, "tau": tau, "theta": theta}
-    for name, tau_c in (("vpc", theta), ("vpc, 30 theta", 30.0 * theta)):
-        kc, ti = simc(k, tau, theta, tau_c)
-        g[name] = {"Kc": float(kc), "Ti": float(ti), "tau_c": tau_c}
+    # The valve on the feed with each temperature rung closed: a feed step of 0.1
+    # raw down after an hour, read against the same seeds' unstepped run.
+    q = ProdParams(sensor_noise_scale=1.0, valve_rest=0.8)
+    n0, du = 240, -0.1
+    for tc in TCS:
+
+        def valve(step):
+            loop = Loops(q, g, "two", float(q.T_band), None, tc, feed_step=(n0, step))
+            return run(env, q, loop, SEEDS)[1][:, :, 0]
+
+        dy = np.median(valve(du) - valve(0.0), axis=0)[n0:]
+        m = fit("fopdt", float(q.delta_t), dy, np.full(len(dy), du))
+        theta = float(m["theta"]) + float(q.delta_t) / 2
+        kc, ti = simc(float(m["k"]), float(m["tau"]), theta, theta)
+        g["vpc " + tc] = {
+            "Kc": float(kc), "Ti": float(ti), "k": float(m["k"]),
+            "tau": float(m["tau"]), "theta": theta,
+        }  # fmt: skip
     out.mkdir(parents=True, exist_ok=True)
     (out / "production_gains.json").write_text(json.dumps(g, indent=1, default=float))
-    print(
-        json.dumps({k: v for k, v in g.items() if k != "fits"}, default=float),
-        flush=True,
-    )
+    print(json.dumps(g, default=float), flush=True)
+
+
+#: The temperature loop's rungs, up the ladder: the PI, the PI around the water the
+#: balances ask for at the measured feed, and the cascade on the jacket outlet
+#: around the same, as ``reference_ladder.build`` composes them. The last is the
+#: cascade without the balances under it, which the script would build for a row
+#: that declares none.
+TCS = ("pi", "feedforward", "cascade", "cascade alone")
+
+
+def _alpha(design, dt):
+    return -np.expm1(-dt / design["Tf"]) if design.get("Tf") else 1.0
 
 
 class Loops:
     """One of [P1]'s structures, vectorised over episodes on the host. The
-    temperature controller (PI on the water, started from the valve as the reset
-    left it) holds ``b`` under the band's top. ``kind``:
+    temperature controller holds ``b`` under the band's top by the water, started
+    from the valve as the reset left it; ``tc`` is its rung (``TCS``). ``kind``:
 
     - ``"src"``: split range. Past the water's top its output cuts the feed,
       scaled by the two loops' SIMC gains' ratio; one integral for both valves.
@@ -342,36 +355,76 @@ class Loops:
 
     oracle = False
 
-    def __init__(self, p, g, kind, b, extra, vpc="vpc", feed_step=None):
-        self.kind, self.b, self.extra, self.step = kind, b, extra, feed_step
-        self.dt, self.band = float(p.delta_t), float(p.T_band)
+    def __init__(self, p, g, kind, b, extra, tc="pi", feed_step=None):
+        self.p, self.kind, self.b, self.extra, self.tc = p, kind, b, extra, tc
+        self.step, self.dt, self.band = feed_step, float(p.delta_t), float(p.T_band)
         self.kw, self.tiw = abs(g["water"]["Kc"]), g["water"]["Ti"]
+        self.cascade = tc.startswith("cascade")
+        self.a = _alpha(g["outer"] if self.cascade else g["water"], self.dt)
+        if self.cascade:
+            self.ko, self.tio = abs(g["outer"]["Kc"]), g["outer"]["Ti"]
+            self.ki, self.tii = abs(g["inner"]["Kc"]), g["inner"]["Ti"]
+            self.aj = _alpha(g["inner"], self.dt)
         # The feed answers like an integrator, so the two valves are matched on
         # their SIMC gains, not on steady process gains.
         self.ratio = abs(g["feed"]["Kc"] / g["water"]["Kc"])
-        two = g["feed"] if kind == "two" else g.get(vpc, g["feed"])
+        two = g["feed"] if kind == "two" else g.get("vpc " + tc, g["feed"])
         self.k2, self.ti2 = abs(two["Kc"]), two["Ti"]
-        self.name = f"{kind} {vpc if kind == 'vpc' else ''} b={b} extra={extra}"
+        self.name = f"{kind} {tc} b={b} extra={extra}"
+
+    def balance(self, o, sp):
+        """The raw water the balances ask for at the measured feed, with the
+        reactor at ``sp``, the feed at the middle of its range and full activity:
+        the ladder's steady-state feedforward."""
+        p = self.p
+        q = float(p.q_min) + o[:, 3] / 100.0 * float(p.q_max - p.q_min)
+        k = float(p.k0) * np.exp(-float(p.EA_over_R) / sp)
+        C_a = float(p.Caf) / (1.0 + k * float(p.V) / q)
+        T_f = 0.5 * float(p.feed_T_range[0] + p.feed_T_range[1])
+        made = float(-p.deltaHr) * k * C_a * float(p.V)
+        duty = q * float(p.rho * p.C) * (T_f - sp) + made
+        T_j = sp - duty / float(p.UA)
+        F_w = duty / (CP_WATER * np.maximum(T_j - float(p.Tw_in), 1e-3))
+        return 2.0 * (F_w - float(p.Fw_min)) / float(p.Fw_max - p.Fw_min) - 1.0
 
     def reset(self, key, obs, task):
         o = np.asarray(obs, float)
-        w, f = o[:, 2] / 50 - 1, o[:, 3] / 50 - 1
+        w, f, zero = o[:, 2] / 50 - 1, o[:, 3] / 50 - 1, np.zeros(len(o))
         if self.kind == "src":  # the output that holds both valves as they stand
             w = np.where(w >= 1 - 1e-6, 1 + (1 - f) / self.ratio, w)
-        return {"i": np.zeros(len(o)), "j": np.zeros(len(o)), "w": w, "f": f}
+        sp = o[:, 4] + self.band - self.b
+        return {
+            "i": zero, "j": zero, "ii": zero, "w": w, "f": f, "y": o[:, 0],
+            "yj": o[:, 1], "tj0": o[:, 1], "ff0": self.balance(o, sp),
+        }  # fmt: skip
 
     def act(self, m, obs, t):
         o, dt = np.asarray(obs, float), self.dt
         sp = o[:, 4] + self.band - self.b
-        e = o[:, 0] - sp  # a hot reactor opens the water
+        y = m["y"] + self.a * (o[:, 0] - m["y"])
+        yj, ii = m["yj"], m["ii"]
+        e = y - sp  # a hot reactor opens the water
         i = m["i"] + e * dt
-        v = m["w"] + self.kw * (e + i / self.tiw)
+        base = m["w"]
+        if self.tc in (
+            "feedforward",
+            "cascade",
+        ):  # around the balances, re-based where the reset stood
+            base = base + self.balance(o, sp) - m["ff0"]
+        if self.cascade:  # the outer loop lowers the jacket's set point
+            yj = yj + self.aj * (o[:, 1] - yj)
+            e_j = yj - (m["tj0"] - self.ko * (e + i / self.tio))
+            ii = m["ii"] + e_j * dt
+            v = base + self.ki * (e_j + ii / self.tii)
+        else:
+            v = base + self.kw * (e + i / self.tiw)
         water, j = np.clip(v, -1.0, 1.0), m["j"]
         if self.kind == "src":
             feed = np.clip(1.0 - self.ratio * np.maximum(v - 1.0, 0.0), -1.0, 1.0)
             i = np.where((v < -1.0) | (feed <= -1.0), m["i"], i)
         else:
-            i = np.where(v == water, i, m["i"])
+            free = v == water
+            i, ii = np.where(free, i, m["i"]), np.where(free, ii, m["ii"])
             if self.extra is None:
                 feed = m["f"] + (self.step[1] if t >= self.step[0] else 0.0)
             else:
@@ -383,7 +436,8 @@ class Loops:
                 asked = m["f"] + self.k2 * (e2 + j2 / self.ti2)
                 feed = np.clip(asked, -1.0, 1.0)
                 j = np.where(asked == feed, j2, j)
-        return np.stack([water, feed], axis=1), {**m, "i": i, "j": j}
+        memory = {**m, "i": i, "j": j, "ii": ii, "y": y, "yj": yj}
+        return np.stack([water, feed], axis=1), memory
 
 
 SCENARIOS = {  # the shipped suite less the setpoint move, with its weights
@@ -396,7 +450,7 @@ SEEDS = tuple(range(100, 110))
 #: Solves per start, each from the last one's end plan. Two settle every scenario
 #: but the catalyst decay, whose starts ended up to 46 % apart; six brought them
 #: within 12 % (1.5 % at the median) and its ceiling 2.4 % lower.
-SOLVES = 2
+SOLVES = {"catalyst_loss": 6}
 RECORD = {
     "made": lambda s, p, t: made(s, p),
     "T": lambda s, p, t: s.T,
@@ -445,11 +499,12 @@ def show(name, label, r):
 
 
 def candidates(g):
-    """``(label, kind, extra, vpc)`` for every structure and tuning."""
-    out = [("split range", "src", None, "vpc")]
-    out += [(f"two controllers, +{x} K", "two", x, "vpc") for x in GRID["two"]]
-    for vpc in ("vpc", "vpc, 30 theta"):
-        out += [(f"{vpc}, valve at {x}", "vpc", x, vpc) for x in GRID["vpc"]]
+    """``(label, kind, extra, tc)``: the two feed-steered structures on the PI,
+    and valve position control on every rung of the temperature loop."""
+    out = [("split range", "src", None, "pi")]
+    out += [(f"two controllers, +{x} K", "two", x, "pi") for x in GRID["two"]]
+    for tc in TCS:
+        out += [(f"{tc}, valve at {x}", "vpc", x, tc) for x in GRID["vpc"]]
     return out
 
 
@@ -458,12 +513,12 @@ def place(out):
     cheapest set point at which the normal day's seeds never leave the band."""
     g = json.loads((out / "production_gains.json").read_text())
     env, p, placed = ProductionCSTR(), ProdParams(sensor_noise_scale=1.0), {}
-    for label, kind, extra, vpc in candidates(g):
+    for label, kind, extra, tc in candidates(g):
         rows = {}
         for b in GRID_B:
             if kind == "two" and extra >= b:  # the second set point inside the band
                 continue
-            r, _, _ = run(env, p, Loops(p, g, kind, b, extra, vpc), SEEDS)
+            r, _, _ = run(env, p, Loops(p, g, kind, b, extra, tc), SEEDS)
             rows[b] = (
                 float(np.mean(r["cost"])),
                 float(np.max(r["off_spec"])),
@@ -473,7 +528,7 @@ def place(out):
             b: c for b, (c, off, trips) in rows.items() if off == 0.0 and not trips
         }
         b = min(stays, key=stays.get) if stays else None
-        placed[label] = {"kind": kind, "extra": extra, "vpc": vpc, "b": b, "rows": rows}
+        placed[label] = {"kind": kind, "extra": extra, "tc": tc, "b": b, "rows": rows}
         print(f"{label:34s} b {b} cost {stays.get(b)} | " + " ".join(
             f"{k}:{c:.4f}{'' if off == 0 and not tr else '*'}" for k, (c, off, tr) in rows.items()
         ), flush=True)  # fmt: skip
@@ -481,7 +536,11 @@ def place(out):
 
 
 def measure(out, seeds=SEEDS):
-    """Every placed candidate and the ceiling on every scenario, per seed."""
+    """The cheapest placed setting of each structure and rung, and the ceiling, on
+    every scenario, per seed. A third argument names a stored measurement whose
+    ceiling is kept instead of solved again (the plant, scenarios and seeds being
+    the same); a seed on which a closed loop here costs less takes that cost."""
+    stored = json.loads(pathlib.Path(sys.argv[3]).read_text()) if sys.argv[3:] else None
     g = json.loads((out / "production_gains.json").read_text())
     placed = json.loads((out / "production_placed.json").read_text())
     env, base, result, t0 = (
@@ -494,7 +553,7 @@ def measure(out, seeds=SEEDS):
     # One candidate per structure: its cheapest placed setting on the normal day.
     best = {}
     for label, v in kept.items():
-        key = v["kind"] + (v["vpc"] if v["kind"] == "vpc" else "")
+        key = v["kind"] + v["tc"]
         cost = v["rows"][str(v["b"])][0]
         if key not in best or cost < best[key][1]:
             best[key] = (label, cost)
@@ -503,10 +562,16 @@ def measure(out, seeds=SEEDS):
         for label, _ in best.values():
             v = kept[label]
             rows[label], moves[label], _ = run(
-                env, p, Loops(p, g, v["kind"], v["b"], v["extra"], v["vpc"]), seeds
+                env, p, Loops(p, g, v["kind"], v["b"], v["extra"], v["tc"]), seeds
             )
+        if stored:
+            cheapest = np.min([r["cost"] for r in rows.values()], axis=0)
+            ceiling = dict(stored[name]["ceiling"])
+            ceiling["from_closed_loop"] = int(np.sum(cheapest < ceiling["cost"]))
+            ceiling["cost"] = np.minimum(ceiling["cost"], cheapest).tolist()
+            rows["ceiling"] = ceiling
         plans, certs = [], []
-        for i, seed in enumerate(seeds):
+        for i, seed in enumerate(() if stored else seeds):
             closed = min(moves, key=lambda k: rows[k]["cost"][i])
             first = moves[closed][i]
             options = [(rows[closed]["cost"][i], first, "closed loop " + closed, 0)]
@@ -515,7 +580,7 @@ def measure(out, seeds=SEEDS):
                 ("moves", first),
             ):
                 plan = init
-                for again in range(SOLVES):
+                for again in range(SOLVES.get(name, 2)):
                     plan, cert = F.solve(
                         env, p, seed, ceiling_margins, CEILING_TERMS, plan, maxiter=3000
                     )
@@ -543,8 +608,9 @@ def measure(out, seeds=SEEDS):
                 f"  {name} seed {seed}: {cost:.5f} from {start}, gap {gap}, {time.time() - t0:.0f} s",
                 flush=True,
             )
-        rows["ceiling"], _, _ = run(env, p, F.PlanPolicy(np.stack(plans)), seeds)
-        rows["ceiling"]["certs"] = certs
+        if not stored:
+            rows["ceiling"], _, _ = run(env, p, F.PlanPolicy(np.stack(plans)), seeds)
+            rows["ceiling"]["certs"] = certs
         result[name] = {"weight": weight, **rows}
         for label, r in rows.items():
             show(name, label, r)
