@@ -384,6 +384,25 @@ $77 of dilution a day on average over these seeds. That is the reset's gift to e
 a day's debt, and it makes the priced figure noisy day by day: 28 days won, 4
 lost, the worst by $6.1.
 
+**The suite on the fixed plant, seeds 100 to 109, dollars a day:**
+
+| Scenario | Reference | Planner | Room | Reference before | Planner before |
+|---|---:|---:|---:|---:|---:|
+| edf_daily | 19,012 | 4,011 | 4.74 | 19,008 | 4,007 |
+| edf_short_hold | 21,837 | 3,939 | 5.54 | 21,838 | 3,931 |
+| krsko_slow | 2,682 | 1,488 | 1.80 | 2,681 | 1,491 |
+| krsko_shallow | 1,679 | 586 | 2.87 | 1,679 | 587 |
+| fast_return | 25,115 | 4,716 | 5.33 | 25,086 | 4,716 |
+| baseload | 40 | 32 | 1.24 | 39 | 34 |
+
+Weighted: $1,555 against $347, a room of 4.48 (it was 4.46). The planner is no
+worse than the reference on any of the 60 days, nothing trips, and no solve
+failed or stopped at its cap. The planner leaves $6.6 a day more owed at the
+day's end than the reference, weighted; charged for it the room is 4.39. A year
+is worth what it was: $568k against $127k, and 5,047 MWh of lost output against
+84. The fixes move the baseload days and leave the load-follow days where they
+were, as the rounding only reached trickles.
+
 **Single against double precision.** The package review's precision test (draft
 PR 248, `tests/test_plant_numerics.py`) holds each raw action at 0, 0.005,
 0.02, -0.02 and 0.1 for a day with the noise off and asks that float32 and
