@@ -397,6 +397,9 @@ WORKER_GB = {
     "plane": 8.5,
     "plane_sine": 8.5,
     "plane_energy": 8.5,
+    # The shared-solver column: 14.5 to 16.1 GB per episode, measured on
+    # Linux (2026-11-17).
+    "distillation": 16.5,
 }
 DEFAULT_WORKER_GB = 2.0
 
