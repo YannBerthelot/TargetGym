@@ -19,8 +19,10 @@ Contract, from the sources and the audit's tolerances, not from the code:
   2 C/min [S4] and Bayer's over 2 C/min [S3], with the audit's factor 4 on the
   top and 25 % below the slow end;
 - T7: it rises 25 K within 3 to 48 min [S2; S3];
-- T8: open loop, a cooling step's 95 % time is 1.6 to 6.4 residence times
-  [S1, Fig. 2];
+- T8: open loop, a cooling step settles in 1.6 to 6.4 residence times
+  [S1, Fig. 2]. S1's figure is a settling time after an overshoot (a peak near
+  60 min, settled after about 110), so the plant's is read the same way: the
+  time after which the response stays within 5 % of its final value;
 - the jacket outlet's reading is about 2 min late [S6]: with the noise off it
   is the jacket's temperature 2 min earlier, not its temperature now;
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
@@ -186,25 +188,26 @@ def test_loss_of_circulation_rises_25_kelvin_in_minutes():
     assert hit.size and 3.0 <= (hit[0] + 1) * p.delta_t <= 48.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="finding, kept (owner, 2026-11-12): open loop settles in 0.99 "
-    "residence times. The range is the audit's weak reading of PARSEX's closed "
-    "loop; the plant's thermal time follows from S1's V, q and UA (PHYSICS.md, "
-    "T8).",
-)
 def test_an_open_loop_cooling_step_settles_in_a_few_residence_times():
+    """T8. The plant overshoots open loop, as PARSEX's closed loop did [S1,
+    Fig. 2], so the first time the response reaches 95 % of its final value is a
+    rise time. Settled means it stays within 5 % of its final value from then on
+    (owner, 2026-11-23)."""
     # A step test on a still feed: the day's drift (cstr-v6) would move the end
-    # point the 95 % is read against.
+    # point the 5 % is read against.
     lo, hi = CSTRParams().feed_T_range
     p = quiet(feed_T_range=(0.5 * (lo + hi),) * 2)
     s = rest(p)
     raw = float(ENV.initial_action(s, p)[0])
     traj = hold(p, s, raw - 0.1, 2000)
     d = traj[:, 1] - float(s.T)
-    t95 = (np.argmax(np.abs(d) >= 0.95 * abs(d[-1])) + 1) * p.delta_t
+    final = d[-1]
+    # The run is long enough to read the end point: its last tenth is at rest.
+    assert np.abs(d[-200:] - final).max() < 0.01 * abs(final)
+    outside = np.nonzero(np.abs(d - final) > 0.05 * abs(final))[0]
+    settled = (outside[-1] + 2) * p.delta_t
     residence = p.V / p.q
-    assert 1.6 <= t95 / residence <= 6.4, t95 / residence
+    assert 1.6 <= settled / residence <= 6.4, settled / residence
 
 
 def test_the_jacket_outlet_is_read_two_minutes_late():

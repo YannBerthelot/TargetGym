@@ -140,18 +140,20 @@ restated on the family (Amendment 3):
 | T5. Analyser | no composition reading (none found) | pass |
 | T6. Loss of circulation | 0.75 to 8 K/min over 3 min, pooled: Morton's 1 to 2 C/min [S4], Bayer's over 2 C/min [S3], the audit's factor 4 on top and 25 % below | pass (0.81) |
 | T7. 25 K rise | 3 to 48 min [S2; S3] | pass |
-| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 0.99**, kept as a finding (strict xfail) |
+| T8. Open-loop settling | within 5 % of its final value from 1.6 to 6.4 residence times on [S1, Fig. 2] | pass (3.72) |
 | Runaway trips the interlock | [S3] | pass |
 | Starts at rest on its setpoint | rule 17 | pass |
 
-**Finding, T8.** Open loop, a cooling step settles in 0.99 residence times (0.97 on v5),
-faster than the 1.6 the audit derived from PARSEX's closed loop (3.2, halved).
-The audit called it weak, kept for scale; the reactor's own temperature time
-constant is not documented (REALITY.md, "Time scales"). Not moved: the
-reactor's thermal time follows from S1's V and q and the UA derived from S1's
-design duty, about 11 min, and only the jacket's mass (ours) could slow it,
-with no source for a larger one. The owner kept the plant and the range on
-2026-11-12; the test is a strict xfail, so a plant change that passes it shows.
+**T8, how it is read (owner, 2026-11-23).** Open loop the design point is an
+underdamped oscillator: poles at -0.0197 +- 0.0465i per min (a period of
+135 min, damping 0.39) and the jacket's at -0.53 per min. A cooling step
+overshoots its final value by 25 %, peaks at 58.5 min and stays within 5 % of
+its final value from 126.5 min, 3.72 residence times. It first reaches 95 % of
+that value at 0.99 residence times, which is a rise time: the test read that
+figure until 2026-11-23 and stood as a strict xfail. S1's own figure is a
+settling time after an overshoot (a peak near 60 min, settled after about 110
+[S1, Fig. 2]), so the plant is now read the same way. The plant and the audit's
+range are as the owner kept them on 2026-11-12.
 
 ---
 
