@@ -93,6 +93,9 @@ class HVACParams(EnvParams):
     T_supply_min: float = 15.0  # C
 
     # ---- The heat source: a brine-to-water heat pump [13, 14] ----
+    #: Its size per m^2 of floor, W/m^2: Muenster's reversible heat pumps give
+    #: 530 kW of heat for 14 000 m^2 [13]. The slab takes no more than this.
+    source_capacity: float = 38.0
     #: COP = eta T_supply / (T_supply - T_brine), in kelvin. Ours, family range
     #: 0.50 to 0.57: datasheet COPs of 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at
     #: B0/W55 (EN 14511; Dimplex SI 90TU 5.00 / 3.80 / 3.10 at W35 / W45 / W55;
@@ -197,6 +200,7 @@ PARAM_UNITS = {
     "h_floor": "W/(m^2 K)",
     "h_ceiling": "W/(m^2 K)",
     "c_water": "J/(kg K)",
+    "source_capacity": "W/m^2",
     "T_supply_max": "degC",
     "T_supply_min": "degC",
     "frost_on": "degC",
@@ -454,19 +458,34 @@ def solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, params: HVACPar
     return T_air, T_surface
 
 
+def source_size(params: HVACParams):
+    """The heat source's capacity for the zone, W [13]."""
+    return params.source_capacity * params.A_floor
+
+
 def slab_heat(T_supply, T_core, params: HVACParams):
     """Heat from the water into the core, W. Heating only: water below the
     core gives none, since the plant has no chiller, and the valve's lowest
-    setting is off (PHYSICS.md)."""
+    setting is off (PHYSICS.md). No more than the source's size [13]."""
     H_water = slab_conductances(params)["H_water"]
     on = T_supply > params.T_supply_min
-    return jnp.where(on, H_water * jnp.maximum(T_supply - T_core, 0.0), 0.0)
+    asked = H_water * jnp.maximum(T_supply - T_core, 0.0)
+    return jnp.where(on, jnp.minimum(asked, source_size(params)), 0.0)
+
+
+def supply_made(T_supply, T_core, params: HVACParams):
+    """The supply water the plant gives for the valve's ``T_supply``: the same,
+    until the slab would take more than the source's size; then the water that
+    carries that size into the core, cooler than asked."""
+    H_water = slab_conductances(params)["H_water"]
+    return jnp.minimum(T_supply, T_core + source_size(params) / H_water)
 
 
 def return_temperature(T_supply, T_core, params: HVACParams):
     """Return water, from the heat the flow gave up [12, p. 12]."""
     s = slab_conductances(params)
-    return T_supply - slab_heat(T_supply, T_core, params) / s["m_c"]
+    made = supply_made(T_supply, T_core, params)
+    return made - slab_heat(T_supply, T_core, params) / s["m_c"]
 
 
 def floor_surface_temperature(T_core, T_air, params: HVACParams):
@@ -475,24 +494,57 @@ def floor_surface_temperature(T_core, T_air, params: HVACParams):
     return T_air + (T_core - T_air) * s["floor_share"]
 
 
+def node_rates(T_mass, T_core, T_supply, T_out, phi_int, phi_sol, params: HVACParams):
+    """d/dt of the mass and the slab core, K/s, for the weather and gains given."""
+    p = params
+    c = zone_conductances(p)
+    s = slab_conductances(p)
+    phi_ia, phi_st, phi_m = split_gains(phi_int, phi_sol, p)
+    T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
+    dT_mass = (
+        c["H_tr_ms"] * (T_surface - T_mass) + c["H_tr_em"] * (T_out - T_mass) + phi_m
+    ) / c["C_m"]
+    dT_core = (slab_heat(T_supply, T_core, p) + s["H_slab"] * (T_air - T_core)) / s[
+        "C_slab"
+    ]
+    return jnp.array([dT_mass, dT_core])
+
+
+def drift_over(rate, jacobian, seconds):
+    """The change of ``[T_mass, T_core]`` over ``seconds`` at constant supply,
+    weather and gains, from their ``rate`` now (K/s) and its ``jacobian`` in the
+    two nodes. The balances are linear, so this is their exact solution,
+    ``A^-1 (exp(A t) - I) v``, written on the two real modes of the 2 by 2 ``A``
+    (an RC network's are real and decaying)."""
+    A = jacobian
+    trace, det = A[0, 0] + A[1, 1], A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]
+    gap = jnp.sqrt(jnp.maximum(trace * trace - 4.0 * det, 1e-30))
+    fast, slow = 0.5 * (trace - gap), 0.5 * (trace + gap)
+    eye = jnp.eye(2, dtype=A.dtype)
+
+    def grown(mode):  # (exp(mode t) - 1) / mode
+        return jnp.expm1(mode * seconds) / mode
+
+    on_slow, on_fast = (A - fast * eye) / gap, (slow * eye - A) / gap
+    return (grown(slow) * on_slow + grown(fast) * on_fast) @ rate
+
+
 def compute_velocity(
     position, action, time, weather_dev, params: HVACParams, level=None
 ):
     """RHS for ``[T_mass, T_core]``. ``action`` is the supply water temperature."""
     p = params
-    T_mass, T_core = position[0], position[1]
-    c = zone_conductances(p)
-    s = slab_conductances(p)
     T_out = outdoor_temperature(time, weather_dev, p, level)
-    phi_ia, phi_st, phi_m = split_gains(internal_gain(time, p), solar_gain(time, p), p)
-    T_air, T_surface = solve_air_and_surface(T_mass, T_core, T_out, phi_st, phi_ia, p)
-    dT_mass = (
-        c["H_tr_ms"] * (T_surface - T_mass) + c["H_tr_em"] * (T_out - T_mass) + phi_m
-    ) / c["C_m"]
-    dT_core = (slab_heat(action, T_core, p) + s["H_slab"] * (T_air - T_core)) / s[
-        "C_slab"
-    ]
-    return jnp.array([dT_mass, dT_core]), None
+    rates = node_rates(
+        position[0],
+        position[1],
+        action,
+        T_out,
+        internal_gain(time, p),
+        solar_gain(time, p),
+        p,
+    )
+    return rates, None
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
@@ -504,7 +556,8 @@ def compute_next_state(
     integration_method: str = "rk4_2",
 ):
     """``action_raw`` in [-1, 1] maps to supply water in [T_supply_min,
-    T_supply_max]. Frost protection overrides it with full supply [1]."""
+    T_supply_max]. Frost protection overrides it with full supply [1]. The
+    source's size bounds the heat, and the supply kept is the water it made."""
     p = params
     commanded = convert_raw_action_to_range(
         action_raw, min_action=p.T_supply_min, max_action=p.T_supply_max
@@ -555,7 +608,7 @@ def compute_next_state(
             T_out_hist=history,
             weather_dev=weather_dev,
             T_out_level=level,
-            T_supply=T_supply,
+            T_supply=supply_made(T_supply, T_core, p),
             Q_slab=slab_heat(T_supply, T_core, p),
             T_return=return_temperature(T_supply, T_core, p),
             T_floor=floor_surface_temperature(T_core, T_air, p),
@@ -702,7 +755,7 @@ class HVACState(EnvState):
     #: The outdoor mean where it stands, hidden: the regime's ``T_out_mean`` in a
     #: window, on its way to a new regime's after a stream's switch.
     T_out_level: float
-    T_supply: float  # supply water the valve gave, C
+    T_supply: float  # supply water the plant gave, C
     Q_slab: float  # heat into the slab from the water, W
     T_return: float  # return water, measured [12]
     T_floor: float  # floor surface, C

@@ -48,7 +48,7 @@ def runner(name):
         def seen(obs, state):
             if not hold:
                 return obs
-            assigned = E.assigned_cas_3d(state.target_altitude, params)
+            assigned = env.assigned_cas(state, params)
             wide = state.replace(target_radius=state.target_radius + widen)
             obs = obs.at[22].mul(1.0 + shift * KT / assigned)
             return obs.at[18:21].set(jnp.stack(E.racetrack_guidance(wide)))

@@ -42,8 +42,9 @@ and the schedule)
 
 As a continuing plant the schedule renews when its six demand blocks have run
 (``renew_schedule``): five fresh blocks from the level it holds, the clock five
-blocks back. The valve's and the counter's times count on ``block_clock``, so no
-clock in the plant grows without bound (long-strata draft 4, S1).
+blocks back. The counter's times count on ``block_clock`` and the valve's dead
+time counts substeps since each command, so no clock in the plant grows without
+bound (long-strata draft 4, S1).
 """
 
 from typing import Tuple
@@ -278,17 +279,14 @@ class CompressorSurgeState(EnvState):
     setpoint_levels: jnp.ndarray
     #: The six consumer-opening levels. Hidden.
     demand_levels: jnp.ndarray
-    #: Steps since the schedule started. Hidden. The clock the valve's and the
-    #: surge counter's times count on, so it is ``time`` in a window; a renewal
+    #: Steps since the schedule started. Hidden. The clock the surge counter's
+    #: times count on, so it is ``time`` in a window; a renewal
     #: (``renew_schedule``) moves it and them back together.
     block_clock: int
     #: The valve command through the positioner's dead time [C7]: the recent
-    #: commands with the time (s) each was issued, newest first.
+    #: commands, newest first, one issued per step.
     valve_cmds: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((VALVE_HISTORY,)), kw_only=True
-    )
-    valve_cmd_times: jax.Array = struct.field(
-        default_factory=lambda: jnp.full((VALVE_HISTORY,), -1.0e9), kw_only=True
     )
     #: The times (s) of the last ``surge_trip_count`` surges, newest first; a
     #: long-past time for none. The surge counter operators read [C5].
@@ -482,8 +480,8 @@ def renew_schedule(state: CompressorSurgeState, params, key, clock=None):
     """The schedule renewed (long-strata draft 4, S1): from the opening and the
     header setpoint it holds at ``clock`` (its own, by default), five fresh
     demand blocks drawn in ``demand_range`` at ``demand_ramp_s``, the clock at
-    the start of the first of them. The valve's and the counter's times move
-    back with the clock, so the dynamics see no change."""
+    the start of the first of them. The counter's times move back with the
+    clock, so the dynamics see no change."""
     p = params
     clock = state.block_clock if clock is None else clock
     tau = clock * p.delta_t
@@ -499,7 +497,6 @@ def renew_schedule(state: CompressorSurgeState, params, key, clock=None):
         setpoint_lead=jnp.zeros_like(state.setpoint_lead),
         demand_ramp=jnp.asarray(p.demand_ramp_s, jnp.float32),
         block_clock=start,
-        valve_cmd_times=state.valve_cmd_times - back,
         surge_times=state.surge_times - back,
     )
 
@@ -668,14 +665,19 @@ def compute_next_state(
     rho = suction_density(params)
     tau_0 = state.block_clock * params.delta_t
 
-    t0 = state.block_clock * params.delta_t
     cmds = jnp.concatenate([jnp.reshape(x_cmd, (1,)), state.valve_cmds[:-1]])
-    issued = jnp.concatenate([jnp.reshape(t0, (1,)), state.valve_cmd_times[:-1]])
+    # The dead time is counted in whole substeps, not read off the clock: the
+    # command at queue position i was issued i steps before this one. At 0.15 s
+    # and 0.01 s substeps a comparison of times sat on float32's rounding edge,
+    # and the valve moved a substep early on four steps in five.
+    age = jnp.arange(VALVE_HISTORY) * n_sub
+    lag = params.valve_lag / h - 0.5
 
-    def delayed(tau):
-        """The command the positioner passes at ``tau``: the newest issued at
-        least ``valve_lag`` before, or the oldest kept."""
-        ready = issued <= tau - params.valve_lag
+    def delayed(j):
+        """The command the positioner passes over substep ``j``: the newest
+        issued at least ``valve_lag`` before the substep starts, or the
+        oldest kept."""
+        ready = age + j >= lag
         k = jnp.where(jnp.any(ready), jnp.argmax(ready), VALVE_HISTORY - 1)
         return cmds[k]
 
@@ -687,7 +689,7 @@ def compute_next_state(
             N_cmd - N_ramp, -params.drive_rate * h, params.drive_rate * h
         )
         x = x + jnp.clip(
-            delayed(t0 + (j + 1) * h) - x,
+            delayed(j) - x,
             -params.valve_close_rate * h,
             params.valve_open_rate * h,
         )
@@ -754,7 +756,6 @@ def compute_next_state(
             phi_min=phi_min,
             block_clock=state.block_clock + 1,
             valve_cmds=cmds,
-            valve_cmd_times=issued,
             surge_times=surge_times,
             surges=surged.astype(m_c.dtype),
             time=state.time + 1,
