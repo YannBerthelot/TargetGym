@@ -223,6 +223,84 @@ in automatic (Vogtle 7.7.2.4), and its safety analyses start from the normal
 envelope (B 3.4.1). Here the rods are the agent's. It is the cold return's
 question again.
 
+### Review of 2026-11-23
+
+A package review asked three things of the task as it stands on this branch: is
+the room on baseload days beyond seed noise, what is the room worth a year, and
+what is left before the charter record.
+
+**The reference's dead time.** The expert shipped the previous plant's boron dead
+time, 615 s. The recipe on this plant reads 600 s (585 s at full load, 600 s at
+the hold), and a large test now checks the shipped numbers against the recipe.
+Re-measured on the ten seeds, the reference costs $19,008, $21,838, $2,681,
+$1,679, $25,086 and $39 by scenario, weighted $1,553 a day (it was $1,555). The
+room stays 4.46.
+
+**Baseload against seed noise.** Baseload was run on 30 more seeds (110 to 139).
+Over the 40 seeds the reference costs $61.9 a day and the planner $51.7, a room
+of 1.20. The paired saving is $10.2 a day with a standard error of $2.4 (t 4.3):
+28 days won, 5 lost, 7 tied, the worst loss $12.9. So the room is beyond seed
+noise. Almost all of the reference's baseload cost is effluent (95 %), and the
+saving has two parts, priced at the least effluent a net dilution needs, $15,700
+per unit of ln(boron before / boron after), the primary's 250 t at $0.0628 a kg:
+
+- $6.4 a day (standard error $1.8, t 3.5, 25 days won, 7 lost) is boration the
+  planner never has to dilute back. The reference spends $15.2 a day over the
+  least its day's net dilution needs, the planner $4.3.
+- $3.8 a day (standard error $2.1) is dilution the planner leaves for the next
+  day: its boron ends the day 0.07 ppm higher on average. The day does not charge
+  what is owed at its end. With that charged, the baseload room is 1.12.
+
+The planner loses to the reference on 5 of the 40 baseload days (seeds 115, 116,
+117, 121 and 129), by $1.8 to $12.9. On three of them it spends 27 to 36 rod
+steps the reference never spends; on the other two it spends slightly more
+effluent.
+None is a ladder seed (100 to 109), where it never loses.
+
+**The end of the day over the suite.** The same charge on the ten ladder seeds is
+$6.8 a day weighted, against a saving of $1,205: 0.6 %. The room is 4.46 as
+scored and 4.38 with the day's end charged. It weighs most on `krsko_shallow`,
+$221 of a $1,093 saving, where the planner ends the day with Tavg 0.77 K lower.
+
+**What the room is worth.** On a 1 GWe unit with the suite's weights (10.8 % of
+days follow load), the reference costs about $567k a year and the planner $127k,
+a saving of about $440k. In energy the reference loses 5,054 MWh of output a year
+and the planner 85 MWh; in effluent, 2,467 t against 1,473 t. A load-follow day
+costs the reference about $14,075 and the planner $2,945: $11,130 and 126 MWh
+saved. Baseload days carry 89 % of the weight and about $3.3k of the yearly
+saving ($2.1k net of what is left for the next day). So the task is not a nearly
+saturated one: over 98 % of the stake is in the days that follow load.
+
+**The stop's setpoint.** With the stop at 20 F in place of 10 F (`edf_daily` and
+`fast_return`, seeds 100 to 102), the planner costs 0.96 to 1.01 of what it costs
+at 10 F, with every solve converged and no trip. The flagged setpoint moves the
+planner's cost by 4 % at most.
+
+**Family sweep (B7) on this plant.** The sweep's reactor runner dated from the
+plant before the turbine action and could not run. Fixed: three-action nulls, the
+shipped expert built on each member's own curve book with its recipe re-read on
+that member at the start of its cycle. On the 8 draws no reference trips, the
+null at rest costs nothing (2e-6 dollars), and the reference beats the null by
+more than 100 times on every load-follow scenario. **The property holds on 6 of
+8 draws.** Both failures are baseload:
+
+| Draw | MTC, pcm/K, start / end of cycle | Worth, pcm/ppm | Dead time read, s | Baseload, reference / null | Holds |
+|---:|---:|---:|---:|---:|---|
+| 0 | -9.7 / -45.5 | -7.0 | 615 | $74.8 / $280.9 | yes |
+| 1 | -17.7 / -66.0 | -10.8 | 585 | $29.3 / $40.9 | yes |
+| 2 | -16.5 / -71.9 | -10.2 | 585 | $23.8 / $20.0 | no |
+| 3 | -14.9 / -53.7 | -9.5 | 585 | $55.2 / $137.1 | yes |
+| 4 | -12.3 / -60.1 | -8.2 | 585 | $43.6 / $70.2 | yes |
+| 5 | -10.3 / -57.9 | -7.3 | 615 | $49.4 / $85.8 | yes |
+| 6 | -14.4 / -50.5 | -9.2 | 585 | $61.7 / $184.3 | yes |
+| 7 | -12.5 / -71.1 | -8.3 | 585 | $25.1 / $19.2 | no |
+
+The two failures are the two strongest end-of-cycle moderator coefficients. The
+likely cause is the day's end again: the null dilutes nothing, a strong
+coefficient keeps the day's burnup inside Tavg's free band, and the dilution owed
+is never charged. Not measured on those two draws: the sweep keeps no
+trajectories.
+
 ### Not measured yet
 
 - A ceiling that is certified: the candidate above is the planner's own plan
@@ -240,7 +318,14 @@ question again.
   planner never lifts them, and the steam they blow is free, though it takes a
   Tavg at least 7.7 K hot at half load, $11.7 a step in Tavg charge.
 - Whether the reference may use the return on colder water.
-- Acceptance (J2), the family sweep (B7) and a learning check (J7).
+- Acceptance (J2) and a learning check (J7). The family sweep ran on 2026-11-23,
+  above; the numbers flagged since (`loading_stop`, `relief_temperature`,
+  `relief_accumulation`, `valve_margin`) have no range in `ours.json`, so it does
+  not draw them yet.
+- The foresight run on the plant as it stands (the $460 against $461 was measured
+  with the hot side still held to the band), the planner's own choices swept
+  (knot length, back-offs, timed limits planned as hard), and the stop at 20 F on
+  the other 19 scenario and seed pairs.
 
 ## Starting tilt and the family sweep, 2026-11-10 (reactor-v9)
 
