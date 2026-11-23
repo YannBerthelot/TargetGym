@@ -439,6 +439,38 @@ def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
     )
 
 
+def test_a_task_that_declares_no_disturbance_does_not_read_its_step_keys(spec):
+    """``disturbance_fields`` (registry.EnvSpec) is what puts a task under the
+    two disturbance checks here, so a task that leaves it empty promises that
+    its plant draws nothing as it runs. Two runs from one reset on different
+    step keys then walk the same states, up to the first trip: a restart is a
+    fresh draw of the plant and may differ. patrol, patrol_range_bearing and
+    wake_surf drew gusts and declared none until 2026-11-23, which skipped
+    both checks for them."""
+    if spec.disturbance_fields:
+        pytest.skip(f"{spec.name} declares its disturbance: checked above")
+    env, params = spec.make_env(), spec.make_test_params()
+    _, start = env.reset_env(jax.random.PRNGKey(0), params)
+    action = _zero_action(env, params)
+
+    @jax.jit
+    def run(seed):
+        def body(state, key):
+            _, state, _, _, info = env.step_env(key, state, action, params)
+            leaves = jax.tree_util.tree_leaves(state)
+            return state, (leaves, info.get("tripped", jnp.bool_(False)))
+
+        keys = jax.random.split(jax.random.PRNGKey(seed), 40)
+        return jax.lax.scan(body, start, keys)[1]
+
+    (one, tripped_one), (two, tripped_two) = run(1), run(2)
+    tripped = np.asarray(tripped_one) | np.asarray(tripped_two)
+    before = int(np.argmax(tripped)) if tripped.any() else len(tripped)
+    assert before > 0, "tripped on the first step: nothing to compare"
+    for a, b in zip(one, two):
+        np.testing.assert_array_equal(np.asarray(a)[:before], np.asarray(b)[:before])
+
+
 def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
     """Where an env is stochastic, the key must actually influence the outcome."""
     if not spec.disturbance_fields:
