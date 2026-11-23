@@ -1,5 +1,8 @@
 # Battery
 
+!!! note "Extra since 2026-11-15"
+    Battery is kept in the repository but is not part of the benchmark: it failed acceptance (J2), so it is out of the headline and the capability claims. The reasons are in its [physics contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md), Status.
+
 <p align="center"><img src="../../videos/battery/pid_output.gif" width="480px"/></p>
 
 Follow a regulation signal for 4 hours with a 1 MW / 1.69 MWh lithium-ion battery. The signal is an hourly level plus a regulation movement, and following it exactly runs out of energy on most seeds. Leaving the charge or cell-voltage window trips the pack, and deep cycles cost more wear per MWh than shallow ones, so how far to follow is a real decision.

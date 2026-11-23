@@ -398,6 +398,15 @@ which single shooting cannot (Vanroye et al., FATROP, arXiv 2303.16746).
 Every state now starts at the measured one, with the moves still held.
 four_tank then had no failure and no trip.
 
+*Amended by the owner, 2026-11-14.* A ceiling script may also start its solve
+from the shipped expert's run on the same seed and keep the expert's moves as a
+candidate, as it may from a simulated-state start or from the oracle's run. A
+task oracle still never starts from an expert. The reactor's whole-day ceiling
+needed it: from the held start it cost more than the expert on five seeds
+(krsko_slow 100, 102, 103 and 104, edf_daily 104). `scripts/record_ceilings.py
+--start mpc+expert` records the start and whether it fell back to the expert's
+moves.
+
 **G9, the stages past the episode.** As the horizon shrinks at the episode's
 end, the stages past it still ran the plant. On the open-loop unstable CSTR
 their states reached 1e41, and the last 8 solves of seed 100 failed. Those
