@@ -2,17 +2,18 @@
 
 Nothing here is registered or scored. On training seeds 100 to 109 it flies:
 
-1. the shipped reference, with the wake and without it;
-2. a candidate reference, the formation hold over the A320's own TECS tune
-   (height on pitch, speed on thrust, as the 3D tasks fly it) with a slow
-   spacing loop, at stations moved outboard of the shipped one and set on the
-   vortex plane for their distance in trail;
+1. the reference the task shipped until that review, a TECS retuned on the 3D
+   distance to the station, with the wake and without it;
+2. the reference, the formation hold over the A320's own TECS tune (height on
+   pitch, speed on thrust, as the 3D tasks fly it) with a slow spacing loop,
+   at stations from 0.87 span, the station until that review, to 1.43 spans
+   from the lead's centreline;
 3. a stand-in for the ceiling: the wake's best steady point held perfectly,
    from the wake model alone. It is a bound from a static argument, not an
    oracle, and it has no ride limit (REALITY.md, limits).
 
 It prints each station's hold, its saving against the same seeds flown with
-the wake off, and the candidate's cost over the stand-in's, each with a 95 %
+the wake off, and the reference's cost over the stand-in's, each with a 95 %
 interval over the ten paired seeds.
 
     uv run python scripts/wake_surf_review.py      # about 3 min on a server
@@ -51,37 +52,35 @@ from target_gym.plane.experts_tecs import AIRLINER  # noqa: E402
 
 SEEDS = jnp.arange(100, 110)
 STEPS, BURN_IN = 1800, 300
-#: The candidate: the A320's one TECS tune, and a spacing loop slow enough to
-#: leave the throttle alone (the Gulfstream's pilot held +-250 ft by hand).
-CANDIDATE = WAKE_SURF_HOLD.replace(
-    tecs=AIRLINER, k_ref=0.3, k_x=0.01, a_x=0.05, k_xi=0.0
+#: The reference until the review (patrol/experts.py's history).
+BEFORE = WAKE_SURF_HOLD.replace(
+    tecs=AIRLINER.replace(spd_weight=1.0, thr_damp=6.0, time_const=5.0),
+    k_ref=1.0,
+    k_x=0.08,
+    k_xi=0.001,
 )
-STATIONS_OUT_M = (0.0, 7.5, 10.0, 12.5, 15.0, 20.0)
+#: Stations, in spans from the lead's centreline: 0.87 was the task's until
+#: the review, and the task now draws 1.2 to 1.3.
+STATIONS_SPANS = (0.87, 1.08, 1.15, 1.22, 1.29, 1.43)
 
 
-def start(env, params, seed, out_m, on_plane):
-    """A reset with the station ``out_m`` further outboard and, with
-    ``on_plane``, at the vortex's sink for its distance; the follower keeps
-    its drawn offset from the station."""
+def start(env, params, seed, spans):
+    """A reset with the station ``spans`` spans from the lead's centreline, on
+    the side drawn; the follower keeps its drawn offset from the station."""
     reset_key, run_key = jax.random.split(jax.random.PRNGKey(seed))
     _, state = env.reset_env(reset_key, params)
     drawn = jnp.stack(desired_slot_position(state))
     follower = state.follower
     offset = jnp.stack([follower.x, follower.y, follower.z]) - drawn
-    speed = jnp.hypot(state.lead.x_dot, state.lead.y_dot)
-    b0 = jnp.pi / 4.0 * params.wingspan
-    sink = state.wake_history[0, 6] / (2.0 * jnp.pi * b0) * state.slot_back / speed
-    state = state.replace(
-        slot_up=jnp.where(on_plane, -sink, state.slot_up),
-        slot_right=state.slot_right + jnp.sign(state.slot_right) * out_m,
-    )
+    side = jnp.sign(state.slot_right)
+    state = state.replace(slot_right=side * spans * params.wingspan)
     x, y, z = jnp.stack(desired_slot_position(state)) + offset
     return state.replace(follower=follower.replace(x=x, y=y, z=z)), run_key
 
 
-def fly(env, ctrl, gains, params, seed, out_m, on_plane):
+def fly(env, ctrl, gains, params, seed, spans):
     """One episode's per-step station errors, upwash, economy, bank and trips."""
-    state, run_key = start(env, params, seed, out_m, on_plane)
+    state, run_key = start(env, params, seed, spans)
 
     def step(carry, key):
         obs, state, memory = carry
@@ -110,7 +109,7 @@ def fly(env, ctrl, gains, params, seed, out_m, on_plane):
 def static_peak(env, params, seed):
     """Out of the wake and at its best steady point, for one seed's draw:
     ``(fuel flow in kg/s, the peak's share of it saved, the cost ratio)``."""
-    state, _ = start(env, params, seed, 0.0, True)
+    state, _ = start(env, params, seed, STATIONS_SPANS[0])
     lead = state.lead
     speed, z = float(jnp.hypot(lead.x_dot, lead.y_dot)), float(lead.z)
     rho = float(compute_air_density_from_altitude(z))
@@ -150,9 +149,9 @@ def main() -> int:
     ctrl = make_wake_surf_pid_controller()
 
     @jax.jit
-    def flown(gains, wake_strength, out_m, on_plane):
+    def flown(gains, wake_strength, spans):
         p = params.replace(wake_strength=wake_strength)
-        one = lambda seed: fly(env, ctrl, gains, p, seed, out_m, on_plane)  # noqa: E731
+        one = lambda seed: fly(env, ctrl, gains, p, seed, spans)  # noqa: E731
         return jax.vmap(one)(SEEDS)
 
     def row(label, out):
@@ -168,13 +167,12 @@ def main() -> int:
         )
         return held["economy"].mean(1)
 
-    row("shipped reference", flown(WAKE_SURF_HOLD, 1.0, 0.0, False))
-    row("shipped reference, wake off", flown(WAKE_SURF_HOLD, 0.0, 0.0, False))
-    wake_off = row("candidate, wake off", flown(CANDIDATE, 0.0, 0.0, True))
+    row("before the review, 0.87 span", flown(BEFORE, 1.0, 0.87))
+    row("before the review, wake off", flown(BEFORE, 0.0, 0.87))
+    wake_off = row("reference, wake off", flown(WAKE_SURF_HOLD, 0.0, 1.25))
 
-    flow, saved, ratio = map(
-        np.array, zip(*(static_peak(env, params, int(s)) for s in SEEDS))
-    )
+    peaks = (static_peak(env, params, int(seed)) for seed in SEEDS)
+    flow, saved, ratio = map(np.array, zip(*peaks))
     ceiling = wake_off * ratio
     print(
         f"static peak: {100 * saved.mean():.1f} % of fuel flow "
@@ -182,9 +180,9 @@ def main() -> int:
         f"the wake {3600 * flow.mean():.0f} kg/h"
     )
     fuel_share = flow / (flow + float(params.cost_index) / 60.0)
-    for out_m in STATIONS_OUT_M:
+    for spans in STATIONS_SPANS:
         economy = row(
-            f"candidate, {out_m:4.1f} m outboard", flown(CANDIDATE, 1.0, out_m, True)
+            f"reference, {spans:.2f} spans", flown(WAKE_SURF_HOLD, 1.0, spans)
         )
         cost_saving = 1.0 - economy / wake_off
         print(

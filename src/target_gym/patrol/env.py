@@ -419,6 +419,7 @@ PARAM_UNITS = {
     "wake_core_ratio": "-",
     "wake_decay_rate": "-",
     "follower_spawn_noise": "m",
+    "spacing_tolerance": "m",
     "airliner_lead": "-",
     "upset_bank": "rad",
     "delta_t": "s",
@@ -432,13 +433,13 @@ _A320 = PlaneParams3D
 class WakeSurfParams(PatrolParams):
     """``wake_surf``: an A320 follower surfing an A320 lead's wake (owner,
     2026-11-10), wake-energy retrieval as Airbus's fello'fly flew it, two A350s
-    3 km apart, and the C-17 $AVE trials 3 000 to 6 000 ft in trail.
+    3 km apart (patrol/REALITY.md).
 
     The airframe is the A320 of the transport tasks (``PlaneParams3D``), its
     attitude loop and protections included. The station sits where the
-    model's own wake gives the most upwash for a level lead: 0.87 of a span
-    outboard, NASA's 13 % tip overlap, and below by the vortex's sink, 21 m at
-    3 km (plane3d/PHYSICS.md, wake surfing).
+    extended-formation trials flew, 1.2 to 1.3 spans from the lead's
+    centreline (theirs: 0.94 to 1.8), and on the vortex plane, below the lead
+    by the pair's sink over the time in trail (``wake_sink``).
     """
 
     initial_mass: float = _A320.initial_mass
@@ -488,18 +489,27 @@ class WakeSurfParams(PatrolParams):
     target_altitude_range: Tuple[float, float] = (33_000.0 * 0.3048, 37_000.0 * 0.3048)
     initial_altitude_range: Tuple[float, float] = (33_000.0 * 0.3048, 37_000.0 * 0.3048)
     #: The station: 2.8 to 3.7 km in trail (fello'fly's 3 km; ours, about it),
-    #: 0.87 of the span outboard on a side drawn at random, and the vortex's
-    #: sink below, 19 to 26 m over 12 to 16 s.
+    #: 1.2 to 1.3 spans to a side drawn at random (ours, inside the 0.94 to
+    #: 1.8 spans the trials flew, REALITY.md), and on the vortex plane: its
+    #: height is ``-wake_sink``, 19 to 26 m down, so ``slot_up_range`` is not read.
     slot_back_range: Tuple[float, float] = (2_800.0, 3_700.0)
-    slot_right_range: Tuple[float, float] = (31.0, 31.0)
-    slot_up_range: Tuple[float, float] = (-26.0, -19.0)
-    #: The box about the station, m (ours, a span: no public tolerance for a
-    #: fello'fly station was found). Inside it only the economy counts.
+    slot_right_range: Tuple[float, float] = (
+        1.2 * _A320.wingspan,
+        1.3 * _A320.wingspan,
+    )
+    slot_up_range: Tuple[float, float] = (0.0, 0.0)
+    #: The box across the wake about the station, m (ours, a span: no public
+    #: tolerance for a station was found). Inside it only the economy counts.
     e_floor_slot: float = 30.0
     e_tol_slot: float = 30.0
     slot_tolerance: float = 30.0
+    #: The along-track tolerance, m: the +-250 ft the Gulfstream's pilot held
+    #: by throttle, the wake changing slowly along it [REALITY.md, N1 IV].
+    spacing_tolerance: float = 250.0 * 0.3048
     min_separation: float = 40.0  # over the A320's span
-    follower_spawn_noise: float = 10.0
+    #: Established on the station (charter B5), not capturing it: within the
+    #: reference's own hold, 1.5 m RMS across and in height (ours).
+    follower_spawn_noise: float = 2.0
     #: Straight and level, as fello'fly's oceanic track (ours): the station is
     #: held in the lead's frame, and in a turn the wake stays on the lead's
     #: past track, 3.7 deg of turn and 100 m off that frame at 0.3 deg/s
@@ -617,6 +627,13 @@ def slot_error(state: PatrolState):
     return jnp.sqrt(eb**2 + er**2 + eu**2 + 1e-8)
 
 
+def station_distance(state: PatrolState):
+    """Distance from the slot across the lead's track, sideways and in height
+    (metres): what ``wake_surf``'s box reads."""
+    _, er, eu = slot_error_vector(state)
+    return jnp.sqrt(er**2 + eu**2 + 1e-8)
+
+
 def separation(state: PatrolState):
     """3D distance between the two aircraft (metres)."""
     dx = state.follower.x - state.lead.x
@@ -685,15 +702,19 @@ def compute_reward_terms_patrol(
 def compute_reward_terms_wake_surf(
     state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
 ):
-    """``wake_surf``'s cost terms, each >= 0: the station box, and what the
-    follower's operator pays, fuel and time by the cost index per air distance
-    (``plane.env.economy_cost``). Inside the box the economy is all that counts,
-    so the cost falls where the follower finds the lead's upwash."""
+    """``wake_surf``'s cost terms, each >= 0: the station box across the wake,
+    the along-track tolerance, and what the follower's operator pays, fuel and
+    time by the cost index per air distance (``plane.env.economy_cost``).
+    Inside both the economy is all that counts, so the cost falls where the
+    follower finds the lead's upwash."""
     p = params
-    box = R.tracking_cost(slot_error(state), p.e_floor_slot, p.e_tol_slot, 2.0, xp)
+    across = station_distance(state)
+    box = R.tracking_cost(across, p.e_floor_slot, p.e_tol_slot, 2.0, xp)
+    back = slot_error_vector(state)[0]
+    spacing = R.tracking_cost(back, p.spacing_tolerance, p.spacing_tolerance, 2.0, xp)
     follower = state.follower
     terms = {
-        "tracking": box,
+        "tracking": box + spacing,
         "economy": economy_cost(
             follower.power,
             follower.z,
@@ -986,6 +1007,17 @@ def wake_sample(lead, lift, speed, params):
     right = (jnp.sin(lead.psi), -jnp.cos(lead.psi))
     wake = (lead.x, lead.y, lead.z, *right, lead.phi, params.wake_strength * gamma)
     return jnp.stack(wake)
+
+
+def wake_sink(lead, back, params):
+    """How far the lead's vortex pair has sunk ``back`` metres behind it, in
+    metres: at ``w0 = Gamma / (2 pi b0)`` for the time in trail, with the
+    circulation of its weight in level flight (``wake_sample``, ``wake_air``)."""
+    speed = compute_velocity_3d(lead.x_dot, lead.y_dot, lead.z_dot)
+    b0 = jnp.pi / 4.0 * params.wingspan
+    rho = compute_air_density_from_altitude(lead.z)
+    gamma = lead.m * params.gravity / (rho * speed * b0)
+    return gamma / (2.0 * jnp.pi * b0) * back / speed
 
 
 def shed_wake(history, sample):

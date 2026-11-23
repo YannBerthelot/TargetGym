@@ -49,7 +49,7 @@ To pick one by what you want to test, see
 | `patrol` | `patrol-v6` | (26,) | (3,) | slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `patrol_range_bearing` | `patrol_range_bearing-v6` | (21,) | (3,) | measured range (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 | `formation` | `formation-v5` | (74,) | (9,) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
-| `wake_surf` | `wake_surf-v3` | (26,) | (3,) | slot error (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
+| `wake_surf` | `wake_surf-v3` | (26,) | (3,) | distance across the wake (m) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 > `plane` -- No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).
 
