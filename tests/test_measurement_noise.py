@@ -266,7 +266,10 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
         _rollout(noisy, _quiet(params), key, action),
         _rollout(free, params, key, action),
     ):
-        np.testing.assert_array_equal(a[0], b[0])
+        # The reading as the reward below: two programs, and JAX 0.11 rounds one
+        # value in 25 a float32 step apart (200.37903 against 200.37904 on
+        # plane3d_racetrack, Python 3.14, 2026-11-23; owner, 2026-11-23).
+        np.testing.assert_allclose(a[0], b[0], rtol=TWO_PROGRAMS)
         jax.tree_util.tree_map(np.testing.assert_array_equal, a[1], b[1])
         if a[2] is not None:
             np.testing.assert_allclose(a[2], b[2], rtol=TWO_PROGRAMS)
