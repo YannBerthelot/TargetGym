@@ -200,12 +200,12 @@ v5 and are stale.
 
 `experts.py`: a PI from the reactor temperature to the cooling water, biased
 at the water the setpoint needs at the design feed. Gains by SIMC (tau_c =
-theta) on one bump test of the water (+0.2 raw) from the design steady state,
-noise and events off: k = -10.7 K per raw unit, tau 18.4 min, theta 8.9 min,
-so Kp = 0.097 per K and Ti = 18.4 min (`src/target_gym/data/pid_gains.json`).
-The same gains stand at noise levels 0.5 and 2, since the test is noise-free,
-which the noise-level study does not accept (`test_gain_levels.py`, two
-failures for the ladder).
+theta) on single-run bump tests of the water, seeds 100 to 109 at noise scale 1
+(`docs/proposals/expert-protocols-process.md`, section 9): k = -9.68 K per raw
+unit, tau 15.4 min, theta 7.4 min, so Kp = 0.105 per K and Ti = 15.4 min, with
+a 0.18 min filter on the reading (`src/target_gym/data/pid_gains.json`). Noise
+levels 0.5 and 2 have gains of their own (`pid_gains_0.5x.json`,
+`pid_gains_2x.json`).
 
 ## 10. What the reference ladder row needs
 
@@ -219,7 +219,10 @@ failures for the ladder).
 
 `oracle.py` plans on the reactor and jacket balances, with the interlock as a
 limit and the scenario's event held from the state. It does not see a later
-event. Not run.
+event. Last run on the normal day on 2026-11-12 (10 seeds, no trip, a cost
+under 0.001 per step, `data/baseline_returns/cstr.json`); the shared solver has
+changed since, so that row is stale. The foresight ceilings are in
+`data/oracle_ceilings/cstr.json` (2026-11-09).
 
 ---
 
