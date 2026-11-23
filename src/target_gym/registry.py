@@ -530,10 +530,19 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     # changing one re-records only the oracle rows of that package's tasks.
     # experts/mpc.py holds the shared machinery and is in every task's
     # oracle fingerprint.
-    def make(env, params, **kwargs):
+    def make(env, params, disturbances=None, **kwargs):
+        """``params`` are the planner's (``plan_params``: process noise zeroed).
+        ``disturbances``, the run's own params, reach a factory that reads the
+        disturbances' statistics (one declaring that argument), and no other."""
+        import inspect
         from importlib import import_module
 
-        return getattr(import_module(module), factory_name)(env, params, **kwargs)
+        factory = getattr(import_module(module), factory_name)
+        if disturbances is not None and "disturbances" in (
+            inspect.signature(factory).parameters
+        ):
+            kwargs["disturbances"] = disturbances
+        return factory(env, params, **kwargs)
 
     return make
 
@@ -1217,6 +1226,13 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_battery_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        extra=(
+            "failed acceptance (J2, 2026-11-15, owner's decision): null "
+            "policies beat the reference on 16 of 30 seeds and the family "
+            "sweep held on 0 of 8 draws; trading is the whole cost on the "
+            "price scenarios and a wrong charge estimate costs nothing on most "
+            "seeds (energy/battery/PHYSICS.md, Status)"
+        ),
     ),
     # Append new tasks here, never insert: a task's position in REGISTRY is its
     # benchmark seed index, and TargetFoundation derives seeds the same way.
@@ -1243,6 +1259,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         # (size and period ours), so the normal day moves the unstable point.
         # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=7,
+        extra=(
+            "measures state knowledge, not control (2026-11-15, owner's "
+            "decision): J2 passed, but on 4 of its 5 scenarios the true-state "
+            "oracle tracks exactly (cost 2e-12 to 2e-10, every solve converged), "
+            "so its room of about 180 is the value of a perfect state reading; "
+            "only grade_change tests control (pc_gym/unstable_cstr/PHYSICS.md, "
+            "Status)"
+        ),
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
         scenarios=_scenarios(

@@ -358,6 +358,33 @@ def test_the_shipped_controller_runs_as_a_policy():
     assert (a >= info.action_low).all() and (a <= info.action_high).all()
 
 
+@pytest.mark.medium
+def test_the_shipped_oracle_bound_to_a_run_plans_on_its_params():
+    """The oracle is the problem definition (owner, 2026-11-23), so bound to a
+    run (``bind(env, params, seeds)``, as ``reference_ladder.run_suite`` binds
+    each scenario's) it plans on that run's params, not the registered task's.
+    hvac's cold snap holds the outdoor mean at -5 C against the registered 5 C:
+    the bound oracle's first move from the reset is the one an oracle built on
+    the cold snap's params makes, and not the registered one's."""
+    from target_gym.runners.runners import baseline_policy
+
+    spec = REGISTRY["hvac"]
+    env, run = spec.make_env(), spec.make_test_params(T_out_mean=-5.0)
+    info, key = B.task_info("hvac", env, run, 1), jax.random.PRNGKey(0)
+
+    def first_move(policy):
+        return B.run_policy(policy, env, run, info, key, n_steps=1)["action"][0, 0]
+
+    bound = B.shipped_policy("mpc")
+    bound.bind(env, run, (0,))
+    own = B.CallablePolicy(
+        lambda task: baseline_policy(spec, "mpc", run), "mpc", oracle=True
+    )
+    moved = first_move(bound)
+    np.testing.assert_allclose(moved, first_move(own), rtol=1e-6)
+    assert not np.allclose(moved, first_move(B.shipped_policy("mpc")), rtol=1e-3)
+
+
 def test_a_burn_in_per_episode_is_each_episodes_own():
     """``score`` with a burn-in per episode: each episode scored with its own,
     the metrics the mean over episodes."""
