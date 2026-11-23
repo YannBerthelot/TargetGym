@@ -348,3 +348,151 @@ def test_boiler_oracle_backs_the_trip_levels_off_by_the_level_reading():
     row = records.load_row("oracle_widths", "boiler_drum")
     assert row["sites"] == {}
     assert row["limit_backoffs"] == pytest.approx([sigma, 0.0])
+
+
+# --- Wind: the overspeed level backed off over the pitch's window (K11h, protocol
+# Amendment 6, owner 2026-11-23) ------------------------------------------------
+# The receding plan forecasts the turbulence decaying, so K11h backs the overspeed
+# level off by 2 s_j |d omega_j / d v| over j = 1 to the window: the run-up of a
+# wind deviation the plan does not see, held from the solve with the move held,
+# s_j = sigma sqrt(1 - a^2j) its spread over j steps (IEC 61400-1 [S13]: sigma =
+# Iref (0.75 V + 5.6); a = exp(-dt / T), T = Kaimal L_u / V). The window is the
+# time the pitch rate limit needs to take back a 2-sigma gust, over the registered
+# mean winds, 13 to 25 m/s, where the pitch regulates: 6 steps (1.5 s).
+
+WIND_GRID = np.arange(13.0, 25.01, 1.0)
+
+
+def _wind_reset(spec, p, v):
+    """The float64 operating point the reset establishes at mean wind ``v``,
+    with no turbulence: rated speed, its pitch and torque."""
+    env = spec.make_env()
+    still = p.replace(v_mean_range=(float(v), float(v)), turbulence_iref=0.0)
+    return env, float64(still), float64(env.reset_env(jax.random.PRNGKey(0), still)[1])
+
+
+def test_wind_pitch_window_is_the_rate_limits_time_to_take_back_a_2_sigma_gust():
+    """dbeta = 2 sigma (dtau/dv) / |dtau/dbeta| at each operating point; the
+    window is the largest dbeta / pitch_rate_max over 13 to 25 m/s, in whole
+    0.25 s steps: about 1.28 s at 13 m/s, so 6 steps."""
+    from target_gym.energy.wind_turbine.env import aerodynamic_torque
+    from target_gym.energy.wind_turbine.oracle import HOLD_WINDOW
+
+    spec = REGISTRY["wind_turbine"]
+    p = spec.make_test_params()
+    seconds = []
+    with enable_x64():
+        for v in WIND_GRID:
+            _, p64, st = _wind_reset(spec, p, v)
+
+            def tau(wind, pitch, st=st, p64=p64):
+                return aerodynamic_torque(st.omega, wind, pitch, p64)[0]
+
+            dv = float(jax.grad(tau, 0)(float(v), st.pitch))
+            dbeta = float(jax.grad(tau, 1)(float(v), st.pitch))
+            sigma = float(p.turbulence_iref) * (0.75 * v + 5.6)
+            seconds.append(2.0 * sigma * dv / abs(dbeta) / float(p.pitch_rate_max))
+    assert max(seconds) == pytest.approx(1.28, abs=0.01)
+    assert HOLD_WINDOW == int(np.ceil(max(seconds) / float(p.delta_t))) == 6
+
+
+def _hold_backoff(spec, p, grid, window):
+    """K11h's term from the float64 env, by central differences on the mean wind:
+    the worst over the grid and j <= window of 2 s_j |d omega_j / d v|."""
+    worst, h = 0.0, 1e-3
+    with enable_x64():
+        for v in grid:
+            env, p64, st = _wind_reset(spec, p, v)
+            held = env.initial_action(st, p64)
+
+            def omegas(dv, st=st, p64=p64, held=held, env=env):
+                s, out = st.replace(v_mean=st.v_mean + dv), []
+                for t in range(window):
+                    s = env.step_env(jax.random.PRNGKey(t), s, held, p64)[1]
+                    out.append(float(s.omega))
+                return np.array(out)
+
+            gain = np.abs(omegas(h) - omegas(-h)) / (2.0 * h)
+            sigma = float(p.turbulence_iref) * (0.75 * v + 5.6)
+            T = float(p.kaimal_factor) * float(p.turbulence_lambda1) / v
+            a = np.exp(-float(p.delta_t) / T)
+            s_j = sigma * np.sqrt(1.0 - a ** (2 * np.arange(1, window + 1)))
+            worst = max(worst, float(np.max(2.0 * s_j * gain)))
+    return worst
+
+
+@pytest.mark.parametrize("scenario", [{}, {"turbulence_iref": 0.16}])
+def test_wind_oracle_backs_the_overspeed_level_off_by_a_held_gust_over_the_window(
+    scenario,
+):
+    """The planned overspeed bound (the limit less the solver's back-off) is the
+    overspeed level less K11's smoothing gap and K11h's term, from the params the
+    oracle is built on: the registered task, and gusty_class_a's Iref of 0.16,
+    which backs it off further. Central differences against the exact derivative:
+    1e-3 relative."""
+    from target_gym.api import make_oracle
+    from target_gym.energy.wind_turbine.env import omega_rated
+    from target_gym.oracles.controller import widths_row
+
+    spec = REGISTRY["wind_turbine"]
+    p = spec.make_test_params(**scenario)
+    oracle = make_oracle("wind_turbine", p)  # the planner's copy has no turbulence
+    (limit,) = oracle.model.limits
+    row = widths_row("wind_turbine")
+    planned = limit.hi - row["limit_backoffs"][0]
+    level = float(p.overspeed_factor) * float(omega_rated(float64(p)))
+    term = _hold_backoff(spec, p, WIND_GRID, 6)
+    assert level - planned == pytest.approx(row["limit_gaps"][0] + term, rel=1e-3)
+    assert term > 0.09
+
+
+def test_wind_ceiling_keeps_the_overspeed_level_itself():
+    """K11h is the receding plan's: the ceiling knows the wind ahead, so its
+    model's limit is the overspeed level (it backs off by its own
+    ``ceiling_backoffs``)."""
+    from target_gym.energy.wind_turbine.env import omega_rated
+    from target_gym.energy.wind_turbine.oracle import wind_model
+
+    spec = REGISTRY["wind_turbine"]
+    with enable_x64():
+        p64 = float64(spec.make_test_params())
+        (limit,) = wind_model(spec.make_env(), p64, rest=False).limits
+    level = float(p64.overspeed_factor) * float(omega_rated(p64))
+    # float32 params read in float64 (rated speed's 1e-7), far under K11h's 0.1.
+    assert limit.hi == pytest.approx(level, rel=1e-6)
+
+
+def test_wind_receding_plan_sees_the_extreme_gust_the_env_applies():
+    """The extreme operating gust is in the problem: its start is in the data and
+    its size is the env's (``state.gust_size``, or in a window the size the
+    scenario's turbulence gives at the mean wind, env.py ``gust``). The
+    planner's copy of the params has no turbulence (``plan_params``), which gave
+    the plan a gust of size 0. Gust from 1 s; each step, the plan's departure
+    from its mean path is the env's gust departure, v_wind - v_mean - v_turb,
+    to float64 rounding."""
+    from target_gym.api import make_oracle
+    from target_gym.energy.wind_turbine.oracle import wind_step
+
+    spec = REGISTRY["wind_turbine"]
+    env = spec.make_env()
+    run = spec.make_test_params(gust=1.0, gust_window=(1.0, 1.0))
+    oracle = make_oracle("wind_turbine", run)
+    m = oracle.model
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, 40)
+    with enable_x64():
+        p64 = float64(run)
+        st = float64(env.reset_env(resets[0], run)[1])
+        task, x, s = m.data(st), m.state_x(st), st
+        decay = jnp.exp(
+            -p64.delta_t / (p64.kaimal_factor * p64.turbulence_lambda1 / st.v_mean)
+        )
+        planned, applied = [], []
+        for t in range(40):
+            v_plan = wind_step(
+                env, oracle.params, x[:6], jnp.zeros(2), t, task, jnp.zeros(5)
+            )[1]
+            planned.append(float(v_plan - st.v_mean - st.v_turb * decay ** (t + 1)))
+            s = env.step_env(steps[t, 0], s, env.initial_action(s, p64), p64)[1]
+            applied.append(float(s.v_wind - s.v_mean - s.v_turb))
+    assert max(abs(a) for a in applied) > 1.0  # the gust is on, metres a second
+    np.testing.assert_allclose(planned, applied, atol=1e-9)

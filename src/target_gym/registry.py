@@ -530,10 +530,19 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     # changing one re-records only the oracle rows of that package's tasks.
     # experts/mpc.py holds the shared machinery and is in every task's
     # oracle fingerprint.
-    def make(env, params, **kwargs):
+    def make(env, params, disturbances=None, **kwargs):
+        """``params`` are the planner's (``plan_params``: process noise zeroed).
+        ``disturbances``, the run's own params, reach a factory that reads the
+        disturbances' statistics (one declaring that argument), and no other."""
+        import inspect
         from importlib import import_module
 
-        return getattr(import_module(module), factory_name)(env, params, **kwargs)
+        factory = getattr(import_module(module), factory_name)
+        if disturbances is not None and "disturbances" in (
+            inspect.signature(factory).parameters
+        ):
+            kwargs["disturbances"] = disturbances
+        return factory(env, params, **kwargs)
 
     return make
 

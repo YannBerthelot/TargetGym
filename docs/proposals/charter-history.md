@@ -59,6 +59,13 @@ carries no rule of its own.
   and the score disagree (J1). Draft and reasons: `charter-amendment-5-draft.md` on
   branch `claude/reactor-axial-dd4617`.
 
+- **Amendment 6, the actuator's window (2026-11-23).** The wind turbine's receding
+  oracle rode its overspeed level on a forecast of decaying turbulence and tripped on 35
+  of 60 MPC-line seeds. The owner chose "Actuator window, about 2 s": a limit's back-off
+  covers a 2-sigma disturbance for the time the correcting actuator's rate limit needs to
+  take it back (J3; oracle smoothing protocol, Amendment 6, K11a). The formula gave 1.5 s,
+  and the owner kept it. It is general: wind is the first task it applies to.
+
 **Old numbers.** Design step 0 became B2; step 1, B1; step 2, B4; step 3, B3 and B6;
 step 4, B1 and D2.
 
