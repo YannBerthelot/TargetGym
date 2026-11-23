@@ -27,6 +27,7 @@ the surge line, with as little recycle as possible and no counted surge.
 | `energy_price` | 1 | per kJ | ours: the score's unit is kJ of recycle energy [C3, p. 1; C1] |
 | `zone_price` | 1000 | kJ/s | ours: a second outside the zone costs about 16 s of the hold's recycle power |
 | `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
+| `reset_margin` | 0.10 | of surge flow at speed | ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1] (2026-11-23) |
 
 The hidden surge-line offset, the moving setpoint
 schedule (`p_ref_range`) and the travel, tracking and running terms are gone:
@@ -51,8 +52,17 @@ which the surge detector keeps [C5; C4]. The setpoint channel is constant.
 
 ### Episode (rules 17 and 20)
 
-The machine starts at the speed that holds 24 kPa at the reset's recycle and
-first demand (established operation). Demand moves as the scenario says:
+The machine starts in established operation for its first demand
+(`established_point`): at rest at 24 kPa on a control line 10 % right of the
+surge line, the recycle where that line needs it and shut where the consumers
+take more than the line's flow, as on most normal days [C3, p. 2]. A trip's
+restart puts it back the same way for the demand it then meets
+(`restart_plant`). Until 2026-11-23 the reset kept the recycle at 0.35 whatever
+the demand. On a normal day the machine could not hold 24 kPa through it even at
+its top speed, so 8 of 10 seeds started below the header zone (19.6 to 23.2 kPa),
+every ladder rung then spent about 7 s outside it, and that zone charge was 63 %
+of the reference's weighted cost. That start was a capture, which charter B5
+rules out. Demand moves as the scenario says:
 
 | Scenario | Demand | Source |
 |---|---|---|
@@ -90,6 +100,7 @@ restated on the family's ranges:
 | 7. Surge counted before it trips | 1 surge no trip, 3 in the window trip [C5] | pass |
 | Constant header setpoint | [C3, p. 4] | pass |
 | In the zone, less recycle scores better | [C3, p. 1] | pass |
+| Each scenario starts in established operation, and a trip restarts in it | charter B5; [C6; C1] for the line, [C3, p. 2] for the shut recycle | pass since 2026-11-23 (failed before: 31 of 32 normal-day resets off the setpoint) |
 
 Tests 1 to 4 passed on the model before version 4; 6, 7 and the job tests
 failed and pass now.
@@ -341,7 +352,7 @@ at the end, with their sources.
 | `demand_sigma` | 0.02 | opening | ours | stationary sd of the deviation; the one `noise_fields` entry; section 6 | ⚠️ |
 | `demand_theta` | 0.2 | 1/s | ours | reversion rate, a 5 s correlation time; a = 0.980199 per step, innovation sd 0.00396 (derived) | ⚠️ |
 | `demand_dev_reset_clip` | 3.0 | sd | ours | clip on the initial draw only (0.06 of opening) | ✅ |
-| `N_reset`, `x_reset` | 1.0, 0.35 | of rated, opening | ours | the reset and restart point; surge-safe for every opening 0.2 to 1.0 (section 5) | ✅ |
+| `N_reset`, `x_reset` | 1.0, 0.35 | of rated, opening | ours | version 2's reset and restart point, surge-safe for every opening 0.2 to 1.0 (section 5); the reset no longer reads it (version 4, Episode, 2026-11-23) and it stays for this section's check of the equilibrium solver | ⚠️ |
 | `reset_newton_iters` | 6 | 1 | ours | Newton from Phi 0.70; static field | ✅ |
 | `soft_min_temperature` | 1e-3 | 1 | ours | the trip is conservative by at most T ln 10 = 2.3e-3 in Phi (derived) | ✅ |
 | `delta_t` | 0.1 | s | ours | 4.5 steps per Helmholtz period (0.452 s, derived) | ✅ |

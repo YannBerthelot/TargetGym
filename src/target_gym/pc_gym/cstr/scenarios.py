@@ -70,9 +70,17 @@ def cstr_scenarios() -> tuple[dict, ...]:
         ),
         _row(
             "feed_buildup",
-            {"feed_rise": 0.1},
+            # Derived: the largest whole percent the valve can hold at the design
+            # point. It takes the water to 135.5 of its 136 g/s at the middle feed
+            # temperature, past the top on a warm feed and short of it on a cold
+            # one, as Bayer's cooler held only under a feed limit [S3]. The 10 % of
+            # before needed 179 g/s: 5 K high whatever the controller did.
+            {"feed_rise": 0.03},
             source="[S3, PDF pp. 36-37, 46]",
-            description="the feed's reactant rises 10 % (size ours)",
+            description=(
+                "the feed's reactant rises 3 %, to the top of what the cooling"
+                " water can hold at the design point (derived)"
+            ),
             weight=0.05,
             **_upset(hold_min=120.0),
         ),

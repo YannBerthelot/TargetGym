@@ -43,8 +43,11 @@ def reset(seed=0, **changes):
 def hold(env, p, s, steps):
     """Rods where they are, no boron: the Tavg error, program minus Tavg."""
     rods = np.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0], np.float32)
+    # Compiled once: stepped as plain Python, each of the 1 440 steps builds its
+    # own programs, and the test took 32.6 GB and five minutes (2026-11-23).
+    step = jax.jit(env.step_env)
     for k in range(steps):
-        obs, s, _, _, _ = env.step_env(jax.random.PRNGKey(k), s, rods, p)
+        obs, s, _, _, _ = step(jax.random.PRNGKey(k), s, rods, p)
     return float(s.T_ref - 0.5 * (s.T_coolant + s.T_cold))
 
 

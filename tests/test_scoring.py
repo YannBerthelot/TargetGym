@@ -255,6 +255,16 @@ def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeyp
     assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
 
 
+def test_the_wake_surfers_two_tracking_terms_read_one_relative_fix():
+    """Hand-worked, independent of ``scoring``: the box across the wake (30 m)
+    and the along-track tolerance (250 ft, 76.2 m) both read the relative
+    position of the two aircraft, good to 3 m (patrol/PHYSICS.md). One
+    resolution past each: (3 / 30)^2 + (3 / 76.2)^2 = 0.01 + 0.00155. One floor
+    past each: 1 + 1."""
+    assert scoring.ceiling("wake_surf") == pytest.approx(0.01155, rel=1e-3)
+    assert scoring.settle_band("wake_surf") == pytest.approx(2.0)
+
+
 @pytest.mark.parametrize(
     "name, floor, reading",
     [
@@ -805,3 +815,67 @@ def test_the_protocol_records_the_expert_on_ten_seeds_and_the_oracle_on_three(
     assert asked == {"pid": 10, "mpc": 3}
     assert written["pid_seeds"] == 10
     assert written["seeds"] == 3
+
+
+# --- Tasks scored on their job, zero costs and unknown ceilings ---------------
+# Contract (scoring.JOB_SCORED's note and the module docstring): a job-scored task
+# has no tracked setpoint, so no tracking term, ceiling or settle band (NaN).
+# ``compare`` still gives the paired cost ratio; what is read against a tracking
+# hold is unknown there (NaN), not 0 and not an error.
+
+
+def _job_episode(cost):
+    cost = np.asarray(cost, float)
+    n = len(cost)
+    return E.Episode(
+        cost=cost,
+        in_band=np.ones(n, bool),
+        target_change=np.zeros(n, bool),
+        failed=np.zeros(n, bool),
+        terms={"energy": cost},
+    )
+
+
+def test_compare_gives_a_job_scored_task_its_ratio_and_no_tracking_numbers():
+    # Expert 4 per step, policy 2 per step on both seeds: b / x = 2.
+    nan = float("nan")
+    expert = [_job_episode(np.full(50, 4.0)) for _ in range(2)]
+    policy = [_job_episode(np.full(50, 2.0)) for _ in range(2)]
+    m = scoring.compare(policy, expert, nan, burn_in=10, settle=5, band=nan)
+    assert m["ratio"] == pytest.approx(2.0)
+    assert m["win_rate"] == 1.0 and m["beats_expert"]
+    for key in ("score", "headroom", "room_left", "expert_hold", "policy_hold"):
+        assert np.isnan(m[key]), key
+    for key in ("expert_settling", "policy_settling", "settling_ratio"):
+        assert np.isnan(m[key]), key
+
+
+def test_headroom_to_an_unknown_ceiling_is_unknown():
+    assert np.isnan(scoring.headroom(3.0, float("nan")))
+    assert np.isnan(scoring.headroom(float("nan"), 1.0))
+
+
+def test_two_sides_that_cost_nothing_are_level():
+    """Neither side ever left its band: the ratio is 1 (``_ratio``'s convention
+    for 0 over 0), nobody wins a seed, and the policy does not beat the expert."""
+    expert = [_episode(np.zeros(40)) for _ in range(4)]
+    policy = [_episode(np.zeros(40)) for _ in range(4)]
+    m = scoring.compare(policy, expert, 1.0, burn_in=5, settle=5)
+    assert m["ratio"] == pytest.approx(1.0)
+    assert m["ratio_ci"] == pytest.approx((1.0, 1.0))
+    assert m["transient_ratio"] == pytest.approx(1.0)
+    assert m["win_rate"] == 0.0 and not m["beats_expert"]
+
+
+@pytest.mark.medium
+def test_score_policy_scores_a_job_scored_task():
+    """hvac has no tracked setpoint (``JOB_SCORED``). Its expert against itself
+    on the same seed costs the same, so the ratio is 1 and it does not beat
+    itself; the tracking score is unknown."""
+    import target_gym as tg
+
+    assert "hvac" in scoring.JOB_SCORED
+    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1)
+    assert m["ratio"] == pytest.approx(1.0)
+    assert not m["beats_expert"]
+    assert np.isnan(m["score"]) and np.isnan(m["s_max"])

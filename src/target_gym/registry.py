@@ -987,6 +987,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # diversion basin pumped back, influent flow swings, scenarios.
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        # Rebuilt on the shared solver (#199), so its oracle reads the solver's
+        # modules and its horizon and widths files; declaring them puts them in
+        # the oracle's fingerprint alone, as for every task on the solver.
+        oracle_data=_shared_oracle("ph_neutralization"),
         scenarios=_scenarios(
             "ph_neutralization_scenarios",
             module="target_gym.pc_gym.ph_neutralization.scenarios",

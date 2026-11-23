@@ -169,9 +169,10 @@ def test_the_boron_reading_is_twenty_minutes_late():
     start = float(obs[7])
     rods = 1.0 - 2.0 * float(s.rod_in)
     readings, core = [], []
+    step = jax.jit(env.step_env)  # compiled once, not rebuilt on each of 70 steps
     for k in range(70):
         dilute = np.array([rods, -1.0 if k < 4 else 0.0, 1.0], np.float32)  # 2 min
-        obs, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, dilute, p)
+        obs, s, _, _, _ = step(jax.random.PRNGKey(0), s, dilute, p)
         readings.append(float(obs[7]))
         core.append(float(s.boron))
     core, readings = np.array(core), np.array(readings)

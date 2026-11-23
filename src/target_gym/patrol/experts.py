@@ -430,19 +430,23 @@ HOLD = FormationHoldParams(
 )
 
 
-#: The wake-surfing follower's hold: the formation hold over the A320's own
-#: autopilot (the 3D tasks' cruise schedule, speed floor and TECS). Its slot
-#: gains are the patrol's, not tuned for a station 3 km in trail.
+#: The wake-surfing follower's hold: the formation hold's guidance cascade
+#: over the A320's own autopilot as the 3D tasks fly it, their cruise
+#: schedule, speed floor and one TECS tune (height on pitch, speed on thrust).
+#: Its spacing loop is slow, 100 s against TECS's 5 s, with no integral: the
+#: wake changes slowly along the track, so the trials let the distance wander
+#: +-250 ft and left the throttle alone a minute at a time [patrol/REALITY.md,
+#: N1 IV]. Set once from that, not searched. Until 2026-11-23 a TECS retuned
+#: on the 3D distance to the station swung 62 m RMS in height and met no upwash.
 WAKE_SURF_HOLD = HOLD.replace(
     law=0.0,
     k_bank_comp=0.15,  # the A320's (plane3d.experts)
     cruise_cas=290.0 * 1852.0 / 3600.0,
     cruise_mach=0.78,
     v_min_eas=96.0,
-    # Step 1 of scripts/tune_formation_hold.py --wake-surf, on training seeds
-    # 100-109 (2026-11-10): the worst seed's RMS 156 m, from 215 m, no trips.
-    tecs=AIRLINER.replace(spd_weight=1.0, thr_damp=6.0, time_const=5.0),
-    k_ref=1.0,
+    tecs=AIRLINER,
+    k_x=0.01,  # 1/s
+    k_xi=0.0,
 )
 
 

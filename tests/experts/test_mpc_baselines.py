@@ -36,16 +36,23 @@ HEAVY_COMPILE = {"formation"}
 # cold cache (measured 2026-10-28), more than a small test's share of a machine.
 AIRCRAFT = {spec.name for spec in specs_in_group("aircraft")} - HEAVY_COMPILE
 
-# The reactor's oracle plans a whole day. Even on this test's 20 steps it compiles
-# a 38-knot problem (two knots and its 3 h tail) and solves it cold twice: 144 s
-# on a loaded server (2026-11-16, marked medium with the owner's approval).
-SLOW_COLD_START = {"reactor"}
+# The oracles on the shared solver compile for 2.5 to 9 min each on a CI runner
+# (wind_turbine 552 s, boiler_drum 306 s, reactor 269 s, compressor_surge 163 s,
+# cement_kiln 147 s, measured 2026-11-23), and a worker building one reached
+# 12 GB: a third of the small tier's 55 min between five tests.
+SHARED_SOLVER = {
+    "wind_turbine",
+    "boiler_drum",
+    "reactor",
+    "compressor_surge",
+    "cement_kiln",
+}
 
 
 def _size(name):
     if name in HEAVY_COMPILE:
         return pytest.mark.large
-    return pytest.mark.medium if name in AIRCRAFT | SLOW_COLD_START else ()
+    return pytest.mark.medium if name in AIRCRAFT | SHARED_SOLVER else ()
 
 
 def _bounds(space, shape):
