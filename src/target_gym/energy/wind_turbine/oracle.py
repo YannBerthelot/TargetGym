@@ -181,12 +181,12 @@ def velocity(position, action, v_wind, widths, p):
     ]), None  # fmt: skip
 
 
-def rotor_ahead(turb, steps, v_mean, p):
-    """The turbulence the rotor sees ``steps`` steps on, with no draw to come:
-    ``turb`` is (the hub's turbulence, the filter's fast lag, its slow lag) now.
+def rotor_ahead(hub, lags, steps, v_mean, p):
+    """The turbulence the rotor sees ``steps`` steps on, with no draw to come,
+    from the hub's turbulence ``hub`` and the filter's (fast, slow) ``lags`` now.
     The hub's decays by d a step, and each lag's recursion ``lag' = e lag + (1 -
     e) u'`` sums in closed form, ``e^k lag + (1 - e) u d (e^k - d^k) / (e - d)``."""
-    hub, lag_fast, lag_slow = turb[0], turb[1], turb[2]
+    lag_fast, lag_slow = lags[0], lags[1]
     t_fast, t_slow, _ = rotor_filter(v_mean, p)
     d = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
 
@@ -203,10 +203,10 @@ def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, turb, now, gust_t0, derate_t0, path = task[1:7]
+    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
     after = (now + t + 1) * p.delta_t
     if path is None:
-        seen = rotor_ahead(turb, t + 1, v_mean, p)
+        seen = rotor_ahead(v_turb, task[7], t + 1, v_mean, p)
         v_wind = v_mean + seen + gust(after, v_mean, gust_t0, p)
         derated = (derate_t0 >= 0.0) & (after >= derate_t0)
         rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
@@ -223,10 +223,11 @@ def wind_step(env, p, x, v, t, task, widths):
     return x1, v_wind, rating
 
 
-def turbulence_of(state):
-    """The wind's own state, for the plan's data: (the hub's turbulence, the
-    spatial filter's fast lag, its slow lag)."""
-    return jnp.stack([state.v_turb, state.v_lag_fast, state.v_lag_slow])
+def filter_lags(state):
+    """The rotor's spatial filter as it stands, for the plan's data: (its fast
+    lag, its slow lag) of the hub's turbulence. Kept apart from the turbulence
+    itself, the deviation the noise drives (``measure_oracle_widths``, K11)."""
+    return jnp.stack([state.v_lag_fast, state.v_lag_slow])
 
 
 def turning_points(m0, turn0, dir0, moments):
@@ -266,8 +267,8 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
         power = electrical_power(x1[0], x1[2], p)
         available = jnp.minimum(rating, wind_power(v_wind, p))
         moment = tower_base_moment(x1[3], p)
-        if len(task) > 7:  # turning points frozen by the outer loop
-            mask, z0 = task[7]
+        if len(task) > 8:  # turning points frozen by the outer loop
+            mask, z0 = task[8]
             mask = jnp.asarray(mask)
             z = jnp.where(t == 0, jnp.asarray(z0, x.dtype), x[6])
             hit = mask[jnp.minimum(t, mask.shape[0] - 1)]
@@ -286,8 +287,8 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             s.moment_turn,
         ]),  # fmt: skip
         data=lambda s: (
-            s.target_power, s.v_mean, turbulence_of(s), s.time, s.gust_t0,
-            s.derate_t0, None,
+            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0,
+            None, filter_lags(s),
         ),  # fmt: skip
         hold=lambda s: jnp.zeros(2, s.omega.dtype),
         action=lambda s, v: raw_command(p, jnp.stack([s.pitch, s.torque]), v),
@@ -343,8 +344,8 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
 
     path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
-        state.target_power, state.v_mean, turbulence_of(state), state.time,
-        state.gust_t0, state.derate_t0, path,
+        state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
+        state.derate_t0, path, filter_lags(state),
     )  # fmt: skip
 
 
