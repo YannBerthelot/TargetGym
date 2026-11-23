@@ -432,18 +432,40 @@ class WakeSurf(PlanePatrol):
     with two A350s (patrol/REALITY.md, patrol/PHYSICS.md).
 
     The observation is the patrol's 26 values, the tracked one the distance to
-    the station across the wake. The cost is the station box across the wake,
-    the along-track tolerance and the follower's operator cost, fuel and time
-    by the cost index: inside the box, the less thrust the lead's upwash leaves
-    the follower needing, the less it pays. The upwash grows toward the vortex
-    core, 0.8 to 0.9 span inboard of the station, and a vortex that rolls the
-    follower past 60 deg is an upset, a trip.
+    the station across the wake. The station it gives is a prediction: the
+    lead's track and the follower's wind estimate times the time in trail, so
+    off across the track by that estimate's error, held over a window. The
+    wake itself drifts with the air the lead left it in. The cost is the
+    station box across the wake, the along-track tolerance and the follower's
+    operator cost, fuel and time by the cost index: inside the box, the less
+    thrust the lead's upwash leaves the follower needing, the less it pays.
+    The upwash grows toward the near vortex, a span inboard of the station;
+    passing through it trips the plant, as does a bank past 60 deg.
 
     Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     registry_name: str = "wake_surf"
     tracked_names: tuple = ("distance across the wake (m)",)
+    #: The patrol's instruments, and the station's lateral offset as given: a
+    #: unit draw held for a 30-minute window, which ``get_obs`` scales by the
+    #: wind estimate's error and the time in trail (patrol/PHYSICS.md).
+    readings: tuple = (
+        *PlanePatrol.readings,
+        ChannelReading(17, sigma=1.0, interval=1800.0),
+    )
+
+    def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
+        params = self.default_params if params is None else params
+        obs = super().get_obs(state, params)
+        in_trail = state.slot_back / jnp.hypot(state.lead.x_dot, state.lead.y_dot)
+        error = (obs[17] - state.slot_right) * params.wind_estimate_sigma * in_trail
+        # The follower's place from the lead is read as it is, so its offset
+        # from a station moved by ``error`` moves the other way.
+        right = obs[11] - error
+        across = jnp.sqrt(right**2 + obs[12] ** 2 + 1e-8)
+        obs = obs.at[17].set(state.slot_right + error).at[11].set(right)
+        return obs.at[24].set(across)
 
     def station_height(self, drawn, lead, slot_back, params):
         """On the vortex plane: below the lead by its wake's sink."""

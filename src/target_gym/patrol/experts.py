@@ -10,8 +10,11 @@ the oracle each have a fingerprint of their own
 (``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 """
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import struct
 
 from target_gym.experts.pid import (
@@ -38,6 +41,9 @@ _PSI, _E_BACK, _E_RIGHT, _E_UP = 9, 10, 11, 12
 _RV_FWD, _RV_RIGHT, _SLOT_BACK, _SLOT_RIGHT = 13, 14, 16, 17
 _RV_UP, _POWER = 15, 21
 _REL_HEADING = 19
+_AILERON = 23
+#: The observation's axis of the offset across the track, for moving a station.
+_E_RIGHT_AXIS = np.eye(26, dtype=np.float32)[_E_RIGHT]
 # Indices into the range-and-bearing observation; 0-9 are as above.
 _RANGE, _AZ, _EL = 10, 11, 12
 _RB_SLOT_BACK, _RB_SLOT_RIGHT, _RB_SLOT_UP = 13, 14, 15
@@ -430,15 +436,65 @@ HOLD = FormationHoldParams(
 )
 
 
+@struct.dataclass
+class WakeSurfHoldParams(FormationHoldParams):
+    """The formation hold on a station it finds by its roll trim.
+
+    The station ``wake_surf`` gives is a prediction, off by the wind estimate's
+    error times the time in trail. NASA's crews found the wake by its effect
+    instead [patrol/REALITY.md, N1 III.D]: they stepped inward and let each
+    step settle until the steady roll trim passed a set level, then held. Here
+    that is a loop: the station moves outboard while the filtered aileron holds
+    more than ``trim_level``, inboard while less, at ``trim_rate`` per radian
+    past it, at most ``trim_reach`` either way.
+    """
+
+    #: The aileron the hold shows on the task's station, 1.38 spans from the
+    #: wake, read on training seeds 100 to 109 with the wind known
+    #: (2026-11-23): 1.35 deg. Where the station sits is the zone rule's
+    #: (``WakeSurfParams.slot_right_range``), so this is its reading, not a tune.
+    trim_level: float = 0.0236  # rad
+    #: Ours: a filter of 30 s, and a rate that closes the loop in about 2 min,
+    #: four times the filter, so each move settles before the next.
+    trim_filter: float = 30.0  # s
+    trim_rate: float = 3.5  # m/s per rad
+    trim_reach: float = 30.0  # m, the station box's width
+
+
+@struct.dataclass
+class WakeSurfHoldState(FormationHoldState):
+    """The hold's memory, how far outboard it has moved its station, its
+    filtered aileron and its age in steps."""
+
+    moved: float = 0.0
+    trim: float = 0.0
+    age: float = 0.0
+
+
+def wake_surf_hold_step(params, state, obs, xp=jnp):
+    """The formation hold about a station moved to its roll trim's level. It
+    engages where it is, as an ingress already made would leave it, and waits
+    two filter times before it moves the station."""
+    p = params
+    side = xp.sign(obs[_SLOT_RIGHT])
+    here = xp.clip(side * obs[_E_RIGHT], -p.trim_reach, p.trim_reach)
+    moved = xp.where(state.age > 0.5, state.moved, here)
+    trim = state.trim + p.dt / p.trim_filter * (obs[_AILERON] - state.trim)
+    filled = state.age * p.dt >= 2.0 * p.trim_filter
+    rate = xp.where(filled, p.trim_rate * (xp.abs(trim) - p.trim_level), 0.0)
+    moved = xp.clip(moved + p.dt * rate, -p.trim_reach, p.trim_reach)
+    action, new = patrol_hold_step(p, state, obs - side * moved * _E_RIGHT_AXIS, xp)
+    return action, new.replace(moved=moved, trim=trim, age=state.age + 1.0)
+
+
 #: The wake-surfing follower's hold: the formation hold's guidance cascade
 #: over the A320's own autopilot as the 3D tasks fly it, their cruise
 #: schedule, speed floor and one TECS tune (height on pitch, speed on thrust).
 #: Its spacing loop is slow, 100 s against TECS's 5 s, with no integral: the
 #: wake changes slowly along the track, so the trials let the distance wander
 #: +-250 ft and left the throttle alone a minute at a time [patrol/REALITY.md,
-#: N1 IV]. Set once from that, not searched. Until 2026-11-23 a TECS retuned
-#: on the 3D distance to the station swung 62 m RMS in height and met no upwash.
-WAKE_SURF_HOLD = HOLD.replace(
+#: N1 IV]. Set once from that, not searched.
+_WAKE_SURF_CASCADE = HOLD.replace(
     law=0.0,
     k_bank_comp=0.15,  # the A320's (plane3d.experts)
     cruise_cas=290.0 * 1852.0 / 3600.0,
@@ -448,11 +504,18 @@ WAKE_SURF_HOLD = HOLD.replace(
     k_x=0.01,  # 1/s
     k_xi=0.0,
 )
+WAKE_SURF_HOLD = WakeSurfHoldParams(
+    **{
+        field.name: getattr(_WAKE_SURF_CASCADE, field.name)
+        for field in dataclasses.fields(_WAKE_SURF_CASCADE)
+    }
+)
 
 
 def make_wake_surf_pid_controller() -> Controller:
-    """``wake_surf``'s expert: the formation hold on the A320, at its station."""
-    return Controller(WAKE_SURF_HOLD, FormationHoldState(), patrol_hold_step)
+    """``wake_surf``'s expert: the formation hold on the A320, on the station
+    its roll trim finds."""
+    return Controller(WAKE_SURF_HOLD, WakeSurfHoldState(), wake_surf_hold_step)
 
 
 def make_patrol_pid_controller() -> Controller:

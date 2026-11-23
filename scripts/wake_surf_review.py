@@ -1,5 +1,9 @@
 """Measurements behind the 2026-11-23 review of ``wake_surf`` (patrol/REALITY.md).
 
+It measured the task as #217 merged it, a still and known wake 2.8 to 3.7 km
+back. The wake has drifted and the station been a prediction since, so a
+fresh run does not reproduce its numbers (patrol/PHYSICS.md).
+
 Nothing here is registered or scored. On training seeds 100 to 109 it flies:
 
 1. the reference the task shipped until that review, a TECS retuned on the 3D

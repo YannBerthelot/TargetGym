@@ -1,28 +1,43 @@
 """``wake_surf``: an A320 surfing an A320's wake (patrol/REALITY.md, patrol/PHYSICS.md).
 
-Contract, from the plant record and the owner's decision of 2026-11-23:
+Contract, from the plant record and the owner's decisions of 2026-11-23:
 
 - The station is on the vortex plane: below the lead by the pair's sink over the
   time in trail, ``w0 t`` with ``w0 = Gamma / (2 pi b0)``, ``Gamma = W / (rho V b0)``
   and ``b0 = pi b / 4`` [Holzapfel and Steen 2007; Blake and Multhopp]. Two line
   vortices lift most on their own plane, so the upwash falls on either side of it.
-- It is 1.2 to 1.3 spans from the lead's centreline, inside the 0.94 to 1.8 spans the
-  extended-formation trials flew [REALITY.md: N2, N1 figure 10].
+- It is 1.38 spans from the wake's centreline, inside the 0.94 to 1.8 spans the
+  extended-formation trials flew [REALITY.md: N2, N1 figure 10], and 1.2 to 1.8 km
+  in trail: their 4,000 ft at the near end, the 50 spans NASA calls the larger end
+  of the usable range at the far one [REALITY.md: N1 III.D, N3 I].
 - Held there, the follower needs 3.5 to 10 % less fuel flow, what those trials
   sustained [REALITY.md: N1 II, V.A]. Upwash ``w`` rotates the lift forward by
   ``w / V``, so the saving is ``W w / V`` of the drag.
+- The wake moves with the air the lead left it in: a sample ``k`` steps old has
+  drifted by the gust the lead met there times ``k`` steps (Taylor's frozen field,
+  as the plant hands the lead's gust to its follower).
+- The station the follower is given is a prediction [REALITY.md: N1 III.B]: off
+  across the track by its wind estimate's error, 1 m/s (ours; 0.5 to 2 in
+  [REALITY.md: M1]), times the time in trail, and held over a 30-minute window.
+  What it reads of its own place from the lead is not touched, and with no sensor
+  noise the station is exact.
+- A wake crossing trips the plant [REALITY.md: N4 VI.D, N1 V.A]: the follower's
+  centreline inboard of the near vortex, ``b0 / 2 = pi b / 8`` = 14.06 m from the
+  wake's centreline. The patrol does not trip on it, and with the wake switched
+  off (``wake_strength`` 0) there is no vortex to cross.
 - Across the wake the station box is 30 m (ours, a span): free inside, then the
   squared excess in box widths. Along track the tolerance is the +-250 ft the
   Gulfstream's pilot was given [REALITY.md: N1 IV], priced the same way.
-- The follower starts in established operation, within 10 m of its station
-  (charter B5: no capture).
+- The follower starts in established operation, within 10 m of its place in the
+  wake (charter B5: no capture).
 - A bank past 60 deg is an upset, a trip [EASA AMC 25.1329, A4.2: Hazardous]; the
   patrol, which does not set ``upset_bank``, does not trip on it.
 - Both seats are A320s: the lead flies the airliner's schedule, 290 KCAS then
   M 0.78, at the A320's 73.5 t.
-- The reference surfs (large): on held-out seeds it never trips, stays inside the box
-  and the along-track tolerance past the scored burn-in, and burns 3.5 to 10 % less
-  fuel than on the same seeds with the wake switched off.
+- The reference surfs (large): on held-out seeds, with the station predicted and
+  the wake drifting, it never trips, stays within 5 m of its place in the wake on
+  average, inside the box and the along-track tolerance past the scored burn-in,
+  and burns 3.5 to 10 % less fuel than on the same seeds with the wake off.
 """
 
 import functools
@@ -36,6 +51,7 @@ import target_gym as tg
 from target_gym.eval import scored_burn_in
 from target_gym.patrol.env import (
     check_is_terminal_patrol,
+    compute_next_state_patrol,
     desired_slot_position,
     slot_delay,
     slot_error,
@@ -113,7 +129,95 @@ def test_the_station_lies_on_the_vortex_plane(seed):
 def test_the_station_is_where_the_trials_flew(seed):
     _, params, state = _reset(seed=seed)
     spans = abs(float(state.slot_right)) / float(params.wingspan)
-    assert 1.2 <= spans <= 1.3
+    assert spans == pytest.approx(1.38, abs=0.005)
+    assert 1_200.0 <= float(state.slot_back) <= 1_800.0
+
+
+def test_the_wake_drifts_with_the_gust_the_lead_left_it_in():
+    """A steady gust held for 5 steps (no key): a sample ``k`` steps old has moved
+    ``k`` times the gust, and the samples laid before the gust began 5 times."""
+    _, params, state = _reset()
+    gust = jnp.array([0.3, -0.8, 0.5])
+    state = state.replace(gust_history=jnp.broadcast_to(gust, (20, 3)))
+    drifting, still = state, state
+    for _ in range(5):
+        drifting, _ = compute_next_state_patrol(jnp.zeros(3), drifting, params)
+        still, _ = compute_next_state_patrol(
+            jnp.zeros(3), still, params.replace(wake_drift=0.0)
+        )
+    moved = np.asarray(drifting.wake_history - still.wake_history)[:8, :3]
+    age = np.minimum(np.arange(8), 5)[:, None]
+    np.testing.assert_allclose(moved, age * np.asarray(gust), atol=0.05)
+
+
+def _scored(seed=3):
+    env, params = tg.make("wake_surf")
+    _, state = env.reset_env(jax.random.PRNGKey(seed), params)
+    return env, params, state
+
+
+def test_the_station_given_is_a_prediction_held_over_the_window():
+    env, params, state = _scored()
+    now = np.asarray(env.get_obs(state, params))
+    late = np.asarray(env.get_obs(state.replace(time=1_700), params))
+    assert abs(now[17] - float(state.slot_right)) > 0.1  # off, on this seed
+    assert late[17] == pytest.approx(now[17], abs=1e-4)
+
+
+def test_a_predicted_station_leaves_the_followers_own_place_as_read():
+    """Its offset from the station moves with the station, so its place from the
+    lead, their sum, is the one the fixes give: within 2 m, five times the
+    0.38 m of two 0.27 m fixes differenced. The tracked distance follows."""
+    env, params, state = _scored()
+    obs = np.asarray(env.get_obs(state, params))
+    _, right, _ = slot_error_vector(state)
+    from_the_lead = float(right) + float(state.slot_right)
+    assert obs[11] + obs[17] == pytest.approx(from_the_lead, abs=2.0)
+    assert obs[24] == pytest.approx(np.hypot(obs[11], obs[12]), abs=1e-3)
+
+
+def test_with_no_sensor_noise_the_station_is_exact():
+    env, params, state = _reset()
+    obs = np.asarray(env.get_obs(state, params))
+    assert obs[17] == pytest.approx(float(state.slot_right), abs=1e-4)
+    assert obs[11] == pytest.approx(float(slot_error_vector(state)[1]), abs=1e-4)
+
+
+@pytest.mark.large
+def test_the_stations_error_is_the_wind_estimates_times_the_time_in_trail():
+    """Over 400 windows the error over the time in trail has the wind
+    estimate's 1 m/s: within 0.12, three standard errors of a standard
+    deviation from 400 draws (1 / sqrt(800))."""
+    env, params = tg.make("wake_surf")
+
+    def wind_error(seed):
+        _, state = env.reset_env(jax.random.PRNGKey(seed), params)
+        speed = jnp.hypot(state.lead.x_dot, state.lead.y_dot)
+        error = env.get_obs(state, params)[17] - state.slot_right
+        return error * speed / state.slot_back
+
+    errors = np.asarray(jax.jit(jax.vmap(wind_error))(jnp.arange(1_000, 1_400)))
+    assert errors.std() == pytest.approx(1.0, abs=0.12)
+    assert abs(errors.mean()) < 0.15
+
+
+@pytest.mark.parametrize("name, trips", [("wake_surf", True), ("patrol", False)])
+@pytest.mark.parametrize("from_the_centreline", [12.0, 16.0])
+def test_a_wake_crossing_trips_the_wake_surfer_only(name, trips, from_the_centreline):
+    _, params, state = _reset(name)
+    side = float(jnp.sign(state.slot_right))
+    inboard = from_the_centreline - abs(float(state.slot_right))
+    state = _at_station(state, right=side * inboard)
+    tripped, _ = check_is_terminal_patrol(state, params)
+    assert bool(tripped) is (trips and from_the_centreline < 14.06)
+
+
+def test_with_the_wake_switched_off_there_is_no_vortex_to_cross():
+    _, params, state = _reset(wake_strength=0.0)
+    inboard = 12.0 - abs(float(state.slot_right))
+    state = _at_station(state, right=float(jnp.sign(state.slot_right)) * inboard)
+    tripped, _ = check_is_terminal_patrol(state, params)
+    assert not bool(tripped)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -182,8 +286,8 @@ def test_both_seats_are_a320s_on_the_airliner_schedule():
 @functools.cache
 def _flights(wake_strength):
     """The shipped expert on the held-out seeds: per seed and step the
-    along-track error, the distance across the wake and the trips, and the
-    fuel each seed burned."""
+    along-track error, the offset across the track, the distance across the
+    wake and the trips, and the fuel each seed burned."""
     env, params = tg.make("wake_surf")
     params = params.replace(wake_strength=wake_strength)
     expert = tg.make_expert("wake_surf")
@@ -200,23 +304,25 @@ def _flights(wake_strength):
                 jax.random.fold_in(key, i), state, action, params
             )
             back, right, up = slot_error_vector(state)
-            return (obs, state, memory), (back, jnp.hypot(right, up), info["tripped"])
+            out = (back, right, jnp.hypot(right, up), info["tripped"])
+            return (obs, state, memory), out
 
         steps = jnp.arange(int(params.max_steps_in_episode))
         (_, last, _), out = jax.lax.scan(step, (obs, state, expert.reset()), steps)
         return out, fuel - last.follower.fuel
 
-    (back, across, tripped), burned = jax.jit(jax.vmap(one))(jnp.array(HELD_OUT))
+    out, burned = jax.jit(jax.vmap(one))(jnp.array(HELD_OUT))
     burn_in = scored_burn_in("wake_surf", params)
-    held = np.asarray(back)[:, burn_in:], np.asarray(across)[:, burn_in:]
-    return *held, np.asarray(tripped), np.asarray(burned)
+    back, right, across = (np.asarray(series)[:, burn_in:] for series in out[:3])
+    return back, right, across, np.asarray(out[3]), np.asarray(burned)
 
 
 @pytest.mark.large
 def test_the_reference_surfs_inside_its_box_and_saves_fuel():
-    back, across, tripped, burned = _flights(1.0)
+    back, right, across, tripped, burned = _flights(1.0)
     *_, burned_alone = _flights(0.0)
     assert not tripped.any()
+    assert np.abs(right.mean(1)).max() <= 5.0, right.mean(1)
     assert across.max() <= 30.0, f"{across.max():.1f} m across the wake"
     assert np.abs(back).max() <= SPACING_M, f"{np.abs(back).max():.1f} m along it"
     saving = 1.0 - burned / burned_alone
