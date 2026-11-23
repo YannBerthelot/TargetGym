@@ -30,7 +30,7 @@ measurement from a session, not a charter record. The sections below this one da
 | `plane_energy` | 3.5 | Extra | Its cost was a climb-rate limit missing from its reference. Goes to Extra as solved once the reference has its rates (#239). |
 
 Decided the same day, for every task: a reference rests at the lowest set point it never
-leaves its zone from ([amendment 6, draft](charter-amendment-6-draft.md)); a task with
+leaves its zone from ([amendment 7, draft](charter-amendment-7-draft.md)); a task with
 little room is kept when the room is beyond seed noise and worth something at the
 plant's scale. `battery` and `unstable_cstr` moved to Extra on 2026-11-15, so they are not in
 this table, though the older one below still lists them.

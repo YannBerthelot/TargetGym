@@ -1,10 +1,13 @@
-# Charter amendment 6 (draft): where a reference rests, and tasks with little room
+# Charter amendment 7 (draft): where a reference rests, and tasks with little room
 
 Status: draft, for the owner to read line by line. The decisions in it were taken by the
 owner on 2026-11-23, by picker, while piloting the per-task review sessions. It proposes
 edits to [task-charter.md](task-charter.md); this file only gives the text. Each change
 names the rule it edits, the wording to add or replace, and the case that showed the gap.
 Nothing here is in force until the owner adopts it.
+
+It was first numbered 6. The charter's Amendment 6 is now the actuator's window, adopted
+the same day with the wind turbine's oracle ([charter-history.md](charter-history.md)).
 
 ## Why
 
