@@ -207,9 +207,8 @@ the flight controls, not the pilot, keep load factor, bank and AOA inside their 
   Honeywell FMGS excerpt).
 - FAA AC 120-5 (1963): turn altitude hold off in severe turbulence (search snippet).
 - ICAO Doc 8168: 25 deg bank or 3 deg/s, whichever is less (search snippet of an AIP).
-- Thrust-limited maximum altitude: where residual climb at max climb thrust falls to 100
-  to 300 fpm (training slides and a forum post, per the 2026-11-08 review; not found in
-  an Airbus manual).
+- Thrust-limited maximum altitude: confirmed since, see "The cruise envelope" below
+  [SF21]: 300 ft/min at a constant Mach.
 - Holding-area design wind: an omnidirectional 2h + 47 kt at h thousand feet, after
   ICAO PANS-OPS Doc 8168 (PPRuNe posts quoting it; a 2003 post gives 3h + 47; the
   primary text was not reached). Used only as the top of the scenarios' wind range.
@@ -308,3 +307,92 @@ names a post-trip state. The owner's call (2026-11-11): a crash loses the sortie
 and the plant restarts as the sortie's replacement, established in cruise; the hour
 of `restart_steps` prices the gap. Since the sortie's level and mass are the outside
 world in a stream, the replacement flies at them.
+
+
+## The cruise envelope (2026-11-23)
+
+What the airliner can hold in cruise, and what threatens its speed there. Each source
+was fetched twice; the chart was read from its vector paths, not by eye.
+
+### Sources
+
+- **[SF21]** Airbus, Safety first #21, January 2016, "Control your speed... in cruise"
+  (de Baudus and Castaigns).
+  <https://mms-safetyfirst.s3.eu-west-3.amazonaws.com/pdf/safety+first/control-your-speed-in-cruise.pdf>
+- **[EASA.A.064]** the [TCDS] above, A320 section, engines: "A320-233: Two IAE V2527E-A5
+  jet engines (MOD 25068)"; "A320-214: Two CFMI CFM 56-5B4 jet engines".
+- **[EASA IM.E.069]** EASA type-certificate data sheet IM.E.069, IAE V2500-A5, -D5 and
+  -E5 series, issue 05, 20 December 2022, section 6: take-off thrust of the V2527-A5,
+  V2527E-A5 and V2527M-A5, 11 031 daN; maximum continuous, 9 892 daN; "ratings are based
+  on Sea Level Static test stand operation". <https://www.easa.europa.eu/en/downloads/7687/en>
+- **[EASA E.003]** EASA type-certificate data sheet E.003, CFM56-5B and -5C series,
+  issue 06, 9 January 2023, 6.1: CFM56-5B4 take-off thrust 12 010 daN.
+  <https://www.easa.europa.eu/en/downloads/7797/en>
+- **[HAMMAMI]** M. O. Hammami, "Turbofan Specific Fuel Consumption, Size, and Mass from
+  Correlated Engine Parameters", master thesis, HAW Hamburg, 2021, p. 21 and 22.
+  <https://www.fzt.haw-hamburg.de/pers/Scholz/arbeiten/TextHammami.pdf>
+- **[BENSEL]** A. Bensel, "Characteristics of the Specific Fuel Consumption for Jet
+  Engines", study thesis, HAW Hamburg, 2018, p. 21.
+  <https://reposit.haw-hamburg.de/bitstream/20.500.12738/13156/3/2018_Bensel_Specific_Fuel_Consumption_for_Jet_Engines.pdf>
+
+Not reached: Mattingly, Elements of Gas Turbine Propulsion (1996), and Scholz's memo of
+2017, which [HAMMAMI] and [BENSEL] reproduce.
+
+### The recommended maximum altitude
+
+- "REC MAX = Min [Service ceiling; Aerodynamic ceiling; Max certified ceiling]" [SF21
+  p. 5]. The service ceiling is the "service curve, corresponding to the propulsion
+  capacity of the aircraft's engines to maintain +300ft/minute at a constant Mach"; the
+  aerodynamic ceiling "corresponds to buffet onset of 1.3g (corresponding to 40 deg of
+  bank angle in level flight)" [SF21 p. 5].
+- "On Airbus aircraft, the REC MAX is always limited by the service ceiling or the
+  certified ceiling", bar the A319 CJ and some A340-500/600 at heavy weights [SF21 p. 6].
+
+### The published envelope: A320-233, 70 t, ISA [SF21 p. 6, figure]
+
+Mach against altitude in feet, each curve's points as drawn:
+
+- **300 ft/min ("Vz 300 ft/min"):** M 0.600 at 34 619; 0.657 at 35 638; 0.689 at 36 162;
+  0.721 at 36 799; 0.739 at 36 991; 0.756 and 0.774 at 37 093, its top; 0.794 at
+  36 336; 0.799 at 36 016; 0.813 at 33 760; 0.822 at 31 460. The "REC MAX ALT" line is
+  drawn at 37 179.
+- **Top speed in level flight at max climb thrust ("VMAX level at Max CLB"):** M 0.768
+  at 39 000; 0.792 at 38 043; 0.807 at 36 919; 0.817 at 35 128; 0.824 at 33 454;
+  0.829 at 31 274 and at 25 157.
+- **ECON speed at cost index 0:** M 0.660 at 25 484; 0.691 at 28 025; 0.713 at 29 946;
+  0.730 at 31 620; 0.751 at 33 978; 0.760 at 36 467, its top; 0.751 at 37 065.
+- **Green dot:** M 0.521 at 23 000; 0.553 at 25 472; 0.615 at 29 782; 0.651 at 32 075;
+  0.709 at 35 447; 0.737 at 36 987; 0.774 at 39 049. "GD speed gives an estimate of the
+  speed for best lift-to-drag ratio" [SF21 p. 3].
+- **Buffet at 1.3 g:** low side, M 0.600 at 29 306, 0.670 at 33 250, 0.739 at 36 991;
+  high side, M 0.822 at 37 145, 0.839 at 32 454.
+
+### What threatens the speed in cruise [SF21 p. 4, 12, 13]
+
+- "In most cases, speed excursion situations are due to rapid wind and temperature
+  variations/evolutions."
+- A continuous speed decay in cruise "may be due to: a large and continuous increase in
+  tailwind or decrease in headwind, in addition to an increase in the Outside Air
+  Temperature (OAT), that results in a decrease of the REC MAX FL, or a large or
+  prolonged downdraft, when the flight crew flies (parallel and) downwind in a
+  mountainous area, due to orographic waves. The downdraft may have a negative vertical
+  speed of more than 500 ft/min."
+- "The nearer the aircraft is to the REC MAX FL, the smaller the thrust margin."
+- Below the speed where max thrust equals drag, "there is no thrust margin available to
+  accelerate while maintaining a stabilized level flight. Then the only way to stop the
+  deceleration is to lose altitude". "The crew should not fly below GD."
+- How large, how long and how often such downdrafts, wind changes and temperature rises
+  are: not found yet.
+
+### Fuel per unit of thrust
+
+- "Mattingly (1996) proposed a linear model to calculate the SFC": `SFC = (1.13e-5 +
+  1.25e-5 M) sqrt(theta)`, `theta = T(h) / T0` [HAMMAMI eq. 2.1]. "This model was later
+  adjusted by Roux (2005) and Scholz (2017) by multiplying the constants by a factor of
+  0.92": `SFC = Ca V + Cb`, `Ca = 3.38e-8 kg/(N m)`, `Cb = 1.04e-5 sqrt(T(h) / T0)
+  kg/(N s)` [HAMMAMI eq. 2.2].
+- [BENSEL eq. 4.1] prints the same line and the same two constants, with the
+  temperature ratio the other way up, `sqrt(T0 / T(h))`. That form does not follow from
+  Mattingly's law as [HAMMAMI eq. 2.1] gives it, and [HAMMAMI p. 31] has the standing
+  consumption fall with altitude; it is taken as a misprint.
+

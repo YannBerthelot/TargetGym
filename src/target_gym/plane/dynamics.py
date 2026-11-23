@@ -598,7 +598,13 @@ def fuel_flow(thrust, air_speed, z, params, xp=jnp, sound=None):
     SI form Roux and Scholz adjusted it to [HAMMAMI eq. 2.1 and 2.2]. It rises
     with speed and falls with the air's temperature, where a constant figure
     put the max-range Mach above the cruise Mach at every weight.
+
+    An aircraft whose parameters do not carry the law's two numbers (the 3D
+    airliner and the Hornet, until they take it) keeps its constant
+    ``specific_fuel_consumption``, kg/(kN s).
     """
+    if not hasattr(params, "fuel_static"):
+        return params.specific_fuel_consumption * 1e-3 * thrust
     if sound is None:
         sound = compute_speed_of_sound_from_altitude(z)
     theta = sound**2 / (1.4 * 287.0 * 288.15)

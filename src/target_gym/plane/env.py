@@ -415,8 +415,8 @@ class PlaneParams(EnvParams):
     #: band width past a band does.
     economy_weight: float = 0.0
     #: The reference cruise's operating cost, kg/s: fuel at FL330, M 0.78,
-    #: 73.5 t (0.742 kg/s in the model) plus the cost index's 0.5.
-    economy_scale: float = 1.242
+    #: 73.5 t (0.837 kg/s in the model) plus the cost index's 0.5.
+    economy_scale: float = 1.337
     # ---- Clearances (``target_pattern = 5``, ``plane_energy``) ----
     #: One clearance per tread, s (ours: a 2 000 ft change at the 500 fpm
     #: minimum takes 240 s, plus a minute held at the new level).
