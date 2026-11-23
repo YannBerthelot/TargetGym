@@ -14,6 +14,8 @@ verified, and Amendment 3, not from the code:
 4. the surge period rises with the discharge volume [C8, p. 4];
 6. the recycle valve reaches 95 % within 2.5 s [C1], and has moved less than
    5 % of its stroke at 0.15 s and more by 0.30 s [C7, 150 to 300 ms];
+   The dead time is the same whenever the command is issued: no travel before
+   0.15 s, on every schedule clock.
 7. surge is counted: one short surge does not trip; a third within the window
    (10 to 20 s [C5]) does.
 And the job [C3, pp. 1-2, 4]: a constant header pressure; inside its zone the
@@ -136,6 +138,32 @@ def test_the_recycle_valve_strokes_with_its_positioner_lag():
     assert xs[t <= 0.15 + 1e-9].max() < 0.05
     assert xs[np.abs(t - 0.30) < 1e-9][0] > 0.05
     assert t[np.argmax(xs >= 0.95)] <= 2.5
+
+
+def test_the_valve_waits_out_its_dead_time_on_every_clock():
+    """[C7]: 150 to 300 ms pass before the valve moves; the task's is 0.15 s.
+    Whatever the schedule's clock reads when the command is issued, the valve
+    has not travelled 0.1 s after it, and has travelled (0.2 - 0.15) s x
+    0.5 /s = 0.025 of its stroke 0.2 s after it."""
+    p = CompressorSurgeParams(demand_sigma=0.0)
+    env = CompressorSurge()
+    _, s0 = env.reset_env(jax.random.PRNGKey(0), p)
+    action = jnp.array([raw_speed(float(s0.N), p), 1.0])
+
+    def travel(clock):
+        s = s0.replace(
+            block_clock=clock,
+            x=jnp.float32(0.2),
+            valve_cmds=jnp.full_like(s0.valve_cmds, 0.2),
+        )
+        s1 = compute_next_state(action, s, p, jax.random.PRNGKey(0))[0]
+        s2 = compute_next_state(action, s1, p, jax.random.PRNGKey(0))[0]
+        return s1.x - 0.2, s2.x - 0.2
+
+    first, second = jax.vmap(travel)(jnp.arange(1200))
+    # float32 holds an opening near 0.2 to 1.5e-8.
+    np.testing.assert_allclose(np.asarray(first), 0.0, atol=1e-7)
+    np.testing.assert_allclose(np.asarray(second), 0.025, atol=1e-6)
 
 
 def _run_counting(p, action_of, seconds):

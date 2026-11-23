@@ -1,5 +1,5 @@
 {
-  "fingerprint": "b8e7209d0540776b",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). compressor_surge: the reset and a trip's restart are established operation on a 10 % control line at the header setpoint (charter B5; owner, 2026-11-23), where the fixed 35 % recycle started normal days below the header zone at top speed. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-23T15:19:28+00:00"
+  "fingerprint": "d6a18a4fd22c480f",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). compressor_surge: the reset and a trip's restart are established operation on a 10 % control line at the header setpoint (charter B5; owner, 2026-11-23), and the valve's dead time is counted in whole substeps, where float32's rounding of the clock made it 0.14 s on four steps in five (owner, 2026-11-23). Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T16:19:08+00:00"
 }
