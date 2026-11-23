@@ -36,7 +36,9 @@ from target_gym.reactor.env import (
 )
 from target_gym.reactor.env_jax import CONTROL_PERIOD, Reactor
 
-P = ReactorParams()
+#: The hand values here are the start of the cycle's (1690 ppm, -12 pcm/K, -8 pcm/ppm);
+#: the task draws the cycle point since 2026-11-15 (test_reactor_cycle.py).
+P = ReactorParams(cycle_range=(0.0, 0.0))
 ENV = Reactor()
 QUIET = P.replace(demand_sigma=0.0)
 
@@ -77,7 +79,7 @@ def _hold(state, params, seconds, raw=None):
     raw = _action(state) if raw is None else raw
 
     def body(s, _):
-        return compute_next_state(jnp.array([raw, 0.0]), s, params)[0], None
+        return compute_next_state(jnp.array([raw, 0.0, 1.0]), s, params)[0], None
 
     steps = int(seconds / float(params.delta_t))
     return jax.lax.scan(body, state, None, length=steps)[0]
@@ -151,7 +153,7 @@ def test_inserting_rods_lowers_power_on_the_scored_step():
     """Past an inner solve of about 1.25 s, TR-BDF2 misses the prompt jump and this
     goes the wrong way: 40 pcm in, then a 5 s sub-step, reads 1.04 at two solves."""
     state, params = _lined_out(0.8)
-    new, _ = compute_next_state(jnp.array([-1.0, 0.0]), state, params)
+    new, _ = compute_next_state(jnp.array([-1.0, 0.0, 1.0]), state, params)
     assert float(new.n) < 0.8
 
 
@@ -195,7 +197,7 @@ def test_rods_move_at_72_steps_a_minute_both_ways(raw, sign):
     """72 / 60 / 228 of the stroke a second, over the 5 s sub-step: 6 steps."""
     state, params = _lined_out(0.8)
     state = state.replace(rod_in=jnp.float32(0.5))
-    new, _ = compute_next_state(jnp.array([raw, 0.0]), state, params)
+    new, _ = compute_next_state(jnp.array([raw, 0.0, 1.0]), state, params)
     moved = (float(state.rod_in) - float(new.rod_in)) * 228.0
     assert moved == pytest.approx(sign * 6.0, rel=1e-3)
 
@@ -206,12 +208,12 @@ def test_wear_charges_travel_and_not_a_command_the_rods_cannot_reach():
     move nothing, so it costs nothing."""
     state, params = _lined_out(0.8)
     state = state.replace(rod_in=jnp.float32(0.5))
-    new, _ = compute_next_state(jnp.array([1.0, 0.0]), state, params)
+    new, _ = compute_next_state(jnp.array([1.0, 0.0, 1.0]), state, params)
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(
         6.0, rel=1e-3
     )
     stuck = state.replace(rod_in=jnp.float32(0.0))
-    new, _ = compute_next_state(jnp.array([1.0, 0.0]), stuck, params)
+    new, _ = compute_next_state(jnp.array([1.0, 0.0, 1.0]), stuck, params)
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(0.0)
 
 
@@ -240,7 +242,7 @@ def test_a_step_sums_the_sub_steps_of_a_moving_rod():
     state, params = _lined_out(0.8)
     state = state.replace(rod_in=jnp.float32(0.5))
     _, _, _, _, info = ENV.step_env(
-        jax.random.PRNGKey(0), state, jnp.array([1.0, 0.0]), params
+        jax.random.PRNGKey(0), state, jnp.array([1.0, 0.0, 1.0]), params
     )
     assert float(info["reward_terms"]["running"]) == pytest.approx(36.0, rel=0.01)
 

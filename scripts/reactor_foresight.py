@@ -48,9 +48,9 @@ def reference_actions(env, p, ref, seed):
 def plan_cost(env, p, seed, actions, surrogate=False):
     """The cost of a plan from the reset of ``seed``, as the reward charges it.
     With ``surrogate``, also the planner's hinges, which give the timed limits a
-    gradient: the band's (``oracle.PLAN_BAND_WEIGHT``) on each step's offset, and
+    gradient: the band's (``reactor_rods_model.PLAN_BAND_WEIGHT``) on each step's offset, and
     a step of lost output per K of Tavg above its DNB limit."""
-    from target_gym.reactor.oracle import PLAN_BAND_WEIGHT
+    from reactor_rods_model import PLAN_BAND_WEIGHT
 
     _, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
