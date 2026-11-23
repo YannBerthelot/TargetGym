@@ -97,14 +97,15 @@ def save_video(
     # Use step_env (no auto-reset) when available to avoid gymnax's auto-reset
     # connecting terminal and initial states in the rendered frames (triangle artifact).
     use_step_env = hasattr(env, "step_env") and hasattr(env, "default_params")
+    # Compiled once: as plain Python, a task's sub-step loops are compiled again
+    # on every step and JAX keeps each program, tens of GB over a long episode.
+    step_env = jax.jit(env.step_env) if use_step_env else None
 
     while not done:
         action = select_action(obs, state) if needs_state else select_action(obs)
         if use_step_env:
             action = jnp.asarray(action)
-            obs, state, reward, terminated, info = env.step_env(
-                key, state, action, params
-            )
+            obs, state, reward, terminated, info = step_env(key, state, action, params)
         elif hasattr(env, "default_params"):
             obs, state, reward, terminated, info = env.step(key, state, action, params)
         else:

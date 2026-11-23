@@ -411,6 +411,12 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- `make_gymnasium` environments and `save_video` compile the task's step once.
+  They called it as plain Python, where a task's sub-step loops are compiled
+  again on every step and JAX keeps each program: 14 of the 25 tasks grew
+  with every step, the reactor by 22 to 50 MB, until the process ran out of
+  memory. `env.step` was never affected. Values agree with the uncompiled
+  step to float32 rounding.
 - **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
   job** (battery, boiler_drum, compressor_surge, distillation, hvac,
   ph_neutralization, wind_turbine). It now returns their cost ratio, and the
