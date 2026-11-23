@@ -133,6 +133,42 @@ def test_wind_plan_costs_what_the_env_charges_bar_the_tower():
     np.testing.assert_allclose(planned, replayed - terms["tower"], rtol=1e-9)
 
 
+def test_wind_receding_plan_charges_the_episodes_own_curtailment():
+    """The oracle is the problem definition, so its receding model reads the
+    de-rate the episode carries (``state.derate_level``, its start and its end),
+    not its own params' (owner, 2026-11-23). The shipped oracle plans on the
+    registered task's params, which have no de-rate; the episode here is
+    de-rated to 0.9 from 1 s (step 4), with no turbulence and no tower term so
+    the mean path is the wind. Torque falls at its rate limit, so power drops
+    under both ratings and lost production is priced on every step: the plan
+    then charges what the env charges, to float64 rounding. Read at the params'
+    rating of 1.0, it charges 0.1 of rated power more per step once the de-rate
+    starts."""
+    from target_gym.energy.wind_turbine.oracle import wind_model
+
+    spec = REGISTRY["wind_turbine"]
+    env = spec.make_env()
+    still = dict(turbulence_iref=0.0, tower_share=0.0)
+    run = spec.make_test_params(derate_to=0.9, derate_window=(1.0, 1.0), **still)
+    moves = [[0.0, -1.0]] * 10  # torque stays above 0, inside the move rows
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    with enable_x64():
+        st = float64(env.reset_env(resets[0], run)[1])
+        tm = wind_model(env, float64(spec.make_test_params(**still)))
+        d = {"task": tm.data(st), "widths": jnp.zeros(5)}
+        x, planned = tm.state_x(st), 0.0
+        for t, u in enumerate(moves):
+            x, c, y = tm.step(d, x, jnp.asarray(u, jnp.float64), t)[:3]
+            planned += float(c + hinge_costs(tm.hinges, jnp.asarray(y)))
+        p64, s, replayed = float64(run), st, 0.0
+        for t, u in enumerate(moves):
+            a = tm.action(s, jnp.asarray(u, jnp.float64))
+            _, s, r, _, info = env.step_env(steps[t, 0], s, a, p64)
+            assert not bool(info["tripped"])
+            replayed -= float(r)
+    np.testing.assert_allclose(planned, replayed, rtol=1e-9)
+
+
 def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
     """The outer loop's contract (Loew and Bottasso 2022, online rainflow): with
     the tower's turning points frozen at the plan's own, the planned fatigue is

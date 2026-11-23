@@ -14,7 +14,9 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   bilinear lookup at width 0 (``table_weights``); the wind after every step:
   on its noise-free mean path in the registry's receding slot, and on the
   episode's own path for the ceiling (``ceiling_data``), which knows the
-  turbulence ahead as a ceiling may;
+  turbulence ahead as a ceiling may; the gust and the de-rate as the episode
+  carries them (their own clocks, the gust's size, the de-rate's level and
+  end), not the params' (owner, 2026-11-23);
 - objective: the score's lost production against the available power (the
   rating, timed curtailment included, or the wind at peak Cp), a one-sided
   epigraph row, and the pitch system's wear, an absolute row on the pitch's
@@ -176,13 +178,20 @@ def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
-    after = (now + t + 1) * p.delta_t
+    v_mean, v_turb, now, (gust_t0, gust_c0, size), derate, path = task[1:7]
     if path is None:
+        # Each event as the episode carries it (env.py, ``step_env``): its own
+        # clock, the gust's size and the de-rate's level and end, so the plan
+        # sees the episode's curtailment, not the params' (owner, 2026-11-23).
+        derate_t0, derate_c0, level, until = derate
+        t_gust = (now + t + 1 - gust_c0) * p.delta_t
+        t_derate = (now + t + 1 - derate_c0) * p.delta_t
         decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
-        v_wind = v_mean + v_turb * decay ** (t + 1) + gust(after, v_mean, gust_t0, p)
-        derated = (derate_t0 >= 0.0) & (after >= derate_t0)
-        rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
+        v_wind = (
+            v_mean + v_turb * decay ** (t + 1) + gust(t_gust, v_mean, gust_t0, p, size)
+        )
+        derated = (derate_t0 >= 0.0) & (t_derate >= derate_t0) & (t_derate < until)
+        rating = jnp.where(derated, level, p.rating) * p.P_rated
     else:  # the episode's own wind and rating, t + 1 steps after the start
         k = jnp.minimum(t, path.shape[0] - 1)
         v_wind, rating = path[k, 0], path[k, 1]
@@ -250,8 +259,10 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             s.moment_turn,
         ]),  # fmt: skip
         data=lambda s: (
-            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0, None
-        ),
+            s.target_power, s.v_mean, s.v_turb, s.time,
+            (s.gust_t0, s.gust_c0, s.gust_size),
+            (s.derate_t0, s.derate_c0, s.derate_level, s.derate_until), None,
+        ),  # fmt: skip
         hold=lambda s: jnp.zeros(2, s.omega.dtype),
         action=lambda s, v: raw_command(p, jnp.stack([s.pitch, s.torque]), v),
         tracked=lambda s: electrical_power(s.omega, s.torque, p)[None],
@@ -305,8 +316,10 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
 
     path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
-        state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
-        state.derate_t0, path,
+        state.target_power, state.v_mean, state.v_turb, state.time,
+        (state.gust_t0, state.gust_c0, state.gust_size),
+        (state.derate_t0, state.derate_c0, state.derate_level, state.derate_until),
+        path,
     )  # fmt: skip
 
 
