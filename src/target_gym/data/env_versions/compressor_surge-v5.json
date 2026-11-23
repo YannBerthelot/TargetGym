@@ -1,5 +1,5 @@
 {
-  "fingerprint": "6242058a65d6eecc",
-  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-14T14:45:07+00:00"
+  "fingerprint": "76c0aa0b5073184a",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). compressor_surge: the reset and a trip's restart are established operation on a 10 % control line at the header setpoint (charter B5; owner, 2026-11-23), where the fixed 35 % recycle started normal days below the header zone at top speed. Every record is redone in the re-record pass. Stamped again on the merge with the review fixes of PR 203, which change no step, reward or observation here: A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
+  "stamped": "2026-11-23T16:21:09+00:00"
 }

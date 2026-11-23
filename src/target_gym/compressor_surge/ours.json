@@ -12,6 +12,12 @@
    "hi": 0.104,
    "unit": "of rated per s",
    "why": "ours (3 %/s, TUNED); the two readings of Gravdahl et al. 2002 Table 2, 1.66 %/s (rad/s^2) to 10.4 %/s (rev/s^2), converted from % per s to a fraction; compressor_surge/PHYSICS.md:626-640. Source-reading bounds, not a stated family range: confirm before use; the ends are the two published readings, not a stated family range (owner, 2026-11-12)"
+  },
+  "reset_margin": {
+   "lo": 0.1,
+   "hi": 0.15,
+   "unit": "of surge flow at speed",
+   "why": "ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1]; 0.10 is the lower end (compressor_surge/env.py, established_point; PHYSICS.md, version 4, Episode)"
   }
  },
  "coupled": [],
