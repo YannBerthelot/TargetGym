@@ -3,8 +3,12 @@
 What the plant's datasheet and balances say, and nothing read from a score
 (PHYSICS.md section 10). Two stages in series, each with its own valve and probe:
 stage 1's base valve on its probe, stage 2's trim valve on the discharge probe. The
-discharge is a zone, pH 6 to 8 [P7], cheap side low (less base holds a lower pH), so
-its loop holds 2 sigma above 6; stage 1 has no zone and follows the same setpoint.
+discharge is a zone, pH 6 to 8 [P7], cheap side low (less base holds a lower pH).
+The score charges every step outside it as an excursion, the price of a violation,
+so its loop holds the lowest tenth of a pH above 6 at which the reference leaves the
+permit on none of its seeds (J1, owner, 2026-11-23), not 2 sigma above 6; stage 1
+has no zone and follows the same setpoint. An episode starts on the set point the
+operator holds (rule 17), so each candidate is run from its own.
 """
 
 from __future__ import annotations
@@ -28,11 +32,19 @@ def row() -> Row:
 
     spec = REGISTRY["ph_neutralization"]
     p = spec.make_test_params()
-    # Bump tests at the reset steady state with the upsets and the buffer's drift at
-    # 0 (PHYSICS.md section 10).
-    test = {"acid_upset_size": 0.0, "flow_swing": 0.0, "q2_noise_std": 0.0}
     low, high = float(p.permit_low), float(p.permit_high)
     centre = 0.5 * (low + high)
+    # Bump tests with the upsets and the buffer's drift at 0, on the steady state at
+    # the zone's centre (PHYSICS.md section 10). The loop may be placed anywhere from
+    # the cheap edge to the centre, and the titration curve is steepest at the centre
+    # there, so J1's most sensitive point is the centre's whatever is placed; testing
+    # there also keeps the gains from depending on the set point they then place.
+    test = {
+        "acid_upset_size": 0.0,
+        "flow_swing": 0.0,
+        "q2_noise_std": 0.0,
+        "setpoint_pH": centre,
+    }
     q3_min, span = float(p.q3_min), float(p.q3_max - p.q3_min)
     q2_nominal = float(p.q2_nominal)
 
@@ -91,6 +103,10 @@ def row() -> Row:
         du,
         window,
         zone=(low, high, "low"),
+        # Leaving the permit is the reward's ``excursion`` term [P8].
+        exit_terms=("excursion",),
+        # The reset puts both tanks on the steady state at ``setpoint_pH``.
+        established=lambda setpoint: {"setpoint_pH": float(setpoint)},
     )
     # The field case's "kicker" steps the second stage's valves open on low pH
     # [P3, pp. 4-5]: an override on the trim, holding the discharge above the

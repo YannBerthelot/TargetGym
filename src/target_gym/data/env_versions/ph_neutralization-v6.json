@@ -1,5 +1,5 @@
 {
-  "fingerprint": "d3fb87792e20e415",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "7602c460701d296d",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.4 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T16:34:26+00:00"
 }
