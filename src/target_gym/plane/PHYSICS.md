@@ -776,6 +776,28 @@ plant's 300 ft/min ceiling sets at these masses: `plane` cruises from FL290 to F
 1.3 g buffet limit alone), and the stream's `ceiling_levels` are FL350 at 73.5 t and
 FL330 at 78 t.
 
+**Mountain waves** (`wave_wind`, `tests/plane/test_plane_waves.py`). The cruise threats
+Airbus names [SF21 p. 13] enter `plane` as two scenarios, 1 % of cruise time each (the
+owner's figure, 2026-11-23: no source gives how often an airliner in cruise meets one;
+taken from the normal window, 0.40 to 0.38).
+
+| Scenario | What the air does | Size | Length |
+|---|---|---|---|
+| `wave_downdraft` | sinks, a half-sine (shape ours) | peak 3.0 to 4.5 m/s: ICAO's severe mountain wave [SIGMET] to the top of the Sierra Wave Project's weak class [WILDMANN] | 25 km of track [BRAMBERGER Figure 2] |
+| `wave_headwind_loss` | the along-track wind turns to a tailwind on a half-cosine (shape ours) and stays | 10 to 20 m/s: about 20 in the recorded case [BRAMBERGER Figure 2], the lower half ours | 25 km of track |
+
+The aircraft meets the wave between 300 and 1 500 s (ours: the wave and what follows it
+inside the window). The wave is the outside world's, kept through a trip's restart and
+a new sortie, hidden as a gust is, and read at once by the air data. In a stream it is
+the task's own event, two an hour in a wave regime (ours: the window's one in 30 min).
+The temperature rise of the recorded case, about 8 K, is not modelled: the atmosphere
+takes no offset yet.
+
+The reference in them, 12 paired seeds: 1 818 in the downdraft and 1 828 in the head
+wind loss against 1 808 in calm air, no trip, the altitude band never left, the speed
+band left on 0 and 6 seeds of 12. The thrust margin holds the waves at most levels;
+only near FL350 does the reference give up speed.
+
 **Known deviations of this amendment** (owner, 2026-11-23).
 - The chart's top speed in level flight at max climb thrust, where the residual climb
   is zero, is 700 to 1 700 ft under the plant's from M 0.77 to 0.82. Effect: at the top
