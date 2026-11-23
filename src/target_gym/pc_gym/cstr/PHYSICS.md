@@ -319,7 +319,7 @@ search, says what was looked for):
 |---|---|---|---|
 | band on the temperature | 1 K either side of the setpoint; product made outside it counts for nothing | no tolerance found in [S1], [S9] or [S12] | 0.5 to 2 K |
 | feed's floor | 40 g/s | S1's range starts at 0 [S1, Table 1]; no turndown found | 0 to 40 g/s |
-| start of a window | full cooling: the reactor on its setpoint, the water valve at its top and the feed that takes (or the feed at its top and the water that takes) | a choice of established production; no source | none |
+| start of a window | the reactor on its setpoint, the water valve at 95 % of its span and the feed that takes (or the feed at its top and the water that takes) | sourced since the first sweep: [S13]'s example holds the valve at 95 %, short of its limit. The first choice, the valve at its top (ours), left no cooling at the first step, and the reference could not be placed in a band under 0.9 K | none |
 | setpoint move | S1's 2 C [S1, Fig. 2] as a ramp over 60 min | derived: S1's closed loop took about an hour to its peak, and a band that jumped 2 K could not be kept | 30 to 120 min |
 | feed build-up | 10 % | sourced as an event [S3], its size ours; with a feed to cut it can be held | 3 to 10 % |
 | cooling loss | 5 min | as the task above | 2 to 8 min |

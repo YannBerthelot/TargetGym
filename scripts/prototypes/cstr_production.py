@@ -20,9 +20,9 @@ What changes from ``pc_gym.cstr``, and why:
   than ``T_band`` (ours: 1 K) off its setpoint is off-spec and counts for
   nothing. A trip loses 4 h of nameplate production, as the shipped task prices
   it. One unit throughout, so no price is needed.
-- The window starts in established production at full cooling: the reactor on
-  its setpoint, the water valve at ``valve_rest`` of its span (1: its top) and
-  the feed that takes, or the feed at its top and the water that takes.
+- The window starts in established production: the reactor on its setpoint, the
+  water valve at ``valve_rest`` of its span (0.95, where [P1]'s example holds
+  it) and the feed that takes, or the feed at its top and the water that takes.
 
 The reference is the ladder's (``scripts/reference_ladder.py``, run on this plant
 in this process): the temperature on the water by SIMC, and its valve position
@@ -93,7 +93,11 @@ class ProdParams(CSTRParams):
     q_min: float = 2.4  # L/min, 40 g/s (ours)
     q_max: float = 6.6  # L/min, 110 g/s [S1, Table 1]
     T_band: float = 1.0  # K either side of the setpoint (ours)
-    valve_rest: float = 1.0  # of the water valve's span at the reset: its top
+    #: The water valve at the reset, of its span: where [P1]'s example holds it, "some
+    #: back-off" keeping it "within the controllable range" [P1, pp. 436, 438]. At
+    #: its top (the first choice, ours) the reference had no cooling left at the
+    #: first step and could not be placed in a band under 0.9 K.
+    valve_rest: float = 0.95
     #: Minutes a setpoint move takes. Derived: S1's closed loop took about an hour
     #: to carry its 2 C move to its peak [S1, Fig. 2], and a band that jumped 2 K
     #: at once could not be kept by anything.
