@@ -293,8 +293,18 @@ the real splitter's is 111 min [D4, G2]. The task is Column A.
 ## 11. What the reference ladder row needs
 
 - Zones: yD at least `yD_spec` (0.9857), cheap side low (less purity, less
-  boilup); xB at most `xB_spec` (0.0143), cheap side high. The reference sits
-  2 sigma inside each cheap edge (`ladder.zone_setpoint`, rule 22).
+  boilup); the reference sits 2 sigma inside that edge
+  (`ladder.zone_setpoint`, rule 22). xB at most `xB_spec` (0.0143) has no
+  cheap side since the score prices the light key (v8): purer bottoms cost
+  boilup, less pure bottoms lose light key, and the column at rest costs
+  least at xB 0.0075 (3.567 a step, against 3.680 two sigma inside the
+  spec), the bottoms over-purified as D8 finds with energy this cheap. The
+  reference rests the bottoms there (`scripts/ladder_rows/distillation.py`,
+  `_bottoms_rest`), from the balances and the score's prices, where the flow
+  box can hold it. The box is 5 % over what the specs need, and at 20 % more
+  feed the over-purified bottoms need more reflux than it has, so the
+  setpoint follows the metered feed (`_bottoms_schedule`): 0.0075 up to 10 %
+  more feed, back to two sigma inside the spec at 20 % more.
 - Scenarios: the four of section 8, from `EnvSpec.scenarios`.
 - Bump tests at the design point with `feed_step` and `zF_step` at 0.
 - PI by SIMC on the analysers (5 min sample, 5 min dead time), then

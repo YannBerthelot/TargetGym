@@ -129,6 +129,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `demand_dev_reset_clip` | 3 | - |
 | `surge_trip_count` | 3 | - |
 | `surge_window` | 15 | s |
+| `reset_margin` | 0.1 | - |
 | `N_reset` | 1 | - |
 | `x_reset` | 0.35 | - |
 | `reset_newton_iters` | 6 | - |
