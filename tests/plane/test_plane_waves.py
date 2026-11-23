@@ -40,11 +40,17 @@ def _scenario(name):
     return next(s for s in suite() if s.name == name)
 
 
+#: One wind-sensor environment and one compiled step for the whole module: the
+#: parameters are an argument, so every scenario runs the same program.
+_SENSOR = Airplane2D(observe_wind=True)
+_STEP = jax.jit(_SENSOR.step_env)
+
+
 def _window(name, seed, **changes):
     """The wind a sensor reads through one calm window of scenario ``name`` flown
     on the trim action: ``(along-track m/s, vertical m/s, airspeed m/s, assigned
     true airspeed m/s)``, one row a second."""
-    sensor = Airplane2D(observe_wind=True)
+    sensor, step = _SENSOR, _STEP
     _, params = tg.make(
         "plane",
         **{
@@ -58,7 +64,6 @@ def _window(name, seed, **changes):
     obs, state = sensor.reset_env(key, params)
     action = sensor.trim_action(state, params)
     assigned = float(obs[sensor.obs_index["target_speed"]])
-    step = jax.jit(sensor.step_env)
     rows = [np.asarray(obs)]
     for k in jax.random.split(key, int(params.max_steps_in_episode) - 1):
         obs, state, *_ = step(k, state, action, params)
