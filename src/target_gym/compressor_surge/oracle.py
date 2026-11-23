@@ -16,7 +16,10 @@ section 5.4, and decision S10), run by
   ``data/oracle_widths/compressor_surge.json``); the valve behind its
   positioner's dead time, as the env passes it (``history``): the state
   carries the commands still in the positioner; the consumers' deviation on
-  its noise-free mean path, a^t times its measured value;
+  its noise-free mean path, a^t times its measured value; their schedule at
+  the ramp the episode's own schedule carries (``schedule_ramp``: 1, 5 or
+  15 s by scenario), as the env reads it, not the params' (owner, 2026-11-23:
+  the problem the oracle solves is the episode's);
 - objective (version 3, charter Amendment 3): the recycle energy in kJ, and
   the header zone as a smooth hinge, the zone price per second past the band
   (T2);
@@ -43,6 +46,7 @@ from target_gym.compressor_surge.env import (
     compute_velocity,
     live_target,
     recycle_flow,
+    schedule_ramp,
     scheduled_setpoint,
     suction_density,
 )
@@ -105,7 +109,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     phi_min, the substep Phis, the rate limits' arguments)``. ``widths`` are
     the drive's and the valve's (0.0 is the exact clip), and ``deltas[i, j]``
     is added to site i's output at substep j (K5's probe)."""
-    _, demand, clock, drift, time = task
+    _, demand, clock, drift, time, ramp = task
     n, K = _substeps(env.integration_method), history(p)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
@@ -133,7 +137,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
         xv = xv + softplus_clip(args[1], -lo_x, hi_x, widths[1]) + deltas[1, j]
         velocity = partial(
             compute_velocity, action=None, N_ramp=N_ramp, x=xv, dev=dev,
-            demand_levels=demand, params=p,
+            demand_levels=demand, params=p, ramp=ramp,
         )  # fmt: skip
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, (clock + t) * p.delta_t + j * h]),
@@ -178,6 +182,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         ),
         data=lambda s: (
             s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev, s.time,
+            schedule_ramp(s, p),
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
