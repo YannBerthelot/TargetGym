@@ -85,6 +85,22 @@ at fixed T), since decomposition grows stiff near the trip.
 initiator in the reactor are hidden: no on-line measurement of them is in the
 sources.
 
+### Task: `unstable_cstr`
+
+Hold the temperature of an LDPE autoclave at its setpoint with the initiator
+feed, at an operating point that is unstable without control. The policy reads
+the temperature, its own initiator feed and the setpoint. Conversion and the
+initiator in the reactor are hidden. Each step is charged the squared
+temperature error, counted in units of 1 K. A reactor that reaches 573 K
+trips, which is charged as a restart; a reactor that cools down pays only the
+tracking cost.
+
+| obs | meaning |
+|---|---|
+| 0 | `T`, reactor temperature (K) |
+| 1 | initiator feed, percent of its 0 to 1e-3 kmol/m3 range |
+| 2 | reactor temperature setpoint (K) |
+
 ---
 
 ## 5. Episode and scenarios (rules 17, 20 and J4)

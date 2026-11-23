@@ -125,6 +125,28 @@ and the plant runs on (D5).
 The buffer flow, the acid strength and the invariants are hidden: no source
 shows them measured.
 
+### Task: `ph_neutralization`
+
+Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6
+to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without
+overdosing. The policy reads both stages' pH probes, its two valves, the
+influent flow, the time spent outside the permit and the diversion basin's
+level. The buffer flow and the acid strength are hidden. Each step is charged,
+in litres of reagent, the reagent used, the time outside the permit, and the
+effluent diverted while the discharge is below pH 5. One excursion longer than
+60 min, or an overrun basin, is a violation and is charged as a restart.
+
+| obs | meaning |
+|---|---|
+| 0 | discharge pH, stage 2's probe |
+| 1 | stage-1 reagent valve, percent of its range |
+| 2 | pH set point |
+| 3 | minutes outside the permit in this excursion |
+| 4 | stage-1 pH, its probe |
+| 5 | stage-2 trim valve, percent of its maximum |
+| 6 | influent flow (mL/s) |
+| 7 | diversion basin level, percent of its volume |
+
 ---
 
 ## 5. Episode (rule 17)

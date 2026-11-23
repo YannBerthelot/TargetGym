@@ -13,7 +13,7 @@ env, params = tg.make("compressor_surge")
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((7,))` |
+| Observation space | `Box((8,))` |
 | Tracked variable(s) | header pressure (kPa) |
 | Episode length | 1200 steps of 0.1 s (2 min) |
 | Cite as | `compressor_surge-v5` |
@@ -31,7 +31,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[6]`.
+8 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[6]`.
 
 | # | meaning |
 |---|---|
@@ -42,16 +42,19 @@ actuator range inside the environment.
 | 4 | drive speed setpoint, percent of rated |
 | 5 | recycle valve opening (%) |
 | 6 | target header pressure (kPa) |
+| 7 | surges counted within the last `surge_window` seconds, as the trip's counter reads |
 
 ## Rewards
 
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `energy`, `zone`, `surge`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -59,11 +62,11 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 17 fields.
+`reset` samples the initial condition and the target; state has 20 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The counted-surge trip [C5; C3, p. 3]: ``surge_trip_count`` surges within ``surge_window``. A NaN fails the comparison, so a non-finite proposal trips. No trip on the line itself: crossing it is the start of a surge, which is counted when the flow reverses. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 1200 steps.
 
@@ -73,10 +76,10 @@ Recorded over 10 seeds of the 1200-step episode (see [Baseline results](../basel
 
 | controller | mean return | cost per step |
 |---|---|---|
-| PID | -2.208e+06 | 1840 |
-| MPC | -1.226e+05 | 102.2 |
+| PID | -9.59e+04 | 79.92 |
+| MPC | -1.388e+05 | 115.7 |
 
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+The MPC beats the PID on 0 of 10 seeds and does not trip the plant on any of them.
 
 ## Arguments
 
@@ -113,7 +116,10 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `drive_rate` | 0.03 | 1/s |
 | `tau_N` | 1 | s |
 | `valve_open_rate` | 0.5 | 1/s |
+| `valve_lag` | 0.15 | s |
 | `valve_close_rate` | 0.1 | 1/s |
+| `header_setpoint` | 24000 | Pa |
+| `header_band` | 1200 | Pa |
 | `setpoint_block_steps` | 300 | steps |
 | `setpoint_ramp_s` | 10 | s |
 | `demand_block_steps` | 200 | steps |
@@ -121,24 +127,20 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `demand_sigma` | 0.02 | - |
 | `demand_theta` | 0.2 | 1/s |
 | `demand_dev_reset_clip` | 3 | - |
-| `surge_offset_max` | 0.05 | - |
+| `surge_trip_count` | 3 | - |
+| `surge_window` | 15 | s |
 | `N_reset` | 1 | - |
 | `x_reset` | 0.35 | - |
 | `reset_newton_iters` | 6 | - |
 | `soft_min_temperature` | 0.001 | - |
 | `time_unit_seconds` | 1 | s |
-| `reward_version` | 2 | - |
-| `e_floor` | 0.0275 | kPa |
-| `e_tol` | 0 | kPa |
-| `tracking_exponent` | 2 | - |
-| `dp_error_max` | 20.68 | kPa |
-| `failure_cost` | 1.13101e+06 | reward |
+| `reward_version` | 3 | - |
+| `energy_price` | 1 | 1/kJ |
+| `zone_price` | 1000 | kJ/s |
+| `surge_price` | 2000 | kJ |
+| `failure_cost` | 2200 | kJ |
 | `restart_steps` | 9000 | steps |
-| `c_hold` | 62270 | W |
-| `running_weight` | 1 | - |
-| `travel_free` | 0.0025 | 1/step |
-| `travel_weight` | 1 | - |
+| `e_floor` | 1.2 | kPa |
 | `precision_floor` | 0.0275 | kPa |
-| `rho_floor_tracking` | 1.40284e-05 | reward |
-| `rho_floor` | 1.40284e-05 | reward |
+| `dp_error_max` | 20.68 | kPa |
 

@@ -19,6 +19,32 @@ level to steam and feedwater moves. It is in the model through the steam
 distribution in the risers and under the water surface, Astrom and Bell's
 fourth-order model.
 
+### Task: `boiler_drum`
+
+Keep a boiler's drum water level between its low and high trip levels while
+the load moves, using the feedwater and the firing, and deliver the steam the
+load plan asks for. The level first moves the wrong way after a steam or
+feedwater change (shrink and swell). The policy reads the level, the pressure,
+the steam flow, its two actuators, the load plan and the caps an upset puts on
+firing and feedwater. Each step is charged, in GBP, the steam delivered off
+the plan beyond the meter's resolution. A level past either trip level for
+more than 10 s trips the unit, which is charged as a hot restart.
+
+| obs | meaning |
+|---|---|
+| 0 | drum level, deviation from normal water level (m) |
+| 1 | drum pressure (bar) |
+| 2 | steam flow drawn by the turbine (kg/s) |
+| 3 | firing, percent of its maximum |
+| 4 | feedwater flow, percent of its maximum |
+| 5 | level target, always 0 (m) |
+| 6 | pressure setpoint (bar) |
+| 7 | load now: the steam the turbine valve passes at nominal pressure (kg/s) |
+| 8 | load the plan ramps to (kg/s); during an upset, the runback's load if lower |
+| 9 | seconds until the ramp starts, 0 once it has |
+| 10 | firing the plant can still deliver, percent of its maximum |
+| 11 | feedwater the plant can still deliver, percent of its maximum |
+
 ## 2. Model
 
 The plant is the four-state model of [S1], ported from the authors' own

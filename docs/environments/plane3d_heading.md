@@ -13,9 +13,9 @@ env, params = tg.make("plane3d_heading")
 | | |
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
-| Observation space | `Box((15,))` |
+| Observation space | `Box((19,))` |
 | Tracked variable(s) | altitude (m) |
-| Episode length | 300 steps of 1 s (5 min) |
+| Episode length | 600 steps of 1 s (10 min) |
 | Cite as | `plane3d_heading-v9` |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
@@ -32,7 +32,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-15 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
+19 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[2]` against `obs[10]`.
 
 | # | meaning |
 |---|---|
@@ -51,16 +51,22 @@ actuator range inside the environment.
 | 12 | throttle, 0 to 1 |
 | 13 | elevator deflection (rad) |
 | 14 | aileron deflection (rad) |
+| 15 | assigned speed, as a true airspeed (m/s) |
+| 16 | airspeed, against the wind and gust (m/s) |
+| 17 | normal load factor (g) |
+| 18 | heading, where the nose points (rad), the vector's quantity (Amendment 4) |
 
 ## Rewards
 
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `running`, `economy`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -68,24 +74,17 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 33 fields.
+`reset` samples the initial condition and the target; state has 42 fields.
 
 ## Episode end
 
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 300 steps.
+**Truncation.** After 600 steps.
 
 ## Baselines
 
-Recorded over 10 seeds of the 300-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1.672e+06 | 5573 |
-| MPC | -6.893e+05 | 2298 |
-
-The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of them.
+No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
 ## Arguments
 
@@ -94,7 +93,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 1 | s |
-| `max_steps_in_episode` | 300 | steps |
+| `max_steps_in_episode` | 600 | steps |
 | `sensor_noise_scale` | 1 | - |
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |
@@ -118,6 +117,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `surface_rate_limit` | 0.523599 | rad/s |
 | `load_factor_max` | 2.5 | g |
 | `load_factor_min` | -1 | g |
+| `ap_load_increment` | 0.2 | g |
 | `vmo_eas` | 180.056 | m/s |
 | `mmo` | 0.82 | - |
 | `buffet_mach` | 0.3 | - |
@@ -125,11 +125,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `bank_limit` | 1.0472 | rad |
 | `aspect_ratio` | 9.48 | - |
 | `aileron_effectiveness` | 0.4 | - |
-| `cl_alpha` | 0.08786 | 1/deg |
+| `cl_alpha` | 0.08378 | 1/deg |
+| `sweep_half_chord` | 0.38186 | rad |
 | `cl0` | 0.2 | - |
 | `cd0` | 0.02 | - |
 | `k` | 0.045 | - |
-| `aoa_stall` | 15 | deg |
+| `aoa_stall` | 15.5 | deg |
 | `CL_max` | 1.5 | - |
 | `CL_min` | -1 | - |
 | `aoa_stall_width` | 3 | deg |
@@ -137,12 +138,21 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `k_shock_stall` | 4 | - |
 | `shock_stall_floor` | 0.25 | - |
 | `k_drag` | 5 | - |
-| `I` | 9000000 | kg.m^2 |
-| `I_x` | 2500000 | kg.m^2 |
-| `moment_arm_stabilizer` | 15 | m |
-| `moment_arm_wings` | 1.5 | m |
-| `stabilizer_surface` | 27 | m^2 |
-| `elevator_surface` | 10 | m^2 |
+| `pitch_gyration_radius` | 8.666 | m |
+| `roll_gyration_radius` | 5.039 | m |
+| `moment_arm_stabilizer` | 13.36 | m |
+| `moment_arm_wings` | 0.822 | m |
+| `stabilizer_surface` | 31 | m^2 |
+| `tail_cl_alpha` | 0.07021 | 1/deg |
+| `tail_aspect_ratio` | 5 | - |
+| `tail_sweep_half_chord` | 0.411 | rad |
+| `tail_k` | 0.0796 | - |
+| `tail_CL_max` | 1 | - |
+| `tail_aoa_stall` | 15 | deg |
+| `tail_efficiency` | 0.9 | - |
+| `elevator_effectiveness` | 0.5 | - |
+| `downwash_ratio` | 1 | - |
+| `stabilizer_setting` | 0.02417 | rad |
 | `wingspan` | 35.8 | m |
 | `aileron_surface` | 6 | m^2 |
 | `moment_arm_aileron` | 14 | m |
@@ -153,15 +163,15 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `heading_precision_floor` | 0.0087 | rad |
 | `position_precision_floor` | 3 | m |
 | `reward_version` | 2 | - |
-| `e_floor_altitude` | 1 | m |
-| `e_tol_altitude` | 0 | m |
-| `e_floor_heading` | 0.0087 | rad |
+| `e_floor_altitude` | 19.812 | m |
+| `e_tol_altitude` | 19.812 | m |
+| `e_floor_heading` | 0.174533 | rad |
 | `e_floor_path` | 3 | m |
 | `tracking_exponent` | 2 | - |
-| `failure_cost` | 2.9729e+08 | reward |
+| `failure_cost` | 377468 | reward |
 | `restart_steps` | 3600 | steps |
-| `rho_floor_tracking` | 0.344219 | reward |
-| `rho_floor` | 0.344219 | reward |
+| `rho_floor_tracking` | 0 | reward |
+| `rho_floor` | 0 | reward |
 | `figure8_altitude_amplitude` | 200 | m |
 | `initial_z_dot` | 0 | m/s |
 | `initial_x_dot` | 200 | m/s |
@@ -177,11 +187,32 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wind_x` | 0 | m/s |
 | `wind_y` | 0 | m/s |
 | `wind_z` | 0 | m/s |
-| `turbulence_sigma` | 1.2 | m/s |
+| `turbulence_sigma` | 0.564 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
 | `turbulence_scale_length` | 533.4 | m |
 | `gust_roll_rate` | 0 | rad/s |
 | `wind_shear_x` | 0 | 1/s |
 | `wind_shear_y` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |
+| `target_cas` | 149.189 | m/s |
+| `target_mach` | 0.78 | - |
+| `speed_band` | 5.14444 | m/s |
+| `mach_band` | 0.02 | - |
+| `e_tol_heading` | 0.174533 | rad |
+| `e_tol_path` | 0 | m |
+| `assigned_speed_mode` | 0 | - |
+| `holding_rate` | 0.0523599 | rad/s |
+| `holding_bank` | 0.523599 | rad |
+| `hold_design_bank` | 0.436332 | rad |
+| `cost_index` | 30 | kg/min |
+| `economy_weight` | 1 | - |
+| `economy_scale` | 1.242 | kg/s |
+| `heading_clearance_period` | 150 | s |
+| `protected_bank` | 0.523599 | rad |
+| `holding_split_altitude` | 4267.2 | m |
+| `holding_leg_low` | 60 | s |
+| `holding_leg_high` | 90 | s |
+| `holding_cap_low` | 118.322 | m/s |
+| `holding_cap_high` | 136.328 | m/s |
+| `wind_tau` | 2010 | s |
 

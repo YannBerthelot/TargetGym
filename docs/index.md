@@ -51,7 +51,7 @@ for t in range(200):
         break
 ```
 
-[Browse the twenty-four environments →](environments.md){ .md-button .md-button--primary }
+[Browse the 25 environments →](environments.md){ .md-button .md-button--primary }
 [Getting started →](getting-started.md){ .md-button }
 
 ---

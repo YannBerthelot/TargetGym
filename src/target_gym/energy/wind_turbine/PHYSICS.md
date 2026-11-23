@@ -14,6 +14,27 @@ pitch, torque and speed limits, while the tower is damped (REALITY.md sec. 6, [S
 hold speed changes the thrust. Version 5 prices that trade: lost production against
 the tower's fatigue and the pitch system's wear, all in dollars.
 
+### Task: `wind_turbine`
+
+Run a 5 MW wind turbine above rated wind with blade pitch and generator
+torque: deliver the power the wind makes available, up to the rating, while
+sparing the tower and the pitch system. Pitching to hold speed changes the
+thrust, which swings the tower. The policy reads rotor speed, pitch, torque,
+power, the current rating, the nacelle's fore-aft acceleration and the nacelle
+wind speed. Each step is charged, in dollars, the production lost against the
+available power, the tower's fatigue damage and the pitch travel. Overspeed
+at 1.20 times rated speed trips the turbine, which is charged as a restart.
+
+| obs | meaning |
+|---|---|
+| 0 | rotor speed (rpm) |
+| 1 | blade pitch (deg) |
+| 2 | generator torque, percent of its maximum |
+| 3 | electrical power (MW) |
+| 4 | the current rating's power (MW) |
+| 5 | nacelle fore-aft acceleration (m/s^2) |
+| 6 | nacelle anemometer wind speed (m/s) |
+
 ## 2. Model
 
 A rigid drivetrain on the tower's first fore-aft mode, both driven by the rotor in the

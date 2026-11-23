@@ -398,6 +398,7 @@ policy has to learn to keep it from the flows it does observe.
 | 4 | drive speed setpoint, percent of rated |
 | 5 | recycle valve opening (%) |
 | 6 | target header pressure (kPa) |
+| 7 | surges counted within the last `surge_window` seconds, as the trip's counter reads |
 
 **Observation.** The compressor flow m_c is the anti-surge flow element. m_d is the
 consumers' flow at the state's clock with the deviation the coming step
