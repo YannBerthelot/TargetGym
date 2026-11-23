@@ -84,7 +84,7 @@ family's documented range, or ours with a reason.
 | `sewer_floor` | 5.0 | pH | cited [P9] |
 | `basin_volume` | 236.2 | L | ours, family "hours of flow" (Amendment 3): 2 h of nominal discharge |
 | `pumpback_flow` | 4.15 | mL/s | ours: a quarter of the influent, so the basin drains in about 16 h |
-| `setpoint_pH` | 6.4 | pH | ours: where the reference's rule places it (section 10), the lowest tenth of a pH above 6 at which the reference never leaves the permit; the set point is the operator's [P3, p. 4], lowered toward the limit while the discharge stays comfortably above it [P3, pp. 4-5] |
+| `setpoint_pH` | 6.5 | pH | ours: where the reference's rule places it (section 10), the lowest tenth of a pH above 6 at which the reference never leaves the permit; the set point is the operator's [P3, p. 4], lowered toward the limit while the discharge stays comfortably above it [P3, pp. 4-5] |
 | `delta_t`, `max_steps_in_episode` | 5, 1440 | s, steps | ours: 2 h, past the 60 min excursion [P8] |
 | `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
@@ -133,7 +133,7 @@ shows them measured.
 ## 5. Episode (rule 17)
 
 Both tanks start on the steady state that holds the operator's set point, pH
-6.4 (section 10), under the buffer flow they meet, the trim valve shut and the
+6.5 (section 10), under the buffer flow they meet, the trim valve shut and the
 basin empty, as a loop in automatic leaves them. What then moves is set by the scenario (section 6): influent acid
 strength [P3, p. 4], influent flow, and the buffer's Ornstein-Uhlenbeck drift
 [P1; P2]. Each upset comes twice, at times drawn over the episode, to a level
@@ -234,8 +234,11 @@ at the charged cost.
   the lowest tenth of a pH above 6 at which it leaves the permit on none of the
   ladder's seeds, in any scenario (`ladder.zone_grid`, `ladder.first_without_exit`;
   charter J1, owner, 2026-11-23). Each candidate is run from episodes started on
-  it. Measured on 2026-11-23: every seed leaves at 6.0, 6.1 and 6.2, four at 6.3,
-  none at 6.4, which is `setpoint_pH`. Stage 1 has no zone and follows the same
+  it, and every rung takes over from the valves as the reset left them: stage 1's
+  valve there depends on the buffer flow the tanks meet, which is hidden, so no
+  balance gives it. Measured on 2026-11-23: every seed leaves at 6.0 and 6.1,
+  eight at 6.2, five at 6.3, one at 6.4 and none at 6.5, which is `setpoint_pH`.
+  Stage 1 has no zone and follows the same
   setpoint.
 - Scenarios: the five of section 6.
 - Two valves: stage 1 coarse, stage 2 trim. Bump tests on the steady state at

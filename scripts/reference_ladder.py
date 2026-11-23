@@ -23,8 +23,9 @@ and holds the first setpoint of ``ladder.zone_grid``, from the cheap edge, at wh
 the pi rung leaves the zone on none of the seeds in any scenario (``zone_exits``,
 ``ladder.first_without_exit``), as the ladder keeps a rung that trips none. Where the
 plant's reset depends on the setpoint (``Cv.established``), each candidate's episodes
-start on it, the pi rung's bias is the rest there, and the kept one's overrides join
-``Row.score``, so every later run starts on it too.
+start on it, and the kept one's overrides join ``Row.score``, so every later run
+starts on it too. A row whose reset no balance can compute starts ``bumpless``, and
+so do its candidates.
 Bumps are read against the same seed's unstepped run (``Plant(paired=True)``), so a
 slow walk or drift the two runs share leaves the response.
 
@@ -165,7 +166,10 @@ class Row:
     gives the rest at a point's parameters where ``rest`` can't read it. ``build``
     fills ``placed``: each zone loop's measured deviation (None under the exit rule)
     and setpoint; and ``scans``: under the exit rule, the seeds that left at each
-    candidate it ran."""
+    candidate it ran.
+    ``bumpless`` starts every rung from ``rest`` at the reset
+    (``ladder_controller``'s ``start``), for a task whose reset stands on a steady
+    state its balances can't compute, because something they need is hidden."""
 
     steps: int
     rest: object
@@ -184,6 +188,7 @@ class Row:
     why: dict = dataclasses.field(default_factory=dict)
     placed: dict = dataclasses.field(default_factory=dict)
     scans: dict = dataclasses.field(default_factory=dict)
+    bumpless: bool = False
 
 
 def corners(**ranges) -> tuple:
@@ -362,13 +367,7 @@ def build(name: str, row: Row, spec=None) -> dict:
     const = np.median(plant.u0, axis=0)
     flat = lambda o, xp: xp.asarray(const, dtype=xp.float32)  # noqa: E731
 
-    def bias_at(extra):
-        """The pi rung's bias where an episode starts with ``extra``: the rest
-        there, as ``flat`` is the rest at the base point."""
-        if not extra:
-            return flat
-        there = np.median(plant_at(params_at(extra)).u0, axis=0)
-        return lambda o, xp: xp.asarray(there, dtype=xp.float32)
+    start = row.rest if row.bumpless else None
 
     def read(o, xp):
         return xp.stack([c.read(o, xp) for c in row.loops])
@@ -390,7 +389,7 @@ def build(name: str, row: Row, spec=None) -> dict:
                 # J1 on a zone priced as a violation: from the cheap edge, the first
                 # candidate at which the pi rung leaves the zone on no seed. The
                 # row's other loops follow each candidate (``row.placed``), and its
-                # episodes start on it, the bias at the rest there.
+                # episodes start on it.
                 at = list(centres)
 
                 def exits_at(point, c=c, i=i, at=at):
@@ -404,8 +403,9 @@ def build(name: str, row: Row, spec=None) -> dict:
                         Rung("pi", tuple(pis), mix),
                         read,
                         stacked(at),
-                        bias_at(extra),
+                        flat,
                         dt,
+                        start,
                     )
                     left = zone_exits(
                         name, row, Reference("pi", probe), c.exit_terms, spec, extra
@@ -447,13 +447,12 @@ def build(name: str, row: Row, spec=None) -> dict:
             targets[i] = _constant(setpoint)
         if started:
             # Established there from now on: every later run starts on the kept
-            # setpoints, and the rungs act around the rest there.
+            # setpoints.
             row.score = {**row.score, **started}
-            flat = bias_at(started)
     target = stacked(targets)
 
     def make(rung, bias):
-        return ladder_controller(rung, read, target, bias, dt)
+        return ladder_controller(rung, read, target, bias, dt, start)
 
     loops = tuple(pis)
     rungs["pi"] = make(Rung("pi", loops, mix), flat)

@@ -159,7 +159,7 @@ class PHParams(EnvParams):
     # Established operation: both tanks on the steady state at the operator's
     # set point. The set point is the operator's choice [P3, p. 4] and is not
     # scored; reagent is saved by holding it nearer the permit's low limit while
-    # the discharge stays comfortably above it [P3, pp. 4-5]. Ours: 6.4, where
+    # the discharge stays comfortably above it [P3, pp. 4-5]. Ours: 6.5, where
     # the reference's rule places it, the lowest tenth of a pH above the permit's
     # low edge at which the reference leaves the permit on none of its seeds
     # (charter J1, owner, 2026-11-23; scripts/ladder_rows/ph_neutralization.py,
@@ -167,7 +167,7 @@ class PHParams(EnvParams):
     # 2 h at 5 s: longer than the 60 min excursion the permit counts [P8], with
     # room for the upsets. Ours. The scenario suite (scenarios.py) sets which
     # upsets run.
-    setpoint_pH: float = 6.4
+    setpoint_pH: float = 6.5
     delta_t: float = 5.0
     max_steps_in_episode: int = 1440
 

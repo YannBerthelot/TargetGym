@@ -27,6 +27,10 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
 - ``ladder_controller``: position-form PI around a bias. The integral holds while
   the loop's MV is saturated or overridden. A cascade's outer output is the inner
   loop's setpoint. An override's select keeps the constraint on its side.
+- ``ladder_controller`` with a start hold (bumpless transfer, as a loop switched to
+  automatic on a running plant): the first output is what the actuator held at the
+  reset plus the loops' action on their errors. What the bias and each cascade's
+  rest were off by at the reset is kept for the episode, not read again.
 
 Expected values are worked by hand in each test.
 """
@@ -274,6 +278,52 @@ def test_cascade_outer_output_is_the_inner_setpoint():
     ctrl = one_loop(Pi(0, 2.0, 1e9), cascades=(inner,))
     actions = run(ctrl, [[0.0, 1.0, 6.5]])
     np.testing.assert_allclose(actions[0], [0.1], atol=1e-7)
+
+
+def held(obs, xp):
+    """The actuator as the reset left it, read from the observation's last entry."""
+    return xp.stack([obs[-1]])
+
+
+def with_start(pi, **rung):
+    return ladder_controller(
+        Rung(name="test", loops=(pi,), mix=np.eye(1), **rung),
+        read_cv,
+        read_target,
+        lambda o, xp: xp.stack([0.1]),
+        1.0,
+        held,
+    )
+
+
+def test_a_start_hold_takes_over_from_the_actuator_as_the_reset_left_it():
+    # Zero error, bias 0.1, the actuator held at 0.5: the output is 0.5, not the
+    # bias. The hold is read once: a later 0.9 in that entry changes nothing.
+    ctrl = with_start(Pi(0, 2.0, 4.0))
+    actions = run(ctrl, [[0.4, 0.4, 0.5], [0.4, 0.4, 0.5], [0.4, 0.4, 0.9]])
+    np.testing.assert_allclose(actions[:, 0], [0.5, 0.5, 0.5])
+
+
+def test_a_start_hold_leaves_the_loop_acting_on_its_error():
+    # Kc 2, Ti 4, dt 1, error 0.1: 2 * (0.1 + 0.1 / 4) = 0.25 on the held 0.5,
+    # then 2 * (0.1 + 0.2 / 4) = 0.3.
+    ctrl = with_start(Pi(0, 2.0, 4.0))
+    actions = run(ctrl, [[0.0, 0.1, 0.5], [0.0, 0.1, 0.5]])
+    np.testing.assert_allclose(actions[:, 0], [0.75, 0.8])
+
+
+def test_a_start_hold_rests_a_cascades_inner_loop_on_its_reading():
+    # The inner reading stands at 6 where its rest says 5: with zero outer error
+    # the output is the held 0.4. Then an outer error of 1 (Kc 2) asks 2 above the
+    # reading's own rest, 8, against a reading of 6.5: 0.2 * 1.5 = 0.3 on the 0.4.
+    inner = Cascade(
+        read=lambda o, xp: o[2],
+        rest=lambda o, xp: 5.0,
+        pi=Pi(0, 0.2, 1e9),
+    )
+    ctrl = with_start(Pi(0, 2.0, 1e9), cascades=(inner,))
+    actions = run(ctrl, [[0.0, 0.0, 6.0, 0.4], [0.0, 1.0, 6.5, 0.4]])
+    np.testing.assert_allclose(actions[:, 0], [0.4, 0.7], atol=1e-7)
 
 
 def floor_override():

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "7602c460701d296d",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.4 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-23T16:34:26+00:00"
+  "fingerprint": "ab0c588e9d721125",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.5 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T16:58:39+00:00"
 }

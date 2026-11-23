@@ -59,6 +59,11 @@ def row() -> Row:
     def raw(q3, xp=np):
         return 2.0 * (q3 - q3_min) / span - 1.0
 
+    def valves(o, xp):
+        """The raw commands holding both valves where the reset left them: each
+        reads exactly, in percent of its range (obs 1 and 5)."""
+        return xp.stack([o[1] / 50.0 - 1.0, o[5] / 50.0 - 1.0])
+
     def rest_at(q):
         """Stage 1's valve on the steady balance at the point's setpoint, buffer and
         streams (``steady_base_flow``, as the reset puts it), the trim shut."""
@@ -130,10 +135,9 @@ def row() -> Row:
         {"q2_nominal": float(p.q2_min)},
         {"q2_nominal": buffer_high},
     )
-    base = spec.make_test_params(**test)
     return Row(
         720,
-        rest_at(base),
+        valves,
         (stage_1, discharge),
         test=test,
         points=points,
@@ -141,6 +145,11 @@ def row() -> Row:
         balance=balance,
         limits=(kicker,),
         placed=placed,
+        # The reset stands on the steady state of the buffer flow the tanks meet,
+        # which is hidden, so no balance gives stage 1's valve. Every rung, and
+        # every candidate set point, takes over from the valves as the reset left
+        # them (charter B5: a scenario starts in established operation).
+        bumpless=True,
         why={
             "cascade": "no inner measurement: each valve sets its reagent flow "
             "directly, and the field case's cascade [P3] is a set point optimizer "
