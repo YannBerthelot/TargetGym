@@ -754,7 +754,7 @@ the cruise Mach, where the chart has 0.74 to 0.76.
 | 300 ft/min ceiling, M 0.739 to 0.813 | the curve | above 41 000 ft | within 642 ft |
 | Zero-climb ceiling, M 0.768 to 0.817 | the curve | above 41 000 ft | within 924 ft on PR 204's atmosphere |
 | Max-range Mach, 25 500 to 36 500 ft | 0.660 to 0.760 | 0.68 to 0.80 | 0.62 to 0.78 |
-| Green dot, 23 000 to 35 400 ft | 0.521 to 0.709 | 0.505 to 0.455 | 0.500 to 0.665 |
+| Green dot, 23 000 to 32 100 ft | 0.521 to 0.651 | 0.505 to 0.615 | 0.500 to 0.615 |
 
 What the change moves at the reference cruise (FL330, M 0.78, 73.5 t): drag 42.4 to
 49.2 kN, lift over drag 17.0 to 14.7, fuel 2 674 to 3 014 kg/h, residual climb 1 218
