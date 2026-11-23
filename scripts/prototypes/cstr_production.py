@@ -286,7 +286,6 @@ RECORD = {
 #: The placement grid, fixed before any run: the temperature set point in tenths
 #: of a kelvin under the band's top (the score's resolution) down to its centre,
 #: and the valve's set point from [P1]'s 95 % toward its top and down to 90 %.
-GRID_B = tuple(round(0.1 * k, 1) for k in range(1, 11))
 GRID_VALVE = (0.99, 0.98, 0.95, 0.9)
 #: The project's own numbers and the ranges B7 draws them from (cstr/PHYSICS.md,
 #: "Production prototype"). The feed's floor runs down to S1's 0 [S1, Table 1].
@@ -393,13 +392,20 @@ def reference(RL, p, g, b, valve):
     return RL.Reference("reference", law)
 
 
+def grid_b(p):
+    """Tenths of a kelvin under the band's top, down to its centre."""
+    return tuple(
+        round(0.1 * k, 1) for k in range(1, int(float(p.T_band) / 0.1 + 1e-6) + 1)
+    )
+
+
 def place(RL, env, p, g, seeds=SEEDS):
     """``(b, valve)`` by the owner's rule: on the fixed grid, the cheapest setting
     at which no deciding seed of the normal day leaves the band or trips. A seed
     that does so at every setting does not decide, and is returned by name."""
     cost, exits = {}, {}
     for valve in GRID_VALVE:
-        for b in GRID_B:
+        for b in grid_b(p):
             r, _, _ = run(env, p, reference(RL, p, g, b, valve), seeds)
             cost[b, valve] = float(np.mean(r["cost"]))
             exits[b, valve] = (np.array(r["off_spec"]) > 0) | np.array(r["trips"])
