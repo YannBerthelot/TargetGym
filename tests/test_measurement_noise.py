@@ -714,9 +714,19 @@ def test_a_channel_reading_does_not_inherit_the_noise_of_its_fields():
 
 @noisy_tasks
 def test_noise_runs_under_jit_vmap_and_scan(spec):
-    """A scanned, vmapped, jitted rollout returns the eager rollout's readings,
-    within float32 fusion (the reset's copy compiled inside the step differs
-    by a step or so), and nothing in it needs a key but the episode's."""
+    """A scanned, vmapped, jitted rollout is the rollout taken one step at a
+    time, and nothing in it needs a key but the episode's. In two parts,
+    because an instrument that rounds to a digital step cannot be compared
+    across two compiled programs: where a value sits on a rounding edge, one
+    float32 step in the plant becomes one whole step of the instrument. On
+    plane_sine the altitudes 6147.9111 and 6147.9116 m, one float32 step apart,
+    read 6147.816 and 6148.121 m (2026-11-23).
+
+    - The plant: the scanned states are the stepped ones, within float32 fusion.
+    - The instruments: each scanned reading is the reading of the scanned state
+      it came with, which holds the sensor key and the clock the noise is
+      drawn from. Same state in, same reading out, rounding included.
+    """
     env, params = spec.make_env(), spec.make_test_params()
     keys = jax.random.split(jax.random.PRNGKey(4), 3)
     low, high = _bounds(env, params)
@@ -731,17 +741,16 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
             o, s, _, _, info = env.step_env(
                 jax.random.fold_in(stream, t), s, action, params
             )
-            return s, (o, info["measured_reward"])
+            return s, (o, info["measured_reward"], s)
 
         return obs, jax.lax.scan(step, state, jnp.arange(8))[1]
 
-    first, (obs, measured) = jax.jit(jax.vmap(episode))(keys)
+    first, (obs, measured, states) = jax.jit(jax.vmap(episode))(keys)
     assert obs.shape == (3, 8, *first.shape[1:])
     assert measured.shape == (3, 8)
     assert np.all(np.isfinite(obs)) and np.all(np.isfinite(measured))
 
     rows = _rollout(env, params, keys[1], action, steps=8)
-    eager = np.stack([np.asarray(o) for o, *_ in rows[1:]])
     # atol: a channel derived from km-scale coordinates (an error to a path
     # 36 km out, say) inherits their float32 step: 1 mm at 15 km, 3.9 mm at
     # 36 km. Two such steps at the farthest coordinate, never under 2 mm.
@@ -755,7 +764,21 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
         + [0.0]
     )
     atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
-    np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=atol)
+
+    def close(got, want):
+        got, want = np.asarray(got), np.asarray(want)
+        if np.issubdtype(want.dtype, np.floating):
+            np.testing.assert_allclose(got, want, rtol=1e-5, atol=atol)
+        else:  # the sensor key, the clock, a counter: the same, exactly
+            np.testing.assert_array_equal(got, want)
+
+    ours = jax.tree_util.tree_map(lambda leaf: leaf[1], states)
+    for t, (_, stepped, *_) in enumerate(rows[1:]):
+        jax.tree_util.tree_map(
+            close, jax.tree_util.tree_map(lambda leaf: leaf[t], ours), stepped
+        )
+    read = jax.jit(jax.vmap(lambda s: env.get_obs(s, params)))(ours)
+    np.testing.assert_allclose(obs[1], read, rtol=1e-5, atol=atol)
     np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=atol)
 
 
