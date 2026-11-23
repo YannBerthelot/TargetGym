@@ -140,6 +140,13 @@ theta_K 6.302336) through `compute_next_state` for 2400 steps on seeds 100 to 10
 averaging `damage` and `pitch_travel`. Choosing them picks the family member whose tower
 and pitch system last exactly 20 years at that duty.
 
+Stale since Oye's lag (review of 2026-11-23): the stored rates reproduce to four digits
+with `dynamic_inflow = 0`. On the plant as it is the same recipe gives 3.032e5 (MN m)^4
+and 0.1720 deg per step, 1.43 and 0.98 times the stored values, so the tower is priced
+1.43 times above what this paragraph says. The rate is an 8-seed mean of a fourth-power
+quantity, and it counts 20 years of continuous steps while the scenarios cover 3,640 h
+a year. Left as stored: changing it changes the score, which is the owner's call.
+
 ## 4. Limits (rule 14) and zones (rule 22)
 
 | Limit | Kind | Model | Source |
@@ -199,6 +206,12 @@ present. The floor of the score, in closed form: 0, at the available power with 
 tower still and the pitch still; the measured reward adds the meter's scatter on
 `lost`, at most E|N(0, 1 kW)| = 798 W, $3.3e-6 per step.
 
+Those figures predate Oye's lag and the stored gains (review of 2026-11-23). The shipped
+expert at sensor noise 1, seeds 100 to 109, per 10 min: lost $0.29 to $0.61, tower $3.6
+to $11.1, pitch $0.20 to $0.24 as scenario means, and it trips in 6 of the 60 windows
+(8 of 180 on seeds 100 to 129), none in `near_rated`. S1's published gains halve the
+tower term on the same seeds.
+
 ## 6. Behaviour tests (charter step 3, Amendment 3)
 
 `tests/energy/wind_turbine/test_wind_turbine_reality.py`. Tests 2, 4, 5 and 8 were
@@ -232,8 +245,12 @@ the scenario suite.
 
 ## 7. Deviations still in the model
 
-- D1. Dynamic inflow is one lumped Oye lag (tau1 only, no radial split), and the
-  oracle's planner keeps the quasi-steady tables (section 9).
+- D1. Dynamic inflow is one lumped Oye lag (tau1 only, no radial split). The oracle's
+  planner carries the same lag as its sixth state (`oracle.velocity`). The expert's gain
+  recipe does not: `scripts/wind_turbine_gains.py` fits the steady table, while the
+  speed loop now sees the wake-frozen sensitivity, which on this plant is within 3 to
+  19 % of S1's published line. The stored gains are 2.5 times S1's at 12 m/s (review of
+  2026-11-23).
 - D2. One tower mode: no side-side, second fore-aft, drivetrain or blade modes, no 1p or
   3p loading. So blade-root loads are not priced, and S5's trade of 2.1 % tower DEL for
   1.26 % blade DEL is only half in the score; pitch wear stands in for the rest.

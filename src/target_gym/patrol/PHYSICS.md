@@ -299,8 +299,10 @@ it (ours, the reference's hold), established as the charter asks.
 **The score.** `tracking` is the box, on the distance across the wake (sideways and
 in height, the tracked observation), plus the along-track error past +-250 ft, the
 tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], each the
-squared excess in its own width. `economy` is the follower's fuel and time by the
-cost index (plane/PHYSICS.md).
+squared excess in its own width. Both read the two aircraft's relative position, good
+to 3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past each,
+(3 / 30)^2 + (3 / 76.2)^2 = 0.0116 a step, and the settle band 2. `economy` is the
+follower's fuel and time by the cost index (plane/PHYSICS.md).
 
 **The reference.** The formation hold's guidance cascade over the A320's own
 autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on

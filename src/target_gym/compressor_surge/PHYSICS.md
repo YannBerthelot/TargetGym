@@ -42,6 +42,12 @@ none had a source.
 | Header pressure | Zone | Outside +-1.2 kPa of 24 kPa priced per second | [C3, p. 4] for the constant target; band ours |
 | Recycle valve | Hardware | 0.15 s dead time, then 2 s to open, 10 s to close | [C7; C1; Mirsky et al.] |
 
+The dead time is counted in whole 0.01 s substeps since each command, one command a
+step (2026-11-23). Read off the clock, as it was, 0.15 s sat on float32's rounding
+edge: over schedule clocks 0 to 1199 the valve moved a substep early on 959, so the
+dead time was 0.14 s on four steps in five and differed between the float32 plant
+and the float64 planner.
+
 A short excursion left of the line that recovers no longer trips (deviation
 D4, fixed; `test_a_short_excursion_does_not_trip` now passes).
 
@@ -129,6 +135,16 @@ failed and pass now.
 keeps Phi right of the line as a limit, so it never surges: a bound from the
 safe side. Its valve model lacks the positioner's dead time, which must be
 added before rule 9 runs it. Not run.
+
+**The ceiling (2026-11-23).** `ceiling_margins` holds the ceiling's plans to the
+same line, Phi at least 2W, where it had asked only for forward flow: left of the
+line the model has no rotating stall (D1), and plans sat up to 8.5 % left of it.
+It also holds each command inside its actuator's reach (`CEILING_ROWS`). Past the
+reach a command changes nothing, its gradient is zero and the solver stalled: on
+one normal-day seed the plain solve stopped after 20 iterations at 4.59 kJ per step
+from the reference's moves, and with the reach charge reached 0.52 from them and
+0.59 from the hold plan. `ceiling_start` clips a start into reach; the plant runs
+it as it runs the start.
 
 ### Reward parameters (version 4)
 
@@ -1060,9 +1076,10 @@ and each upset regime a shift, 8 h. No regime brings events of its own
 have run the schedule renews (`renew_schedule`), five fresh levels drawn in the
 scenario's range from the level it holds, so the demand keeps moving at the
 scenario's own rate. The schedule carries the ramp it was drawn with
-(`demand_ramp`), so a ramp in progress at a switch keeps its rate. The valve's
-dead time and the surge counter read the schedule's clock, which a renewal moves
-back with them, so no clock in the plant grows without bound. `start_event`
+(`demand_ramp`), so a ramp in progress at a switch keeps its rate. The surge
+counter reads the schedule's clock, which a renewal moves back with it, and the
+valve's dead time counts substeps since each command, so no clock in the plant
+grows without bound. `start_event`
 moves the demand now, for a stream given event rates. The normal day is sourced: abnormal situations arise almost daily in large
 process plants (`REALITY.md` [ST1]). That an upset regime lasts a shift is
 ours; shifts run 8 to 12 h ([ST2], [ST3]). The regimes bring no event; the demand
@@ -1083,7 +1100,7 @@ outside world (`OUTSIDE_WORLD`), which depends on the seed and the time only.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 154 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 90 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
