@@ -230,16 +230,18 @@ at the charged cost.
 - Zone: the discharge pH in 6 to 8 [P7]; the cheap side is low (pH 6), since
   less base holds a lower pH (19 % less at pH 6 than at 7 at nominal buffer).
   The score charges every step outside the permit at the price of a violation
-  (section 7), so the reference is not placed 2 sigma inside the edge: it holds
-  the lowest tenth of a pH above 6 at which it leaves the permit on none of the
-  ladder's seeds, in any scenario (`ladder.zone_grid`, `ladder.first_without_exit`;
-  charter J1, owner, 2026-11-23). Each candidate is run from episodes started on
+  (section 7), so the reference is not placed 2 sigma inside the edge: each rung
+  holds the lowest tenth of a pH above 6 at which it leaves the permit on none of
+  the ladder's seeds, in any scenario, and the ladder keeps the cheapest rung
+  (`ladder.zone_grid`, `ladder.first_without_exit`; charter J1, owner,
+  2026-11-23). Each candidate is run from episodes started on
   it, and every rung takes over from the valves as the reset left them: stage 1's
   valve there depends on the buffer flow the tanks meet, which is hidden, so no
-  balance gives it. Measured on 2026-11-23: every seed leaves at 6.0 and 6.1,
-  eight at 6.2, five at 6.3, one at 6.4 and none at 6.5, which is `setpoint_pH`.
-  A seed no candidate could hold would not constrain the placement and would be
-  listed; here every seed is held at 6.5, so none is.
+  balance gives it. Measured on 2026-11-23, of 50 episodes: the pi rung leaves
+  on 50, 46, 23, 9, 2 and 0 at 6.0 to 6.5, the feedforward and the override on 50,
+  48, 17, 7, 2 and 0. All three keep 6.5, which is `setpoint_pH`; the feedforward
+  is the cheapest. A seed no candidate could hold would not constrain a rung's
+  placement and would be listed; here every seed is held at 6.5, so none is.
   Stage 1 has no zone and follows the same
   setpoint.
 - Scenarios: the five of section 6.
