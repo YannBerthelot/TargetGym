@@ -1044,3 +1044,18 @@ the roll loop's overshoot of the protected bank, above, are unchanged. `env.py`
 still carries the earlier holding speed (`assigned_speed_mode` 1 in
 `assigned_cas_3d`), unused by the racetrack: `env.py` is in the patrol family's
 fingerprints, so it was left for the tidy-up.
+
+**What rests on the plant's thrust margin (2026-11-23).** The 2D aircraft's review
+found the shared plant's thrust margin about 3.3 times Airbus's published one, with a
+scale of 0.795 on maximum thrust proposed to the owner (plane/PHYSICS.md once
+decided). Rerun with that scale (`--set thrust_output_at_sea_level=190800`), nothing
+in this section moves: fuel follows the thrust delivered, which in steady flight is
+the drag. The racetrack's reference costs 921.93 a window against 921.94, its bands
+0, the two moves save the same 0.40 to 0.76 %; the heading task's costs 662.2
+against 662.4, bands 0, the same flat speed lever; the least-thrust speed at 73.5 t
+is 219.7 kt at both scales, on a lever of 0.43 in place of 0.34. Only the heading
+task's severe zone (share 1e-4) changes seed by seed, where the throttle's reach
+matters. A fix that moved the drag rise or the polar instead, to land Airbus's
+max-range Mach, would move the least-thrust speed and every fuel figure:
+`GREEN_DOT_CAS` is then derived again, and
+`test_the_assigned_speed_is_the_plants_least_fuel_speed` fails until it is.
