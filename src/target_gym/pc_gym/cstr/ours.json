@@ -15,7 +15,6 @@
   "failure_cost",
   "restart_steps",
   "k0_decay",
-  "feed_rise",
   "cooling_loss",
   "event_hold"
  ]

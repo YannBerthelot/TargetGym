@@ -673,3 +673,21 @@ With upsets and noise on, the oracle against its expert, seeds 0 to 4:
 
 No trips on either side. All 657 solves converge (KKT at most 1e-8), and none
 fail or hit the cap.
+
+## Amendment 5, 2026-11-15: the plant's precision
+
+Decided by the owner for `boiler_drum`. The boiler's planner smooths nothing and its
+plant draws nothing after the reset, so K11 backed off neither trip level. On an
+induced-draft fan runback the plan rode the low trip at exactly -0.330 m, with
+converged solves (KKT about 1e-9, model replay gap about 1e-10). The float32 plant
+the score runs ended up to 6.7e-7 m past the float64 plan, the env's inclusive trip
+timer ran, and 6 of 10 runback seeds tripped. The plan also rode the high trip.
+
+**K11p.** At a trip level the plan can ride, K11 adds a third term: the plant's
+precision, equal to the ceiling's back-off at that limit (`ceiling_backoffs`).
+For the boiler that is one sigma of the level's reading, 0.5 mm, on both trip
+levels, and nothing on the floor of the steam under the water, which the env clips.
+It is one rule for the ceiling and the receding slot, for the same reason, and not
+a gap measured by watching the trip. Tasks in `PRECISION`
+(`scripts/measure_oracle_widths.py`) record it as `limit_precision`, summed into
+`limit_backoffs`.

@@ -118,10 +118,10 @@ def _patrol_errors(obs, state, params):
 
 
 def _wake_surf_errors(obs, state, params):
-    """The distance to the station, the box's argument."""
-    from target_gym.patrol.env import slot_error
+    """The distance to the station across the wake, the box's argument."""
+    from target_gym.patrol.env import station_distance
 
-    return np.array([float(slot_error(state))])
+    return np.array([float(station_distance(state))])
 
 
 def _wake_surf_economy(obs, state, params):
