@@ -217,21 +217,35 @@ earns nothing. The floor of the score, in closed form: steam within the
 meter's resolution of the plan costs zero, so the floor is 0. The measured
 ceiling and the room are under "Why the room is small" below.
 
-**The reference measured per scenario** (shipped three-element expert, seeds
-100 to 109, sensor noise on; `scripts` not changed): no trip in any scenario.
+**The shipped expert measured per scenario** (the three-element expert of
+`experts.py`, which is not the charter's reference; seeds 100 to 109, sensor
+noise on, measured again on 2026-11-23 through `benchmark.run_policy`): no
+trip in any scenario.
 
 | Scenario | Cost, GBP per hour (10 seeds) | Level, min and max |
 |---|---|---|
-| `normal` | 0.0 to 0.5 on nine seeds, 7.5 on one | -76 to +95 mm |
-| `industrial_swing` | 0.1 to 1.3, 13.0 on one | -80 to +156 mm |
-| `low_load` | 11.8 to 14.1, 0.2 on one | -104 to +205 mm |
-| `id_fan_runback` | 34 to 95 | -76 to +108 mm |
-| `feed_pump_trip` | 2.3 to 4.1 | -209 to +237 mm |
+| `normal` | 0.0 to 0.7 on eight seeds, 10.6 and 12.7 on two | -85 to +122 mm |
+| `industrial_swing` | 0.0 to 2.2 on eight seeds, 15.4 and 15.7 on two | -71 to +168 mm |
+| `low_load` | 12.0 to 16.7 | -141 to +207 mm |
+| `id_fan_runback` | 39 to 108 | -83 to +110 mm |
+| `feed_pump_trip` | 16.9 to 19.2 | -225 to +214 mm |
 
-The feed pump trip is where shrink and swell reach the trips: the level falls
-to 63 % of the low margin and, when the standby pump delivers, rises to 93 % of
-the high one (S10's unit fell to 84 % of its low margin). Rule 23: the
-reference costs more than zero on 49 of 50 seeds.
+The shipped expert costs more than zero on 48 of 50 seeds. Below about half
+load it does not hold: its level gain, 600 kg/s per m, was tuned at nominal
+load, where the feed's inverse response lasts 18.5 s, and the ladder's bump
+tests find 95 s at 25 % load. On `low_load` seed 101 (drawn on the seed's own
+key, not the record's) a 4 % load change starts a cycle of about 250 s, the
+level between -70 and +195 mm and the feed between 0 and 100 kg/s, to the end
+of the hour. `low_load`, and the hold at 50 % after each upset, cost it GBP 12
+to 19 an hour for that reason.
+
+The charter's reference is the ladder's cascade rung, with a level gain of
+58 kg/s per m. On 64 seeds per scenario it costs nothing on `normal` and
+`low_load`, GBP 0.025 an hour on `industrial_swing`, 55.9 on `id_fan_runback`
+and 0.57 on `feed_pump_trip`, and never trips. The feed pump trip is where it
+comes nearest a trip: the level falls to 84 % of the low margin at worst
+(-276 mm), which is S10's unit's own figure (6.5 in against 7.7 in), and stays
+under +62 mm.
 
 **Why the room is small (charter J5).** The ceiling (data/oracle_ceilings,
 seeds 100 to 109) costs zero on four of the five scenarios. The charter's
