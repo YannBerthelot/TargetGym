@@ -691,7 +691,7 @@ tripping (the re-record pass, step 5, records them again).
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 140 |
+| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 141 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
