@@ -72,7 +72,7 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17]; inside the 37 to 56 % one plant's ID fan and feed pump derates ran to (REALITY.md [ST1]) |
 | `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
 | `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
-| `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
+| `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds". A motor-driven backup pump reaches rated speed in about 15 s [S32]; no upper end was found (REALITY.md sec. 4) |
 | `event_hold` | 9990 | s (stream, upsets) | 2.775 h, the median of six ID fan and feed pump forced derates at one plant, 0.35 to 67 h (REALITY.md [ST1]): how long a runback holds the unit back before it ramps up at its plan's rate; a window never sets it, so its runback holds to the end |
 | `window_ramp` | on | - | The window's one planned ramp; a stream turns it off and plans each load change as an event |
 | `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
@@ -397,7 +397,10 @@ low trip than [S14] reports.
   `J` in money (above), for a pressure error that the real unit's turbine
   removes. With the plan's valve running back at 40 to 60, 100 to 120 and
   300 %/min in place of 12 to 25, the reference's cost on that scenario falls
-  from GBP 58 an hour to 23, 13 and 7 (128 seeds; review of 2026-11-23).
+  from GBP 58 an hour to 23, 13 and 7 (128 seeds; review of 2026-11-23). The
+  cost is not a control error: it is the plan's steam that the capped firing
+  cannot make, 2.1 t a window on average, GBP 48 of the reference's 56, and
+  the two move together seed by seed (correlation 0.999 on 64 seeds).
 - The turbine valve is the plan's, not the agent's, where REALITY.md's job
   sentence gives the operator "the boiler and turbine masters" (section 6).
   The standby pump's 30 to 60 s is ours above [S11]'s "more than 30 seconds".
@@ -407,6 +410,17 @@ low trip than [S14] reports.
   delays once the plan runs back at 40 %/min or faster. Effect: the upsets
   carry no trip risk as scored, and the move that would remove one, shedding
   load faster at the price of steam off the plan, is not the agent's.
+  Giving the agent that move was looked at on 2026-11-23 and dropped. The
+  sources put the standby's start at about 15 s to rated speed [S32] and at
+  "more than 30 seconds" to deliver [S11], and [S11] has the drum's normal
+  level set so that the unit rides through it; no source read gives a longer
+  delay (one, not read on its page, has about 90 s allowed for the transfer,
+  REALITY.md "For the owner to open by hand"). With the delay drawn in 15 to
+  90 s the reference trips on no seed of 128. The move, emulated by the
+  plan's rate with the steam it sheds charged at the imbalance price, costs
+  GBP 33 an upset and is cheaper on no seed (paired gap -32.5, 95 % interval
+  -35.0 to -30.1). Only with the delay in 60 to 90 s does it win, on the one
+  seed of 128 that trips.
 - The level has no price between the trips and the oracle reads it true, so
   the cheapest plan spends the drum's water: the ceiling's plan on
   `id_fan_runback` stays 0.5 mm inside a trip level, its back-off (the
@@ -415,7 +429,12 @@ low trip than [S14] reports.
   that room: the reference with its level setpoint moved to -250 mm while the
   fans cap firing costs 22 % less on that scenario (GBP 43.7 against 55.9 an
   hour, 64 seeds), its lowest level 51 mm from the low trip. REALITY.md found
-  no alarm distance to price (section 3).
+  no alarm distance to price (section 3). The reason it pays: water already
+  in the drum takes 1.41 MJ/kg to evaporate, feedwater 1.71. The band between
+  the trips holds 9.6 t of water, so spending it in place of feedwater while
+  firing is capped makes 1.7 t more steam, GBP 39 of the ceiling's gain of 52
+  an hour, if the drum is filled to the high trip before the fan trips and
+  emptied to the low one after. Half of that needs the fan trip known ahead.
 - A trip's lump holds the lost generation only. [S24] Table 1-1 adds the wear
   of the hot start, a median $36 per MW of capacity for gas-fired steam units
   and $94 for small subcritical coal (2011 $), which the lump leaves out.

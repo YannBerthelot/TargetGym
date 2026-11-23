@@ -9,9 +9,11 @@ ours numbers no source gives a range for. 8 Latin-hypercube draws on a fixed
 seed; a table with no ranges is swept on its shipped member alone (owner,
 2026-11-12). Ceilings are not run per draw (J6): the room is "not measured" here.
 
-The reactor (expert reference): on each draw the expert is re-tuned by its
-recipe's bump tests and run against the rod-park hold over the suite on seeds
-100 to 109; a plant at rest must need nothing for a day.
+The reactor (expert reference): on each draw the expert's bump-test numbers are
+read again by its recipe, and the shipped expert, with them and on the draw's own
+curve book, is run against the rod-park hold over the suite on seeds 100 to 109;
+a plant at rest must need nothing for a day. The recipe lines its bump points out
+by hand at the start of the cycle, so that is where its bumps are run.
 
 Every other charter task (``ladder``): on each draw the task's registry entry
 answers with the drawn numbers, so its ladder row, bump tests, rungs and nulls
@@ -167,7 +169,7 @@ def at_rest_cost(env, p):
         carried_days_range=(0.0, 0.0), sensor_noise_scale=0.0, initial_tilt_share=0.0,
     )  # fmt: skip
     _, s = env.reset_env(jax.random.PRNGKey(0), q)
-    null = jnp.array([1.0 - 2.0 * q.rod_park, 0.0])
+    null = jnp.array([1.0 - 2.0 * q.rod_park, 0.0, 1.0])  # the turbine on its plan
     keys = jax.random.split(jax.random.PRNGKey(1), q.max_steps_in_episode)
 
     def step(s, k):
@@ -183,11 +185,12 @@ def reactor(table):
 
     from target_gym import scenarios
     from target_gym.reactor import Reactor, ReactorParams
+    from target_gym.reactor.experts import make_reactor_pid_controller
     from target_gym.registry import REGISTRY
 
     env = Reactor()
     suite = scenarios.suite(REGISTRY["reactor"])
-    hold = lambda m, o: (jnp.array([L.PARK, 0.0]), m)  # noqa: E731
+    hold = lambda m, o: (jnp.array([L.PARK, 0.0, 1.0]), m)  # noqa: E731
     report = []
     for i, d in enumerate(draws(table)):
         p = ReactorParams(**d)
@@ -195,17 +198,24 @@ def reactor(table):
         row = {"draw": i, "values": d, "at_rest_cost": rest,
                "at_rest_trips": rest_trips, "scenarios": {}}  # fmt: skip
         try:
-            tune, _ = L.bumps(env, p)
+            tune, _ = L.bumps(env, p.replace(cycle_range=(0.0, 0.0)))
         except L.TrippedDuringTest as e:
             # The recipe cannot be run on this member: the property fails here.
             row.update(holds=False, tune_refused=str(e))
             print(json.dumps(row), flush=True)
             report.append(row)
             continue
+        read = {
+            "wd_Kc": float(tune.wd_Kc),
+            "wd_Ti": float(tune.wd_Ti),
+            "theta": float(tune.t_Ti) / 8.0,
+        }
+        expert = make_reactor_pid_controller(plant=p, **read)
+        act = lambda m, o, e=expert: e.step(e.params, m, o)  # noqa: E731
+        row["tune"] = read
         for sc in suite:
             q = ReactorParams(**{**sc.overrides, **d})
-            act, memory = L.procedure(q, tune)
-            ref = L.rows(env, q, act, memory)
+            ref = L.rows(env, q, act, expert.init_state)
             null = L.rows(env, q, hold, jnp.asarray(0.0))
             row["scenarios"][sc.name] = {
                 "reference_median": float(np.median(ref["cost_by_seed"])),
