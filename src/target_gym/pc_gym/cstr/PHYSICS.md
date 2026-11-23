@@ -140,18 +140,20 @@ restated on the family (Amendment 3):
 | T5. Analyser | no composition reading (none found) | pass |
 | T6. Loss of circulation | 0.75 to 8 K/min over 3 min, pooled: Morton's 1 to 2 C/min [S4], Bayer's over 2 C/min [S3], the audit's factor 4 on top and 25 % below | pass (0.81) |
 | T7. 25 K rise | 3 to 48 min [S2; S3] | pass |
-| T8. Open-loop settling | 95 % in 1.6 to 6.4 residence times [S1, Fig. 2] | **fail: 0.99**, kept as a finding (strict xfail) |
+| T8. Open-loop settling | within 5 % of its final value from 1.6 to 6.4 residence times on [S1, Fig. 2] | pass (3.72) |
 | Runaway trips the interlock | [S3] | pass |
 | Starts at rest on its setpoint | rule 17 | pass |
 
-**Finding, T8.** Open loop, a cooling step settles in 0.99 residence times (0.97 on v5),
-faster than the 1.6 the audit derived from PARSEX's closed loop (3.2, halved).
-The audit called it weak, kept for scale; the reactor's own temperature time
-constant is not documented (REALITY.md, "Time scales"). Not moved: the
-reactor's thermal time follows from S1's V and q and the UA derived from S1's
-design duty, about 11 min, and only the jacket's mass (ours) could slow it,
-with no source for a larger one. The owner kept the plant and the range on
-2026-11-12; the test is a strict xfail, so a plant change that passes it shows.
+**T8, how it is read (owner, 2026-11-23).** Open loop the design point is an
+underdamped oscillator: poles at -0.0197 +- 0.0465i per min (a period of
+135 min, damping 0.39) and the jacket's at -0.53 per min. A cooling step
+overshoots its final value by 25 %, peaks at 58.5 min and stays within 5 % of
+its final value from 126.5 min, 3.72 residence times. It first reaches 95 % of
+that value at 0.99 residence times, which is a rise time: the test read that
+figure until 2026-11-23 and stood as a strict xfail. S1's own figure is a
+settling time after an overshoot (a peak near 60 min, settled after about 110
+[S1, Fig. 2]), so the plant is now read the same way. The plant and the audit's
+range are as the owner kept them on 2026-11-12.
 
 ---
 
@@ -200,12 +202,12 @@ v5 and are stale.
 
 `experts.py`: a PI from the reactor temperature to the cooling water, biased
 at the water the setpoint needs at the design feed. Gains by SIMC (tau_c =
-theta) on one bump test of the water (+0.2 raw) from the design steady state,
-noise and events off: k = -10.7 K per raw unit, tau 18.4 min, theta 8.9 min,
-so Kp = 0.097 per K and Ti = 18.4 min (`src/target_gym/data/pid_gains.json`).
-The same gains stand at noise levels 0.5 and 2, since the test is noise-free,
-which the noise-level study does not accept (`test_gain_levels.py`, two
-failures for the ladder).
+theta) on single-run bump tests of the water, seeds 100 to 109 at noise scale 1
+(`docs/proposals/expert-protocols-process.md`, section 9): k = -9.68 K per raw
+unit, tau 15.4 min, theta 7.4 min, so Kp = 0.105 per K and Ti = 15.4 min, with
+a 0.18 min filter on the reading (`src/target_gym/data/pid_gains.json`). Noise
+levels 0.5 and 2 have gains of their own (`pid_gains_0.5x.json`,
+`pid_gains_2x.json`).
 
 ## 10. What the reference ladder row needs
 
@@ -219,7 +221,10 @@ failures for the ladder).
 
 `oracle.py` plans on the reactor and jacket balances, with the interlock as a
 limit and the scenario's event held from the state. It does not see a later
-event. Not run.
+event. Last run on the normal day on 2026-11-12 (10 seeds, no trip, a cost
+under 0.001 per step, `data/baseline_returns/cstr.json`); the shared solver has
+changed since, so that row is stale. The foresight ceilings are in
+`data/oracle_ceilings/cstr.json` (2026-11-09).
 
 ---
 

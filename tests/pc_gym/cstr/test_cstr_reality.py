@@ -19,8 +19,12 @@ Contract, from the sources and the audit's tolerances, not from the code:
   2 C/min [S4] and Bayer's over 2 C/min [S3], with the audit's factor 4 on the
   top and 25 % below the slow end;
 - T7: it rises 25 K within 3 to 48 min [S2; S3];
-- T8: open loop, a cooling step's 95 % time is 1.6 to 6.4 residence times
-  [S1, Fig. 2];
+- T8: open loop, a cooling step settles in 1.6 to 6.4 residence times
+  [S1, Fig. 2]. S1's figure is a settling time after an overshoot (a peak near
+  60 min, settled after about 110), so the plant's is read the same way: the
+  time after which the response stays within 5 % of its final value;
+- the jacket outlet's reading is about 2 min late [S6]: with the noise off it
+  is the jacket's temperature 2 min earlier, not its temperature now;
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
 - the feed sits at room temperature, 23.1 and 24.9 C on S1's two days
   [S1, Tables 3, 4], so within an episode it drifts and never leaves that
@@ -184,25 +188,48 @@ def test_loss_of_circulation_rises_25_kelvin_in_minutes():
     assert hit.size and 3.0 <= (hit[0] + 1) * p.delta_t <= 48.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="finding, kept (owner, 2026-11-12): open loop settles in 0.99 "
-    "residence times. The range is the audit's weak reading of PARSEX's closed "
-    "loop; the plant's thermal time follows from S1's V, q and UA (PHYSICS.md, "
-    "T8).",
-)
 def test_an_open_loop_cooling_step_settles_in_a_few_residence_times():
+    """T8. The plant overshoots open loop, as PARSEX's closed loop did [S1,
+    Fig. 2], so the first time the response reaches 95 % of its final value is a
+    rise time. Settled means it stays within 5 % of its final value from then on
+    (owner, 2026-11-23)."""
     # A step test on a still feed: the day's drift (cstr-v6) would move the end
-    # point the 95 % is read against.
+    # point the 5 % is read against.
     lo, hi = CSTRParams().feed_T_range
     p = quiet(feed_T_range=(0.5 * (lo + hi),) * 2)
     s = rest(p)
     raw = float(ENV.initial_action(s, p)[0])
     traj = hold(p, s, raw - 0.1, 2000)
     d = traj[:, 1] - float(s.T)
-    t95 = (np.argmax(np.abs(d) >= 0.95 * abs(d[-1])) + 1) * p.delta_t
+    final = d[-1]
+    # The run is long enough to read the end point: its last tenth is at rest.
+    assert np.abs(d[-200:] - final).max() < 0.01 * abs(final)
+    outside = np.nonzero(np.abs(d - final) > 0.05 * abs(final))[0]
+    settled = (outside[-1] + 2) * p.delta_t
     residence = p.V / p.q
-    assert 1.6 <= t95 / residence <= 6.4, t95 / residence
+    assert 1.6 <= settled / residence <= 6.4, settled / residence
+
+
+def test_the_jacket_outlet_is_read_two_minutes_late():
+    """[S6]: a jacket temperature measured at the outlet "adds approximately two
+    minutes of dead time". After a water move, noise off, each reading is the
+    jacket's true temperature 2 min earlier."""
+    p = quiet()
+    s = rest(p)
+    raw = jnp.asarray(ENV.initial_action(s, p)) + 0.5
+    step = jax.jit(ENV.step_env)
+    late = round(2.0 / p.delta_t)
+    truth, readings = [float(s.T_j)], [float(ENV.get_obs(s, p)[1])]
+    for k in range(5 * late):
+        obs, s, *_ = step(jax.random.PRNGKey(k), s, raw, p)
+        truth.append(float(s.T_j))
+        readings.append(float(obs[1]))
+    truth, readings = np.array(truth), np.array(readings)
+    # float32 at 320 K resolves 3e-5 K.
+    np.testing.assert_allclose(readings[:late], truth[0], atol=1e-4)
+    np.testing.assert_allclose(readings[late:], truth[:-late], atol=1e-4)
+    # The jacket has moved meanwhile, so this is not the state read directly.
+    assert np.abs(readings[late:] - truth[late:]).max() > 0.1
 
 
 def test_a_runaway_trips_the_interlock():

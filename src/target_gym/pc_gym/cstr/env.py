@@ -318,7 +318,12 @@ def get_obs(state: CSTRState, params: CSTRParams):
     """``[T, T_j, F_w_pct, T_setpoint]``: the reactor's temperature probe, the
     jacket outlet temperature [S6; S8, Fig. 6], the water flow, logged on
     PARSEX [S1, Fig. 2], and the setpoint. No composition: an online analyser
-    on such a reactor was not found, and Bayer sampled once a day [S3]."""
+    on such a reactor was not found, and Bayer sampled once a day [S3].
+
+    This reads whatever ``state`` it is given. The instruments are not here:
+    ``CSTR.get_obs`` hands it the measured copy of the state (``CSTR.readings``),
+    with the thermowell's lag on ``T`` and the outlet's 2 min dead time on
+    ``T_j``, so the agent never reads the state's ``T_j`` directly."""
     pct = 100.0 * (state.F_w - params.Fw_min) / (params.Fw_max - params.Fw_min)
     return jnp.array([state.T, state.T_j, pct, state.target_T])
 
