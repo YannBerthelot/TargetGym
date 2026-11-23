@@ -1,9 +1,10 @@
 """The pH oracle's planner pH.
 
 The env finds pH by bisection, whose derivative is zero, so the planner's pH
-carries the titration curve's slope instead. The closed-loop oracle check went
-with the tracking score (charter rule 15): the oracle is rebuilt for the job
-score before it is run again.
+carries the titration curve's slope instead. The oracle was rebuilt for the job
+score on the shared solver (#199); its closed loop is measured by the charter's
+MPC line (``scripts/record_charter.py --parts mpc``), not here: one episode takes
+about five minutes.
 """
 
 import jax

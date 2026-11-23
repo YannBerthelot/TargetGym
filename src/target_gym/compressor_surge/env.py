@@ -19,8 +19,9 @@ the consumers' valve against their static head and through the recycle valve
 back to suction. The drive follows a rate-limited speed setpoint through a
 first-order lag; the recycle valve is rate limited, faster opening than
 closing. The consumers' opening follows a hidden schedule plus an
-Ornstein-Uhlenbeck deviation. The plant trips when Phi falls below the
-episode's surge line, a hidden offset right of the characteristic's peak.
+Ornstein-Uhlenbeck deviation. A surge is a flow reversal; the plant trips on
+the third within ``surge_window`` (version 4). It starts, and restarts after a
+trip, in established operation (``established_point``).
 
 State (three ODEs, two actuator positions, the disturbance, the trip variable
 and the schedule)
@@ -116,8 +117,8 @@ class CompressorSurgeParams(EnvParams):
     drive_rate: float = 0.03  # of rated per s
     #: Speed lag behind the rate-limited drive setpoint (ours).
     tau_N: float = 1.0  # s
-    #: Full open in 2 s, dead time included (read-consistent: Mirsky et al.
-    #: p.23; Wilson and Sheldon Table 1).
+    #: Full stroke in 2 s once the valve moves, after ``valve_lag``
+    #: (read-consistent: Mirsky et al. p.23; Wilson and Sheldon Table 1).
     valve_open_rate: float = 0.5  # per s
     #: The positioner and actuator lag ahead of the stroke, "within 150-300
     #: ms" [C7]: a dead time before the valve moves. Ours, the family's lower
@@ -159,9 +160,16 @@ class CompressorSurgeParams(EnvParams):
     surge_window: float = 15.0  # s
 
     # ---- Reset (ours) ----
+    #: Established operation (charter B5): the plant starts, and restarts
+    #: after a trip, on a control line this far right of the surge line, in
+    #: flow at speed, at the header setpoint (``established_point``). Ours, the
+    #: family's low end: about 10 % [C6], 10 to 15 % [C1].
+    reset_margin: float = 0.10
+    #: Version 2's reset point (rated speed, recycle 0.35), which the reset no
+    #: longer reads: with it a normal day's demand started the plant below its
+    #: header zone at top speed, a capture. Kept for section 2's check of the
+    #: equilibrium solver and for the numbers script.
     N_reset: float = 1.0  # of rated
-    #: Surge-safe for every opening 0.2 to 1.0 (PHYSICS.md, reset). The speed
-    #: is then the one that holds the header setpoint (established operation).
     x_reset: float = 0.35
     #: Newton iterations of the reset equilibrium. Static: it is a Python loop
     #: count, so it must not be traced. A different value simply retraces.
@@ -231,6 +239,7 @@ PARAM_UNITS = {
     "demand_sigma": "-",
     "demand_theta": "1/s",
     "demand_dev_reset_clip": "-",
+    "reset_margin": "-",
     "N_reset": "-",
     "x_reset": "-",
     "reset_newton_iters": "-",
@@ -585,6 +594,46 @@ def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp)
         f, df = jax.jvp(residual, (phi,), (jnp.ones_like(phi),))
         phi = phi - f / df
     return np.asarray(phi) if xp is np else phi
+
+
+def established_point(opening, params: CompressorSurgeParams):
+    """Established operation (charter B5) for the consumers' ``opening``:
+    ``(m_c, dp, N, x, Phi)`` at rest at the header setpoint.
+
+    The recycle stands where a control line ``reset_margin`` right of the
+    surge line needs it: that line's flow at the setpoint, less what the
+    consumers take there, through the valve; shut where they take more, as on
+    a normal day [C3, p. 2]. The speed is then the one that holds the
+    setpoint, by bisection on the equilibrium's pressure, which rises with
+    speed. With the valve on the line the bisection lands on the line's own
+    speed; with it shut, the plant sits right of the line.
+    """
+    p = params
+    rho, sp = suction_density(p), p.header_setpoint
+    phi_line = 2.0 * p.W * (1.0 + p.reset_margin)
+    N_line = jnp.sqrt(sp / (rho * p.U_r**2 * characteristic(phi_line, p)))
+    m_line = rho * p.A_c * p.U_r * N_line * phi_line
+    x = jnp.clip(
+        (m_line - consumer_flow(sp, opening, p)) / recycle_flow(sp, 1.0, p), 0.0, 1.0
+    )
+
+    def header_at(N):
+        phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters)
+        return rho * (N * p.U_r) ** 2 * characteristic(phi, p)
+
+    def bisect(bounds, _):
+        lo, hi = bounds
+        mid = 0.5 * (lo + hi)
+        low = header_at(mid) < sp
+        return (jnp.where(low, mid, lo), jnp.where(low, hi, mid)), None
+
+    (lo, hi), _ = jax.lax.scan(
+        bisect, (jnp.asarray(p.N_min), jnp.asarray(p.N_max)), None, length=24
+    )
+    N = 0.5 * (lo + hi)
+    phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters)
+    U = N * p.U_r
+    return rho * p.A_c * U * phi, rho * U**2 * characteristic(phi, p), N, x, phi
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
