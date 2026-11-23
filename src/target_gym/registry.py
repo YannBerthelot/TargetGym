@@ -698,6 +698,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
         # vectors every 150 s, and a scenario suite.
         # v9: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Still v9, unreleased (owner, 2026-11-23): the heading band travels
+        # at a 25 deg turn's rate, and the suite has no steady wind.
         version=9,
     ),
     EnvSpec(
@@ -741,7 +743,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=None,
         baselines_note=(
             "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
-            "score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the "
             "earlier cost, so the room is not measured (charter rule 9)."
         ),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
@@ -769,6 +771,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
         # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
         # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Still v10, unreleased (owner, 2026-11-23): the hold costs its fuel,
+        # is assigned green dot and prices only the maximum holding airspeed
+        # (plane3d/hold.py).
         version=10,
     ),
     EnvSpec(
@@ -987,6 +992,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # diversion basin pumped back, influent flow swings, scenarios.
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        # Rebuilt on the shared solver (#199), so its oracle reads the solver's
+        # modules and its horizon and widths files; declaring them puts them in
+        # the oracle's fingerprint alone, as for every task on the solver.
+        oracle_data=_shared_oracle("ph_neutralization"),
         scenarios=_scenarios(
             "ph_neutralization_scenarios",
             module="target_gym.pc_gym.ph_neutralization.scenarios",

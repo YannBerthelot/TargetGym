@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 from gymnax.environments import environment, spaces
 
+from target_gym import reward as R
 from target_gym.base import (
     actuate,
     canonical_dtypes,
@@ -47,6 +48,7 @@ from target_gym.plane.stream_events import (
     sortie_mass,
     start_zone,
 )
+from target_gym.plane3d import hold
 from target_gym.plane3d.dynamics import read_angles_3d
 from target_gym.plane3d.env import (
     _RACETRACK_LEG,
@@ -60,15 +62,13 @@ from target_gym.plane3d.env import (
     compute_reward_circle,
     compute_reward_figure8,
     compute_reward_heading,
-    compute_reward_racetrack,
+    compute_reward_racetrack_v1,
     compute_reward_terms_circle,
     compute_reward_terms_figure8,
     compute_reward_terms_heading,
-    compute_reward_terms_racetrack,
     get_obs_circle,
     get_obs_figure8,
     get_obs_heading,
-    get_obs_racetrack,
     heading_3d,
     wrap_angle,
 )
@@ -384,12 +384,13 @@ class _Airplane3DBase(
             [2.0 * lever - 1.0, state.theta / PITCH_DEMAND_MAX, jnp.zeros(())]
         )
 
-    def _established(self, key, base_kwargs, params, heading):
+    def _established(self, key, base_kwargs, params, heading, speed=None):
         """``base_kwargs`` established (Amendment 2, rule 17): at the assigned
         level and speed, wings level on ``heading``, in trim, with the episode's
-        turbulence zone drawn [BEA447 Figure 24]."""
+        turbulence zone drawn [BEA447 Figure 24]. ``speed`` is the assigned true
+        airspeed where the task has its own (the hold's)."""
         z = base_kwargs["target_altitude"]
-        speed = assigned_tas_3d(z, z, params)
+        speed = assigned_tas_3d(z, z, params) if speed is None else speed
         theta, stick, power = trim_level(speed, z, base_kwargs["m"], params)
         onset_key, length_key = jax.random.split(key)
         start = jax.random.uniform(
@@ -488,7 +489,7 @@ class Plane3DHeading(_Airplane3DBase):
     def default_params(self) -> PlaneParams3D:
         # The scored configuration (Amendment 2, plane3d/PHYSICS.md): heading
         # select from established cruise, 600 s (ours: the longest turn, 180
-        # deg at a holding turn's rate, takes under 110 s, then a held heading
+        # deg at the protected bank, takes 96 to 122 s, then a held heading
         # through the turbulence zone, which starts anywhere in the episode).
         band = 65.0 * 0.3048  # +-65 ft [RVSM A.4.1.4]
         ten = float(np.deg2rad(10.0))  # +-10 deg [ACS]
@@ -503,6 +504,12 @@ class Plane3DHeading(_Airplane3DBase):
             e_tol_altitude=band,
             e_floor_heading=ten,
             e_tol_heading=ten,
+            # The heading band travels at a 25 deg turn's rate, the AIM's bank
+            # with a flight director and the bottom of the family's 25 to 30
+            # deg, so any turn the family's autopilots make is inside it
+            # [AIM538]; at 30 deg it travelled at the protected bank itself
+            # (owner, 2026-11-23).
+            holding_bank=float(np.deg2rad(25.0)),
             # Fuel and time inside the bands, as ``plane`` (owner, 2026-11-10).
             economy_weight=1.0,
             rho_floor_tracking=0.0,
@@ -527,8 +534,10 @@ class Plane3DHeading(_Airplane3DBase):
             & (state.time < params.max_steps_in_episode)
             & (jnp.mod(state.time, period) == 0)
         )
+        # The step is folded in, so a caller that keeps one key still gets a
+        # new draw at each clearance.
         heading = jax.random.uniform(
-            jax.random.fold_in(key, _CLEARANCE),
+            jax.random.fold_in(jax.random.fold_in(key, state.time), _CLEARANCE),
             minval=params.target_heading_range[0],
             maxval=params.target_heading_range[1],
         )
@@ -695,6 +704,12 @@ class Plane3DRacetrack(_Airplane3DBase):
             e_tol_heading=ten,
             e_floor_path=track,
             e_tol_path=track,
+            # What a hold costs is its fuel, in kg a second: the time is ATC's,
+            # so nothing per distance and no cost index (owner, 2026-11-23;
+            # plane3d/hold.py).
+            economy_weight=1.0,
+            economy_scale=1.0,
+            cost_index=0.0,
             rho_floor_tracking=0.0,
             rho_floor=0.0,
             failure_cost=((12192.0 - band) / band) ** 2,
@@ -721,14 +736,24 @@ class Plane3DRacetrack(_Airplane3DBase):
         )
         return fresh.replace(x=along * c - radius * s_, y=along * s_ + radius * c)
 
+    def assigned_cas(self, state, params=None):
+        """The CAS the hold is flown at: green dot for the aircraft's mass,
+        under the maximum holding airspeed (``plane3d.hold``)."""
+        params = self.default_params if params is None else params
+        return hold.assigned_cas(state.m, state.target_altitude, params)
+
     def compute_reward(self, state, params):
-        return compute_reward_racetrack(state, params)
+        return R.select(
+            params.reward_version,
+            compute_reward_racetrack_v1(state, params),
+            R.total(hold.reward_terms(state, params)),
+        )
 
     def _terms(self, state, params, tripped=None):
-        return compute_reward_terms_racetrack(state, params, tripped=tripped)
+        return hold.reward_terms(state, params, tripped=tripped)
 
     def _observe(self, state, params):
-        return get_obs_racetrack(state, xp=jnp, params=params)
+        return hold.observe(state, params, self.obs_index["target_speed"])
 
     @canonical_reset
     def reset_env(self, key: chex.PRNGKey, params: PlaneParams3D = None):
@@ -746,9 +771,11 @@ class Plane3DRacetrack(_Airplane3DBase):
         # turns are sized for the greatest ground speed, the assigned speed
         # plus the steady wind, at ``hold_design_bank``, so the downwind turn
         # is flyable inside the protected bank; the inbound leg's minute (1.5
-        # above 14 000 ft) at the assigned speed sets the leg.
+        # above 14 000 ft) at the assigned speed sets the leg. The assigned
+        # speed is the aircraft's own holding speed, green dot for its mass.
         z = base_kwargs["target_altitude"]
-        speed = assigned_tas_3d(z, z, params)
+        hold_speed = hold.assigned_tas(z, base_kwargs["m"], z, params)
+        speed = hold_speed
         wind = jnp.sqrt(params.wind_x**2 + params.wind_y**2)
         hold_radius = (speed + wind) ** 2 / (
             params.gravity * jnp.tan(params.hold_design_bank)
@@ -791,7 +818,7 @@ class Plane3DRacetrack(_Airplane3DBase):
         # Amended: established on the leg at the hold's level and speed.
         key, zone_key = jax.random.split(key)
         established = self._established(
-            zone_key, base_kwargs, params, jnp.arctan2(s_, c)
+            zone_key, base_kwargs, params, jnp.arctan2(s_, c), speed=hold_speed
         )
         established.update(x=start_x, y=start_y)
         base_kwargs = jax.tree_util.tree_map(
