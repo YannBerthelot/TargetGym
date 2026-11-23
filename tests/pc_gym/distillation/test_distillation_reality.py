@@ -27,7 +27,13 @@ and inside them, at the same product split, the run on less boilup scores
 better. And one from the family's economics [D8, Table 1]: distillate sells at
 2 $/mol and bottoms at 1, with boilup at about 0.01 $/mol for hydrocarbons, so
 each kmol of light key lost to the bottoms costs (2 - 1) / 0.01 = 100 kmol of
-boilup: purer bottoms on the same boilup score better.
+boilup: purer bottoms on the same boilup score better. The same premium prices
+the distillate's give-away: at purity y it holds D y of light key, which at the
+spec's purity is D y / spec of on-spec product, D (y - spec) / spec more than
+was drawn [D8; D10, pp. 36-37]. And off-spec distillate sells a grade down: US
+contract polymer-grade propylene was 35.50 cents/lb and chemical grade 34.00 in
+August and September 2025 [D9, p. 2], so it loses 1.5 / 35.5 of its 2 $/mol,
+8.45 kmol of boilup a kmol.
 
 Configurations (charter Amendment 3). D1's figures are for Column A with
 0.5 kmol drums, so tests 1 and 5 to 10 run that configuration. The shipped
@@ -353,3 +359,45 @@ def test_light_key_lost_to_the_bottoms_costs_100_kmol_of_boilup_a_kmol():
     pure = lean.replace(x=lean.x.at[0].set(0.005))
     gain = float(ENV.compute_reward(pure, p)) - float(ENV.compute_reward(lean, p))
     assert gain == pytest.approx(100.0 * 0.5 * 0.004 * float(p.delta_t), rel=1e-3)
+
+
+def _inside(p, top_margin):
+    """A column at rest on the design flows with the bottoms at 0.009 and the
+    distillate ``top_margin`` inside its spec: D = B = 0.5 kmol/min."""
+    s = start(p)
+    return s.replace(x=s.x.at[-1].set(float(p.yD_spec) + top_margin).at[0].set(0.009))
+
+
+def test_a_distillate_purer_than_its_spec_gives_product_away():
+    """[D8, Table 1; D10, pp. 36-37]: the distillate is paid on what is drawn, so
+    purity past the spec is product not sold at the distillate's price. On the
+    same flows, a distillate 0.004 inside its spec against one 0.001 inside:
+    D (0.004 - 0.001) / spec = 0.5 * 0.003 / 0.985714 = 0.0015217 kmol/min more
+    on-spec product it could have been, at 100 kmol of boilup a kmol."""
+    p = quiet()
+    purer, leaner = _inside(p, 0.004), _inside(p, 0.001)
+    lost = float(ENV.compute_reward(leaner, p)) - float(ENV.compute_reward(purer, p))
+    assert lost == pytest.approx(100.0 * 0.0015217 * float(p.delta_t), rel=5e-3)
+
+
+def test_a_distillate_on_its_spec_gives_nothing_away():
+    """On the spec the column pays its boilup and the light key in its bottoms
+    and nothing else: V0 + 100 * 0.5 * 0.009 = 3.20629 + 0.45 a 1 min step."""
+    p = quiet()
+    cost = -float(ENV.compute_reward(_inside(p, 2e-6), p))
+    assert cost == pytest.approx(
+        (V0 + 100.0 * 0.5 * 0.009) * float(p.delta_t), abs=1e-3
+    )
+
+
+def test_off_spec_distillate_sells_a_grade_down():
+    """[D9, p. 2]: polymer-grade propylene 35.50 cents/lb, chemical grade 34.00,
+    so a distillate under its spec loses 1.5 / 35.5 of its 2 $/mol [D8], which
+    is 1.5 / 35.5 * 2 / 0.01 = 8.4507 kmol of boilup a kmol. Two columns on the
+    same flows, the distillate just inside and just under its spec: 0.5 kmol/min
+    of distillate, 4.2254 kmol of boilup a 1 min step."""
+    p = quiet()
+    gap = float(ENV.compute_reward(_inside(p, 2e-6), p)) - float(
+        ENV.compute_reward(_inside(p, -1e-4), p)
+    )
+    assert gap == pytest.approx(0.5 * 8.4507 * float(p.delta_t), abs=2e-3)

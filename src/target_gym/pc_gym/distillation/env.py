@@ -134,19 +134,28 @@ class DistillationParams(EnvParams):
 
     # ---- Score (charter rule 15; REALITY.md, "The operator's job") ----
     # Keep both impurities inside their zones at the least reflux and boilup
-    # [D4, p. 5]. In kmol of boilup per step: the boilup itself, and each kmol
-    # of off-spec product, which is run through the column again at the
-    # nominal V/F = 3.206 kmol of boilup per kmol (ours: no price was found,
-    # and a second pass is the cheapest way to recover it). Inside the zones
-    # purity earns nothing more; it costs the boilup it takes.
+    # [D4, p. 5], and sell what the feed can give [D8]. In kmol of boilup per
+    # step: the boilup itself; what each product gives up to the other's price;
+    # and each kmol of off-spec product.
     reward_version: int = 3
     boilup_price: float = 1.0  # per kmol of boilup
-    reprocess_price: float = 3.206  # kmol of boilup per kmol off spec
-    # Recovery: light key leaving in the bottoms is sold at the bottoms' price
-    # instead of the distillate's. On Column A, distillate 2 $/mol, bottoms
-    # 1 $/mol and boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p.
-    # 2965], so each kmol lost costs (2 - 1) / 0.01 = 100 kmol of boilup.
-    recovery_price: float = 100.0  # kmol of boilup per kmol of light key lost
+    # Off-spec bottoms are run through the column again at the nominal V/F =
+    # 3.206 kmol of boilup per kmol (ours: no price was found, and a second
+    # pass is the cheapest way to recover them).
+    reprocess_price: float = 3.206  # kmol of boilup per kmol of bottoms off spec
+    # Off-spec distillate sells a grade down. US contract polymer-grade
+    # propylene was 35.50 cents/lb and chemical grade 34.00 in August and
+    # September 2025 [D9, p. 2]: 1.5 / 35.5 of its value, on Column A's
+    # 2 $/mol with boilup at 0.01 $/mol [D8].
+    downgrade_price: float = 1.5 / 35.5 * 2.0 / 0.01  # kmol of boilup per kmol
+    # The distillate's premium over the bottoms. On Column A, distillate
+    # 2 $/mol, bottoms 1 $/mol and boilup about 0.01 $/mol for hydrocarbons
+    # [D8, Table 1, p. 2965]: (2 - 1) / 0.01 = 100 kmol of boilup a kmol. It
+    # prices the light key the bottoms carry away, and the distillate's
+    # give-away: at purity y the distillate holds D y of light key, which at
+    # the spec's purity is D y / spec of on-spec product, D (y - spec) / spec
+    # more than was drawn [D8; D10, pp. 36-37].
+    recovery_price: float = 100.0  # kmol of boilup per kmol sold at the bottoms' price
     # No trip (the zones are not trips), so a trip has no cost: 0, the
     # charter's convention for a plant with no trip (B5).
     failure_cost: float = 0.0
@@ -187,6 +196,7 @@ PARAM_UNITS = {
     "reward_version": "-",
     "boilup_price": "kmol",
     "reprocess_price": "kmol/kmol",
+    "downgrade_price": "kmol/kmol",
     "recovery_price": "kmol/kmol",
     "failure_cost": "kmol",
     "restart_steps": "steps",
@@ -427,9 +437,12 @@ def compute_reward_terms(
     (``DistillationParams``, "Score").
 
     - ``boilup``: the reboiler's duty [D4, p. 5];
-    - ``off_spec``: each product outside its zone, run through again;
+    - ``off_spec``: the distillate under its spec, sold a grade down [D9], and
+      the bottoms over theirs, run through again;
     - ``light_lost``: the light key leaving in the bottoms, sold at the
-      bottoms' price instead of the distillate's [D8].
+      bottoms' price instead of the distillate's [D8];
+    - ``give_away``: the on-spec distillate a purer one could have been, at
+      the same premium [D8; D10, pp. 36-37].
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
@@ -438,16 +451,18 @@ def compute_reward_terms(
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
     D, B = flows(state.L, state.V, p, state.F)
-    off_top = xp.where(state.x[-1] < p.yD_spec, D, 0.0)
-    off_bottom = xp.where(state.x[0] > p.xB_spec, B, 0.0)
+    yD, xB = state.x[-1], state.x[0]
+    off_top = xp.where(yD < p.yD_spec, D, 0.0)
+    off_bottom = xp.where(xB > p.xB_spec, B, 0.0)
+    spare = xp.maximum(yD - p.yD_spec, 0.0) / p.yD_spec
     terms = {
         "boilup": R.priced_cost(state.V * p.delta_t, p.boilup_price, xp),
-        "off_spec": R.priced_cost(
-            (off_top + off_bottom) * p.delta_t, p.reprocess_price, xp
-        ),
+        "off_spec": R.priced_cost(off_top * p.delta_t, p.downgrade_price, xp)
+        + R.priced_cost(off_bottom * p.delta_t, p.reprocess_price, xp),
         "light_lost": R.priced_cost(
-            B * xp.clip(state.x[0], 0.0, 1.0) * p.delta_t, p.recovery_price, xp
+            B * xp.clip(xB, 0.0, 1.0) * p.delta_t, p.recovery_price, xp
         ),
+        "give_away": R.priced_cost(D * spare * p.delta_t, p.recovery_price, xp),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 

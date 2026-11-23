@@ -111,13 +111,14 @@ not from this column. Eq. 31's own rounded entries give 36.07 and 146.0.
 | `max_steps_in_episode` | 400 | steps | ours: about two dominant time constants |
 | analyser cycle, dead time | 5, 5 | min | cited range: 3 to 30 min in total [D5] |
 | `boilup_price` | 1 | kmol | ours: the unit of the score |
-| `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec product is run through again, at the nominal V/F |
-| `recovery_price` | 100 | kmol/kmol | cited: (pD - pB) / pV on Column A, distillate 2 and bottoms 1 $/mol, boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965] |
+| `reprocess_price` | 3.206 | kmol/kmol | ours: no price found; off-spec bottoms are run through again, at the nominal V/F |
+| `downgrade_price` | 8.45 | kmol/kmol | cited: off-spec distillate sells a grade down, chemical grade 1.50 cents/lb under polymer grade at 35.50 [D9, p. 2], on Column A's 2 $/mol with boilup at 0.01 [D8] |
+| `recovery_price` | 100 | kmol/kmol | cited: (pD - pB) / pV on Column A, distillate 2 and bottoms 1 $/mol, boilup about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965]; prices the light key lost and the give-away |
 | `failure_cost` | 0 | kmol | no trip, so a trip costs nothing (charter B5) |
 | `restart_steps` | 1 | steps | never charged |
 | `e_floor_top`, `e_floor_bottom` | 4e-4 | - | the analysers' scatter (section Readings), for the time-in-band KPI only |
 
-Count: 12 cited, 11 ours.
+Count: 13 cited, 11 ours.
 
 ---
 
@@ -125,8 +126,8 @@ Count: 12 cited, 11 ours.
 
 | Limit | Kind | Model | Source |
 |---|---|---|---|
-| Distillate below yD 0.9857 | Zone | Off-spec distillate is charged its reprocessing | spec [D2]; zone [D4, p. 5, Table 1] |
-| Bottoms above xB 0.0143 | Zone | As above, for bottoms | spec [D2]; zone [D4, p. 5, Table 1] |
+| Distillate below yD 0.9857 | Zone | Off-spec distillate sells a grade down | spec [D2]; zone [D4, p. 5, Table 1]; price [D9] |
+| Bottoms above xB 0.0143 | Zone | Off-spec bottoms are charged their reprocessing | spec [D2]; zone [D4, p. 5, Table 1] |
 | Flooding | Not modelled | Kind not found [D6]; `V_max` stands in, ours | [D6] |
 | Reflux and boilup | Hardware | The flow box, clipped | ours (section 3) |
 
@@ -167,10 +168,11 @@ the least reflux and boilup, without flooding [D4, p. 5; D6]. Per minute, in
 kmol of boilup:
 
 ```
-reward     = -(boilup + off_spec + light_lost)
+reward     = -(boilup + off_spec + light_lost + give_away)
 boilup     = V dt
-off_spec   = 3.206 (D [yD < 0.9857] + B [xB > 0.0143]) dt
+off_spec   = (8.45 D [yD < 0.9857] + 3.206 B [xB > 0.0143]) dt
 light_lost = 100 B xB dt
+give_away  = 100 D max(yD - 0.9857, 0) / 0.9857 dt
 ```
 
 Light key leaving in the bottoms is sold at the bottoms' price instead of the
@@ -178,7 +180,24 @@ distillate's: on Column A distillate sells at 2 $/mol, bottoms at 1 and boilup
 costs about 0.01 $/mol for hydrocarbons [D8, Table 1, p. 2965], so each kmol
 costs (2 - 1) / 0.01 = 100 kmol of boilup. With energy this cheap the
 bottoms pay to be over-purified, as D8 finds for Column A (its region with the
-bottoms' spec inactive); the distillate's purity earns nothing past its spec.
+bottoms' spec inactive).
+
+The same premium prices the distillate's give-away (owner, 2026-11-23). D8's
+margin pays the distillate on what is drawn, so purity past the spec is
+product not sold: at purity y the distillate holds D y of light key, which at
+the spec's purity is D y / spec of on-spec product, D (y - spec) / spec more
+than was drawn. It is charged on the stream as it leaves, like the light key,
+so no inventory can be drawn down to earn it. This is where better control
+earns on a column: a smaller spread lets the operating target move toward the
+limit [D10, pp. 36-37]. Before it, purity past the spec cost only its boilup:
+two sigma of back-off cost 0.022 a step, against 0.064 now.
+
+Off-spec distillate sells a grade down: chemical-grade propylene was 1.50
+cents/lb under polymer grade at 35.50 in August and September 2025 [D9, p. 2],
+1.5 / 35.5 of its 2 $/mol, 8.45 kmol of boilup a kmol. White's case study
+prices an off-spec top product a third lower [D10, Table 1]; those are assumed
+prices of a debutanizer, and the splitter's own grades are kept. Off-spec
+bottoms keep the second pass's boilup (ours).
 
 ---
 
