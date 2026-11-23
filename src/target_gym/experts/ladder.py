@@ -18,7 +18,8 @@ import numpy as np
 from target_gym.experts.pid import Controller
 from target_gym.identification import simc
 
-__all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
+__all__ = ["Cascade", "Override", "Pi", "Rung", "ValvePosition", "best_rung"]
+__all__ += ["decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 __all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
 
@@ -137,6 +138,24 @@ class Override:
 
 
 @dataclass(frozen=True)
+class ValvePosition:
+    """Hold a loop's valve at ``setpoint`` by another MV, ``mv``, which no loop
+    drives: Shinskey's valve position control, as Reyes-Lua, Zotica and Skogestad
+    lay it out (IFAC ADCHEM 2018, section 2.3). ``read(obs, xp)`` is the watched
+    valve's position, in the units of ``setpoint``. A PI moves ``mv`` from where the
+    reset left it (the start hold's value, else the bias's), never past ``top``, the
+    throughput asked for, and its integral holds while that limits it. ``kc`` has
+    the sign of the watched valve's answer to ``mv`` with the loops closed."""
+
+    read: Callable
+    setpoint: float
+    mv: int
+    kc: float
+    ti: float
+    top: float = 1.0
+
+
+@dataclass(frozen=True)
 class Rung:
     """One step of the ladder. ``mix`` is MVs by loops, the pairing on the rungs
     without a decoupler."""
@@ -146,6 +165,7 @@ class Rung:
     mix: np.ndarray
     cascades: tuple = ()
     overrides: tuple = ()
+    valve_positions: tuple = ()
 
 
 class Memory(NamedTuple):
@@ -159,6 +179,9 @@ class Memory(NamedTuple):
     #: each cascade's rest were off by at the reset. Zero without one.
     trim: object = ()
     inner_trim: object = ()
+    #: Each valve position loop's integral, and the MV as it took it over.
+    vp_integral: object = ()
+    vp_base: object = ()
 
 
 def ladder_controller(
@@ -216,6 +239,16 @@ def ladder_controller(
                 1.0,
             )
             resets.append(r + dt / o.ti * (u[o.mv] - r))
+        vp_i, vp_b = [], []
+        for n, v in enumerate(rung.valve_positions):
+            took = start(obs, xp)[v.mv] if start is not None else u[v.mv]
+            base_v = xp.where(first, m.vp_base[n], took)
+            e_v = v.setpoint - v.read(obs, xp)
+            i_v = m.vp_integral[n] + e_v * dt
+            wanted = base_v + v.kc * (e_v + i_v / v.ti)
+            u[v.mv] = xp.clip(xp.minimum(wanted, v.top), -1.0, 1.0)
+            vp_i.append(xp.where(u[v.mv] == wanted, i_v, m.vp_integral[n]))
+            vp_b.append(base_v)
         action = xp.stack(u)
 
         moved = xp.abs(action - asked) > 0
@@ -234,6 +267,8 @@ def ladder_controller(
             xp.ones_like(m.started),
             trim,
             _stack(trims, xp) if start is not None else m.inner_trim,
+            _stack(vp_i, xp),
+            _stack(vp_b, xp),
         )
 
     n, c, o = len(rung.loops), len(inner), len(rung.overrides)
@@ -246,6 +281,8 @@ def ladder_controller(
         np.zeros(()),
         np.zeros(rung.mix.shape[0]),
         np.zeros(c),
+        np.zeros(len(rung.valve_positions)),
+        np.zeros(len(rung.valve_positions)),
     )
     return Controller(None, zero, step)
 

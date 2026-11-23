@@ -26,6 +26,11 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   automatic on a running plant): the first output is what the actuator held at the
   reset plus the loops' action on their errors. What the bias and each cascade's
   rest were off by at the reset is kept for the episode, not read again.
+- ``ValvePosition`` (Shinskey's valve position control; Reyes-Lua, Zotica and
+  Skogestad, IFAC ADCHEM 2018, section 2.3): a PI holds a loop's valve at its set
+  point by another MV, which it moves from where it took it over (the start hold's
+  value, else the bias's) and never past its top, the throughput asked for. Its
+  integral holds while the top limits it.
 
 Expected values are worked by hand in each test.
 """
@@ -38,6 +43,7 @@ from target_gym.experts.ladder import (
     Override,
     Pi,
     Rung,
+    ValvePosition,
     best_rung,
     cv_sigma,
     decoupler,
@@ -277,6 +283,56 @@ def test_a_start_hold_rests_a_cascades_inner_loop_on_its_reading():
     ctrl = with_start(Pi(0, 2.0, 1e9), cascades=(inner,))
     actions = run(ctrl, [[0.0, 0.0, 6.0, 0.4], [0.0, 1.0, 6.5, 0.4]])
     np.testing.assert_allclose(actions[:, 0], [0.4, 0.7], atol=1e-7)
+
+
+def two_valves(vp, start=None):
+    """A loop that never moves MV 0 (zero gain) and a valve position loop on MV 1,
+    whose bias asks for its top. Observations: ``[cv, target, valve, held MV 1]``."""
+    return ladder_controller(
+        Rung(
+            name="test",
+            loops=(Pi(0, 0.0, 1.0),),
+            mix=np.array([[1.0], [0.0]]),
+            valve_positions=(vp,),
+        ),
+        read_cv,
+        read_target,
+        lambda o, xp: xp.asarray([0.0, 1.0]),
+        1.0,
+        start,
+    )
+
+
+def watched(o, xp):
+    return o[2]
+
+
+def test_a_valve_position_loop_cuts_its_mv_when_the_valve_is_past_its_set_point():
+    # The valve stands at 0.9 for a set point of 0.8: Kc 0.5 on -0.1 takes 0.05 off
+    # the top the bias asks for. MV 0 is not its business.
+    ctrl = two_valves(ValvePosition(watched, 0.8, 1, 0.5, 1e9))
+    np.testing.assert_allclose(run(ctrl, [[0.0, 0.0, 0.9, 0.0]])[0], [0.0, 0.95])
+
+
+def test_a_valve_position_loop_never_asks_past_its_top_and_does_not_wind_up():
+    # Valve at 0.2, far under its set point: Kc 0.5, Ti 1 asks 1 + 0.5 * 1.2 and
+    # gets the top, 1. Then the valve at 0.9: with no integral kept from the
+    # limited step, 1 + 0.5 * (-0.1 - 0.1) = 0.9.
+    ctrl = two_valves(ValvePosition(watched, 0.8, 1, 0.5, 1.0))
+    actions = run(ctrl, [[0.0, 0.0, 0.2, 0.0], [0.0, 0.0, 0.9, 0.0]])
+    np.testing.assert_allclose(actions[:, 1], [1.0, 0.9])
+
+
+def test_a_valve_position_loop_takes_its_mv_over_where_the_reset_left_it():
+    # With a start hold the MV starts from the 0.6 it held, not from the bias's 1:
+    # valve on its set point, 0.6; then 0.2 under it, 0.6 + 0.5 * 0.2 = 0.7. The
+    # hold is read once: the 0.9 in that entry afterwards changes nothing.
+    ctrl = two_valves(
+        ValvePosition(watched, 0.8, 1, 0.5, 1e9),
+        start=lambda o, xp: xp.stack([0.0 * o[3], o[3]]),
+    )
+    actions = run(ctrl, [[0.0, 0.0, 0.8, 0.6], [0.0, 0.0, 0.6, 0.9]])
+    np.testing.assert_allclose(actions[:, 1], [0.6, 0.7], atol=1e-7)
 
 
 def floor_override():
