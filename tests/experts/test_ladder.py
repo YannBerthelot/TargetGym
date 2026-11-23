@@ -15,6 +15,12 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   from, and an infinite zone has no centre.
 - ``cv_sigma``: the sample standard deviation of the controlled variable, pooled over
   seeds after the burn-in.
+- ``cycle_extremes`` and ``binding_setpoint`` (owner, 2026-11-23, for a zone priced
+  on a schedule): what can leave the zone is the controlled variable's closest
+  approach to the cheap edge in each cycle, over the steps the zone is priced. The
+  setpoint moves until those approaches average ``k = 2`` of their own standard
+  deviations inside the edge, never past the zone's centre. A cycle with no priced
+  step has no approach, and a part cycle at the end is left out.
 - ``null_verdict`` (J2): a null policy wins a seed by costing strictly less than the
   reference; a task fails when any null wins more than half the seeds.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
@@ -39,7 +45,9 @@ from target_gym.experts.ladder import (
     Pi,
     Rung,
     best_rung,
+    binding_setpoint,
     cv_sigma,
+    cycle_extremes,
     decoupler,
     ladder_controller,
     most_sensitive,
@@ -158,6 +166,66 @@ def test_cv_sigma_pools_seeds_after_the_burn_in():
     # sum to 4, over n - 1 = 3, so sigma = sqrt(4 / 3).
     traces = [[100.0, 1.0, 3.0], [100.0, 1.0, 3.0]]
     assert cv_sigma(traces, burn_in=1) == pytest.approx((4 / 3) ** 0.5)
+
+
+def test_cycle_extremes_are_each_cycles_closest_priced_approach():
+    # Two cycles of four steps, priced on steps 1 and 2, then 0, 2 and 3. Toward a
+    # low edge the closest approach is each cycle's priced minimum, 3 and 7; toward
+    # a high edge its priced maximum, 4 and 9. The two steps left over are no cycle.
+    trace = [5.0, 3.0, 4.0, 6.0, 7.0, 2.0, 8.0, 9.0, 1.0, 1.0]
+    priced = [False, True, True, False, True, False, True, True, True, True]
+    np.testing.assert_array_equal(cycle_extremes(trace, priced, 4, "low"), [3.0, 7.0])
+    np.testing.assert_array_equal(cycle_extremes(trace, priced, 4, "high"), [4.0, 9.0])
+
+
+def test_a_cycle_with_no_priced_step_has_no_approach():
+    # Cycles of two: nothing is priced in the first, so only the second counts.
+    trace = [5.0, 3.0, 4.0, 6.0]
+    priced = [False, False, True, True]
+    np.testing.assert_array_equal(cycle_extremes(trace, priced, 2, "low"), [4.0])
+
+
+#: Four daily minima around 21.95: deviations -0.05, 0.15, -0.15, 0.05, squares
+#: summing to 0.05, over n - 1 = 3, so sigma = sqrt(0.05 / 3) = 0.12910.
+MINIMA = [21.9, 22.1, 21.8, 22.0]
+SIGMA = (0.05 / 3) ** 0.5
+
+
+def test_binding_setpoint_puts_the_approach_two_sigma_inside_a_low_edge():
+    # Held at 22.0 the minima average 21.95. On the zone 21 to 26, cheap side low,
+    # they must average 21 + 2 sigma = 21.2582, which is 0.6918 lower, so the
+    # setpoint comes down as much: 21.3082.
+    out = binding_setpoint(21.0, 26.0, 22.0, MINIMA, "low")
+    assert out == pytest.approx(22.0 + (21.0 + 2 * SIGMA - 21.95))
+    assert out == pytest.approx(21.3082, abs=1e-4)
+
+
+def test_binding_setpoint_puts_the_approach_two_sigma_inside_a_high_edge():
+    # The same four values as daily maxima, on the zone 18 to 23 with its cheap
+    # side high: they must average 23 - 2 sigma = 22.7418, which is 0.7918 above
+    # 21.95, so the setpoint held at 21.0 goes up as much, to 21.7918. That is on
+    # the edge's side of the centre 20.5, so nothing stops it.
+    out = binding_setpoint(18.0, 23.0, 21.0, MINIMA, "high")
+    assert out == pytest.approx(21.0 + (23.0 - 2 * SIGMA - 21.95))
+    assert out == pytest.approx(21.7918, abs=1e-4)
+
+
+def test_binding_setpoint_never_crosses_the_centre():
+    # Minima averaging 19.0 with the setpoint held at 22.0: two sigma inside the
+    # low edge is 2.2582 higher, which would put the setpoint at 24.2582, past the
+    # centre 23.5 of the zone 21 to 26.
+    minima = [18.95, 19.15, 18.85, 19.05]
+    assert binding_setpoint(21.0, 26.0, 22.0, minima, "low") == pytest.approx(23.5)
+
+
+@pytest.mark.parametrize("shift", [-1.5, 0.4, 2.0])
+def test_binding_setpoint_does_not_depend_on_where_the_loop_was_held(shift):
+    # Where the approach follows the setpoint one for one, reading the same loop
+    # held elsewhere gives the same placement.
+    moved = [m + shift for m in MINIMA]
+    assert binding_setpoint(21.0, 26.0, 22.0 + shift, moved, "low") == pytest.approx(
+        binding_setpoint(21.0, 26.0, 22.0, MINIMA, "low")
+    )
 
 
 def test_a_null_wins_a_seed_only_by_costing_strictly_less():
