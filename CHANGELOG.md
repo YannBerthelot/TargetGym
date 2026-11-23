@@ -421,6 +421,11 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `tg.make_stream(name)`: the task as a continuing plant, the form an
+  average-reward algorithm trains on. It never ends, its scenarios take turns
+  by their weights, and the reset key fixes its world.
+  `tg.make_gymnasium(name, stream=True)` gives it behind the Gymnasium API.
+  See [Continuing tasks](docs/continuing-tasks.md).
 - **Sensor noise core.** A task declares `readings` of two kinds:
   `FieldReading`, on a measured copy of the state before `get_obs`, and
   `ChannelReading`, on its output. Each has a sigma, optional rounding and an
