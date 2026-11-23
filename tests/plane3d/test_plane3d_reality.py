@@ -17,8 +17,11 @@ Contract:
 - Episode (rule 17): established, wings level, at the assigned level and speed.
 - Heading score (rule 15): altitude +-65 ft [RVSM], speed +-10 kt [AIM 4-4-12],
   heading +-10 deg [ACS] about a heading the aircraft turns toward at no less
-  than the holding turn's rate, 3 deg/s or 30 deg of bank, whichever is less
-  [IFH ch. 10]; past an edge, the squared excess in band widths.
+  than the rate of a turn at 3 deg/s or 25 deg of bank, whichever is less: the
+  AIM's bank with a flight director and the bottom of the family's 25 to 30
+  deg [AIM 5-3-8; plane3d/REALITY.md], so any turn the family's autopilots
+  make is inside the band (owner, 2026-11-23; it was 30 deg, the plant's own
+  protected bank); past an edge, the squared excess in band widths.
 - Holding (B5): right turns, inbound leg 1 min at or below 14 000 ft and 1.5 min
   above, turns at 3 deg/s or 30 deg of bank, speed at most 230 KIAS up to
   14 000 ft and 265 above [IFH ch. 10]; cross-track inside 3/4 of +-1 NM
@@ -263,13 +266,60 @@ def test_a_new_clearance_costs_nothing_when_it_is_given():
 
 def test_not_turning_is_charged_past_the_holding_turn_rate():
     """30 s after a 90 deg clearance, not turned: the turn at min(3 deg/s,
-    g tan 30 / V) has closed rate * 30 s, so that much less 10 deg is past the
+    g tan 25 / V) has closed rate * 30 s, so that much less 10 deg is past the
     edge, in 10 deg widths, squared."""
     env, params, state = _heading_state(30, 0.0)
     v = float(scheduled_airspeed(5000.0, params.target_cas, params.target_mach))
-    rate = min(3.0, np.rad2deg(G * np.tan(np.deg2rad(30.0)) / v))
+    rate = min(3.0, np.rad2deg(G * np.tan(np.deg2rad(25.0)) / v))
     expected = ((rate * 30.0 - 10.0) / 10.0) ** 2
     assert _band_cost(env, state, params) == pytest.approx(expected, rel=1e-3)
+
+
+@pytest.mark.medium
+def test_a_turn_at_25_deg_of_bank_stays_inside_the_heading_band():
+    """The AIM's bank with a flight director, 25 deg [AIM 5-3-8], is a turn the
+    family's autopilots make, so a 120 deg vector flown with the bank demand
+    held to 25 deg costs nothing on the bands, start to finish."""
+    env, _ = tg.make(HEADING)
+    params = _params(
+        HEADING,
+        target_altitude_range=(5000.0, 5000.0),
+        target_heading_range=(2.0 * np.pi / 3.0, 2.0 * np.pi / 3.0),
+        heading_clearance_period=0.0,
+    )
+    limit = 25.0 / 45.0  # the bank demand's full scale is 45 deg
+
+    def at_25(obs, action):
+        return action.at[2].set(jnp.clip(action[2], -limit, limit))
+
+    states, _, tripped = _rollout(HEADING, params, 150, act=at_25)
+    assert not tripped
+    assert max(abs(float(s.phi)) for s in states) > np.deg2rad(20.0)
+    cost = sum(_band_cost(env, s, params) for s in states[1:])
+    assert cost == pytest.approx(0.0, abs=1e-6)
+
+
+@pytest.mark.medium
+def test_a_steady_wind_changes_nothing_a_vector_charges():
+    """A vector is a heading flown at an airspeed and a level [IFH ch. 7], and
+    a uniform steady wind leaves the motion through the air as it was. So the
+    same vector in still air and in a 50 kt wind costs the same, bands and
+    economy, which is why the heading suite has no steady-wind scenario."""
+    env, _ = tg.make(HEADING)
+    totals = []
+    for wind in (0.0, 50.0 * KT):
+        params = _params(HEADING, target_altitude_range=(5000.0, 5000.0), wind_x=wind)
+        states, _, _ = _rollout(HEADING, params, 120)
+        terms = [env.reward_terms(s, params) for s in states[1:]]
+        totals.append(
+            (
+                sum(float(t["tracking"] + t["running"]) for t in terms),
+                sum(float(t["economy"]) for t in terms),
+            )
+        )
+    (bands, economy), (bands_wind, economy_wind) = totals
+    assert bands_wind == pytest.approx(bands, abs=1e-3)
+    assert economy_wind == pytest.approx(economy, rel=1e-3)
 
 
 @pytest.mark.medium
@@ -321,7 +371,9 @@ def test_the_pattern_fits_the_holding_rules(level):
 
 
 def _on_pattern(offset=0.0, backwards=False):
-    """An aircraft abeam on the pattern's leg, ``offset`` m outside it."""
+    """An aircraft abeam on the pattern's leg, ``offset`` m outside it. The
+    tests below read the bands' cost: since 2026-11-23 the hold also charges
+    its fuel (``economy``, tests/plane3d/test_plane3d_hold.py)."""
     env, _ = tg.make(RACETRACK)
     params = _params(RACETRACK, target_altitude_range=(4000.0, 4000.0))
     _, state = env.reset_env(KEY, params)
@@ -337,12 +389,12 @@ def _on_pattern(offset=0.0, backwards=False):
 
 def test_inside_three_quarters_of_a_mile_costs_nothing():
     env, params, state = _on_pattern(offset=1000.0)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
+    assert _band_cost(env, state, params) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_two_widths_off_the_pattern_cost_one_per_second():
     env, params, state = _on_pattern(offset=2778.0)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(1.0, rel=2e-3)
+    assert _band_cost(env, state, params) == pytest.approx(1.0, rel=2e-3)
 
 
 def test_inside_100_ft_of_the_hold_costs_nothing():
@@ -350,19 +402,19 @@ def test_inside_100_ft_of_the_hold_costs_nothing():
     inside the holding tolerance."""
     env, params, state = _on_pattern()
     state = state.replace(z=state.z + 90.0 * FT)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(0.0, abs=1e-6)
+    assert _band_cost(env, state, params) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_200_ft_off_the_hold_costs_one_per_second():
     env, params, state = _on_pattern()
     state = state.replace(z=state.z + 200.0 * FT)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(1.0, rel=2e-3)
+    assert _band_cost(env, state, params) == pytest.approx(1.0, rel=2e-3)
 
 
 def test_flying_the_pattern_backwards_is_charged_on_heading():
     """Right turns only [IFH ch. 10]: on the leg, reversed, 170 deg past +-10."""
     env, params, state = _on_pattern(backwards=True)
-    assert float(-env.compute_reward(state, params)) == pytest.approx(289.0, rel=2e-3)
+    assert _band_cost(env, state, params) == pytest.approx(289.0, rel=2e-3)
 
 
 # -- The reference (medium) -------------------------------------------------------

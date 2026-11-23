@@ -1,5 +1,5 @@
 {
-  "fingerprint": "fb3eaadae704c3dd",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "04e931a556ac1095",
+  "note": "Re-stamped in place, the versions being unreleased (owner, 2026-11-23, review of the 3D airliner tasks): plane3d_racetrack-v10 now charges its fuel, is assigned green dot for its mass and prices only the maximum holding airspeed (plane3d/hold.py); plane3d_heading-v9's heading band travels at a 25 deg turn's rate and its suite has no steady wind; plane3d_circle-v6 and plane3d_figure8-v7 behave as before (the package gained hold.py and their class file changed). Baselines of the four are out of date until the next re-record. Earlier note: Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
+  "stamped": "2026-11-23T15:19:40+00:00"
 }
