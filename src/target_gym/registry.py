@@ -1097,6 +1097,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # and a scenario suite.
         scenarios=_hvac_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Re-stamped in place on 2026-11-23 (v6 is in no release): the heat
+        # source's size, 38 W/m^2 [13], and a reset that meets the band when
+        # the office opens (hvac review; owner's decision).
         version=6,
     ),
     EnvSpec(

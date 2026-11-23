@@ -1,5 +1,5 @@
 {
-  "fingerprint": "03d4aaa9e282ff2f",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "a13ed43bdcd53c6e",
+  "note": "Re-stamped in place on 2026-11-23 (owner's decision, hvac review): the heat source has a size, 38 W/m^2 of floor (Muenster's 530 kW for 14 000 m^2, REALITY.md [13]), so the slab takes at most 5.7 kW and the supply kept is the water the source made; and the reset settles the building where, held on its supply, the room is at the band's 21 C edge when the office opens. v6 is in no release, so it keeps its number. Earlier note: bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
+  "stamped": "2026-11-23T16:26:41+00:00"
 }
