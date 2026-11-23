@@ -118,6 +118,11 @@ d(boron)/dt = Q / M (C_feed - boron)
 Q = 10 kg/s dilution (C_feed 0), 3 kg/s boration (C_feed boric_acid_ppm)
 ```
 
+The law is exact over a sub-step, and its sum carries its own rounding
+(`boron_carry`): a trickle changes the boron by less over 5 s than a
+single-precision number near 1690 ppm can hold (1.2e-4 ppm), and without the
+carry 72 kg of water diluted as 130 kg and 36 kg as none.
+
 The heat path is unchanged: fuel, hot leg, cold leg, steam generator, with the
 turbine taking `P_ref load`. Energy balance fixes steady power at the load. Thermal
 states and xenon step explicitly, neutrons by TR-BDF2, 4 solves in each of 6 sub-steps
