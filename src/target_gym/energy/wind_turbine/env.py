@@ -16,6 +16,7 @@ free wind less the tower top's velocity::
     tau_aero  = 0.5 rho A v_rel^3 Cp(lambda, beta) / w      lambda = w R / v_rel
     F_thrust  = 0.5 rho A v_rel^2 Ct(lambda, beta)
     P_elec    = eta N tau_gen w
+    v         = mean + SF[hub turbulence] + gust     (the rotor's spatial filter, S24)
 
 Cp and Ct are ROSCO's published tables for this rotor (``cp_table``). The
 tower is S1's first fore-aft mode (0.3240 Hz, 1 % structural damping) on the
@@ -58,6 +59,10 @@ RPM_PER_RAD_S = 60.0 / (2.0 * jnp.pi)
 EOG_SECONDS = 10.5
 #: Salt for the mean wind's draw, apart from the turbulence's ``fold_in(key, t)``.
 _MEAN_WIND = 0x4D45414E
+#: Open turning points the tower's rainflow count keeps (ours: a ring-down at the
+#: tower's 5 to 8 % damping nests one range a half cycle, and the 16th is under a
+#: tenth of the first).
+RAINFLOW_DEPTH = 16
 
 
 @struct.dataclass
@@ -73,6 +78,15 @@ class WindTurbineParams(EnvParams):
     dynamic_inflow: float = 1.0
     oye_k1: float = 1.1
     oye_k2: float = 1.3
+
+    # ---- The rotor's spatial filter on the turbulence [S24 Eq. 5.7] ----
+    # H(s) = (sqrt2 + b s) / ((sqrt2 + b sqrt(a) s)(1 + b s / sqrt(a))), b =
+    # gamma R / V: the disc averages the hub's turbulence (``rotor_turbulence``).
+    # 1 on, 0 the hub's point wind over the whole rotor.
+    rotor_averaging: float = 1.0
+    #: gamma, the decay factor over the disc, and a [S24].
+    rotor_decay: float = 1.3
+    rotor_filter_a: float = 0.55
 
     # ---- Drivetrain [S1 Table 5-1] ----
     J_rotor: float = 38_759_228.0  # kg m^2
@@ -174,11 +188,12 @@ class WindTurbineParams(EnvParams):
     #: S-N slope for the damage-equivalent load: the average of the welded
     #: tower curve's two slopes, 3 and 5 (DNV-RP-C203 type E) [S23].
     fatigue_exponent: float = 4.0
-    #: The design rates, (MN m)^m and deg per step: 20 years at these use the
-    #: tower and the pitch system up exactly. Ours, measured once from S1's
-    #: controller on seeds 100 to 107 of the normal scenario (PHYSICS.md).
-    tower_damage_design: float = 2.126e5
-    pitch_travel_design: float = 0.1754
+    #: The design rates, (MN m)^m of rainflow damage and deg per step: 20 years
+    #: at these use the tower and the pitch system up exactly. Ours, measured
+    #: from S1's controller on seeds 100 to 107 of the normal scenario
+    #: (PHYSICS.md; test_wind_turbine_reality.py pins the recipe).
+    tower_damage_design: float = 1041.0
+    pitch_travel_design: float = 0.06644
     #: A trip's restart: an overspeed trip needs a manual reset [S21]; ours,
     #: 2 h, between ROSCO's automatic 400 s start-up [S9 Ex. 32] and a site
     #: visit. At 0.25 s steps.
@@ -200,6 +215,9 @@ PARAM_UNITS = {
     "dynamic_inflow": "-",
     "oye_k1": "-",
     "oye_k2": "-",
+    "rotor_averaging": "-",
+    "rotor_decay": "-",
+    "rotor_filter_a": "-",
     "rho": "kg/m^3",
     "J_rotor": "kg m^2",
     "J_gen": "kg m^2",
@@ -252,7 +270,7 @@ class WindTurbineState(EnvState):
     pitch: float  # blade pitch (deg)
     torque: float  # generator torque (N m)
 
-    v_wind: float  # rotor-effective free wind (m/s)
+    v_wind: float  # the free wind the rotor sees, averaged over its disc (m/s)
     v_mean: float  # the episode's mean wind (m/s)
 
     torque_cmd: float
@@ -268,8 +286,16 @@ class WindTurbineState(EnvState):
     #: The rotor-average induced velocity (m/s), which lags its quasi-steady
     #: value by Oye's tau1 (``induction``).
     w_induced: float = 0.0
-    #: The turbulence's deviation from the mean (m/s), without the gust.
+    #: The hub's turbulence: the point wind's deviation from the mean (m/s),
+    #: without the gust.
     v_turb: float = 0.0
+    #: The spatial filter's two lags of it (m/s); the rotor sees their blend
+    #: (``rotor_turbulence``).
+    v_lag_fast: float = 0.0
+    v_lag_slow: float = 0.0
+    #: The hub's point wind (m/s): the mean, the hub's turbulence and the gust.
+    #: The nacelle anemometer stands there and reads it [S6].
+    v_hub: float = 0.0
     #: 1 once the safety system has fed the blades to feather (a trip).
     feathered: float = 0.0
     #: When this episode's gust and curtailment start, s (-1 for none).
@@ -293,12 +319,16 @@ class WindTurbineState(EnvState):
     #: stream sets each at its event's onset, so float32 keeps them exact.
     gust_c0: jax.Array = 0
     derate_c0: jax.Array = 0
-    #: Tower-base moment (N m) last step and at the last turning point, its
-    #: direction (+1, -1, 0), and the damage the last step closed, (MN m)^m:
-    #: half-cycles counted between turning points (PHYSICS.md, Score).
+    #: Tower-base moment (N m) last step, the way it last moved (+1, -1, 0), its
+    #: open turning points (N m, bottom first, ``moment_depth`` of them) and the
+    #: damage the last step added, (MN m)^m: the rainflow count's increase
+    #: (``rainflow_step``; PHYSICS.md, Score).
     moment: float = 0.0
-    moment_turn: float = 0.0
     moment_dir: float = 0.0
+    moment_stack: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(RAINFLOW_DEPTH)
+    )
+    moment_depth: jax.Array = 1
     damage: float = 0.0
     #: How far the pitch moved over the last step (deg).
     pitch_travel: float = 0.0
@@ -411,6 +441,12 @@ def drivetrain_inertia(params: WindTurbineParams):
     return params.J_rotor + params.N_gear**2 * params.J_gen
 
 
+def power_limit_torque(omega, power, params: WindTurbineParams):
+    """The generator torque that delivers ``power`` (W, electrical) at rotor
+    speed ``omega``: the converter's limit at that set point."""
+    return power / (params.eta_gen * params.N_gear * jnp.maximum(omega, 1e-3))
+
+
 def rated_generator_torque(params: WindTurbineParams):
     """Generator torque that delivers rated power at rated speed."""
     return params.P_rated / (params.eta_gen * params.N_gear * omega_rated(params))
@@ -425,6 +461,64 @@ def turbulence_time_constant(v_mean, params: WindTurbineParams):
     """The Kaimal spectrum's integral time scale, L_u / V, s: its value at zero
     frequency, 4 sigma^2 L_u / V, is an Ornstein-Uhlenbeck process's 4 sigma^2 T."""
     return params.kaimal_factor * params.turbulence_lambda1 / v_mean
+
+
+def rotor_filter(v_mean, params: WindTurbineParams):
+    """The spatial filter [S24 Eq. 5.7] in partial fractions, ``share / (1 +
+    T_fast s) + (1 - share) / (1 + T_slow s)``: (T_fast, T_slow, share), the
+    times in s. At 18 m/s: 2.4 s, 6.1 s and 0.22."""
+    b = params.rotor_decay * params.R / v_mean
+    root = jnp.sqrt(params.rotor_filter_a)
+    t_fast, t_slow, t_lead = b * root / jnp.sqrt(2.0), b / root, b / jnp.sqrt(2.0)
+    return t_fast, t_slow, (t_fast - t_lead) / (t_fast - t_slow)
+
+
+def rotor_blend(lag_fast, lag_slow, v_turb, v_mean, params: WindTurbineParams):
+    """The turbulence the rotor sees (m/s) from the filter's two lags, or the
+    hub's own with ``rotor_averaging`` off."""
+    share = rotor_filter(v_mean, params)[2]
+    averaged = share * lag_fast + (1.0 - share) * lag_slow
+    return jnp.where(params.rotor_averaging > 0.5, averaged, v_turb)
+
+
+def rotor_turbulence(lag_fast, lag_slow, v_turb, v_mean, params: WindTurbineParams):
+    """One step of the spatial filter on the hub's turbulence ``v_turb``, each
+    lag stepped exactly with that value held over the step: (lag_fast,
+    lag_slow, the turbulence the rotor sees)."""
+    t_fast, t_slow, _ = rotor_filter(v_mean, params)
+    keep_fast = jnp.exp(-params.delta_t / t_fast)
+    keep_slow = jnp.exp(-params.delta_t / t_slow)
+    lag_fast = keep_fast * lag_fast + (1.0 - keep_fast) * v_turb
+    lag_slow = keep_slow * lag_slow + (1.0 - keep_slow) * v_turb
+    return lag_fast, lag_slow, rotor_blend(lag_fast, lag_slow, v_turb, v_mean, params)
+
+
+def established_lags(key, v_turb, v_mean, params: WindTurbineParams):
+    """The filter's two lags as a long run leaves them, given the hub's
+    turbulence ``v_turb``: the stepped turbulence and its two stepped lags are
+    jointly normal, so this is their stationary law conditioned on it. With c_i
+    = Cov(lag_i, u) / var and q_ij = Cov(lag_i, lag_j) / var, from the
+    recursions' own fixed point (d the turbulence's decay, e_i a lag's)::
+
+        c_i  = (1 - e_i) / (1 - e_i d)
+        q_ij = (e_i (1 - e_j) d c_i + e_j (1 - e_i) d c_j + (1 - e_i)(1 - e_j))
+               / (1 - e_i e_j)
+    """
+    p = params
+    t_fast, t_slow, _ = rotor_filter(v_mean, p)
+    d = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
+    e = jnp.exp(-p.delta_t / jnp.stack([t_fast, t_slow]))
+    c = (1.0 - e) / (1.0 - e * d)
+    cross = e[:, None] * (1.0 - e[None, :]) * d * c[:, None]
+    q = (cross + cross.T + (1.0 - e[:, None]) * (1.0 - e[None, :])) / (
+        1.0 - e[:, None] * e[None, :]
+    )
+    cov = turbulence_sigma(v_mean, p) ** 2 * (q - c[:, None] * c[None, :])
+    l11 = jnp.sqrt(jnp.maximum(cov[0, 0], 0.0))
+    l21 = jnp.where(l11 > 0.0, cov[0, 1] / jnp.maximum(l11, 1e-12), 0.0)
+    l22 = jnp.sqrt(jnp.maximum(cov[1, 1] - l21**2, 0.0))
+    z = jax.random.normal(key, (2,))
+    return c[0] * v_turb + l11 * z[0], c[1] * v_turb + l21 * z[0] + l22 * z[1]
 
 
 def gust_magnitude(v_hub, params: WindTurbineParams):
@@ -486,27 +580,66 @@ def tower_base_moment(x_tower, params: WindTurbineParams):
     return tower_stiffness(params) * x_tower * params.tower_height
 
 
-def count_half_cycles(state, moment, params):
-    """Half-cycle counting between turning points of the base moment: when the
-    moment turns, the half-cycle from the last turning point closes, with
-    damage 0.5 (range / 1 MN m)^m. Returns (moment, last turn, direction,
-    damage this step)."""
-    step = moment - state.moment
-    direction = jnp.sign(step)
-    turned = (
-        (state.moment_dir != 0.0) & (direction != 0.0) & (direction != state.moment_dir)
-    )
-    span = jnp.abs(state.moment - state.moment_turn) / 1.0e6
-    damage = jnp.where(turned, 0.5 * span**params.fatigue_exponent, 0.0)
-    turn = jnp.where(turned, state.moment, state.moment_turn)
-    direction = jnp.where(direction == 0.0, state.moment_dir, direction)
-    return moment, turn, direction, damage
+def _open_ranges(stack, depth, last):
+    """Each open range (MN m), bottom first: between neighbours in the stack, and
+    from its top to ``last``; 0 past the top."""
+    index = jnp.arange(stack.shape[0])
+    partner = jnp.where(index + 1 < depth, jnp.roll(stack, -1), last)
+    return jnp.where(index < depth, jnp.abs(partner - stack) / 1.0e6, 0.0)
 
 
-def compute_velocity(position, action, v_wind, params: WindTurbineParams):
+def rainflow_step(stack, depth, moment, direction, new, exponent):
+    """One step of the tower's rainflow count (ASTM E1049, three-point rule) as
+    the base moment goes from ``moment`` to ``new`` (N m).
+
+    ``stack`` holds the open turning points, bottom first, ``depth`` of them, the
+    record's first point at the bottom; ``direction`` is the way the moment last
+    moved. Returns (stack, depth, direction, damage): the damage is the increase
+    of the record's count so far, in (MN m)^m, with every open range a half cycle
+    and ``new`` the record's last point. That count never falls: where a range Y
+    closes under X, the ranges W, Y, X become the cycle Y and one range V = W - Y
+    + X, and V^m + Y^m >= W^m + X^m.
+
+    A reversal makes ``moment`` a turning point. Then, against ``new``: while the
+    range X from the top to ``new`` is at least the range Y under it, Y closes,
+    as a half cycle if it holds the record's first point (which goes), else as a
+    cycle (both its points go). A turning point that finds the stack full first
+    closes the innermost pair as a cycle (PHYSICS.md, D5)."""
+    size = stack.shape[0]
+    slot = jnp.arange(size)
+    before = _open_ranges(stack, depth, moment)
+    way = jnp.sign(new - moment)
+    turned = (direction != 0.0) & (way != 0.0) & (way != direction)
+    full = turned & (depth >= size)
+    inner = jnp.abs(stack[size - 1] - stack[size - 2]) / 1.0e6
+    closed = jnp.where(full, inner**exponent, 0.0)
+    depth = jnp.where(full, depth - 2, depth)
+    stack = jnp.where(turned & (slot == depth), moment, stack)
+    depth = jnp.where(turned, depth + 1, depth)
+    for _ in range(size):
+        top = stack[jnp.maximum(depth - 1, 0)]
+        under = stack[jnp.maximum(depth - 2, 0)]
+        y = jnp.abs(top - under)
+        close = (depth >= 2) & (jnp.abs(new - top) >= y)
+        first = close & (depth == 2)
+        count = jnp.where(first, 0.5, 1.0)
+        closed = closed + jnp.where(close, count * (y / 1.0e6) ** exponent, 0.0)
+        stack = jnp.where(first & (slot == 0), stack[1], stack)
+        depth = jnp.where(first, 1, jnp.where(close, depth - 2, depth))
+    after = _open_ranges(stack, depth, new)
+    damage = closed + 0.5 * jnp.sum(after**exponent - before**exponent)
+    direction = jnp.where(way == 0.0, direction, way)
+    return stack, depth, direction, jnp.maximum(damage, 0.0)
+
+
+def compute_velocity(
+    position, action, v_wind, params: WindTurbineParams, power_limit=None
+):
     """RHS for ``[omega, pitch, torque, x_tower, v_tower]``, and the induced
     velocity as a sixth state when given. ``action`` is the step's ``(pitch
-    rate, torque rate)``, constant over the step.
+    rate, torque rate)``, constant over the step. With ``power_limit`` (W) the
+    converter loads the rotor with no more torque than delivers it at this
+    speed, wherever the torque's ramp has got to.
 
     With the sixth state the tables, which hold equilibrium induction, are read
     at the wind that gives the rotor plane its lagging inflow, ``v_rel - (w -
@@ -526,7 +659,12 @@ def compute_velocity(position, action, v_wind, params: WindTurbineParams):
         v_eff = v_rel
     tau_aero, _ = aerodynamic_torque(omega, v_eff, pitch, p)
     thrust = rotor_thrust(omega, v_eff, pitch, p)
-    domega = (tau_aero - p.N_gear * torque) / drivetrain_inertia(p)
+    load = (
+        torque
+        if power_limit is None
+        else jnp.minimum(torque, power_limit_torque(omega, power_limit, p))
+    )
+    domega = (tau_aero - p.N_gear * load) / drivetrain_inertia(p)
     accel = (
         thrust - tower_damping(p) * xdot - tower_stiffness(p) * x
     ) / p.tower_modal_mass
@@ -561,21 +699,37 @@ def compute_next_state(
     # The safety system, once tripped, feathers whatever the controller sends [S4].
     tripped = state.feathered > 0.5
     pitch_cmd = jnp.where(tripped, p.pitch_max, pitch_cmd)
+    # The converter holds electrical power at or under the set point this step
+    # ends on, the rating or a curtailment's level (owner, 2026-11-23; S1 holds
+    # constant power in Region 3 and gives only a torque margin): through the
+    # step it loads the rotor with no more torque than that (``compute_velocity``),
+    # and the torque the step ends on is the one it delivers.
+    t_derate = (state.time + 1 - state.derate_c0) * p.delta_t
+    derated = (
+        (state.derate_t0 >= 0.0)
+        & (t_derate >= state.derate_t0)
+        & (t_derate < state.derate_until)
+    )
+    rating = jnp.where(derated, state.derate_level, p.rating)
+    set_point = rating * p.P_rated
 
-    # Normal turbulence about the mean: an Ornstein-Uhlenbeck process with the
-    # Kaimal integral time scale and IEC's sigma, stepped exactly. Drawn from a
-    # key folded with ``state.time``, so a constant key still gives a process.
+    # Normal turbulence about the mean at the hub: an Ornstein-Uhlenbeck process
+    # with the Kaimal integral time scale and IEC's sigma, stepped exactly. Drawn
+    # from a key folded with ``state.time``, so a constant key still gives a
+    # process. The rotor sees it through its spatial filter; the gust, one
+    # coherent rise over the whole disc, reaches it whole.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     decay = jnp.exp(-p.delta_t / turbulence_time_constant(state.v_mean, p))
     sigma = turbulence_sigma(state.v_mean, p)
     v_turb = state.v_turb * decay + sigma * jnp.sqrt(1.0 - decay**2) * noise
+    lag_fast, lag_slow, v_rotor = rotor_turbulence(
+        state.v_lag_fast, state.v_lag_slow, v_turb, state.v_mean, p
+    )
     t_gust = (state.time + 1 - state.gust_c0) * p.delta_t
-    v_wind = jnp.maximum(
-        state.v_mean
-        + v_turb
-        + gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size),
-        0.1,
-    )  # 0.1 m/s: a numerical floor, never reached
+    gust_now = gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size)
+    # 0.1 m/s: a numerical floor, never reached
+    v_wind = jnp.maximum(state.v_mean + v_rotor + gust_now, 0.1)
+    v_hub = jnp.maximum(state.v_mean + v_turb + gust_now, 0.1)
 
     rates = (
         _ramp(pitch_cmd, state.pitch, p.pitch_rate_max, p.delta_t),
@@ -594,26 +748,30 @@ def compute_next_state(
         ),
         delta_t=p.delta_t,
         compute_velocity=partial(
-            compute_velocity, action=rates, v_wind=v_wind, params=p
+            compute_velocity,
+            action=rates,
+            v_wind=v_wind,
+            params=p,
+            power_limit=set_point,
         ),
         method=integration_method,
     )
     omega = jnp.maximum(new[0], 1e-3)  # numerical floor: tau_aero = P / omega
     pitch = jnp.clip(new[1], p.pitch_min, p.pitch_max)
     torque = jnp.clip(new[2], 0.0, p.torque_max)
+    torque = jnp.minimum(torque, power_limit_torque(omega, set_point, p))
     position = jnp.stack([omega, pitch, torque, new[3], new[4], new[5]])
     accel = compute_velocity(position, (0.0, 0.0), v_wind, p)[0][4]
     over = omega >= p.overspeed_factor * omega_rated(p)
-    moment, turn, direction, damage = count_half_cycles(
-        state, tower_base_moment(new[3], p), p
+    moment = tower_base_moment(new[3], p)
+    stack, depth, direction, damage = rainflow_step(
+        state.moment_stack,
+        state.moment_depth,
+        state.moment,
+        state.moment_dir,
+        moment,
+        p.fatigue_exponent,
     )
-    t_derate = (state.time + 1 - state.derate_c0) * p.delta_t
-    derated = (
-        (state.derate_t0 >= 0.0)
-        & (t_derate >= state.derate_t0)
-        & (t_derate < state.derate_until)
-    )
-    rating = jnp.where(derated, state.derate_level, p.rating)
     v_mean_z, v_mean, v_mean_lo, v_mean_hi = mean_wind(state, key, p)
 
     return (
@@ -626,18 +784,22 @@ def compute_next_state(
             w_induced=new[5],
             a_tower=accel,
             v_wind=v_wind,
+            v_hub=v_hub,
             v_turb=v_turb,
+            v_lag_fast=lag_fast,
+            v_lag_slow=lag_slow,
             v_mean=v_mean,
             v_mean_z=v_mean_z,
             v_mean_lo=v_mean_lo,
             v_mean_hi=v_mean_hi,
             torque_cmd=torque_cmd,
             power=electrical_power(omega, torque, p),
-            target_power=rating * p.P_rated,
+            target_power=set_point,
             feathered=jnp.where(tripped | over, 1.0, 0.0),
             moment=moment,
-            moment_turn=turn,
             moment_dir=direction,
+            moment_stack=stack,
+            moment_depth=depth,
             damage=damage,
             pitch_travel=jnp.abs(pitch - state.pitch),
             time=state.time + 1,
@@ -653,7 +815,8 @@ def get_obs(state: WindTurbineState, params: WindTurbineParams):
     The turbine controller's readings: rotor speed, pitch, generator torque and
     power [S1 Sec. 7]; the rating's power, a set point known ahead [S9 Ex. 29];
     the nacelle accelerometer's fore-aft reading, m/s^2 [S3, S5]; the nacelle
-    anemometer, m/s [S6].
+    anemometer, m/s [S6], which stands at the hub and reads the hub's point
+    wind, not the wind the rotor averages over its disc.
     """
     p = params
     return jnp.array(
@@ -664,7 +827,7 @@ def get_obs(state: WindTurbineState, params: WindTurbineParams):
             state.power / 1.0e6,
             state.target_power / 1.0e6,
             state.a_tower,
-            state.v_wind,
+            state.v_hub,
         ]
     )
 

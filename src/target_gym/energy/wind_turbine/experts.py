@@ -21,14 +21,15 @@ class NRELBaselineParams:
     """The baseline controller's constants, as published, and the plant's.
 
     Speeds are generator-side, in rad/s; pitch in rad; torque in N m. The
-    pitch gains come from Jonkman's pole placement on the Cp table
-    (``scripts/wind_turbine_gains.py``), with his schedule ``GK = 1 / (1 + theta
-    / theta_K)``. The published ones (0.01882681 s, 0.008068634, 6.302336 deg)
-    linearise with the wake frozen. On the steady table the sensitivity runs
-    almost through the origin, so ``Kp`` and ``Ki`` here are the line's value at
-    0 deg, far larger, and ``theta_K`` far smaller: only their product with
-    ``GK`` means anything, and ``schedule_lo_deg`` and ``schedule_hi_deg`` hold
-    the schedule on the curve the line was fitted to.
+    pitch gains come from Jonkman's pole placement on the plant's sensitivity
+    with the wake frozen, as he linearises it and as the plant's inflow lag
+    holds it (``scripts/wind_turbine_gains.py``), with his schedule ``GK = 1 /
+    (1 + theta / theta_K)``. The published ones (0.01882681 s, 0.008068634,
+    6.302336 deg) are for his own tables; on ROSCO's the fitted line starts
+    lower at 0 deg and doubles sooner, so ``Kp``, ``Ki`` and ``theta_K`` differ
+    while their product with ``GK`` stays within about a third of his along
+    region 3. ``schedule_lo_deg`` and ``schedule_hi_deg`` hold the schedule on
+    the curve the line was fitted to.
     """
 
     Kp: float

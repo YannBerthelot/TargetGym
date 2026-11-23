@@ -306,7 +306,7 @@ signal.
 |---|---|---|---|
 | R8 | A test's length (R7) | 120 steps on `battery`, 400 on `boiler_drum` and `glass_furnace`, 720 on `hvac`: `battery` cannot hold an episode of 2880 in manual without leaving its window | ours |
 | R9 | `battery`'s derate width | Rated power over one correlation time of the signal, 1 MW x 900 s / 1692 kWh = 0.148. Section 6's two dispatch blocks gave 0.0985 on 300 s blocks and would read 1.18 on hourly ones, more than the window | ours |
-| R10 | `wind_turbine`'s schedule | Read at the last pitch command, held between the first and last pitch of the region-3 curve, since the line is only fitted there. The line runs almost through the origin, so unheld it multiplies the gain 500 times at fine pitch | ours |
+| R10 | `wind_turbine`'s schedule | Read at the last pitch command, held between the first and last pitch of the region-3 curve, since the line is only fitted there. On the steady table the line ran almost through the origin, so unheld it multiplied the gain 500 times at fine pitch; with the wake frozen (2026-11-23) it would still nearly double it there | ours |
 | R11 | `wind_turbine`'s integral | In pitch units, adding `dt GK Ki e` each step, as ROSCO's `PIController` does, so the scheduled gain is the integral rate the poles ask for at that pitch. Jonkman's text scales a stored error integral by `GK`, which on this line halves the rate | derived |
 | R12 | `boiler_drum`'s commissioning loop | Firing in manual at the seed's heat balance. A P loop on level, the full feed span over the full level span, 200 / 0.5 = 400 kg/s per m, a proportional band of 100 % | ours |
 | R13 | `glass_furnace`'s step | Two steps after a firing interruption, ramped at the fuel's slew, with the ramp as the recorded input, and read against the same phase of the crown's cycle before. Held in manual the crown repeats every three reversals, 75 minutes, on a far slower drift, so a reading against the baseline's mean or one reversal back carries 0.7 K or more of the cycle's own swing, and three back carries 0.1 K. An engineer lays one trace on another. This replaces section 6's twin | derived |
@@ -317,9 +317,15 @@ signal.
 **`wind_turbine`.** No bump test: this is Jonkman's recipe on the Cp table, section
 7.3, as `scripts/wind_turbine_gains.py` has always run it.
 1. Along the region-3 curve (rated speed, 12 to 25 m/s in 0.5 m/s steps, the pitch
-   that leaves 5.2966 MW of mechanical power) read `dP/dtheta`.
+   that leaves 5.2966 MW of mechanical power) read `dP/dtheta` with the wake frozen:
+   the induced velocity held at each point's equilibrium, as Jonkman linearises and
+   as the plant's inflow lag (3 to 9 s) holds it against a 0.6 rad/s loop. Amended
+   on 2026-11-23 (wind_turbine review; the owner chose wake-frozen gains): until
+   then the recipe read the steady table, which the plant no longer shows the loop
+   since Oye's lag went in on 2026-11-08. With `dynamic_inflow` off it still does.
 2. Fit a line in pitch: `dP/dtheta(0)` and its doubling pitch `theta_K`. #157 read
-   -0.07 MW/rad and 0.015 deg.
+   -0.07 MW/rad and 0.015 deg on the steady table; with the wake frozen the line is
+   -14.87 MW/rad and 3.47 deg.
 3. `Kp(0)` and `Ki(0)` by pole placement at `wn` 0.6 rad/s and `zeta` 0.7.
 4. `GK(theta) = 1 / (1 + theta / theta_K)`, read as R10 says, on the proportional
    term and on the integral's rate (R11).
