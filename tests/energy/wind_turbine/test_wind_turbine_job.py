@@ -5,6 +5,12 @@ Contract:
 - Limits (rule 14): overspeed is a trip, handled by the safety system [S4] at
   about 20 % above rated speed [S17]: past it the plant is lost to a shutdown.
   Low rotor speed is not a trip: no source calls it one (REALITY.md sec. 3).
+  The converter holds electrical power at or under the current set point, the
+  rating or a curtailment's level (owner, 2026-11-23): S1's controller holds
+  constant power in Region 3 [S1 Sec. 7.2] and S1's only margin is 10 % on
+  torque [Table 7-2], so whatever torque is asked, no step ends above the set
+  point, the step a curtailment starts included, and asked for more the turbine
+  delivers the set point itself.
 - Score (rules 15 and 23, Amendment 3), in dollars per step:
   * production short of what the wind makes available, min(rating, the wind's
     power at peak Cp), at 60 $/MWh; over-production is free;
@@ -18,7 +24,9 @@ Contract:
     reset callout [S21]: $1,600.
 - Observation (rule 16): the controller's readings plus the nacelle
   accelerometer [S3, S5] and the nacelle anemometer [S6]; the rating, a
-  schedule known ahead, is read.
+  schedule known ahead, is read. The anemometer stands at the hub, so it reads
+  the hub's point wind, the mean plus the hub's own turbulence and any gust,
+  not the wind the rotor averages over its disc (owner, 2026-11-23).
 - Episode (rule 17): established above-rated operation, 10 min [S7, S2], at a
   mean wind between 13 and 25 m/s [S2 Table 2], starting at rated speed and
   power with the tower at its static deflection under the rotor's thrust.
@@ -53,6 +61,86 @@ def _step(state, params=PARAMS):
         ]
     )
     return W.compute_next_state(held, state, params, jax.random.PRNGKey(0))[0]
+
+
+RATED_TORQUE = 5.0e6 / (0.944 * 97.0 * RATED)  # N m: 5 MW at rated speed, S1 p. 19
+FULL_TORQUE = 47_402.91  # N m, S1 Table 7-2
+
+
+def _ask(state, torque, params=PARAMS):
+    """One step with the pitch held and ``torque`` (N m) asked of the generator."""
+    action = jnp.stack(
+        [
+            2.0 * state.pitch / params.pitch_max - 1.0,
+            2.0 * torque / params.torque_max - 1.0,
+        ]
+    )
+    return W.compute_next_state(action, state, params, jax.random.PRNGKey(0))[0]
+
+
+# Full torque would deliver 1.10 x the speed's share of 5 MW: 5.5 MW at rated
+# speed, 6.3 MW at 1.15. The torque starts 10 % under the limit and needs two
+# 3,750 N m steps to reach it, so the fourth step is on it. 1e-5 and 1e-4 are
+# float32 on 5e6 W.
+@pytest.mark.parametrize("speed", [1.0, 1.05, 1.15])
+def test_the_converter_holds_power_at_the_rating_whatever_torque_is_asked(env, speed):
+    state = _reset(env).replace(
+        omega=jnp.asarray(speed * RATED),
+        torque=jnp.asarray(0.9 * RATED_TORQUE / speed),
+    )
+    for _ in range(4):
+        state = _ask(state, FULL_TORQUE)
+        power = float(W.electrical_power(state.omega, state.torque, PARAMS))
+        assert power <= 5.0e6 * (1.0 + 1e-5)
+    assert power == pytest.approx(5.0e6, rel=1e-4)
+
+
+def test_under_the_set_point_the_converter_leaves_the_torque_alone(env):
+    """At 0.9 of rated speed 31 kN m is 3.2 MW, under the 5 MW set point: asked
+    from 30 kN m it is met in one step (1 kN m is inside a step's 3.75)."""
+    state = _reset(env).replace(
+        omega=jnp.asarray(0.9 * RATED), torque=jnp.asarray(30_000.0)
+    )
+    assert float(_ask(state, 31_000.0).torque) == pytest.approx(31_000.0, rel=1e-5)
+
+
+def test_a_curtailment_holds_from_the_step_it_starts(env):
+    """A 10 % curtailment at a second: with full torque asked throughout, power
+    is at the 5 MW rating for the three steps before it and at 4.5 MW from the
+    step the set point falls, never above either."""
+    p = PARAMS.replace(
+        derate_to=0.9,
+        derate_window=(1.0, 1.0),
+        turbulence_iref=0.0,
+        v_mean_range=(15.0, 15.0),
+    )
+    state = _reset(env, params=p)
+    powers = []
+    for _ in range(8):
+        state = _ask(state, FULL_TORQUE, p)
+        powers.append(float(W.electrical_power(state.omega, state.torque, p)))
+    np.testing.assert_allclose(powers[:3], 5.0e6, rtol=1e-4)
+    np.testing.assert_allclose(powers[3:], 4.5e6, rtol=1e-4)
+    assert max(powers[:3]) <= 5.0e6 * (1.0 + 1e-5)
+    assert max(powers[3:]) <= 4.5e6 * (1.0 + 1e-5)
+
+
+@pytest.mark.parametrize("wind", [13.0, 25.0])
+def test_no_step_of_a_turbulent_run_ends_above_the_set_point(env, wind):
+    """Full torque asked through 2 min of turbulence, the pitch held and the
+    overspeed level lifted so the plant runs on whatever the rotor does."""
+    p = PARAMS.replace(v_mean_range=(wind, wind), overspeed_factor=1e9)
+    state = _reset(env, seed=4, params=p)
+    held = 2.0 * state.pitch / p.pitch_max - 1.0
+
+    def body(s, k):
+        s1 = W.compute_next_state(jnp.stack([held, 1.0]), s, p, k)[0]
+        return s1, (W.electrical_power(s1.omega, s1.torque, p), s1.target_power)
+
+    power, target = jax.lax.scan(
+        body, state, jax.random.split(jax.random.PRNGKey(4), 480)
+    )[1]
+    assert float(jnp.max(power / target)) <= 1.0 + 1e-5
 
 
 @pytest.mark.parametrize("ratio, trips", [(1.15, False), (1.19, False), (1.21, True)])
@@ -127,7 +215,59 @@ def test_the_observation_carries_the_rating_accelerometer_and_anemometer(env):
     obs = np.asarray(env.get_obs(state, PARAMS))
     assert obs.shape == (7,)
     assert obs[4] == pytest.approx(5.0)
-    assert obs[6] == pytest.approx(float(state.v_wind), rel=1e-6)
+    # The hub's point wind: the mean plus the hub's turbulence (no gust on a
+    # normal day), from the plant's definition of it.
+    assert obs[6] == pytest.approx(float(state.v_mean + state.v_turb), rel=1e-6)
+
+
+def test_the_anemometer_reads_the_hub_not_the_rotor(env):
+    """Through a minute of turbulence the channel follows the hub's point wind
+    step by step, which the rotor's averaged wind does not: at 18 m/s the two
+    differ by about 1 m/s (standard deviation), 0.2 m/s at the very least."""
+    p = PARAMS.replace(v_mean_range=(18.0, 18.0), overspeed_factor=1e9)
+    state = _reset(env, seed=2, params=p)
+    held = env.initial_action(state, p)
+
+    def body(s, k):
+        obs, s1, *_ = env.step_env(k, s, held, p)
+        return s1, (obs[6], s1.v_mean + s1.v_turb, s1.v_wind)
+
+    read, hub, rotor = (
+        np.asarray(x, float)
+        for x in jax.lax.scan(
+            body, state, jax.random.split(jax.random.PRNGKey(2), 240)
+        )[1]
+    )
+    np.testing.assert_allclose(read, hub, rtol=1e-6)
+    assert np.std(read - rotor) > 0.2
+
+
+def test_the_anemometer_sees_the_gust(env):
+    """An extreme operating gust is one coherent rise over the hub and the disc
+    alike [S13]. Its size follows the turbulence (3.3 sigma1 / 1.3), so the gust
+    is the run with it less the same seed's run without: the same wind on the
+    anemometer and on the rotor, 4.4 m/s at its peak at 15 m/s."""
+
+    def run(gust):
+        p = PARAMS.replace(
+            gust=gust,
+            gust_window=(2.0, 2.0),
+            v_mean_range=(15.0, 15.0),
+            overspeed_factor=1e9,
+        )
+        state = _reset(env, params=p)
+        held = env.initial_action(state, p)
+
+        def body(s, k):
+            obs, s1, *_ = env.step_env(k, s, held, p)
+            return s1, (obs[6], s1.v_wind)
+
+        keys = jax.random.split(jax.random.PRNGKey(0), 80)
+        return [np.asarray(x, float) for x in jax.lax.scan(body, state, keys)[1]]
+
+    (read, rotor), (read0, rotor0) = run(1.0), run(0.0)
+    assert np.abs(rotor - rotor0).max() == pytest.approx(4.43, rel=0.02)
+    np.testing.assert_allclose(read - read0, rotor - rotor0, atol=1e-4)
 
 
 def test_the_accelerometer_reads_the_tower_tops_acceleration(env):

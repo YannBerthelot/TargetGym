@@ -12,9 +12,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   clip never binds and the move rows keep the command in its range (T1r);
   ROSCO's Cp and Ct tables read through K2's clip, cell by cell, which is their
   bilinear lookup at width 0 (``table_weights``); the wind after every step:
-  on its noise-free mean path in the registry's receding slot, and on the
-  episode's own path for the ceiling (``ceiling_data``), which knows the
-  turbulence ahead as a ceiling may;
+  on its noise-free mean path in the registry's receding slot, the hub's
+  turbulence decaying and the rotor's spatial filter following it
+  (``rotor_ahead``), and on the episode's own path for the ceiling
+  (``ceiling_data``), which knows the turbulence ahead as a ceiling may;
 - objective: the score's lost production against the available power (the
   rating, timed curtailment included, or the wind at peak Cp), a one-sided
   epigraph row, and the pitch system's wear, an absolute row on the pitch's
@@ -31,6 +32,12 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   (G12); the ceiling plans the score alone;
 - limit: the rotor speed under the safety system's overspeed level on every
   visited state, elastic at the trip cost per unit (T3);
+- the converter's power limit: the env loads the rotor with no more torque than
+  delivers the set point (``env.compute_velocity``). The model keeps its torque
+  free and pays for power above the set point at ten times the energy price, a
+  surrogate (the env charges nothing there: it never delivers it), so a plan
+  stays where the model and the env agree. Ten times is ours: an exact penalty
+  only has to exceed what shedding power can buy;
 - dropped guards (T4): the speed and wind floors, and the pitch and torque
   clips after the step, since a ramp toward an in-range command stays in range.
 
@@ -57,6 +64,8 @@ from target_gym.energy.wind_turbine.env import (
     omega_rated,
     pitch_system_cost,
     rotor_area,
+    rotor_blend,
+    rotor_filter,
     tower_base_moment,
     tower_cost,
     tower_damping,
@@ -172,15 +181,33 @@ def velocity(position, action, v_wind, widths, p):
     ]), None  # fmt: skip
 
 
+def rotor_ahead(hub, lags, steps, v_mean, p):
+    """The turbulence the rotor sees ``steps`` steps on, with no draw to come,
+    from the hub's turbulence ``hub`` and the filter's (fast, slow) ``lags`` now.
+    The hub's decays by d a step, and each lag's recursion ``lag' = e lag + (1 -
+    e) u'`` sums in closed form, ``e^k lag + (1 - e) u d (e^k - d^k) / (e - d)``."""
+    lag_fast, lag_slow = lags[0], lags[1]
+    t_fast, t_slow, _ = rotor_filter(v_mean, p)
+    d = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
+
+    def ahead(lag, t_lag):
+        e = jnp.exp(-p.delta_t / t_lag)
+        return e**steps * lag + (1.0 - e) * hub * d * (e**steps - d**steps) / (e - d)
+
+    return rotor_blend(
+        ahead(lag_fast, t_fast), ahead(lag_slow, t_slow), hub * d**steps, v_mean, p
+    )
+
+
 def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
+    v_mean, v_turb, now, gust_t0, derate_t0, lags, path = task[1:8]
     after = (now + t + 1) * p.delta_t
     if path is None:
-        decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
-        v_wind = v_mean + v_turb * decay ** (t + 1) + gust(after, v_mean, gust_t0, p)
+        seen = rotor_ahead(v_turb, lags, t + 1, v_mean, p)
+        v_wind = v_mean + seen + gust(after, v_mean, gust_t0, p)
         derated = (derate_t0 >= 0.0) & (after >= derate_t0)
         rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
     else:  # the episode's own wind and rating, t + 1 steps after the start
@@ -194,6 +221,14 @@ def wind_step(env, p, x, v, t, task, widths):
         ),
     )  # fmt: skip
     return x1, v_wind, rating
+
+
+def filter_lags(state):
+    """The rotor's spatial filter as it stands, for the plan's data: (its fast
+    lag, its slow lag) of the hub's turbulence. Kept apart from the turbulence
+    itself, the deviation the noise drives (``measure_oracle_widths``, K11), and
+    ahead of the wind path, which stays the data's last entry."""
+    return jnp.stack([state.v_lag_fast, state.v_lag_slow])
 
 
 def turning_points(m0, turn0, dir0, moments):
@@ -223,6 +258,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
     per_deg = float(pitch_system_cost(p) / (p.pitch_travel_design * life_steps(p)))
     # $ per (MN m)^m of a half-cycle's range (``compute_reward_terms``).
     per_range = float(0.5 * tower_cost(p) / (p.tower_damage_design * life_steps(p)))
+    # $ per W above the set point for a step: the plan's price for power the
+    # converter will not deliver.
+    per_excess = 10.0 * per_W * float(p.energy_price)
 
     def step(d, x, u, t):
         task = d["task"]
@@ -230,8 +268,8 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
         power = electrical_power(x1[0], x1[2], p)
         available = jnp.minimum(rating, wind_power(v_wind, p))
         moment = tower_base_moment(x1[3], p)
-        if len(task) > 7:  # turning points frozen by the outer loop
-            mask, z0 = task[7]
+        if len(task) > 8:  # turning points frozen by the outer loop
+            mask, z0 = task[8]
             mask = jnp.asarray(mask)
             z = jnp.where(t == 0, jnp.asarray(z0, x.dtype), x[6])
             hit = mask[jnp.minimum(t, mask.shape[0] - 1)]
@@ -239,7 +277,7 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             z1 = jnp.where(hit, moment, z)
         else:
             half, z1 = jnp.zeros((), x.dtype), x[6]
-        y = jnp.stack([available - power, x1[1] - x[1], half, x1[0]])
+        y = jnp.stack([available - power, x1[1] - x[1], half, power - rating, x1[0]])
         x1 = jnp.concatenate([x1, z1[None]])
         return x1, jnp.zeros((), x.dtype), y, power[None], ()
 
@@ -250,8 +288,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             s.moment_turn,
         ]),  # fmt: skip
         data=lambda s: (
-            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0, None
-        ),
+            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0,
+            filter_lags(s), None,
+        ),  # fmt: skip
         hold=lambda s: jnp.zeros(2, s.omega.dtype),
         action=lambda s, v: raw_command(p, jnp.stack([s.pitch, s.torque]), v),
         tracked=lambda s: electrical_power(s.omega, s.torque, p)[None],
@@ -262,6 +301,7 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             Hinge(
                 weight=per_range, absolute=True, power=int(p.fatigue_exponent)
             ),
+            Hinge(weight=per_excess, surrogate=True),
         ),
         limits=(Limit(hi=p.overspeed_factor * rated, price=float(trip_cost(p))),),
         move_rows=lambda x, v, steps: reach(p, x[1:3], v, steps),
@@ -306,7 +346,7 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
     path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
         state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
-        state.derate_t0, path,
+        state.derate_t0, filter_lags(state), path,
     )  # fmt: skip
 
 

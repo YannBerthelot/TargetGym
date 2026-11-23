@@ -1,5 +1,5 @@
 {
-  "fingerprint": "e5dcd492a77b9e89",
-  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-14T14:45:07+00:00"
+  "fingerprint": "9bd110669dea1eb6",
+  "note": "Re-stamped in place, unreleased v6 (owner's choices of 2026-11-23, wind_turbine review): the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7), the converter holds electrical power at the set point, and the anemometer channel reads the hub's point wind. No release carries v6, and its records are superseded. Merged with the shared change of 2026-11-14 (a reading's interval counts control steps; two unused rollout helpers removed), which changes no step, reward or observation.",
+  "stamped": "2026-11-23T18:34:57+00:00"
 }

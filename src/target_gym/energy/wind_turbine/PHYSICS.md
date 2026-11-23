@@ -6,6 +6,12 @@ turbines; the NREL 5 MW is the member it is built on. Tags such as [S1] point to
 `REALITY.md`. Every number is cited, or marked ours with the family range it sits in.
 Nothing is anchored on an earlier version of the task (rule 11).
 
+2026-11-23, after the task review (owner's choices of that day): the rotor sees the
+hub's turbulence through its spatial filter, the converter holds electrical power at
+the set point, and the expert's gains are fitted with the wake frozen. The rainflow
+count and the tower's price follow in their own changes; until they land, sections 3
+and 5 describe the score as it still is.
+
 ## 1. The job
 
 Above rated wind, pitch holds rated speed and torque holds rated power, within the
@@ -28,6 +34,8 @@ wind it sees, the free wind less the tower top's velocity:
     dw_i/dt   = (w_qs - w_i) / tau1,   w_qs = a v_rel,   a from Ct by momentum theory
     tau1      = 1.1 / (1 - 1.3 min(a, 0.5)) R / v_rel                     (Oye, [S22])
     P_elec    = eta N tau_gen w
+    v         = V + SF[u] + gust,   u the hub's turbulence about the mean V
+    SF(s)     = (sqrt2 + b s) / ((sqrt2 + b sqrt(a) s)(1 + b s / sqrt(a))),  b = 1.3 R / V,  a = 0.55   ([S24])
 
 **Dynamic inflow** (owner, 2026-11-08). The tables hold equilibrium induction, so
 the rotor-average induced velocity w_i (the state's `w_induced`) is a state that lags its quasi-steady value
@@ -49,12 +57,26 @@ to tower motion. Pitch and torque move toward their commands at their rate limit
 and stop on them (S1's pitch actuator was set at 30 Hz "to be negligible" [S1 Sec. 7.4];
 CART's torque loop is 500 rad/s [S3]). Integration: RK4, two sub-steps per 0.25 s step.
 
-Wind: an Ornstein-Uhlenbeck deviation about the episode's mean with IEC's
+Wind at the hub: an Ornstein-Uhlenbeck deviation about the episode's mean with IEC's
 sigma1 = Iref (0.75 V + 5.6) [S13] and the Kaimal integral time scale L_u / V, L_u =
 8.1 x 42 m [S13, S19] (23 s at 15 m/s; an OU process and the Kaimal spectrum share
 their value at zero frequency, 4 sigma^2 T). A scenario may add one extreme operating
 gust, with IEC's magnitude and shape over 10.5 s [S13], or a 10 % curtailment, each at a
 time the seed draws.
+
+**The wind the rotor sees** (owner, 2026-11-23). A 126 m rotor averages the turbulence
+over its disc: the hub's deviation passes through the rotor's spatial filter SF [S24 Eq.
+5.7], kept as two exact first-order lags (`v_lag_fast`, `v_lag_slow`; 2.4 s and 6.1 s at
+18 m/s, blended 0.22 to 0.78). Its gain is 1 at rest, 0.52 at 0.05 Hz and 0.11 at the
+tower's 0.324 Hz at 18 m/s, so the rotor's wind changes by 0.07 m/s a step where the
+hub's changes by 0.43. The extreme operating gust is one coherent rise over the whole
+disc and is not filtered. The reset draws the two lags from the law a long run leaves
+them in, given the hub's turbulence (`established_lags`). `rotor_averaging = 0` gives
+the rotor the hub's wind. Before this the hub's point wind acted on the whole rotor:
+S1's controller then held speed to 2.8 to 4.8 % of rated and reached the trip in every
+above-rated scenario, against 1.7 to 3.7 % and maxima of +7 to +16 % published [S25,
+S26]; with the filter it holds 1.5 to 2.3 % and peaks at +7 to +10 % (+17 % in the
+extreme gust).
 
 Cost (rule 7): the tower adds two states and a second table lookup per evaluation,
 and no sub-stepping: 0.25 s is 12 steps per tower period, and RK4 at a 0.125 s
@@ -103,6 +125,8 @@ times slower.
 | `design_life_years` | 20 | [S20] |
 | `dynamic_inflow` | 1 | 1 the lag on, 0 the quasi-steady tables |
 | `oye_k1`, `oye_k2` | 1.1, 1.3 | [S22], Oye's tau1 |
+| `rotor_decay`, `rotor_filter_a` | 1.3, 0.55 | [S24 Eq. 5.7]: the decay factor over the disc and the filter's constant |
+| `rotor_averaging` | 1 | 1 the spatial filter on, 0 the hub's wind over the whole rotor |
 | `fatigue_exponent` | 4 | cited: the average slope of the two regimes, 3 and 5, of the DNV-RP-C203 type E curve (Eurocode 3 detail category 80) for welded tower joints, FLOAT's default [S23, sec. 3.5.1, 3.7.1]. The bilinear curve itself can't be used: the DEL is on the tower-top deflection's base moment, not on stress, so there is no stress level to place its knee at 1e7 cycles |
 | `tower_damage_design` | 2.126e5 (MN m)^4 per step | ours: measured once, S1's controller, published gains, seeds 100 to 107 of the normal scenario |
 | `pitch_travel_design` | 0.1754 deg per step | ours: the same runs |
@@ -132,7 +156,8 @@ a year. Left as stored: changing it changes the score, which is the owner's call
 |---|---|---|---|
 | Overspeed, 1.20 x rated | Trip (safety system) | feather at 8 deg/s whatever the agent sends; restart priced at `restart_steps` x `failure_cost` = $1,600 | [S4], [S17], [S21] |
 | Pitch, torque and their rates | Protected (actuator) | saturation, no cost | [S1 Table 7-2] |
-| Rated power | regulated set point | shortfall against what the wind makes available is lost production; more is free | [S1 p. 19] |
+| Electrical power above the set point (the rating, or a curtailment's level) | Protected (converter) | the converter loads the rotor with no more torque than delivers the set point at the speed it is at, whatever torque is asked; no cost (owner, 2026-11-23) | [S1 Sec. 7.2, Table 7-2] |
+| Rated power | regulated set point | shortfall against what the wind makes available is lost production | [S1 p. 19] |
 | Tower fatigue | cost | DEL priced at the tower's cost share | [S5 Sect. 1], [S20] |
 | Pitch wear | cost | travel priced at the pitch system's cost share | [S20] |
 | Low rotor speed, cut-out, grid frequency, ramp rates | not modelled | no source makes them trips here | REALITY.md sec. 3 |
@@ -150,6 +175,9 @@ rated over the six scenarios (seeds 100 to 103), so the edge less 2 sigma is 1.0
 Observation (rule 16): `[omega_rpm, pitch_deg, torque_pct, P_MW, rating_P_MW, a_fa,
 v_nacelle]`: S1's controller readings, the current rating's power [S9 Ex. 29], the
 nacelle accelerometer [S3, S5] (noise not found, none) and the nacelle anemometer [S6].
+The anemometer stands at the hub, so it reads the hub's point wind (`v_hub`: the mean,
+the hub's own turbulence and any gust), not the wind the rotor averages over its disc
+(owner, 2026-11-23). A controller that wants the rotor's wind has to infer it.
 No delays (not found). A curtailment shows in channel 4 when it starts: advance notice
 of a TSO set point is not sourced.
 
@@ -169,7 +197,8 @@ Scenarios (rule 20), `scenarios.py`, each with its source:
 
 Score (rule 15), dollars per step, each term >= 0:
 - `lost`: MWh short of the available power, min(rating, the wind's power at the
-  table's peak Cp), at `energy_price`. Over-production is free. The wind's own lulls
+  table's peak Cp), at `energy_price`. Nothing is charged above the set point, and
+  nothing is delivered there: the converter holds it (section 4). The wind's own lulls
   cost nothing a controller could save.
 - `tower`: the tower's cost (1750 $/kW x 5000 kW x 0.75 x 0.263 = $1,726,031) times
   the step's damage over the design damage of 20 years. Damage closes per half-cycle of
@@ -185,11 +214,12 @@ present. The floor of the score, in closed form: 0, at the available power with 
 tower still and the pitch still; the measured reward adds the meter's scatter on
 `lost`, at most E|N(0, 1 kW)| = 798 W, $3.3e-6 per step.
 
-Those figures predate Oye's lag and the stored gains (review of 2026-11-23). The shipped
-expert at sensor noise 1, seeds 100 to 109, per 10 min: lost $0.29 to $0.61, tower $3.6
-to $11.1, pitch $0.20 to $0.24 as scenario means, and it trips in 6 of the 60 windows
-(8 of 180 on seeds 100 to 129), none in `near_rated`. S1's published gains halve the
-tower term on the same seeds.
+Those figures predate Oye's lag (review of 2026-11-23). With the gains fitted on the
+steady table, as stored until that day, the expert at sensor noise 1 on seeds 100 to 109
+cost, per 10 min as scenario means, lost $0.29 to $0.61, tower $3.6 to $11.1, pitch
+$0.20 to $0.24, and tripped in 6 of the 60 windows (8 of 180 on seeds 100 to 129). With
+the wake-frozen gains: lost $0.30 to $0.63, tower $0.9 to $7.7, pitch $0.16 to $0.20,
+and trips in 2 of the 60 windows (3 of 180), in `gusty_class_a` and `extreme_gust`.
 
 ## 6. Behaviour tests (charter step 3, Amendment 3)
 
@@ -203,6 +233,7 @@ restated as family ranges or properties, written in the test before the rerun.
 | 3 Region 3 hold, published gains | pass | |
 | 4 Wind-step peak time in 5.5 to 22 s (bandwidths 0.2 to 0.6 rad/s) | fail | 2.25 s with dynamic inflow (2.5 s without); overshoot passes |
 | 5 Sensitivity to pitch grows along Region 3, at least doubling | pass | |
+| 5b The wake-frozen sensitivity lies on S1's published line within 25 % | pass | 3 to 19 % |
 | 6 Actuator saturations | pass | |
 | 7 Tower mode 0.324 Hz | pass | 0.323 Hz |
 | 8 A tower-velocity loop takes power out of the tower band, more with gain, half at 10 % | pass | |
@@ -225,17 +256,25 @@ the scenario suite.
 ## 7. Deviations still in the model
 
 - D1. Dynamic inflow is one lumped Oye lag (tau1 only, no radial split). The oracle's
-  planner carries the same lag as its sixth state (`oracle.velocity`). The expert's gain
-  recipe does not: `scripts/wind_turbine_gains.py` fits the steady table, while the
-  speed loop now sees the wake-frozen sensitivity, which on this plant is within 3 to
-  19 % of S1's published line. The stored gains are 2.5 times S1's at 12 m/s (review of
-  2026-11-23).
+  planner carries the same lag as its sixth state (`oracle.velocity`), and the expert's
+  gain recipe reads the sensitivity with the wake frozen, as the speed loop meets it
+  (`scripts/wind_turbine_gains.py`, since 2026-11-23; before, it fitted the steady table
+  and stored gains 2.5 times S1's at 12 m/s). On this plant that sensitivity is within
+  3 to 19 % of S1's published line (behaviour test 5b).
 - D2. One tower mode: no side-side, second fore-aft, drivetrain or blade modes, no 1p or
   3p loading. So blade-root loads are not priced, and S5's trade of 2.1 % tower DEL for
   1.26 % blade DEL is only half in the score; pitch wear stands in for the rest.
 - D3. Past 30 deg the tables are extrapolated (ours), so a feathered rotor brakes to a
   stop rather than idling.
-- D4. A single rotor-effective point wind, OU spectrum, no coherence.
+- D4. One wind for the whole rotor: the hub's turbulence (an OU spectrum) through the
+  spatial filter [S24], with its printed constants and nothing fitted (owner,
+  2026-11-23). No rotational sampling, shear or tower shadow, so no 1p or 3p loading
+  (D2). Effect on the score: the tower's load is under the published one, about 30 to
+  45 MN m as a 20-year, 2e6-cycle, m = 4 figure against 70 to 125 MN m [S25, class A],
+  and it is slow thrust swings, as on the M5000, where suppressing the tower's first
+  mode took 2.1 % off the tower-bottom load [S5]. The tower's price is measured on the
+  reference, so the level cancels; the half-cycle count of D5 undercounts these slow
+  swings 3 to 9 times and is to be replaced by rainflow.
 - D5. Half-cycles are counted between turning points step by step, not by full
   rainflow: a large slow swing broken by small ones is counted as smaller ranges. On the
   narrow-band tower signal the two agree closely; on wind-driven slow swings this
@@ -245,6 +284,31 @@ the scenario suite.
 - D7. Cut-out at 25 m/s is not modelled.
 - D8. The sensor sigmas other than the anemometer's are not in REALITY.md.
 - D9. No sensor delays (not found).
+- D12. Rotor speed is free up to the overspeed trip (owner, 2026-11-23). The trip, at
+  about 20 % over rated, is the only speed limit the sources give [S4, S17]. S1's
+  operating range ends at rated speed [S1 Table 1-1] and published runs visit +7 to
+  +16 % only as transients [S26]; what keeps a real rotor near rated (blade and
+  drivetrain loads, tip-speed noise) is not modelled and no source prices it. So a
+  controller may use the rotor as a flywheel, and the ceiling does. Effect on the room,
+  one seed (`normal`, seed 100, on the filtered wind before the converter's limit was
+  in the plant; S1's published controller costs 5.2e-5 a step there):
+
+  | Ceiling's plan | cost a step | room | rotor speed, mean and range |
+  |---|---|---|---|
+  | no limit | 6.6e-6 | 7.8 | 1.10, 0.91 to 1.200 (power 5.43 MW on average) |
+  | power held at the set point | 8.4e-6 | 6.2 | 1.08, 0.91 to 1.195, over 1.10 half the time |
+  | power held, speed planned under 1.05 | 1.17e-5 | 4.4 | 0.99, 0.91 to 1.050 |
+
+  Holding speed under 1.05 would raise the ceiling's cost 1.4 times. One seed, and
+  the first two rows were not planned on the same margin to the trip: the first
+  0.04 % inside the trip level, the second 0.57 % (at 0.04 % its plans tripped on
+  replay). The third never nears it.
+- D11. The converter's limit acts within the step: at a curtailment the generator
+  torque falls 10 % in one step, past S1's 15 kN m/s, which is the limit on the
+  controller's command (a converter's own loop is far faster: CART's is 500 rad/s
+  [S3]). Before 2026-11-23 the plant had no electrical limit and the score charged
+  nothing above the rating, so the ceiling ran the 5 MW turbine at 5.3 MW on average
+  and 6.6 MW at its peak.
 - D10. One violent tower half-cycle (about 130 MN m under random bang-bang pitch)
   costs $0.46, more than a step of trip downtime ($0.056). The owner restated the
   trip bound per episode on 2026-11-08 (`tests/test_failure_cost_bound.py`): an
@@ -328,7 +392,7 @@ changes: a scored window is bit-identical to what it was.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 30 |
+| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

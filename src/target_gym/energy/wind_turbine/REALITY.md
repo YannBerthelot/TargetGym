@@ -125,6 +125,10 @@ Page numbers are the printed page numbers of each document unless marked "PDF pa
 - **Wind.** IEC turbulence: sigma1 = Iref (0.75 Vhub + 5.6); length scale 42 m above 60 m hub height;
   extreme operating gust lasts 10.5 s; direction change 6 s; coherent gust 10 s; shear 12 s [S13,
   quoting IEC 61400-1 clause 6].
+- **The wind a rotor sees.** A rotor averages turbulence over its disc: the rotor-effective wind of
+  the NREL 5 MW has almost no energy above about 0.1 Hz, where the hub's point wind keeps energy to
+  1 Hz [S25, Fig. 10]. The spatial filter with a decay factor of 1.3 over the disc stands for that
+  averaging in single-point models [S24, Eq. 5.7].
 - **Statistics.** SCADA 10 minute aggregates are standard [S7]; the nacelle transfer function study
   used 1 Hz met data averaged to 10 min [S6, PDF page 5]. Simulated load cases use 6 seeds per wind speed,
   3 to 25 m/s in 2 m/s steps [S2, Table 2].
@@ -290,6 +294,31 @@ All were fetched twice and the cited phrases found both times, except where mark
 - [S18 family] ROSCO's Cp tables at the same commit for the IEA 15 MW, BAR 10 and NREL 2.8 MW
   rotors: peak Cp 0.470 at a tip speed ratio of 8.5, 0.454 at 10.0 and 0.477 at 8.2; every
   table, the NREL 5 MW's included, stops at 30 deg of pitch.
+
+### Added by the task review (2026-11-23)
+
+- [S24] T. Petru, "Modeling of Wind Turbines for Power System Studies", licentiate
+  thesis, Chalmers University of Technology, Technical Report 391L, 2001.
+  https://webfiles.portal.chalmers.se/et/Lic/PetruTomasLic.pdf Eq. (5.7), p. 40: the
+  rotor's spatial filter H_SF(s) = (sqrt2 + b s) / ((sqrt2 + b s sqrt(a))(1 + (b /
+  sqrt(a)) s)), b = gamma R / WS, with "the decay factor over the disc (gamma = 1.3)",
+  "a=0.55", R the turbine's radius and WS the average wind speed at hub height; credited
+  to Wilkie, Leithead and Anderson, Wind Engineering 13(4), 1990. Fetched twice.
+- [S25] Guo, Schlipf, Cheng, Wind Energ. Sci. 8, 149 to 171, 2023 (lidar-assisted
+  control, NREL 5 MW). https://wes.copernicus.org/articles/8/149/2023/ Fig. 10: the
+  rotor-effective wind's spectrum is near zero above about 0.1 Hz at 16 and 18 m/s,
+  while the point spectrum keeps energy to 1 Hz. Figs. 13 and 14 (ROSCO feedback, class
+  1A, 12 seeds of 30 min, read off the figures): rotor speed standard deviation about
+  0.2 to 0.45 rpm at 14 to 24 m/s (1.7 to 3.7 % of rated); tower-base fore-aft
+  damage-equivalent load about 70 to 125 MN m over 12 to 24 m/s (Woehler exponent 4,
+  2e6 cycles, 20 years). Text fetched twice.
+- [S26] J. Jonkman, "Dynamics Modeling and Loads Analysis of an Offshore Floating Wind
+  Turbine", NREL/TP-500-41958, 2007. https://docs.nlr.gov/docs/fy08osti/41958.pdf Fig.
+  6-1 (p. 104), land-based NREL 5 MW, baseline controller, DLC 1.1, turbulence category
+  B, six 10 min runs per wind speed, read off the figure: rotor speed maxima about 13.0
+  to 14.0 rpm at 14 to 24 m/s (+7 to +16 % of rated 12.1 rpm); tower-base fore-aft
+  moment mean about 30 to 50 MN m above rated, per-run range about 0 to 85 MN m.
+  Fetched once.
 
 ## How often each window occurs
 

@@ -17,6 +17,10 @@ chapter 7 (not from the code):
   ``GK = 1 / (1 + theta / theta_K)``; the integral is saturated at the pitch
   limits; the command moves at most 8 deg/s; it starts bumpless from the
   measured pitch.
+* ``dP/dtheta`` is the sensitivity with the wake frozen, as S1 linearises it
+  (pp. 22-25) and as the 0.6 rad/s loop meets it on this plant, whose induced
+  velocity lags a pitch move by Oye's 3 to 9 s (PHYSICS.md sec. 2). With that
+  lag switched off the plant has only its steady table, and the recipe reads it.
 * Ours, for a curtailed task: ``P`` is the dispatched target over the
   generator efficiency (Jonkman's 5.296610 MW is 5 MW / 0.944), and the
   below-rated torque never exceeds region 3's.
@@ -25,15 +29,25 @@ chapter 7 (not from the code):
   the integral is in pitch units and adds ``dt GK Ki e``, as ROSCO's does.
 """
 
+import importlib
 import json
 import math
+import pathlib
+import sys
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
 import target_gym as tg
-from target_gym.energy.wind_turbine.env import WindTurbineParams, aerodynamic_torque
+from target_gym.energy.wind_turbine.env import (
+    WindTurbineParams,
+    aerodynamic_torque,
+    compute_velocity,
+    drivetrain_inertia,
+    induction,
+)
 from target_gym.provenance import GAINS_PATH
 from target_gym.registry import REGISTRY
 
@@ -110,26 +124,69 @@ def _gk(theta_deg, params):
     return 1.0 / (1.0 + theta_deg / params.theta_K_deg)
 
 
-def test_the_schedule_reads_the_surfaces_sensitivity_where_the_task_runs():
-    """Pole placement needs dP/dtheta at the pitch it flies. From the table by
-    a central difference at rated speed, not through the fitted line: at 15, 16
-    and 18 m/s the rated-power pitch's sensitivity is dP/dtheta(0) / GK within
-    15 %, the table's own scatter about the line."""
+def _rated_power_pitch(v, p=WP):
+    """The pitch (deg) that leaves rated mechanical power at rated speed in wind v."""
     from scipy.optimize import brentq
 
+    w0 = float(p.omega_rated_rpm) * RPM
+    P0 = float(p.P_rated) / ETA
+    return brentq(lambda t: float(aerodynamic_torque(w0, v, t, p)[1]) - P0, 0.0, 30.0)
+
+
+def _power_the_rotor_takes(v, theta, wake_of, p=WP):
+    """Aerodynamic power (W) at rated speed and pitch ``theta`` while the wake is
+    still the one in equilibrium with pitch ``wake_of``: read off the plant's own
+    right-hand side with the generator unloaded, power = J dw/dt w."""
+    w0 = float(p.omega_rated_rpm) * RPM
+    w_induced, _ = induction(w0, v, wake_of, p)
+    state = jnp.stack([w0, theta, 0.0, 0.0, 0.0, w_induced]).astype(jnp.float32)
+    domega = compute_velocity(state, (0.0, 0.0), v, p)[0][0]
+    return float(domega) * float(drivetrain_inertia(p)) * w0
+
+
+def test_the_schedule_reads_the_sensitivity_the_speed_loop_sees():
+    """Pole placement needs dP/dtheta at the pitch it flies, as the loop meets
+    it: with the wake frozen. From the plant's dynamics by a central difference
+    at rated speed, not through the fitted line: at 15, 16 and 18 m/s the
+    rated-power pitch's wake-frozen sensitivity is dP/dtheta(0) / GK within
+    15 %, the table's own scatter about the line."""
     params = tg.make_expert("wind_turbine").params
     m = json.loads(GAINS_PATH.read_text())["wind_turbine"]["model"]
-    w0 = float(WP.omega_rated_rpm) * RPM
-    P0 = float(WP.P_rated) / ETA
-
-    def power(v, th):
-        return float(aerodynamic_torque(w0, v, th, WP)[1])
-
     for v in (15.0, 16.0, 18.0):
-        th = brentq(lambda t: power(v, t) - P0, 0.0, 30.0)
+        th = _rated_power_pitch(v)
         d = 1.0  # deg, a table cell either side
-        exact = (power(v, th + d) - power(v, th - d)) / math.radians(2 * d)
-        assert m["dP_dtheta"] / _gk(th, params) == pytest.approx(exact, rel=0.15)
+        seen = (
+            _power_the_rotor_takes(v, th + d, th)
+            - _power_the_rotor_takes(v, th - d, th)
+        ) / math.radians(2 * d)
+        assert m["dP_dtheta"] / _gk(th, params) == pytest.approx(seen, rel=0.15)
+
+
+def test_without_the_wake_lag_the_recipe_reads_the_steady_table():
+    """The recipe follows the plant. With ``dynamic_inflow`` off nothing holds
+    the wake through a pitch move, so the curve it fits is the steady table's
+    own sensitivity: at 13 and 15 m/s, where the frozen wake would read 30 to
+    50 % more, within the table's 15 % scatter."""
+    scripts = pathlib.Path(__file__).resolve().parents[3] / "scripts"
+    sys.path.insert(0, str(scripts))
+    x64 = jax.config.jax_enable_x64
+    try:
+        recipe = importlib.import_module("wind_turbine_gains")
+    finally:  # the script turns x64 on for its own run
+        jax.config.update("jax_enable_x64", x64)
+        sys.path.remove(str(scripts))
+    p = WindTurbineParams(dynamic_inflow=0.0)
+    curve = recipe.sensitivity_curve(p)
+    w0 = float(p.omega_rated_rpm) * RPM
+    for v in (13.0, 15.0):
+        th = _rated_power_pitch(v, p)
+        d = 1.0
+        steady = (
+            float(aerodynamic_torque(w0, v, th + d, p)[1])
+            - float(aerodynamic_torque(w0, v, th - d, p)[1])
+        ) / math.radians(2 * d)
+        fitted_on = np.interp(th, curve[:, 0], curve[:, 1])
+        assert fitted_on == pytest.approx(steady, rel=0.15)
 
 
 def test_a_speed_step_reaches_the_pitch_through_the_quarter_hertz_filter():
@@ -169,8 +226,7 @@ def test_the_gain_falls_as_the_blade_feathers():
 )
 def test_the_schedule_holds_at_the_ends_of_the_curve(outside, end):
     """Past either end of the region-3 curve the line says nothing, so the
-    gain stays what it was at that end (R10). Near 0 deg an unheld line would
-    multiply it 500 times."""
+    gain stays what it was at that end (R10)."""
     params = tg.make_expert("wind_turbine").params
     tq = 4.0e6 / ETA / (RATED_GEN_RPM * RPM)
     expert = _expert()
