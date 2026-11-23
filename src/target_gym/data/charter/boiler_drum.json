@@ -201,7 +201,7 @@
   "broken": {},
   "commit": "03aa6490a39e9164b867bf7933cbeef2ba08b4f3",
   "dirty": true,
-  "fingerprint": "706a049c0be9c754",
+  "fingerprint": "c8f1bf3498a898b4",
   "generated": "2026-11-23T16:58:25+00:00",
   "noise": 1.0,
   "null_share": {
@@ -234,7 +234,7 @@
    "low_load": 0,
    "normal": 0
   },
-  "restamped": "from 25676d4631f1cedb: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
+  "restamped": "from 706a049c0be9c754: 2026-11-23, int's merge of #205 and #229 (14eab7c) changed null_policies.py and family_sweep.py in the reactor's witnesses and sweep only; boiler's five nulls bit-identical before and after on 60 windows (seeds 100-102, normal and id_fan_runback, params traced and constant)",
   "seeds": {
    "feed_pump_trip": [
     1706622111,
@@ -1048,7 +1048,7 @@
  },
  "nulls": {
   "broken": {},
-  "fingerprint": "c4514d7b2d70d86a",
+  "fingerprint": "649a7bde83cb8c12",
   "generated": "2026-11-23T16:25:18+00:00",
   "lines": {
    "constant 0.0": {
@@ -1487,7 +1487,7 @@
     "trips": 50
    }
   },
-  "restamped": "from a7c9cead32cc0235: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed"
+  "restamped": "from c4514d7b2d70d86a: 2026-11-23, int's merge of #205 and #229 (14eab7c) changed null_policies.py and family_sweep.py in the reactor's witnesses and sweep only; boiler's five nulls bit-identical before and after on 60 windows (seeds 100-102, normal and id_fan_runback, params traced and constant)"
  },
  "reference": {
   "fingerprint": "56e9a62b580aed63",
