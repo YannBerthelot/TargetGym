@@ -172,3 +172,119 @@ figure below was read once and confirmed on a second fetch.
   pages). https://stacks.cdc.gov/view/cdc/230000/cdc_230000_DS1.pdf
 - [ST3] Circadian, "8-Hour vs. 12-Hour Shift Schedules" (survey year not
   given). https://circadian.com/managing-247-article-1-0712
+
+## Why the margin is kept (third search, 2026-11-23)
+
+A search for what makes plants keep 10 to 15 % between the surge line and the
+control line. Each source was fetched twice on 2026-11-23 and a statement is kept
+only where both fetches show it. [C1] and [C2] are the articles already listed
+above, read again for these statements.
+
+### The surge line's position is not known exactly, and it moves
+
+- Field and shop surge curves can differ by more than 10 %, from flow-measurement
+  error, pressure and temperature uncertainty and the limits of the maker's
+  off-design prediction; three field surge tests build the limit curve [C1].
+- The mapped line is only its latest known position. It drifts with time and with
+  the machine's condition, unpredictably, and the drift cannot be measured
+  [C10, p. 5]. Wear is named too [C13].
+- Where the gas varies, the line is not one line in flow against head. Reduced
+  ("invariant") coordinates bring it back to nearly one [C10, p. 9]; reduced head
+  against reduced flow cancels temperature, specific gravity and compressibility
+  [C11, p. 12; C16].
+- What those coordinates leave: the compressibility ratio taken constant, good to 1
+  to 2 % (4 % or more for propane or high-pressure CO2), and the polytropic exponent,
+  which needs a correction where the molecular weight varies by over 10 %
+  [C10, pp. 5, 11]. Gas analysers are too slow for the loop [C10, p. 5].
+- Error of an invariant line under changes of inlet pressure, temperature and
+  composition, computed for two machines: 2.6 % for one change and 7 % combined at
+  low suction pressure; 18.6 % and 31.2 % at high suction pressure, with the true
+  line on the unsafe side [C14].
+- Guide vanes change the line's slope, so their position needs a characteriser
+  [C10, p. 8].
+- On air machines the line differs between summer and winter and with age; the
+  usual margin is 10 to 15 %, against a claimed 0 to 5 % with a better estimate of
+  the line [C15, background].
+
+### What the margin is said to cover
+
+- 10 % of surge flow is customary and may be too small or too large. It has to
+  cover the accuracy of the line's data, the error of its invariant representation,
+  the flatness of the curve, the accuracy of the transmitters and the flow element,
+  the system's response time, the size and frequency of disturbances, and how much
+  surge is tolerated. Only site testing settles it [C10, p. 11].
+- 10 to 15 % as one vendor's usual figure [C1]. 3 to 10 % of the surge inlet flow,
+  for measurement inaccuracy and the response of transmitters and valve [C16].
+- The valve's 86 % response, the transmitter's damping and half of each scan time
+  should total under 2 s, under 1 s to run closer [C2]. Controller execution of
+  0.1 s or less [C13].
+
+### Measurement dynamics
+
+- Flow dP transmitters at 100 to 150 ms, at most 200 ms; 300 to 400 ms acceptable
+  on pressure; damping enlarges the margin [C10, pp. 29-30].
+- No instrument time constant above 100 ms [C11, p. 14].
+- A filter of 0.1 to 0.3 s [C1]. Some transmitters ship with 1.7 s of damping [C13].
+- Temperature transmitter dynamics: not found.
+
+### Fast upsets
+
+- At a shutdown the machine loses 20 to 30 % of its speed in the first second, so
+  the head must halve in about 1 s [C11, pp. 17-18].
+- Longest time before surge after a trip, computed for three pipeline units of
+  about 16.1, 6.7 and 17.6 MW: 115, 102 and 125 ms; a valve delay of 200 ms surged
+  [C12, pp. 7-9].
+- At the zero-slope point flow reverses in 0.05 s [C13].
+- Time to surge in an upset that is not a shutdown, and the closing time of a
+  downstream valve: not found.
+
+### What the margin costs
+
+- On an 11 MW offshore export train, a margin cut by 5 % saved 170 to about 500 kW,
+  630,000 Sm3 of fuel gas and 1,600 t of CO2 a year (operator and vendor talk) [C17].
+- A margin of 0 to 5 % instead of 10 to 15 % widens turndown by about 5 to 15 %
+  (a patent's claim, no power figure) [C15].
+- Money per year with the machine's size: not found.
+
+### Not found
+
+The shift of the line per kelvin or per unit of molecular weight; any figure for
+fouling; API 617's wording on surge. Not readable, so not used: core.ac.uk and
+oaktrust copies (refused), an Emerson valve white paper (empty page), the GMRC
+guideline (one copy host only), a Honeywell case study (one fetch only).
+
+### Sources of this search
+
+- [C10] S. Mirsky, J. McWhirter, W. Jacobson, M. Zaghloul, D. Tiscornia (Compressor
+  Controls Corp.), "Development and Design of Antisurge and Performance Control
+  Systems for Centrifugal Compressors", Middle East Turbomachinery Symposium 2015
+  (reprint of the 2012 tutorial),
+  https://turbolab.tamu.edu/wp-content/uploads/2018/08/Tutorial_12.pdf . Paper by a
+  vendor's authors. Checked twice.
+- [C11] R. Kurz, K. Brun, R. White, B. Winkelmann, "Surge Control and Dynamic
+  Behavior for Centrifugal Gas Compressors", Middle East Turbomachinery Symposium
+  2015, https://turbolab.tamu.edu/wp-content/uploads/2018/08/Tutorial_4.pdf .
+  Checked twice.
+- [C12] K. Botros, J. Grose, S. Hill, "Centrifugal Compressor Surge Control
+  Systems: Fundamentals of a Good Design", Asia Turbomachinery and Pump Symposium
+  2016,
+  https://vdn.woodgroup.com/assets/pdfs/Centrifugal_Compressor_Surge_Control_Systems_-_Fundamentals_of_a_Good_Design_(ATPS_2016).pdf .
+  Checked twice.
+- [C13] G. McMillan, "Checklist for Compressor Surge Control Tips", Control Global,
+  2012, https://www.controlglobal.com/home/blog/11339011/checklist-for-compressor-surge-control-tips .
+  Trade article. Checked twice.
+- [C14] M. Di Febo, P. Paganini (IPC), "Protecting High-Pressure Centrifugal
+  Compressors", Turbomachinery International, 2013,
+  https://www.turbomachinerymag.com/view/protecting-high-pressure-centrifugal-compressors .
+  Trade article. Checked twice.
+- [C15] US Patent 10,202,980 B2 (IHI), 2019,
+  https://patents.google.com/patent/US10202980B2/en . Checked twice.
+- [C16] N. Ghanbariannaeeni, G. Ghazanfarihashemi, "Protecting a Centrifugal
+  Compressor From Surge", Pipeline & Gas Journal, March 2012,
+  https://pgjonline.com/magazine/2012/march-2012-vol-239-no-3/features/protecting-a-centrifugal-compressor-from-surge .
+  Trade article. Checked twice.
+- [C17] D. Cook, "TPS 2024: Compressor Anti-Surge Control Improves Energy, Carbon
+  Performance", Turbomachinery International, 2024 (report of a Petrobras and CCC
+  talk),
+  https://www.turbomachinerymag.com/view/tps-2024-compressor-anti-surge-control-improves-energy-carbon-performance .
+  Trade article. Checked twice.
