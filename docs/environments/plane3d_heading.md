@@ -202,7 +202,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `e_tol_path` | 0 | m |
 | `assigned_speed_mode` | 0 | - |
 | `holding_rate` | 0.0523599 | rad/s |
-| `holding_bank` | 0.523599 | rad |
+| `holding_bank` | 0.436332 | rad |
 | `hold_design_bank` | 0.436332 | rad |
 | `cost_index` | 30 | kg/min |
 | `economy_weight` | 1 | - |

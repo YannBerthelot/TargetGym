@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/plane3d_racetrack/pid_output.gif" width="480px"/></p>
 
-Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. The observation gives the signed cross-track error, the tangent heading and the curvature at the nearest point of the pattern, so the work is in the transitions between straight and turning flight.
+Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. The observation gives the signed cross-track error, the tangent heading and the curvature at the nearest point of the pattern, so the work is in the transitions between straight and turning flight. What the hold costs is the fuel it burns, at whatever speed the aircraft flies under the maximum holding airspeed.
 
 ```python
 import target_gym as tg
@@ -49,7 +49,7 @@ actuator range inside the environment.
 | 19 | heading of the pattern at the nearest point (rad) |
 | 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
 | 21 | the hold's half leg (m) |
-| 22 | assigned speed, as a true airspeed (m/s) |
+| 22 | the speed the aircraft holds at, green dot for its mass, as a true airspeed (m/s) |
 | 23 | airspeed, against the wind and gust (m/s) |
 | 24 | normal load factor (g) |
 
@@ -61,7 +61,7 @@ Every environment in this suite scores on one contract. The reward is
 minus the sum of non-negative costs: a tracking cost where the task
 holds a target, a running cost for what the plant consumes or fails to
 deliver, and a failure cost for trips out of the operating envelope.
-This task's terms are `tracking`, `running`, `failure`, reported
+This task's terms are `tracking`, `running`, `economy`, `failure`, reported
 each step in `info["reward_terms"]`.
 The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
@@ -81,7 +81,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
+No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
 ## Arguments
 
@@ -201,9 +201,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `holding_rate` | 0.0523599 | rad/s |
 | `holding_bank` | 0.523599 | rad |
 | `hold_design_bank` | 0.436332 | rad |
-| `cost_index` | 30 | kg/min |
-| `economy_weight` | 0 | - |
-| `economy_scale` | 1.242 | kg/s |
+| `cost_index` | 0 | kg/min |
+| `economy_weight` | 1 | - |
+| `economy_scale` | 1 | kg/s |
 | `heading_clearance_period` | 0 | s |
 | `protected_bank` | 0.523599 | rad |
 | `holding_split_altitude` | 4267.2 | m |
