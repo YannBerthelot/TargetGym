@@ -5,7 +5,8 @@ What the plant's datasheet and balances say, and nothing read from a score
 reflux, bottoms impurity on boilup, each read by its analyser (5 min cycle, 5 min
 dead time). The distillate is a zone, held 2 sigma inside its cheap edge. The bottoms'
 zone has no cheap edge: purer bottoms cost boilup, less pure bottoms lose light key at
-the distillate's price [D8], so the loop rests where the two balance (``_bottoms_rest``).
+the distillate's price [D8], so the loop rests where the two balance (``_bottoms_rest``),
+as far as the flow box can hold it at the metered feed (``_bottoms_schedule``).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from reference_ladder import (  # noqa: E402
     Inner,
     Row,
 )
-from scipy.optimize import minimize_scalar
+from scipy.optimize import brentq, minimize_scalar
 
 from target_gym.experts.ladder import K_BACKOFF
 from target_gym.oracles.controller import enable_x64
@@ -33,6 +34,9 @@ DESIGN_YD, DESIGN_XB = 0.99, 0.01
 L0, V0 = 2.70629, 3.20629
 #: Eq. 31's steady gains, d[yD, xB] / d[L, V] in kmol/min [D1].
 EQ_31 = ((0.8754, -0.8618), (1.0846, -1.0982))
+#: The flow box is 5 % over the flows the specs need (env.py, ``L_max``): the loops'
+#: room to act. A rest point leaves the reflux and boilup that much.
+ROOM = 1.05
 
 
 @functools.lru_cache(maxsize=None)
@@ -120,6 +124,34 @@ def _bottoms_rest(p) -> float:
     return float(best.x)
 
 
+def _bottoms_schedule(p, n: int = 9) -> tuple:
+    """``(feeds, setpoints)``: the bottoms' rest point at each metered feed rate over
+    the sourced step [D1, Fig. 18], on the design feed composition. The cheapest
+    (``_bottoms_rest``) where its reflux and boilup leave the loops the flow box's
+    5 %; less pure where they do not, since the flows fall with the purity; never
+    nearer the spec than rule 22's two sigmas. The balances are homogeneous in the
+    flows, so a feed rate scales the design feed's."""
+    yD = float(p.yD_spec) + K_BACKOFF * float(p.e_floor_top)
+    edge = float(p.xB_spec) - K_BACKOFF * float(p.e_floor_bottom)
+    F0, zF0 = float(p.F), float(p.zF_nominal)
+    best = _bottoms_rest(p)
+
+    def short(xB, scale):
+        L, V = _rest_flows(F0, zF0, yD, float(xB))
+        return max(ROOM * scale * L - float(p.L_max), ROOM * scale * V - float(p.V_max))
+
+    feeds = F0 * (1.0 + float(p.feed_step) * np.linspace(-1.0, 1.0, n))
+    points = []
+    for scale in feeds / F0:
+        if short(best, scale) <= 0.0:
+            points.append(best)
+        elif short(edge, scale) >= 0.0:
+            points.append(edge)
+        else:
+            points.append(float(brentq(short, best, edge, args=(scale,), xtol=1e-7)))
+    return feeds, np.array(points)
+
+
 def row() -> Row:
     spec = REGISTRY["distillation"]
     p = spec.make_test_params()
@@ -127,7 +159,13 @@ def row() -> Row:
     per_L, per_V = 2 / float(p.L_max - p.L_min), 2 / float(p.V_max - p.V_min)
     F0, zF0 = float(p.F), float(p.zF_nominal)
     specs = float(p.yD_spec), float(p.xB_spec)
-    bottoms = _bottoms_rest(p)
+    feeds, bottoms = _bottoms_schedule(p)
+
+    def scheduled(o, xp, values=bottoms):
+        """``values`` at the metered feed (obs 7, FC 1 [D4, p. 5])."""
+        return xp.interp(
+            o[7], xp.asarray(feeds, xp.float32), xp.asarray(values, xp.float32)
+        )
 
     def raw(L, V, xp=np):
         return xp.stack([per_L * (L - L_min) - 1.0, per_V * (V - V_min) - 1.0])
@@ -148,22 +186,20 @@ def row() -> Row:
     # reads it when its rung is traced, after the build has placed it.
     placed: dict = {}
 
-    def held() -> tuple:
-        if "yD on L" in placed:
-            return float(placed["yD on L"][1]), bottoms
-        return DESIGN_YD, DESIGN_XB
+    def held() -> float:
+        return float(placed["yD on L"][1]) if "yD on L" in placed else DESIGN_YD
 
     # Feedforward from the metered feed (obs 7, FC 1 [D4, p. 5]): the flows the
-    # tray balances need for the held products at the nominal feed, kept in their
-    # ratio to the feed. That is the steady state of a feed-rate change at fixed zF
-    # (the balances are homogeneous in the flows), and it closes the overall
-    # balance D = F (zF - xB) / (yD - xB) with the unmeasured zF at nominal.
+    # tray balances need for the held products at the nominal feed composition,
+    # in their ratio to the feed. That is the steady state of a feed-rate change at
+    # fixed zF (the balances are homogeneous in the flows), and it closes the
+    # overall balance D = F (zF - xB) / (yD - xB) with the unmeasured zF at nominal.
     def balance(o, xp):
-        # Traced inside the rung's jit: the solve runs once, eagerly, on constants.
+        # Traced inside the rung's jit: the solves run once, eagerly, on constants.
         with jax.ensure_compile_time_eval():
-            L, V = _rest_flows(F0, zF0, *held())
-        F = o[7] / F0
-        return xp.clip(raw(L * F, V * F, xp), -1.0, 1.0)
+            unit = [_rest_flows(F0, zF0, held(), float(xB)) for xB in bottoms]
+            L, V = (np.array(unit) * (feeds / F0)[:, None]).T
+        return xp.clip(raw(scheduled(o, xp, L), scheduled(o, xp, V), xp), -1.0, 1.0)
 
     # Each analyser's noise band is 6 of its 4e-4 sigmas; a bump moves the product
     # five bands (N3) by eq. 31's larger gain on that MV, so the gain matrix reads
@@ -187,7 +223,7 @@ def row() -> Row:
         "xB on V",
         1,
         lambda o, xp: o[1],
-        lambda o, xp: xp.asarray(bottoms, dtype=xp.float32),
+        scheduled,
         "x",
         du_V,
         window,

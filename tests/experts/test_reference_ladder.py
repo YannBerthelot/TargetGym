@@ -348,12 +348,11 @@ def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):
     assert actions(scored) == pytest.approx(actions(quiet), rel=1e-6)
 
 
-def _column_a_rest_cost(yD, xB, boilup_price, recovery_price):
-    """Cost per minute of Column A at rest with products ``yD`` and ``xB`` on its
-    design feed, PHYSICS.md section 7 with both products in zone: boilup plus light
-    key lost to the bottoms. The column is D2's balances, solved here in float64
-    NumPy: 41 stages, feed on 21, alpha 1.5, F = 1 kmol/min saturated liquid at
-    zF = 0.5, constant molar overflow."""
+def _column_a_rest(yD, xB):
+    """``(L, V, B)`` of Column A at rest with products ``yD`` and ``xB`` on its design
+    feed: D2's balances, solved here in float64 NumPy. 41 stages, feed on 21, alpha
+    1.5, F = 1 kmol/min saturated liquid at zF = 0.5, constant molar overflow. The
+    balances are homogeneous in the flows, so another feed rate scales all three."""
     import numpy as np
     from scipy.optimize import fsolve
 
@@ -380,7 +379,21 @@ def _column_a_rest_cost(yD, xB, boilup_price, recovery_price):
         return [x[-1] - yD]
 
     L = fsolve(top_error, [2.706], xtol=1e-12)[0]
-    return boilup_price * (L + D) + recovery_price * B * xB
+    return L, L + D, B
+
+
+def _bottoms_setpoint(ladder, p, feed):
+    """The setpoint the distillation row's bottoms loop holds at feed rate ``feed``,
+    read off the row as ``build`` reads it."""
+    import numpy as np
+
+    bottoms = ladder.ROWS["distillation"]().loops[1]
+    if bottoms.zone:
+        sigma = float(p.e_floor_bottom)
+        return ladder.zone_setpoint(*bottoms.zone[:2], sigma, bottoms.zone[2])
+    obs = np.zeros(8)
+    obs[7] = feed
+    return float(bottoms.target(obs, np))
 
 
 def test_distillations_bottoms_rest_where_the_score_is_cheapest(ladder):
@@ -388,27 +401,37 @@ def test_distillations_bottoms_rest_where_the_score_is_cheapest(ladder):
     # (PHYSICS.md section 7) gives the bottoms' zone none: purer bottoms cost boilup,
     # less pure bottoms lose light key at 100 kmol of boilup a kmol, and with energy
     # this cheap the best point is inside the zone, the bottoms over-purified [D8,
-    # p. 2966]. So the reference rests the bottoms there: at rest one analyser sigma
-    # (4e-4) to either side the column costs more, and the setpoint keeps the two
-    # sigma of rule 22 from the spec. The distillate is held two sigma inside its
-    # spec, its economic edge.
-    import numpy as np
-
+    # p. 2966]. So on the design feed the reference rests the bottoms there: at rest
+    # one analyser sigma (4e-4) to either side the column costs more, and the
+    # setpoint keeps the two sigma of rule 22 from the spec. The distillate is held
+    # two sigma inside its spec, its economic edge.
     from target_gym.registry import REGISTRY
 
     p = REGISTRY["distillation"].make_test_params()
     sigma = float(p.e_floor_bottom)
-    bottoms = ladder.ROWS["distillation"]().loops[1]
-    if bottoms.zone:  # as ``build`` places a zone loop
-        setpoint = ladder.zone_setpoint(*bottoms.zone[:2], sigma, bottoms.zone[2])
-    else:
-        setpoint = float(bottoms.target(np.zeros(8), np))
+    setpoint = _bottoms_setpoint(ladder, p, float(p.F))
 
     def cost(xB):
-        return _column_a_rest_cost(
-            float(p.yD_spec) + 2 * sigma, xB, p.boilup_price, p.recovery_price
-        )
+        _, V, B = _column_a_rest(float(p.yD_spec) + 2 * sigma, xB)
+        return p.boilup_price * V + p.recovery_price * B * xB
 
     assert setpoint <= float(p.xB_spec) - 2 * sigma
     assert cost(setpoint - sigma) > cost(setpoint)
     assert cost(setpoint + sigma) > cost(setpoint)
+
+
+@pytest.mark.parametrize("step", [-1.0, 0.0, 1.0])
+def test_distillations_bottoms_setpoint_fits_the_flow_box(ladder, step):
+    # A setpoint the plant cannot hold is not a rest point. The feed is metered and
+    # steps 20 % up or down [D1, Fig. 18]; at each sourced feed rate, on the design
+    # feed composition, the reflux and boilup that hold the reference's two setpoints
+    # at rest lie inside the flow box, so both loops keep their authority.
+    from target_gym.registry import REGISTRY
+
+    p = REGISTRY["distillation"].make_test_params()
+    feed = float(p.F) * (1.0 + step * float(p.feed_step))
+    yD = float(p.yD_spec) + 2 * float(p.e_floor_top)
+    L, V, _ = _column_a_rest(yD, _bottoms_setpoint(ladder, p, feed))
+
+    assert float(p.L_min) < L * feed / float(p.F) < float(p.L_max)
+    assert float(p.V_min) < V * feed / float(p.F) < float(p.V_max)
