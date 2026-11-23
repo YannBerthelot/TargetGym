@@ -94,6 +94,14 @@ The next release is 0.8.0, because these changes break code written for
     turbine on its plan. Its first step of an episode solves for a minute or
     two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
     gone with the model it described.
+  - A trickle of boron flow now moves the boron it pays for (2026-11-23). The
+    mixing summed changes smaller than a single-precision boron can hold over a
+    sub-step, so 72 kg of water diluted as 130 kg and 36 kg as none. The sum now
+    carries its rounding (`ReactorState.boron_carry`); large flows are unchanged.
+  - The oracle's first solve of a day also solves from the plan that leaves the
+    rods parked, and keeps the cheaper of the two. From its first guess alone it
+    ended, on baseload days whose xenon dips, on a plan $13 dearer in its own
+    model, and lost those days to the expert.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
