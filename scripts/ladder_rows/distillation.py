@@ -3,7 +3,9 @@
 What the plant's datasheet and balances say, and nothing read from a score
 (PHYSICS.md section 11). Column A in the LV configuration: distillate purity on
 reflux, bottoms impurity on boilup, each read by its analyser (5 min cycle, 5 min
-dead time). Both products are zones, held 2 sigma inside their cheap edges.
+dead time). The distillate is a zone, held 2 sigma inside its cheap edge. The bottoms'
+zone has no cheap edge: purer bottoms cost boilup, less pure bottoms lose light key at
+the distillate's price [D8], so the loop rests where the two balance (``_bottoms_rest``).
 """
 
 from __future__ import annotations
@@ -19,7 +21,10 @@ from reference_ladder import (  # noqa: E402
     Inner,
     Row,
 )
+from scipy.optimize import minimize_scalar
 
+from target_gym.experts.ladder import K_BACKOFF
+from target_gym.oracles.controller import enable_x64
 from target_gym.registry import REGISTRY
 
 #: Column A's design products [D2], at which the rest and the balance hold it.
@@ -31,38 +36,88 @@ EQ_31 = ((0.8754, -0.8618), (1.0846, -1.0982))
 
 
 @functools.lru_cache(maxsize=None)
-def _rest_flows(F: float, zF: float, yD: float, xB: float) -> tuple:
-    """``(L, V)`` holding the products at ``yD`` and ``xB`` with feed ``F`` and
-    ``zF``: the tray balances at steady state, solved by Newton in float64."""
-    from jax.experimental import enable_x64
-
+def _newton() -> tuple:
+    """The tray balances at steady state by Newton in float64, compiled once:
+    ``solve(start, [F, zF, yD, xB])`` gives the solution (profile, L, V) and its
+    largest residual. Also the start, the design point, and the profile's length."""
     from target_gym.pc_gym.distillation.env import compute_velocity, steady_liquid
     from target_gym.pc_gym.distillation.env_jax import _NOMINAL_PROFILE
 
-    p = REGISTRY["distillation"].make_test_params(F=F)
+    base = REGISTRY["distillation"].make_test_params()
     n = len(_NOMINAL_PROFILE)
+
+    def residual(z, at):
+        F, zF, yD, xB = at
+        p = base.replace(F=F)
+        x, L, V = z[:n], z[n], z[n + 1]
+        here = jnp.concatenate([x, steady_liquid(L, p)])
+        dx = compute_velocity(here, (L, V), zF, p)[0][:n]
+        return jnp.concatenate([dx, jnp.stack([x[-1] - yD, x[0] - xB])])
+
+    @jax.jit
+    def solve(z, at):
+        def newton(_, z):
+            return z - jnp.linalg.solve(jax.jacfwd(residual)(z, at), residual(z, at))
+
+        z = jax.lax.fori_loop(0, 20, newton, z)
+        return z, jnp.max(jnp.abs(residual(z, at)))
+
+    start = np.concatenate([np.asarray(_NOMINAL_PROFILE, float), [L0, V0]])
+    return solve, start, n
+
+
+@functools.lru_cache(maxsize=None)
+def _rest(F: float, zF: float, yD: float, xB: float) -> tuple:
+    """The column at rest with the products at ``yD`` and ``xB`` on feed ``F`` and
+    ``zF``, as ``(profile, L, V)``."""
+    solve, start, n = _newton()
     with enable_x64():
-
-        def residual(z):
-            x, L, V = z[:n], z[n], z[n + 1]
-            here = jnp.concatenate([x, steady_liquid(L, p)])
-            dx = compute_velocity(here, (L, V), zF, p)[0][:n]
-            products = jnp.stack([x[-1] - yD, x[0] - xB])
-            return jnp.concatenate([dx, products])
-
-        @jax.jit
-        def solve(z):
-            def newton(_, z):
-                return z - jnp.linalg.solve(jax.jacfwd(residual)(z), residual(z))
-
-            z = jax.lax.fori_loop(0, 20, newton, z)
-            return z, jnp.max(jnp.abs(residual(z)))
-
-        start = np.concatenate([np.asarray(_NOMINAL_PROFILE, float), [L0, V0]])
-        z, left = solve(jnp.asarray(start, jnp.float64))
+        at = jnp.asarray([F, zF, yD, xB], jnp.float64)
+        z, left = solve(jnp.asarray(start, jnp.float64), at)
         z = np.asarray(z)
     assert float(left) < 1e-9, (F, zF, yD, xB, float(left))
-    return float(z[n]), float(z[n + 1])
+    return z[:n], float(z[n]), float(z[n + 1])
+
+
+def _rest_flows(F: float, zF: float, yD: float, xB: float) -> tuple:
+    """``(L, V)`` of ``_rest``."""
+    return _rest(F, zF, yD, xB)[1:]
+
+
+def _rest_cost(yD: float, xB: float) -> float:
+    """The score per step of the column at rest on its design feed with the products
+    at ``yD`` and ``xB``: the env's own reward terms on that steady state."""
+    from target_gym.pc_gym.distillation.env import (
+        DistillationState,
+        compute_reward_terms,
+    )
+
+    p = REGISTRY["distillation"].make_test_params()
+    x, L, V = _rest(float(p.F), float(p.zF_nominal), yD, xB)
+    with enable_x64():
+        state = DistillationState(
+            time=0, x=jnp.asarray(x), zF=p.zF_nominal, L=L, V=V, F=p.F,
+            target_yD=p.yD_spec, target_xB=p.xB_spec,
+        )  # fmt: skip
+        return float(sum(compute_reward_terms(state, p).values()))
+
+
+def _bottoms_rest(p) -> float:
+    """The bottoms impurity at which the column at rest costs least, with the
+    distillate two analyser sigmas inside its spec. The score charges boilup and the
+    light key the bottoms carry away (PHYSICS.md section 7), and with energy this
+    cheap their balance lies inside the zone, the bottoms over-purified [D8, p. 2966]:
+    the operating target is the price's, not the spec's. Never nearer the spec than
+    rule 22's two sigmas."""
+    yD = float(p.yD_spec) + K_BACKOFF * float(p.e_floor_top)
+    edge = float(p.xB_spec) - K_BACKOFF * float(p.e_floor_bottom)
+    best = minimize_scalar(
+        lambda xB: _rest_cost(yD, float(xB)),
+        bounds=(float(p.e_floor_bottom), edge),
+        method="bounded",
+        options={"xatol": 1e-6},
+    )
+    return float(best.x)
 
 
 def row() -> Row:
@@ -72,6 +127,7 @@ def row() -> Row:
     per_L, per_V = 2 / float(p.L_max - p.L_min), 2 / float(p.V_max - p.V_min)
     F0, zF0 = float(p.F), float(p.zF_nominal)
     specs = float(p.yD_spec), float(p.xB_spec)
+    bottoms = _bottoms_rest(p)
 
     def raw(L, V, xp=np):
         return xp.stack([per_L * (L - L_min) - 1.0, per_V * (V - V_min) - 1.0])
@@ -88,13 +144,13 @@ def row() -> Row:
 
     design = np.asarray(raw(L0, V0), np.float32)
 
-    # The build fills ``placed`` with each zone loop's setpoint; the feedforward
-    # reads them when its rung is traced, after the build has placed them.
+    # The build fills ``placed`` with the distillate loop's setpoint; the feedforward
+    # reads it when its rung is traced, after the build has placed it.
     placed: dict = {}
 
     def held() -> tuple:
-        if "yD on L" in placed and "xB on V" in placed:
-            return float(placed["yD on L"][1]), float(placed["xB on V"][1])
+        if "yD on L" in placed:
+            return float(placed["yD on L"][1]), bottoms
         return DESIGN_YD, DESIGN_XB
 
     # Feedforward from the metered feed (obs 7, FC 1 [D4, p. 5]): the flows the
@@ -131,11 +187,10 @@ def row() -> Row:
         "xB on V",
         1,
         lambda o, xp: o[1],
-        lambda o, xp: o[5],
+        lambda o, xp: xp.asarray(bottoms, dtype=xp.float32),
         "x",
         du_V,
         window,
-        zone=(0.0, float(p.xB_spec), "high"),
     )
     # The stage-15 tray temperature, on line [D5], under the bottoms loop. Its
     # first response to boilup is a ramp on the column's slow mode, so it is read

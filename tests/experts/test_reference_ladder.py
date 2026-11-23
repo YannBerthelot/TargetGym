@@ -346,3 +346,69 @@ def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):
         return out
 
     assert actions(scored) == pytest.approx(actions(quiet), rel=1e-6)
+
+
+def _column_a_rest_cost(yD, xB, boilup_price, recovery_price):
+    """Cost per minute of Column A at rest with products ``yD`` and ``xB`` on its
+    design feed, PHYSICS.md section 7 with both products in zone: boilup plus light
+    key lost to the bottoms. The column is D2's balances, solved here in float64
+    NumPy: 41 stages, feed on 21, alpha 1.5, F = 1 kmol/min saturated liquid at
+    zF = 0.5, constant molar overflow."""
+    import numpy as np
+    from scipy.optimize import fsolve
+
+    n, feed, alpha, F, zF = 41, 21, 1.5, 1.0, 0.5
+    D = F * (zF - xB) / (yD - xB)  # the two overall balances
+    B = F - D
+
+    def balances(x, L):
+        V = L + D
+        y = alpha * x / (1 + (alpha - 1) * x)
+        r = np.empty(n)
+        r[0] = (L + F) * x[1] - V * y[0] - B * x[0]
+        for i in range(1, n - 1):
+            stage = i + 1
+            above = L if stage >= feed else L + F
+            here = L if stage > feed else L + F
+            r[i] = above * x[i + 1] + V * y[i - 1] - here * x[i] - V * y[i]
+            r[i] += F * zF * (stage == feed)
+        r[n - 1] = V * y[n - 2] - (L + D) * x[n - 1]
+        return r
+
+    def top_error(L):
+        x = fsolve(balances, np.linspace(0.01, 0.99, n), args=(L[0],), xtol=1e-13)
+        return [x[-1] - yD]
+
+    L = fsolve(top_error, [2.706], xtol=1e-12)[0]
+    return boilup_price * (L + D) + recovery_price * B * xB
+
+
+def test_distillations_bottoms_rest_where_the_score_is_cheapest(ladder):
+    # Charter J1 backs a zone's setpoint off its economic edge. The column's score
+    # (PHYSICS.md section 7) gives the bottoms' zone none: purer bottoms cost boilup,
+    # less pure bottoms lose light key at 100 kmol of boilup a kmol, and with energy
+    # this cheap the best point is inside the zone, the bottoms over-purified [D8,
+    # p. 2966]. So the reference rests the bottoms there: at rest one analyser sigma
+    # (4e-4) to either side the column costs more, and the setpoint keeps the two
+    # sigma of rule 22 from the spec. The distillate is held two sigma inside its
+    # spec, its economic edge.
+    import numpy as np
+
+    from target_gym.registry import REGISTRY
+
+    p = REGISTRY["distillation"].make_test_params()
+    sigma = float(p.e_floor_bottom)
+    bottoms = ladder.ROWS["distillation"]().loops[1]
+    if bottoms.zone:  # as ``build`` places a zone loop
+        setpoint = ladder.zone_setpoint(*bottoms.zone[:2], sigma, bottoms.zone[2])
+    else:
+        setpoint = float(bottoms.target(np.zeros(8), np))
+
+    def cost(xB):
+        return _column_a_rest_cost(
+            float(p.yD_spec) + 2 * sigma, xB, p.boilup_price, p.recovery_price
+        )
+
+    assert setpoint <= float(p.xB_spec) - 2 * sigma
+    assert cost(setpoint - sigma) > cost(setpoint)
+    assert cost(setpoint + sigma) > cost(setpoint)
