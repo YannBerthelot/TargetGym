@@ -29,6 +29,10 @@ V dWa/dt = q1(Wa1 − Wa) + q2(Wa2 − Wa) + q3(Wa3 − Wa)
 V dWb/dt = q1(Wb1 − Wb) + q2(Wb2 − Wb) + q3(Wb3 − Wb)
 ```
 
+That is stage 1, which also receives the basin's pump-back. Stage 2 is fed by
+stage 1's outflow and its own trim valve, with the same mixing law
+(`env.staged_velocity`); its outlet is the discharge.
+
 pH is then the root of the charge balance — an *implicit algebraic* equation:
 
 ```
@@ -37,19 +41,18 @@ Wa + 10^(pH−14) − 10^(−pH) + Wb·(1 + 2·10^(pH−pK2))
 ```
 
 This split is what makes the model both cheap and brutal: two **linear** mixing
-states, with every bit of the nonlinearity in a scalar root-find. Solved by
-44-step bisection on [0, 14] — the residual is monotone in pH so bisection
-cannot fail, and a fixed step count keeps it `jit`/`vmap`-friendly. Newton is
-unsuitable: the residual is near-vertical at the equivalence point and Newton
-overshoots the bracket.
+states per tank, with every bit of the nonlinearity in a scalar root-find. Solved
+by 20-step bisection on [0, 14], to 1.3e-5 pH (`env.PH_BISECTION_STEPS`). The
+residual is monotone in pH so bisection cannot fail, and a fixed step count keeps
+it `jit`/`vmap`-friendly. Newton is unsuitable: the residual is near-vertical at
+the equivalence point and Newton overshoots the bracket.
 
 Deliberately **not** modelled:
 
 | Omitted | Why |
 |---|---|
 | Temperature dependence of pK1, pK2 | Isothermal, as the bench rig. |
-| Mixing dynamics | One perfectly mixed tank; the mixing delay is lumped into the probe's dead time (section Readings). |
-| Staging | Real units run two or more tanks or mixers [P3; P5, p. 2; P7]. One tank is the rig [P1, P2]. Deviation D4. |
+| Mixing dynamics | Each stage is perfectly mixed; the mixing delay is lumped into its probe's dead time (section Readings). |
 | Electrode drift and fouling | Named failures [P5, pp. 2-3; P6], not modelled. Deviation D1. |
 | Several buffer species | Carbonate only. Deviation D2. |
 
@@ -234,16 +237,20 @@ at the charged cost.
 - Feedforward is now available from the metered influent flow (obs 6), through
   the steady balance (`steady_base_flow`), as the field case names [P3, p. 3].
 - The expert (`experts.py`) runs the linearised PI on stage 1 and a trim PI on
-  the discharge with the same gains; its stored gains predate the staging.
+  the discharge with the same gains, tuned on the two-stage plant at its steepest
+  point, the buffer off (`scripts/tune_process_experts.py`).
 
-## 11. Oracle needs
+## 11. The oracle
 
-The oracle (`oracle.py`, NewtonMPC with `action_dim=2`) reads the true state,
-the buffer included, and plans the buffer's mean path (tested). Its stage cost
-is the reward's terms on the planner pH, so the excursion and diversion terms
-have no slope at the permit's edges: before rule 9 runs it, the stage needs a
-smooth hinge at 6, 8 and 5, and the 1440-step episode needs its horizon
-re-measured for 20 min of residence. Not run.
+The oracle (`oracle.py`, on the shared solver, `oracles.controller.Oracle`) reads
+the true state, the buffer flow and the influent's acid strength included, and
+knows no future: it plans the buffer on its mean path and holds the influent as the
+state carries it (tested). Its objective is the reagent both valves use; the permit
+is a limit on the planned discharge, backed off by the planner's error over the base
+valve's dead time (`data/oracle_widths/ph_neutralization.json`), and the excursion,
+diversion and trip terms are charged by the replay if a plan leaves the permit. Its
+plan runs to the end of the episode, in moves of 11 steps
+(`data/oracle_horizons/ph_neutralization.json`).
 
 ---
 
@@ -301,7 +308,7 @@ flow and the setpoint exactly (`docs/proposals/measurement-noise.md`).
 
 | reading | sigma | step | lag | dead time | instrument | status | source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `pH` | 0.01 pH | 0.01 pH | 10 s | 10 s | Glass electrode with industrial pH transmitter | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
+| `pH`, `pH_s1` | 0.01 pH | 0.01 pH | 10 s | 10 s | Glass electrode with industrial pH transmitter, one per stage | Provisional | [McMillan](https://www.controlglobal.com/articles/2013/mcmillan-ph-response-accuracy-reliability) |
 
 **This figure is weak, and it is the tracked quantity.** No noise source was
 found. McMillan gives 0.02 pH only as an accuracy target that needs best
