@@ -5,6 +5,8 @@ the oracle each have a fingerprint of their own
 (``provenance.expert_fingerprint``, ``provenance.oracle_fingerprint``).
 """
 
+import functools
+
 import jax.numpy as jnp
 import numpy as np
 from flax import struct
@@ -160,8 +162,9 @@ class ReferenceParams:
     # Bump tests: boron to Tavg is an integrator with this dead time, the line's
     # 5 to 15 min and the plant's lag. SIMC with tc = theta gives the boron loop
     # ``Kc = 1 / (k 2 theta)`` and ``Ti = 8 theta``, ``k`` the curve book's K of
-    # Tavg per ppm.
-    theta: float = 615.0  # s
+    # Tavg per ppm. The recipe reads 600 s on this plant (2026-11-23); the 615 s
+    # carried until then was the previous plant's.
+    theta: float = 600.0  # s
     ao_ref: float = 0.0
     # The rods' action band: no error while the flux difference is within half its
     # 5 % target band (owner, 2026-11-08; PHYSICS.md section 6).
@@ -341,15 +344,17 @@ def turbine_demand(error, carried, dead, lead, plant, xp=jnp):
     return base + (1.0 - base) * hot
 
 
-def reference_step(params, state, obs, xp=jnp):
+def reference_step(params, state, obs, xp=jnp, book=None):
     """One 30 s step: ``obs = [n, T_hot, rod, load, T_avg, T_ref, delta_I, boron
     (20 min late), to_down, to_up, xenon's power history, the day's ramp rate
     (%/min), its minimum load, the cycle point, the plan's load, the offset's
     penalty time]``, the action ``[rod demand, boron flow, turbine loading rate]``.
+    ``book`` is the plant whose curve book the operator reads: the shipped
+    member's if not given.
     """
     from target_gym.reactor.env import ReactorParams, rod_insertion_limit
 
-    p, book = params, ReactorParams()
+    p, book = params, ReactorParams() if book is None else book
     cycle = obs[..., 13]
     plant = curve_book(cycle, book, xp)
     n, rod, load, T_avg, T_ref = (obs[..., k] for k in (0, 2, 3, 4, 5))
@@ -487,8 +492,16 @@ def reference_step(params, state, obs, xp=jnp):
     return xp.stack([rods, out, turbine + 0.0 * out], axis=-1), new
 
 
-def make_reactor_pid_controller() -> Controller:
+def make_reactor_pid_controller(plant=None, **tuned) -> Controller:
     """The expert: the reference, the Westinghouse procedure run from the curve
     book, as a :class:`~target_gym.experts.pid.Controller`. :func:`rod_control_step`,
-    the published rod program, is a row in the ladder's table beside it."""
-    return Controller(ReferenceParams(), ReferenceState(), reference_step)
+    the published rod program, is a row in the ladder's table beside it.
+
+    ``plant`` is the family member whose curve book the operator reads, and
+    ``tuned`` that member's bump-test numbers (``wd_Kc``, ``wd_Ti``, ``theta``), as
+    the family sweep reads them on each draw. With neither it is the shipped
+    expert, on the shipped member."""
+    step = reference_step
+    if plant is not None:
+        step = functools.partial(reference_step, book=plant)
+    return Controller(ReferenceParams(**tuned), ReferenceState(), step)

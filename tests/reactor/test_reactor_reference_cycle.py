@@ -21,6 +21,15 @@ PHYSICS.md section 6, run from the operator's curve book at the day's cycle poin
   (the fuel's 471.2 K per unit of load at a fixed Tavg, given back through both
   feedbacks, and the program's 15.4 K span): 109.6 K at the start, 41.9 K at 80 %,
   so 0.548 K and 0.209 K of spread, and bands of 0.504 K and 1.182 K.
+- A family member's operator has that member's curve book (charter B7's sweep
+  runs the expert on drawn members): the expert is built for a plant, the shipped
+  member by default. By hand on the first step of a day lined out at full load at
+  the start of the cycle, with the plan's ramp down (2 %/min) under way a boron
+  lead ahead: the plan asks 205.6 ppm per unit of load, 2.056 ppm for the step's
+  1 % of load, against the 2.200 ppm a step of full boration brings at 1690 ppm
+  (3 kg/s of 7800 ppm acid into 250 t), so the flow asked is 0.935 of full
+  boration. On a member whose boron is worth 10 pcm/ppm, not 8, the same power
+  defect asks 164.5 ppm per unit of load, and the flow is 0.748.
 - The turbine loads at the rate boron carries: full dilution at the boron read,
   plus xenon's rate, over ``ppm_per_load``. At 80 % of the cycle with 450 ppm read
   and xenon in balance: 0.018 ppm/s over 216.7 ppm = 8.31e-5 of rated load a
@@ -143,6 +152,19 @@ def test_the_turbine_spends_tavgs_band_and_stops_at_its_cold_edge(error, action)
     plant = curve_book(0.8, BOOK, np)
     out = turbine_demand(error, 8.333e-5, 1.18, 600.0, plant, np)
     assert float(out) == pytest.approx(action, abs=0.005)
+
+
+@pytest.mark.parametrize("worth, flow", [(None, 0.935), (-10.0e-5, 0.748)])
+def test_the_expert_sends_the_boron_its_own_members_book_asks(worth, flow):
+    member = None if worth is None else ReactorParams(boron_worth=worth)
+    expert = make_reactor_pid_controller(plant=member)
+    obs = np.array(
+        [1.0, 596.87, 1.0 - 2.0 * 3.0 / 228.0, 1.0, 580.2, 580.2, 0.0, 1690.0,
+         0.1, 5.0, 1.0, 2.0, 0.5, 0.0, 1.0, 0.0],
+        np.float32,
+    )  # fmt: skip
+    action, _ = expert.step(expert.params, expert.init_state, obs, np)
+    assert float(action[1]) == pytest.approx(flow, abs=0.005)
 
 
 # --- days through the cycle ---

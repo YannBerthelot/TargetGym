@@ -552,7 +552,7 @@ then its gains and its feedforward were fitted at the start of the cycle.
   faster than the line still gets all its boron.
 - *The Tavg loop.* A SIMC PI past the 1.6 K free band, on what is charged (the
   owner's rule of 2026-11-10): `Kc = 1 / (k 2 theta)` and `Ti = 8 theta`, with `k`
-  the curve book's K of Tavg per ppm and `theta` = 615 s, the boron line's dead time
+  the curve book's K of Tavg per ppm and `theta` = 600 s, the boron line's dead time
   to Tavg from the recipe's bump tests.
 - *The operator's tool.* Xenon's rate, and the burnup read off the cycle point (a
   ppm of boron is 1 / 1690 of the cycle), kept as a debt with the play of

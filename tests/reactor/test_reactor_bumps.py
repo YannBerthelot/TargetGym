@@ -20,6 +20,13 @@ not the response.
 
 Tolerance 20 %: the hour's last 40 samples read a ramp still settling from the line's
 delay and the steam generator's lag.
+
+The expert's two bump-test numbers are the recipe's on the shipped member (owner's
+rule: an expert's numbers come from its recipe, run as written). The recipe lines
+its bump points out by hand at the start of the cycle, so that is where it is run:
+bank D on the offset gives ``wd_Kc`` and ``wd_Ti``, and boron on Tavg the dead time
+``theta`` (its SIMC integral time over 8). Large tier: the recipe is some hundred
+bump tests.
 """
 
 import importlib
@@ -32,9 +39,10 @@ import pytest
 
 from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import tavg_dnb_limit
+from target_gym.reactor.experts import ReferenceParams
 
-#: The reference is the start-of-cycle plant's until it is rebuilt for the drawn cycle
-#: point (PHYSICS.md section 6), so these tests run a core at the start of its cycle.
+#: The recipe lines its bump points out by hand for a core at the start of its cycle
+#: (``reactor_ladder.point``), so its bump tests run there.
 START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -106,3 +114,12 @@ def test_a_bump_that_trips_the_plant_is_refused():
     a = jnp.array([1.0 - 2.0 * s.rod_in, -0.2, 1.0])
     with pytest.raises(ladder.TrippedDuringTest):
         ladder.closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+
+
+@pytest.mark.large
+def test_the_experts_bump_numbers_are_the_recipes_on_the_shipped_member():
+    tune, _ = ladder.bumps(Reactor(), ReactorParams(**START_OF_CYCLE))
+    shipped = ReferenceParams()
+    assert shipped.wd_Kc == pytest.approx(tune.wd_Kc, rel=1e-3)
+    assert shipped.wd_Ti == pytest.approx(tune.wd_Ti, rel=1e-6)
+    assert shipped.theta == pytest.approx(tune.t_Ti / 8.0, rel=1e-6)
