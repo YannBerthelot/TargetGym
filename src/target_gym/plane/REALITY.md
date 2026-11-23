@@ -334,6 +334,13 @@ was fetched twice; the chart was read from its vector paths, not by eye.
 - **[HAMMAMI]** M. O. Hammami, "Turbofan Specific Fuel Consumption, Size, and Mass from
   Correlated Engine Parameters", master thesis, HAW Hamburg, 2021, p. 21 and 22.
   <https://www.fzt.haw-hamburg.de/pers/Scholz/arbeiten/TextHammami.pdf>
+- **[BRAMBERGER]** Bramberger, Dornbrack, Wilms, Gemsa, Raynor and Sharman,
+  "Vertically Propagating Mountain Waves - A Hazard for High-Flying Aircraft?", J. Appl.
+  Meteor. Climatol. 57, September 2018, p. 1957, abstract, p. 1958 and Figure 2. Fetched
+  once. <https://elib.dlr.de/121439/>
+- **[SIGMET]** ICAO, Asia/Pacific Regional SIGMET Guide, twelfth edition, November 2025,
+  3.2, SIGMET phenomena. Fetched once.
+  <https://www.icao.int/sites/default/files/APAC/Documents/edocs/MET/ASIA-PACIFIC-REGIONAL-SIGMET-GUIDE-12TH-ED-NOV2025.pdf>
 - **[WILDMANN]** Wildmann et al., "In Situ Measurements of Wind and Turbulence by a
   Motor Glider in the Andes", J. Atmos. Oceanic Technol. 38, April 2021, p. 921.
   <https://elib.dlr.de/142139/1/wildmann_21.pdf>
@@ -387,14 +394,28 @@ Mach against altitude in feet, each curve's points as drawn:
 - Below the speed where max thrust equals drag, "there is no thrust margin available to
   accelerate while maintaining a stabilized level flight. Then the only way to stop the
   deceleration is to lose altitude". "The crew should not fly below GD."
+- A severe mountain wave, the one a SIGMET is issued for: "the accompanying downdraft
+  is 3 m/s (600 ft/min) or more or when severe turbulence is observed or forecast"
+  [SIGMET].
+- A recorded case at cruise level: a research jet at FL410 over the Apennines, 12
+  January 2016. "After a significant loss of the actual flown Mach number within
+  approximately 10-20 s, several stall warnings were issued by the autopilot system.
+  Simultaneously, large variations in the along-track wind speed and static air
+  temperature were observed. The flight situation was mitigated by the pilots, who
+  descended to a lower flight level." "It is the wave-induced modulation of the ambient
+  along-track wind speed that may decrease the aircraft speed toward the minimum needed
+  stall speed" [BRAMBERGER]. Its Figure 2, read from the figure: the head wind fell from
+  about 5 to about 25 m/s of tailwind-ward change, some 20 m/s, over about 25 km of
+  track; the static air temperature swung from about 206 to about 214 K over about
+  40 km; the Mach number fell from 0.80 to 0.72.
 - Vertical air velocity in mountain waves, by the Sierra Wave Project's classes
   (Holmboe and Klieforth 1957; Grubisic and Lewis 2004): "strong" 9 to 18 m/s,
   "moderate" 4.5 to 9 m/s, "weak" 1.5 to 4.5 m/s. On a motor glider's soaring flights in
   the Andes, "40.6% are in weak, 14.1% in moderate and 0.4% in strong wave conditions",
   with more than 10 m/s "occasionally recorded" [WILDMANN]. Those are wave-seeking
   flights low in the troposphere, not an airliner's cruise.
-- How long a downdraft lasts at cruise speed, and how often an airliner in cruise
-  meets one: not found. The FAA's advisory circulars on mountain winds and on clear air
+- How often an airliner in cruise meets a wave of either kind: not found. How long a
+  downdraft lasts at cruise speed: only the 25 km scale of the case above. The FAA's advisory circulars on mountain winds and on clear air
   turbulence (AC 00-57, AC 00-30C, AC 91-85B's appendix on mountain wave activity)
   answer 403 to automated readers; for the owner to open by hand.
 - How large and how fast the wind and temperature changes are: [AC00-30C] above gives
