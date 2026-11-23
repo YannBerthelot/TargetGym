@@ -404,10 +404,10 @@ Mach against altitude in feet, each curve's points as drawn:
   temperature were observed. The flight situation was mitigated by the pilots, who
   descended to a lower flight level." "It is the wave-induced modulation of the ambient
   along-track wind speed that may decrease the aircraft speed toward the minimum needed
-  stall speed" [BRAMBERGER]. Its Figure 2, read from the figure: the head wind fell from
-  about 5 to about 25 m/s of tailwind-ward change, some 20 m/s, over about 25 km of
-  track; the static air temperature swung from about 206 to about 214 K over about
-  40 km; the Mach number fell from 0.80 to 0.72.
+  stall speed" [BRAMBERGER]. Its Figure 2, read from the figure by eye: the head wind
+  component fell by about 20 m/s (from about -5 to about -25 m/s on its axis) over about
+  25 km of track; the static air temperature rose from about 206 to about 214 K over
+  about 40 km; the Mach number fell from 0.80 to 0.72.
 - Vertical air velocity in mountain waves, by the Sierra Wave Project's classes
   (Holmboe and Klieforth 1957; Grubisic and Lewis 2004): "strong" 9 to 18 m/s,
   "moderate" 4.5 to 9 m/s, "weak" 1.5 to 4.5 m/s. On a motor glider's soaring flights in
