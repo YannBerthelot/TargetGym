@@ -139,9 +139,10 @@ def oracle_run(task, scenario, seed) -> dict:
     from target_gym.benchmark import shipped_policy
 
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
+    oracle = shipped_policy("mpc")
+    oracle.bind(env, params, [seed])  # the scenario's own problem, as run_suite's
     rollout = run_policy(
-        shipped_policy("mpc"), env, params, task_info(task, env, params, 1),
-        seeds=[seed],
+        oracle, env, params, task_info(task, env, params, 1), seeds=[seed]
     )  # fmt: skip
     (ep,) = episodes_of(rollout)
     return {
