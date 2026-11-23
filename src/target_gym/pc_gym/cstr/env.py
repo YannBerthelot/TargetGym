@@ -98,7 +98,7 @@ class CSTRParams(EnvParams):
     #: Minutes the loss takes, linear; 0 is S1's instant step. Activity decays
     #: through operation [S1, p. 6] but no source gives a rate inside hours.
     k0_decay: float = 0.0  # min
-    feed_rise: float = 0.0  # fraction of Caf [S3: feed build-up], size ours
+    feed_rise: float = 0.0  # fraction of Caf [S3: feed build-up], size derived
     cooling_loss: float = 0.0  # min the cooling water fails [S2; S3]
     #: Minutes a setpoint move, a catalyst loss or a feed rise lasts before it
     #: returns: a move back, a catalyst change, the feed batch run out. Only a

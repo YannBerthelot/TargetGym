@@ -60,7 +60,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `setpoint_step` | 2 | K (scenario) | cited: a 2 C step [S1, Fig. 2] |
 | `k0_drop` | 0.4 | - (scenario) | cited: a 40 % drop [S1, Fig. 3] |
 | `k0_decay` | 90 | min (scenario) | ours: no source gives a rate inside hours; the slowest linear decay that ends inside the 240 min episode from the latest event, at 150 min |
-| `feed_rise` | 0.1 | - (scenario) | ours: feed build-up is sourced [S3], its size is not |
+| `feed_rise` | 0.03 | - (scenario) | derived: feed build-up is sourced [S3], its size is not, so it is the largest whole percent the valve can hold at the design point, 135.5 of its 136 g/s at the middle feed temperature (112 to 128 g/s of design water leaves 1.5 % on the warmest feed and 4.7 % on the coldest) |
 | `cooling_loss` | 5 | min (scenario) | ours: cooling failures are sourced [S2; S3], their length is not |
 | `event_hold` | 480, 1440, 120 | min (stream, per scenario) | ours: how long a setpoint move (a shift), a catalyst loss (until a catalyst change, a day) and a feed rise (until its batch runs out) last before they return; no source gives these; a window never sets it, so its events hold to the end |
 | readings | 0.04 K; lag 13 s; dead time 2 min | - | Pt100 scatter as before; thin-walled well about 13 s [S10, Fig. 2]; jacket outlet about 2 min [S6] |
@@ -97,7 +97,7 @@ temperature, with the water where that needs it. `scenarios.py`:
 | `normal` | the feed drifts with the room, 23 to 25 C over a day | [S1, Tables 3, 4] |
 | `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
 | `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
-| `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
+| `feed_buildup` | feed reactant +3 %, to the top of the valve's range (derived) | [S3, PDF pp. 36-37, 46] |
 | `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
 
 Each event comes once, at a minute drawn in 30 to 150.
@@ -184,6 +184,15 @@ event (240 - 150 min). S1 rode its step out on feed concentration, a handle
 this task lacks (D3). With S1's 120 g/s design water the steady water after the
 loss is 64 to 75 g/s, above the 40 g/s floor; with v5's 24 C water it sat at 50
 to 58 g/s and every rung quenched the reactor under the step.
+
+**D6. The feed build-up stops at the valve's top (owner, 2026-11-23).** Until
+then the rise was 10 % (ours). Holding 58 C under it needs 179 g/s of water
+against the valve's 136, so the reactor sat 5 K high whatever the controller
+did: 1272 per step for the foresight ceiling and 1360 for the reference, 97 %
+and 69 % of their costs over the suite. Bayer's cooler held its temperature
+only while the feed stayed under a limit [S3, PDF pp. 36-37], so the documented
+day is a feed at the edge of the cooling, not past it. What practice does past
+it is cut the feed (D3: this task has no such handle).
 
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the

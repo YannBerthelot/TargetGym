@@ -25,6 +25,10 @@ Contract, from the sources and the audit's tolerances, not from the code:
   time after which the response stays within 5 % of its final value;
 - the jacket outlet's reading is about 2 min late [S6]: with the noise off it
   is the jacket's temperature 2 min earlier, not its temperature now;
+- the feed build-up stops where the cooling does: Bayer's cooler held its
+  temperature only while the feed stayed under a limit [S3, PDF pp. 36-37], so
+  the scenario's rise is the largest whole percent the valve can hold at the
+  design point (the middle feed temperature);
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
 - the feed sits at room temperature, 23.1 and 24.9 C on S1's two days
   [S1, Tables 3, 4], so within an episode it drifts and never leaves that
@@ -230,6 +234,20 @@ def test_the_jacket_outlet_is_read_two_minutes_late():
     np.testing.assert_allclose(readings[late:], truth[:-late], atol=1e-4)
     # The jacket has moved meanwhile, so this is not the state read directly.
     assert np.abs(readings[late:] - truth[late:]).max() > 0.1
+
+
+def test_the_feed_build_up_takes_the_design_points_water_to_the_valves_top():
+    spec = REGISTRY["cstr"]
+    (build_up,) = [s for s in scenarios.suite(spec) if s.name == "feed_buildup"]
+    p = scenarios.params_for(spec, build_up)
+    middle = 0.5 * (p.feed_T_range[0] + p.feed_T_range[1])
+
+    def water(rise):
+        richer = p.replace(Caf=p.Caf * (1.0 + rise))
+        return float(steady_state(p.T_setpoint, middle, richer)[2])
+
+    assert p.feed_rise > 0.0
+    assert water(p.feed_rise) <= p.Fw_max < water(p.feed_rise + 0.01)
 
 
 def test_a_runaway_trips_the_interlock():
