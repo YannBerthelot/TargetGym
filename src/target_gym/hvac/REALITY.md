@@ -110,6 +110,7 @@ means no source we could read states it.
 | Floor surface, comfort, feet on floor | 19 to 29 °C | comfort requirement (ASHRAE 55) | [4] |
 | Supply water at heating elements, cement or calcium sulphate screed | 55 °C (45 °C asphalt) | hard limit, safety device must cut hot water even without power | [17] |
 | Design flow temperature for one Uponor floor build-up | above 55.5 °C the 29 °C limit is exceeded | design limit | [5, p. 27] |
+| Heat source size, Münster TABS office | 530 kW of heat for 14 000 m2 (38 W/m2) | design capacity | [13] |
 | Cooling water flow | not below 15 to 16 °C | condensation limit | [5, p. 31] |
 | Cooling floor surface | about 20 °C minimum | comfort limit | [5, p. 31] |
 | Condensation (cooling) | dew point detector cuts cold water | trip | [17]; moisture switches on the supply pipe disable chilled water [7, p. 8] |
