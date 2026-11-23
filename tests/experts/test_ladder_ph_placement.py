@@ -9,7 +9,7 @@ The plant starts where the kept rung holds (rule 17): the scored configuration's
 set point is the kept one, so an agent and the reference run the same episodes.
 
 One full ladder build on the scored plant: bump tests at seven operating points, then
-ten seeds of five 2 h scenarios per candidate and per rung. About ten minutes.
+ten seeds of five 2 h scenarios per candidate and per rung. About seven minutes.
 """
 
 import importlib.util
