@@ -15,6 +15,11 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   from, and an infinite zone has no centre.
 - ``cv_sigma``: the sample standard deviation of the controlled variable, pooled over
   seeds after the burn-in.
+- ``zone_grid`` and ``first_without_exit`` (J1, owner, 2026-11-23): on a zone whose
+  exit the score prices as a violation, the candidates are the cheap edge and ten
+  equal steps to the centre, and the reference keeps the first, from the cheap edge,
+  at which it leaves the zone on none of its seeds. Candidates past it are not run.
+  If every candidate leaves, the centre is kept and the scan shows it.
 - ``null_verdict`` (J2): a null policy wins a seed by costing strictly less than the
   reference; a task fails when any null wins more than half the seeds.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
@@ -37,10 +42,12 @@ from target_gym.experts.ladder import (
     best_rung,
     cv_sigma,
     decoupler,
+    first_without_exit,
     ladder_controller,
     most_sensitive,
     null_verdict,
     pi_gains,
+    zone_grid,
     zone_setpoint,
 )
 
@@ -147,6 +154,46 @@ def test_a_one_sided_zone_backs_off_its_finite_edge():
 def test_an_infinite_edge_or_centre_is_an_error(cheap):
     with pytest.raises(ValueError):
         zone_setpoint(-np.inf, 0.01, 0.001, cheap)
+
+
+def test_a_zones_grid_runs_from_its_cheap_edge_to_its_centre_in_ten_steps():
+    # Zone 6 to 8, cheap side low: the edge, then tenths of the half-width 1.0.
+    assert zone_grid(6.0, 8.0, "low") == pytest.approx(
+        [6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0]
+    )
+
+
+def test_a_zones_grid_from_a_high_cheap_edge_runs_down_to_the_centre():
+    # Zone 0.5 to 1.5, cheap side high: half-width 0.5, so steps of 0.05.
+    grid = zone_grid(0.5, 1.5, "high")
+    assert grid[:3] == pytest.approx([1.5, 1.45, 1.4])
+    assert grid[-1] == pytest.approx(1.0) and len(grid) == 11
+
+
+@pytest.mark.parametrize(
+    "zone",
+    # No cheap side: the setpoint is the centre, with nothing to place. An infinite
+    # edge: no centre to stop at.
+    [(6.0, 8.0, None), (-np.inf, 0.01, "high")],
+)
+def test_a_zone_with_no_cheap_side_or_no_centre_has_no_grid(zone):
+    with pytest.raises(ValueError):
+        zone_grid(*zone)
+
+
+def test_the_first_candidate_that_never_leaves_the_zone_is_kept():
+    # Seeds leaving at each candidate, from the cheap edge. 6.3 is the first with
+    # none; 6.4 leaves again and 6.5 does not, but neither is run.
+    exits = {6.0: 10, 6.1: 4, 6.2: 1, 6.3: 0, 6.4: 2, 6.5: 0}
+    setpoint, scan = first_without_exit(tuple(exits), exits.__getitem__)
+    assert setpoint == 6.3
+    assert scan == {6.0: 10, 6.1: 4, 6.2: 1, 6.3: 0}
+
+
+def test_when_every_candidate_leaves_the_centre_is_kept_and_the_scan_shows_it():
+    setpoint, scan = first_without_exit((6.0, 6.5, 7.0), lambda point: 3)
+    assert setpoint == 7.0
+    assert scan == {6.0: 3, 6.5: 3, 7.0: 3}
 
 
 def test_cv_sigma_pools_seeds_after_the_burn_in():

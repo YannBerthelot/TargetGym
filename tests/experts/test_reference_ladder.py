@@ -13,6 +13,15 @@ on a seed is the task's ``J``: each scenario's mean cost per step, weighted by i
 of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre, the deviation measured with the
 loop at the centre on the bump-test seeds.
+
+A zone whose exit the score prices as a violation is placed otherwise (J1, owner,
+2026-11-23): the row names the reward terms charged for leaving it, and the loop holds
+the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which the pi rung
+leaves the zone on none of the ladder's seeds in any scenario. Where the plant's
+reset depends on the setpoint, each candidate's episodes start on it, and so do the
+kept one's from then on. On ``first_order`` the band is the tracking term's own:
+with ``e_tol`` 0.5 around a target pinned at 1.0, it charges x outside 0.5 to 1.5
+and nothing else is charged.
 """
 
 import importlib.util
@@ -205,6 +214,67 @@ def test_a_zone_loop_holds_two_sigma_inside_its_cheap_edge(ladder):
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
 
 
+#: ``first_order`` scored with a priced band: the target pinned at 1.0, the tracking
+#: term free within 0.5 of it, the episode starting on the target.
+BAND = {"target_x_range": (1.0, 1.0), "e_tol": 0.5, "start_on_target": 1.0}
+
+
+class Constant:
+    """A policy holding one raw action on every episode."""
+
+    name, oracle = "constant", False
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t):
+        import numpy as np
+
+        return np.full((len(obs), 1), self.raw), carry
+
+
+@pytest.mark.parametrize(
+    "raw, leaving",
+    # The datasheet's gain is 2 per raw action: 0.5 rests x on 1.0, inside the band
+    # on every seed; 0.9 takes it to 1.8, outside on every seed.
+    [(0.5, 0), (0.9, 10)],
+)
+def test_a_seed_leaves_a_zone_when_its_exit_term_is_charged(ladder, raw, leaving):
+    import dataclasses
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    left = ladder.zone_exits("first_order", row, Constant(raw), ("tracking",))
+    assert left == leaving
+
+
+def test_a_zone_priced_on_exit_holds_the_first_grid_point_that_never_leaves(ladder):
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    row = dataclasses.replace(base, loops=(x,), balance=None, score=BAND)
+    rungs = ladder.build("first_order", row)
+    _, setpoint = row.placed["x on u"]
+    scan = row.scans["x on u"]
+    grid = zone_grid(0.5, 1.5, "high")
+    # The candidates run from the cheap edge, in order, and stop at the kept one.
+    assert list(scan) == pytest.approx(grid[: len(scan)])
+    assert setpoint == pytest.approx(grid[len(scan) - 1])
+    assert all(n > 0 for n in list(scan.values())[:-1])
+    # Kept: the pi rung is never charged for leaving. The band's term is the only
+    # cost of this plant short of a trip, so every seed costs nothing.
+    kept = ladder.run_rung("first_order", row, "pi", rungs["pi"])
+    assert kept["trips"] == 0
+    assert kept["costs"] == pytest.approx([0.0] * 10, abs=0.0)
+
+
 def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):
     # A row may quiet its bump tests (here, no sensor noise). The zone's spread is
     # still the normal day's, so it matches the spread of a row whose tests are
@@ -293,9 +363,16 @@ def test_a_zones_sigma_is_the_spread_where_its_loop_holds(ladder):
     # loop holds, so it is the spread at the placed setpoint, not at the centre: on
     # pH, the pi rung's discharge spread at its setpoint matches the sigma it was
     # placed with (20 %: ten seeds). Stage 1 follows the discharge's setpoint.
+    # pH's own row is placed by the exit rule now; here its discharge loop is put
+    # back on the 2 sigma rule, which other zones keep.
+    import dataclasses
+
     import numpy as np
 
     row = ladder.ROWS["ph_neutralization"]()
+    stage_1, discharge = row.loops
+    two_sigma = dataclasses.replace(discharge, exit_terms=(), established=None)
+    row.loops = (stage_1, two_sigma)
     rungs = ladder.build("ph_neutralization", row)
     sigma, setpoint = row.placed["pH on trim"]
     held = ladder.cv_traces("ph_neutralization", row, rungs["pi"], 1)

@@ -21,11 +21,19 @@ from target_gym.identification import simc
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 __all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
+__all__ += ["ZONE_GRID_STEPS", "first_without_exit", "zone_grid"]
 
 #: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
 #: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
 #: room is seen.
 K_BACKOFF = 2.0
+
+#: Charter J1 (owner, 2026-11-23), for a zone whose exit the score prices as a
+#: violation: the candidate setpoints are the cheap edge and this many equal steps to
+#: the centre. Ten, a tenth of the half-width each: set from the zone alone, before
+#: any room is seen, and no finer, since ten seeds cannot tell closer neighbours
+#: apart.
+ZONE_GRID_STEPS = 10
 
 
 def null_verdict(reference, nulls: dict) -> dict:
@@ -66,6 +74,36 @@ def zone_setpoint(low: float, high: float, sigma: float, cheap, k: float = K_BAC
     if bounded and (point - centre) * inward > 0:
         point = centre
     return float(point)
+
+
+def zone_grid(low: float, high: float, cheap, steps: int = ZONE_GRID_STEPS) -> tuple:
+    """The candidate setpoints on the zone ``[low, high]``: from the ``cheap`` edge
+    (``"low"`` or ``"high"``) to the centre in ``steps`` equal steps, the edge first
+    and the centre last. A zone with no cheap side holds its centre and has nothing to
+    place; one with an infinite edge has no centre to stop at."""
+    if cheap is None:
+        raise ValueError("a zone with no cheap side holds its centre: no grid")
+    if not (np.isfinite(low) and np.isfinite(high)):
+        raise ValueError("a zone with an infinite edge has no centre")
+    edge = {"low": low, "high": high}[cheap]
+    centre = 0.5 * (low + high)
+    return tuple(float(edge + (centre - edge) * i / steps) for i in range(steps + 1))
+
+
+def first_without_exit(grid, exits_at: Callable) -> tuple:
+    """Charter J1 on a zone priced as a violation: the first setpoint of ``grid``,
+    which runs from the cheap edge, at which the reference leaves the zone on none of
+    its seeds, as ``best_rung`` keeps a rung that trips none. ``exits_at(setpoint)``
+    is the number of seeds that leave there; candidates past the kept one are not
+    run. Returns ``(setpoint, scan)``, ``scan`` the exits at each candidate run. When
+    every candidate leaves, the last one (the centre) is kept, and ``scan`` shows
+    its exits."""
+    scan = {}
+    for point in grid:
+        scan[point] = int(exits_at(point))
+        if scan[point] == 0:
+            break
+    return float(point), scan
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:

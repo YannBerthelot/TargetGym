@@ -17,6 +17,14 @@ deviation is the controlled variable's, with the pi rung holding it on the bump-
 seeds in the scored normal day, over the second half of each episode: first at the
 zone's centre, then at each placed setpoint until the setpoint stops moving, since on
 a nonlinear plant the spread depends on where the loop holds.
+A zone whose exit the score prices as a violation is placed otherwise (J1, owner,
+2026-11-23): its loop names the reward terms charged for leaving (``Cv.exit_terms``)
+and holds the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which
+the pi rung leaves the zone on none of the seeds in any scenario (``zone_exits``,
+``ladder.first_without_exit``), as the ladder keeps a rung that trips none. Where the
+plant's reset depends on the setpoint (``Cv.established``), each candidate's episodes
+start on it, the pi rung's bias is the rest there, and the kept one's overrides join
+``Row.score``, so every later run starts on it too.
 Bumps are read against the same seed's unstepped run (``Plant(paired=True)``), so a
 slow walk or drift the two runs share leaves the response.
 
@@ -58,9 +66,11 @@ from target_gym.experts.ladder import (  # noqa: E402
     best_rung,
     cv_sigma,
     decoupler,
+    first_without_exit,
     ladder_controller,
     most_sensitive,
     null_verdict,
+    zone_grid,
     zone_setpoint,
 )
 from target_gym.experts.pid import Controller  # noqa: E402
@@ -86,7 +96,11 @@ class Cv:
     ``window`` size its bump test, on the reading named ``inst``. ``valve`` says the
     MV has a valve's dead band. ``room`` replaces the plant's own limit. ``zone`` is
     ``(low, high, cheap)`` for a loop kept inside a zone: ``target`` is then unused,
-    and the loop holds the setpoint the module docstring describes."""
+    and the loop holds the setpoint the module docstring describes. ``exit_terms``
+    names the reward terms the score charges for leaving the zone: with any, the
+    setpoint is the first of the zone's grid that never leaves, not 2 sigma.
+    ``established(setpoint)`` gives the scored parameters that start an episode on
+    that setpoint, for a plant whose reset depends on it."""
 
     name: str
     mv: int
@@ -99,6 +113,8 @@ class Cv:
     valve: bool = True
     room: float | None = None
     zone: tuple | None = None
+    exit_terms: tuple = ()
+    established: object = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -147,7 +163,9 @@ class Row:
     ``balance`` is rung 2's bias, None without one. ``why`` gives the reason for each
     rung left out, and ``points`` for a task with one operating point. ``rest_at``
     gives the rest at a point's parameters where ``rest`` can't read it. ``build``
-    fills ``placed``: each zone loop's measured deviation and setpoint."""
+    fills ``placed``: each zone loop's measured deviation (None under the exit rule)
+    and setpoint; and ``scans``: under the exit rule, the seeds that left at each
+    candidate it ran."""
 
     steps: int
     rest: object
@@ -165,6 +183,7 @@ class Row:
     published: object = None
     why: dict = dataclasses.field(default_factory=dict)
     placed: dict = dataclasses.field(default_factory=dict)
+    scans: dict = dataclasses.field(default_factory=dict)
 
 
 def corners(**ranges) -> tuple:
@@ -343,6 +362,14 @@ def build(name: str, row: Row, spec=None) -> dict:
     const = np.median(plant.u0, axis=0)
     flat = lambda o, xp: xp.asarray(const, dtype=xp.float32)  # noqa: E731
 
+    def bias_at(extra):
+        """The pi rung's bias where an episode starts with ``extra``: the rest
+        there, as ``flat`` is the rest at the base point."""
+        if not extra:
+            return flat
+        there = np.median(plant_at(params_at(extra)).u0, axis=0)
+        return lambda o, xp: xp.asarray(there, dtype=xp.float32)
+
     def read(o, xp):
         return xp.stack([c.read(o, xp) for c in row.loops])
 
@@ -356,8 +383,45 @@ def build(name: str, row: Row, spec=None) -> dict:
         for i in zoned:
             low, high, _ = row.loops[i].zone
             centres[i] = _constant(0.5 * (low + high))
+        started = {}
         for i in zoned:
             c = row.loops[i]
+            if c.exit_terms:
+                # J1 on a zone priced as a violation: from the cheap edge, the first
+                # candidate at which the pi rung leaves the zone on no seed. The
+                # row's other loops follow each candidate (``row.placed``), and its
+                # episodes start on it, the bias at the rest there.
+                at = list(centres)
+
+                def exits_at(point, c=c, i=i, at=at):
+                    row.placed[c.name] = (None, point)
+                    at[i] = _constant(point)
+                    extra = {
+                        **started,
+                        **(c.established(point) if c.established else {}),
+                    }
+                    probe = ladder_controller(
+                        Rung("pi", tuple(pis), mix),
+                        read,
+                        stacked(at),
+                        bias_at(extra),
+                        dt,
+                    )
+                    left = zone_exits(
+                        name, row, Reference("pi", probe), c.exit_terms, spec, extra
+                    )
+                    print(f"    {c.name}: setpoint {point:.4g}, {left} seeds leave")
+                    return left
+
+                setpoint, row.scans[c.name] = first_without_exit(
+                    zone_grid(*c.zone), exits_at
+                )
+                row.placed[c.name] = (None, setpoint)
+                if c.established:
+                    started.update(c.established(setpoint))
+                print(f"    {c.name}: kept setpoint {setpoint:.4g}", flush=True)
+                centres[i] = targets[i] = _constant(setpoint)
+                continue
             setpoint, at = None, list(centres)
             # The spread is the controlled variable's where its loop holds, which on
             # a nonlinear plant moves with the setpoint: start at the centre, then
@@ -381,6 +445,11 @@ def build(name: str, row: Row, spec=None) -> dict:
             else:
                 print(f"    {c.name}: placement still moving after {PLACE_ROUNDS}")
             targets[i] = _constant(setpoint)
+        if started:
+            # Established there from now on: every later run starts on the kept
+            # setpoints, and the rungs act around the rest there.
+            row.score = {**row.score, **started}
+            flat = bias_at(started)
     target = stacked(targets)
 
     def make(rung, bias):
@@ -576,23 +645,47 @@ def run_rung(name, row, label, controller, spec=None) -> dict:
     return run_suite(name, row, Reference(label, controller), spec)
 
 
+def _suite_episodes(name, row, policy, spec, seeds=None, extra=None):
+    """``(scenario, episodes)`` of ``policy`` over the suite at the row's scored
+    parameters, then ``extra``."""
+    env = spec.make_env()
+    for s in scenarios.suite(spec):
+        own = seeds.get(s.name, SEEDS) if isinstance(seeds, dict) else seeds
+        own = tuple(own or SEEDS)
+        params = scenarios.params_for(
+            spec, s, **{"sensor_noise_scale": NOISE, **row.score, **(extra or {})}
+        )
+        task = task_info(name, env, params, len(own))
+        if hasattr(policy, "bind"):  # a null that reads each episode's reset
+            policy.bind(env, params, own)
+        yield s.name, episodes_of(run_policy(policy, env, params, task, seeds=own))
+
+
+def zone_exits(name, row, policy, terms, spec=None, extra=None) -> int:
+    """The ladder's seeds on which ``policy`` leaves a zone, in any scenario: a step
+    charged one of the reward ``terms`` the score prices the exit with, or a trip.
+    ``extra`` joins the row's scored parameters."""
+    spec = spec or REGISTRY[name]
+    left = np.zeros(len(SEEDS), bool)
+    for _, episodes in _suite_episodes(name, row, policy, spec, None, extra):
+        for k, e in enumerate(episodes):
+            unknown = sorted(set(terms) - set(e.terms))
+            if unknown:
+                raise KeyError(f"{name}: no reward term {unknown}")
+            charged = any(bool(np.any(e.terms[t] > 0.0)) for t in terms)
+            left[k] |= charged or bool(np.any(e.failed))
+    return int(left.sum())
+
+
 def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     """``run_rung`` for any ``benchmark.Policy``. ``seeds`` replaces the ladder's,
     as one tuple or ``{scenario: seeds}``; with counts that differ by scenario,
     ``costs`` (per seed across scenarios) is None and ``trips`` the scenarios' sum."""
     spec = spec or REGISTRY[name]
-    env = spec.make_env()
     weights = scenarios.weights(spec)
     per = {}
-    for s in scenarios.suite(spec):
-        own = seeds.get(s.name, SEEDS) if isinstance(seeds, dict) else seeds
-        own = tuple(own or SEEDS)
-        params = scenarios.params_for(spec, s, sensor_noise_scale=NOISE, **row.score)
-        task = task_info(name, env, params, len(own))
-        if hasattr(policy, "bind"):  # a null that reads each episode's reset
-            policy.bind(env, params, own)
-        episodes = episodes_of(run_policy(policy, env, params, task, seeds=own))
-        per[s.name] = (
+    for scenario, episodes in _suite_episodes(name, row, policy, spec, seeds):
+        per[scenario] = (
             np.array([float(e.cost.mean()) for e in episodes]),
             np.array([bool(np.any(e.failed)) for e in episodes]),
         )
@@ -625,6 +718,8 @@ def climb(name: str, nulls: bool = False) -> dict:
     kept = best_rung({k: results[k] for k in order})
     print(f"  kept: {kept}", flush=True)
     placed = {k: {"sigma": v[0], "setpoint": v[1]} for k, v in row.placed.items()}
+    for k, scan in row.scans.items():  # the exit rule's candidates, as run
+        placed[k]["exits"] = {f"{point:.6g}": n for point, n in scan.items()}
     out = {"rungs": results, "kept": kept, "left_out": row.why, "placed": placed}
     if nulls and kept:
         out["nulls"] = check_nulls(name, row, results[kept])
