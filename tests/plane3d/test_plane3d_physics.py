@@ -287,3 +287,81 @@ def test_the_3d_airframe_is_the_2d_one():
         and getattr(two, name) != getattr(three, name)
     }
     assert not differ, differ
+
+
+# -- The fuel law (owner, 2026-11-24: the 3D A320 takes it, the Hornet does not) ---
+#
+# Contract: the A320 is one aircraft across tasks, so the 3D one burns by the 2D
+# one's law (``plane.dynamics.fuel_flow``, Mattingly's for high-bypass turbofans
+# as Roux and Scholz adjusted it [HAMMAMI eq. 2.2]): fuel per newton of thrust is
+# ``fuel_speed_slope V + fuel_static sqrt(T / T0)``. The Hornet, on the same 3D
+# plant, keeps its constant dry figure, 0.81 lb/(lbf h) [F404].
+#
+# Hand-derived: at 5 000 m the standard air is 288.15 - 0.0065 x 5 000 = 255.65 K,
+# sqrt(255.65 / 288.15) = 0.94192. At 150 m/s the A320 burns 3.38e-8 x 150 +
+# 1.04e-5 x 0.94192 = 5.070e-6 + 9.796e-6 = 1.4866e-5 kg/(N s), so 40 kN of thrust
+# cost 0.59464 kg/s; at 250 m/s, 8.450e-6 + 9.796e-6 = 1.8246e-5, 0.72984 kg/s. The
+# Hornet's 0.81 lb/(lbf h) is 0.81 x 0.45359 / (4.44822 x 3600) = 2.2943e-5
+# kg/(N s), so 0.91773 kg/s for 40 kN at any speed and level.
+
+
+@pytest.mark.parametrize("speed, kg_per_s", ((150.0, 0.59464), (250.0, 0.72984)))
+def test_the_3d_a320_burns_by_the_2d_aircrafts_fuel_law(speed, kg_per_s):
+    from target_gym.plane.dynamics import fuel_flow
+    from target_gym.plane.env import PlaneParams
+    from target_gym.plane3d.env import fuel_flow_3d
+
+    burned = float(fuel_flow_3d(40_000.0, speed, 5_000.0, PlaneParams3D()))
+    assert burned == pytest.approx(kg_per_s, rel=1e-3)
+    two = float(fuel_flow(40_000.0, speed, 5_000.0, PlaneParams()))
+    assert burned == pytest.approx(two, rel=1e-6)
+
+
+@pytest.mark.parametrize("speed, z", ((150.0, 5_000.0), (250.0, 9_000.0)))
+def test_the_hornet_keeps_its_constant_fuel_figure(speed, z):
+    from target_gym.patrol.env import PatrolParams
+    from target_gym.plane3d.env import fuel_flow_3d
+
+    burned = float(fuel_flow_3d(40_000.0, speed, z, PatrolParams()))
+    assert burned == pytest.approx(0.91773, rel=1e-3)
+
+
+def test_wake_surfs_a320_burns_by_the_law_too():
+    """``wake_surf`` flies an A320 on the patrol's plant: the same aircraft."""
+    from target_gym.patrol.env import WakeSurfParams
+    from target_gym.plane3d.env import fuel_flow_3d
+
+    burned = float(fuel_flow_3d(40_000.0, 150.0, 5_000.0, WakeSurfParams()))
+    assert burned == pytest.approx(0.59464, rel=1e-3)
+
+
+def test_a_step_of_level_flight_burns_what_the_law_gives():
+    """Established in trim at 5 000 m, the heading task's aircraft burns in one
+    second what the law gives for its trim thrust and airspeed, within 2 %
+    (the engine and the speed move a little inside the step)."""
+    import target_gym as tg
+    from target_gym.plane import dynamics as D
+
+    env, params = tg.make("plane3d_heading")
+    params = params.replace(
+        turbulence_sigma=0.0,
+        sensor_noise_scale=0.0,
+        target_altitude_range=(5_000.0, 5_000.0),
+        target_heading_range=(0.0, 0.0),
+    )
+    key = jax.random.PRNGKey(5)
+    obs, state = env.reset_env(key, params)
+    _, after, *_ = env.step_env(key, state, env.trim_action(state, params), params)
+    speed = float(obs[env.obs_index["airspeed"]])
+    thrust = float(
+        D.compute_thrust_output(
+            power=state.power,
+            thrust_output_at_sea_level=params.thrust_output_at_sea_level,
+            rho=D.compute_air_density_from_altitude(state.z),
+            M=speed / D.compute_speed_of_sound_from_altitude(state.z),
+        )
+    )
+    per_newton = 3.38e-8 * speed + 1.04e-5 * 0.94192
+    assert float(state.fuel - after.fuel) == pytest.approx(
+        per_newton * thrust, rel=0.02
+    )

@@ -6,12 +6,16 @@ Contract, from src/target_gym/plane3d/REALITY.md:
 - Cost. Time in the hold is ATC's, so what the crew pays is fuel: green dot is
   "computed to minimize drag and thus, the fuel consumption (for example during
   the HOLD phase)" [SF24]. The task's ``economy`` term is the fuel burned, in kg
-  per second; its other terms are the bands of Amendments 2 to 4, unchanged.
+  per second, by the A320's fuel law (``plane.dynamics.fuel_flow``; owner,
+  2026-11-24); its other terms are the bands of Amendments 2 to 4, unchanged.
 - Assigned speed. Green dot, "an estimate of the speed for best lift-to-drag
   ratio" and "the recommended speed ... for a holding in clean configuration",
   computed from "the aircraft weight ... and the pressure altitude" [SF24]. On
-  this plant: the speed of least thrust in level flight at the aircraft's mass,
-  never above the maximum holding airspeed.
+  this plant: the speed of least thrust, so of least drag, in level flight at
+  the aircraft's mass, never above the maximum holding airspeed. Since the fuel
+  law, consumption per newton rises with speed, so the least-fuel speed is
+  under green dot; the reference stays at green dot, as the aircraft holds,
+  and the speed is the agent's (owner, 2026-11-24).
 - Speed limit. A maximum, 230 KIAS from 6 001 to 14 000 ft and 265 KIAS above
   [AIM538, IFH ch. 10], so priced on that side only: past it, the squared excess
   in 10 kt widths per second (the width of AIM 4-4-12's tolerance, as before).
@@ -95,14 +99,34 @@ def _level_thrust(cas, z, mass):
     # the 265 KIAS limit, and the light aircraft under the 230 KIAS one.
     ((60_000.0, 3700.0), (60_000.0, 6500.0), (73_500.0, 6500.0), (78_000.0, 6500.0)),
 )
-def test_the_assigned_speed_is_the_plants_least_fuel_speed(mass, level):
-    """Green dot minimises drag, hence fuel, in the hold [SF24]: level flight
-    10 kt faster or 10 kt slower than the assigned speed needs more thrust."""
+def test_the_assigned_speed_is_the_plants_least_drag_speed(mass, level):
+    """Green dot is the best lift-to-drag speed [SF24]: level flight 10 kt
+    faster or 10 kt slower than the assigned speed needs more thrust."""
     env, params, _, state = _hold(level, mass)
     cas = float(env.assigned_cas(state, params))
     at = float(_level_thrust(cas, level, mass))
     assert at < float(_level_thrust(cas + 10.0 * KT, level, mass))
     assert at < float(_level_thrust(cas - 10.0 * KT, level, mass))
+
+
+@pytest.mark.parametrize("mass, level", ((60_000.0, 6500.0), (73_500.0, 6500.0)))
+def test_least_fuel_is_under_green_dot_once_consumption_rises_with_speed(mass, level):
+    """At the least-drag speed the thrust is flat in speed, and the A320's
+    consumption per newton rises with speed, so level flight 10 kt under green
+    dot burns less fuel for a little more thrust. That speed is the agent's to
+    find: the reference holds at green dot, as the aircraft does [SF24]."""
+    env, params, _, state = _hold(level, mass)
+    cas = float(env.assigned_cas(state, params))
+
+    def burned(speed):
+        thrust = _level_thrust(speed, level, mass)
+        tas = D.scheduled_airspeed(level, speed, 0.99)
+        return float(D.fuel_flow(thrust, tas, level, params))
+
+    assert burned(cas - 10.0 * KT) < burned(cas)
+    assert float(_level_thrust(cas - 10.0 * KT, level, mass)) > float(
+        _level_thrust(cas, level, mass)
+    )
 
 
 @pytest.mark.parametrize("mass", (73_500.0, 78_000.0))

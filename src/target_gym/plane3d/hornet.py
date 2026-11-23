@@ -192,6 +192,9 @@ def airframe():
         moment_arm_aileron=AILERON_ARM,
         thrust_output_at_sea_level=THRUST_SEA_LEVEL,
         specific_fuel_consumption=SFC,
+        # No fuel law of its own: the constant dry figure [F404].
+        fuel_static=0.0,
+        fuel_speed_slope=0.0,
         power_response_rate=POWER_RESPONSE_RATE,
         load_factor_max=LOAD_FACTOR_MAX,
         load_factor_min=LOAD_FACTOR_MIN,
