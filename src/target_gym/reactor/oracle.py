@@ -73,6 +73,7 @@ from target_gym.reactor.oracle_model import (
     Day,
 )
 from target_gym.reward import trip_cost
+from target_gym.utils import stationary_innovation
 
 #: How far a plan looks, and how far past a window's cut it is charged.
 LOOK_HOURS, TAIL_HOURS = 24.0, 3.0
@@ -371,8 +372,11 @@ def wobble_path(key, physics_time, wobble, n: int, theta, sigma, dt):
         lambda i: jax.random.normal(jax.random.fold_in(key, i), dtype=jnp.float32)
     )(at)
 
+    decay = 1.0 - theta * dt
+    innovation = stationary_innovation(sigma / jnp.sqrt(2.0 * theta), decay)
+
     def one(w, z):
-        w = w - theta * w * dt + sigma * jnp.sqrt(dt) * z
+        w = decay * w + innovation * z
         return w, w
 
     return jax.lax.scan(one, wobble, noise)[1]
