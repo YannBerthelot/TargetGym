@@ -150,7 +150,9 @@ def make_oracle(name: str, params=None):
     if not spec.has_mpc:
         raise NotImplementedError(spec.baselines_note or f"{name} ships no oracle")
     params = spec.make_test_params() if params is None else params
-    oracle = spec.make_mpc(spec.make_env(), mpc.plan_params(spec, params))
+    oracle = spec.make_mpc(
+        spec.make_env(), mpc.plan_params(spec, params), disturbances=params
+    )
     oracle.reset()
     return oracle
 
