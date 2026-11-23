@@ -1,6 +1,7 @@
 # Building heating with a TABS slab: model, sources, limits and deviations
 
-Version 5, rebuilt on 2026-11-08 under charter Amendments 1 to 3. The plant
+Version 6: the plant rebuilt as version 5 on 2026-11-08 under charter
+Amendments 1 to 3, with the stream of 2026-11-11 (section 5). The plant
 record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source numbers
 [1] to [21] are REALITY.md's. Under Amendment 3 the task represents the
 family of slab-heated offices, not one building: numbers outside the record
@@ -164,8 +165,10 @@ nearer its middle earns nothing (rule 15; [20]'s loss inside 21 to 26 C is
 small and is not counted). The floor of the score, in closed form: a room held
 in the band costs only its electricity.
 
-**The reference measured per scenario** (the heating curve, seeds 100 to 109,
-sensor noise on), euros per fortnight:
+**The published heating curve measured per scenario** (`experts.py`, seeds 100
+to 109, sensor noise on), euros per fortnight. It is the ladder's `published`
+rung; the ladder keeps its cascade rung as the reference (charter J1), which
+costs less on every scenario and pays no lost work:
 
 | Scenario | Electricity | Lost work | Occupied mean room |
 |---|---|---|---|
@@ -216,6 +219,18 @@ scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
   forecasts carry their own error, not modelled.
 - The 5R1C "medium" mass is kept beside the slab, which a TABS building would
   count in its class.
+- No heat-source capacity. The slab's heat is limited only by the 49 C supply,
+  which allows 39 kW into a zone whose design load is 4.9 kW. Muenster's heat
+  pumps give 530 kW for 14 000 m^2 [13], 38 W/m^2, which is 5.7 kW here.
+  Measured on seeds 100 to 109 (2026-11-23): the ladder's cascade peaks at 13
+  to 22 kW and runs above 5.7 kW for 30 h of a normal fortnight and 94 h of a
+  cold snap; the ceiling's plan peaks at 6 to 10 kW, above 5.7 kW for 107 h of
+  a cold snap. Nothing keeps the task from using it: the source's size is an
+  open plant decision.
+- The COP below W35. The ceiling's plan heats with supply water at 24 to 31 C
+  and the cascade mostly below 35 C, under the lowest datasheet point read
+  (W35, [18]). Their COPs there, 5.3 to 6.5 over a fortnight, are the fixed
+  Carnot share carried down, ours.
 
 ## 8. What the reference ladder's row needs
 
@@ -233,8 +248,10 @@ scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
 
 ## 9. What the oracle needs
 
-- `oracle.py` is ported to v5 (COP, tariff, occupied hinges at the work-loss
-  price) and builds; it has not run.
+- `oracle.py` plans the v5 score (COP, tariff, occupied hinges at the
+  work-loss price). Its ceiling was first recorded on 2026-11-08
+  (`data/oracle_ceilings/hvac.json`): one plan over the episode, with the
+  episode's own weather.
 - Its horizon must reach across a night to the next occupied day, at least 24
   h (96 steps), for night charging to show; the slab's time constant (150 min
   for its flux) sets how far ahead a supply move pays.
