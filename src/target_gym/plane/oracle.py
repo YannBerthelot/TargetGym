@@ -36,6 +36,7 @@ from target_gym.plane.dynamics import (
     airspeed_scaler,
     compute_air_density_from_altitude,
     compute_thrust_output,
+    fuel_flow,
     pitch_inertia,
     scheduled_airspeed,
     total_wind_2d,
@@ -103,11 +104,12 @@ def plane_step(p, x, u, t, gust, method, widths, deltas=om.NO_DELTA):
             p.surface_rate_limit, w.surface_rate, deltas.surface_rate,
         )  # fmt: skip
         power = om.engine(lever, power, dt, p, height)
+        sound = om.sound_speed(height, w, deltas)
         thrust = compute_thrust_output(
             power=power,
             thrust_output_at_sea_level=p.thrust_output_at_sea_level,
             rho=rho,
-            M=air_speed / om.sound_speed(height, w, deltas),
+            M=air_speed / sound,
         )
         velocities, positions, metrics = integrate_dynamics(
             velocities=velocities,
@@ -125,7 +127,7 @@ def plane_step(p, x, u, t, gust, method, widths, deltas=om.NO_DELTA):
             ),
             method=method,
         )
-        burned = burned + p.specific_fuel_consumption * 1e-3 * thrust * dt
+        burned = burned + fuel_flow(thrust, air_speed, height, p, sound=sound) * dt
         lift, mach, peak, pitch_accel, alpha = jax.tree_util.tree_map(
             lambda m: m[-1], metrics
         )

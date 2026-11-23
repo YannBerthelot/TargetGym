@@ -432,9 +432,6 @@ def aero_coefficients(aoa_deg, mach, params):
     # lift slope the negative branch runs away without this clamp.
     CL = jnp.clip(CL, params.CL_min, params.CL_max)
 
-    # --- Drag coefficient ---
-    CD = params.cd0 + params.k * CL**2
-
     # --- Mach corrections ---
     # The swept wing's own growth of lift slope with Mach (``compressibility``),
     # not Prandtl-Glauert's 1/beta, which is a 2D section's and overstated the
@@ -472,6 +469,13 @@ def aero_coefficients(aoa_deg, mach, params):
     )
     CL = jnp.clip(CL, cl_floor, cl_cap)
 
+    # --- Drag coefficient ---
+    # Induced drag follows the lift the wing makes, so it is worked out on the
+    # lift after the Mach corrections. It used to be worked out before them,
+    # which left it at 1 / growth^2 of its value, 58 % at M 0.77, and the
+    # airframe with a lift over drag of 18.5 in cruise where its own polar
+    # says 16.67 at best (PHYSICS.md 4; [SF21] for the thrust margin it gave).
+    CD = params.cd0 + params.k * CL**2
     drag_rise = jnp.where(
         mach > params.M_crit, params.k_drag * (mach - params.M_crit) ** 2, 0.0
     )
@@ -584,6 +588,26 @@ def pitch_demand_bounds(gamma_air, air_speed, z, mass, params, load_reference=1.
     return gamma_air + incidence(cl_lo), gamma_air + incidence(cl_hi)
 
 
+def fuel_flow(thrust, air_speed, z, params, xp=jnp, sound=None):
+    """The fuel the engines burn, kg/s, making ``thrust`` (N) at true airspeed
+    ``air_speed`` (m/s) and height ``z`` (m). ``sound`` is the speed of sound
+    there, for a caller that has its own (the oracle's smoothed one).
+
+    Fuel per unit of thrust is ``fuel_speed_slope V + fuel_static sqrt(T / T0)``:
+    Mattingly's law for high-bypass turbofans, ``(a + b M) sqrt(theta)``, in the
+    SI form Roux and Scholz adjusted it to [HAMMAMI eq. 2.1 and 2.2]. It rises
+    with speed and falls with the air's temperature, where a constant figure
+    put the max-range Mach above the cruise Mach at every weight.
+    """
+    if sound is None:
+        sound = compute_speed_of_sound_from_altitude(z)
+    theta = sound**2 / (1.4 * 287.0 * 288.15)
+    per_thrust = params.fuel_speed_slope * air_speed + params.fuel_static * xp.sqrt(
+        theta
+    )
+    return per_thrust * thrust
+
+
 def economy_cost(power, z, tas, target_tas, params, xp=jnp):
     """What the operator pays per second inside the bands, in reference-cruise
     seconds: fuel plus time, by the cost index, per air distance flown.
@@ -598,7 +622,7 @@ def economy_cost(power, z, tas, target_tas, params, xp=jnp):
     rho = compute_air_density_from_altitude(z)
     mach = tas / compute_speed_of_sound_from_altitude(z)
     thrust = compute_thrust_output(power, params.thrust_output_at_sea_level, mach, rho)
-    flow = params.specific_fuel_consumption * 1e-3 * thrust
+    flow = fuel_flow(thrust, tas, z, params, xp)
     per_second = (flow + params.cost_index / 60.0) * target_tas / xp.maximum(tas, 1.0)
     return params.economy_weight * per_second / params.economy_scale
 

@@ -104,8 +104,8 @@ def section(aoa_deg, mach, p, w, d):
     lift = p.cl0 + p.cl_alpha * aoa_deg
     lift = lift * jax.nn.sigmoid(-(aoa_deg - centre) * sharp)
     lift = softplus_clip(lift, p.CL_min, p.CL_max, w.cl_stall) + d.cl_stall
-    drag = p.cd0 + p.k * lift**2
     lift = lift * compressibility(mach, p.aspect_ratio, p.sweep_half_chord)
+    drag = p.cd0 + p.k * lift**2
     incidence = soft_abs(aoa_deg, w.separation) + d.separation
     separated = jax.nn.sigmoid((incidence - centre) * sharp)
     rad = jnp.deg2rad(aoa_deg)

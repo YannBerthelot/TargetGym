@@ -30,6 +30,7 @@ from target_gym.plane.dynamics import (
     compute_velocity_from_horizontal_and_vertical_speed,
     economy_cost,
     engine_response_rate,
+    fuel_flow,
     in_zone,
     protected_pitch_demand,
     scheduled_airspeed,
@@ -120,14 +121,22 @@ class PlaneState(EnvState):
 class PlaneParams(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 73_500.0
-    thrust_output_at_sea_level: float = 240_000.0
+    #: Two IAE V2527E-A5, the A320-233's engines [EASA.A.064], 11 031 daN each
+    #: at take-off, sea level static [EASA IM.E.069]: the aircraft of the
+    #: published envelope the plant is checked against [SF21 p. 6].
+    thrust_output_at_sea_level: float = 220_620.0
     air_density_at_sea_level: float = 1.225
     frontal_surface: float = 12.6
     wings_surface: float = 122.6
     C_x0: float = 0.095
     C_z0: float = 0.9
     initial_fuel_quantity: float = 23860 / 1.25
-    specific_fuel_consumption: float = 17.5 / 1000
+    #: Fuel per unit of thrust, kg/(N s): ``fuel_speed_slope`` times the true
+    #: airspeed (m/s) plus ``fuel_static`` times sqrt(T / T0), Mattingly's law
+    #: for high-bypass turbofans as Roux and Scholz adjusted it [HAMMAMI
+    #: eq. 2.2] (``plane.dynamics.fuel_flow``). 17.0 mg/(N s) at FL330, M 0.78.
+    fuel_static: float = 1.04e-5
+    fuel_speed_slope: float = 3.38e-8
 
     # The swept wing's lift-curve slope at Mach 0, derived (PHYSICS.md 4):
     # DATCOM's 2 pi A / (2 + sqrt(A^2 (1 + tan^2 L) + 4)) with A = 34.1^2/122.6
@@ -472,7 +481,8 @@ PARAM_UNITS = {
     "C_x0": "-",
     "C_z0": "-",
     "initial_fuel_quantity": "kg",
-    "specific_fuel_consumption": "kg/(kN.s)",
+    "fuel_static": "kg/(N.s)",
+    "fuel_speed_slope": "kg/(N.m)",
     "cl_alpha": "1/deg",
     "cl0": "-",
     "cd0": "-",
@@ -1028,12 +1038,10 @@ def compute_next_state(
             compute_acceleration=accelerate,
             method=integration_method,
         )
-        # Fuel burned over the sub-step. ``specific_fuel_consumption`` is
-        # thrust specific: kg per kilonewton-second, so 17.5/1000 is 1.75e-5
-        # kg/(N s), the right order for a modern high-bypass turbofan. Burn is
-        # charged against the thrust actually produced, which already carries
-        # the altitude lapse and the Mach terms.
-        burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        # Fuel burned over the sub-step, at the thrust actually produced, which
+        # already carries the altitude lapse and the Mach terms, and at the
+        # fuel per thrust of this speed and height (``fuel_flow``).
+        burned = burned + fuel_flow(thrust, air_speed, z, params) * dt
         # Trips read the worst load inside the step, not the one it ends on.
         load = metrics[1][-1] / (mass_now * params.gravity)
         peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
