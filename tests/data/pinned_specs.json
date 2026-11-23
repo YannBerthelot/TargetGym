@@ -449,7 +449,9 @@
     "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [],
+    "disturbance_fields": [
+      "gust_own"
+    ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -488,7 +490,9 @@
     "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
-    "disturbance_fields": [],
+    "disturbance_fields": [
+      "gust_own"
+    ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
