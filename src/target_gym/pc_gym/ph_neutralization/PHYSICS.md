@@ -267,8 +267,9 @@ plan runs to the end of the episode, in moves of 11 steps
 (`data/oracle_horizons/ph_neutralization.json`).
 
 **The ceiling is the perfect hold** (owner, 2026-11-23), not a solve:
-`oracle.perfect_hold(env, params, seed)` holds the discharge exactly on the
-permit's low edge, pH 6.00, through the seed's own episode. At every step its base
+`oracle.perfect_hold(env, params, reset_key, step_keys)` holds the discharge
+exactly on the permit's low edge, pH 6.00, through the episode those keys name
+(a seed's, as `benchmark.episode_keys` draws them; the oracle module draws none). At every step its base
 flow is the steady balance's (`env.steady_base_flow`) for what enters stage 1
 during that step: the influent's flow and acid strength, and the buffer flow the
 step draws. Mixing is linear in the invariants and so is the charge balance at a
