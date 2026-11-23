@@ -979,5 +979,6 @@
  },
  "generated": "2026-11-15",
  "cpu": "scool-bob",
- "stamp": "c05d0a708dadb2ba"
+ "restamped": "from c05d0a708dadb2ba: 2026-11-23, int base.py change (5a8bbc2, dccfb8b); no boiler output changed (control_period 1; reward terms in info only)",
+ "stamp": "f33c353e274eecf1"
 }

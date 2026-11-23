@@ -1,6 +1,6 @@
 {
  "anchor": {
-  "fingerprint": "d06f769cc2bf7a94",
+  "fingerprint": "9cc65e3a72ed39ba",
   "generated": "2026-11-23T17:00:59+00:00",
   "line": {
    "J": 7.936467108549047e-06,
@@ -89,6 +89,7 @@
    },
    "trips": 0
   },
+  "restamped": "from d06f769cc2bf7a94: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
   "seeds": [
    200,
    201,
@@ -103,7 +104,7 @@
   ]
  },
  "ceiling": {
-  "fingerprint": "f0943e1152e4f320",
+  "fingerprint": "8f0561ec7edb450e",
   "generated": "2026-11-15T20:17:10+00:00",
   "line": {
    "J": 1.2838482628365844e-06,
@@ -192,6 +193,7 @@
    },
    "trips": 0
   },
+  "restamped": "from f0943e1152e4f320: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
   "source": "src/target_gym/data/oracle_ceilings/boiler_drum.json"
  },
  "j2": {
@@ -199,7 +201,7 @@
   "broken": {},
   "commit": "03aa6490a39e9164b867bf7933cbeef2ba08b4f3",
   "dirty": true,
-  "fingerprint": "25676d4631f1cedb",
+  "fingerprint": "706a049c0be9c754",
   "generated": "2026-11-23T16:58:25+00:00",
   "noise": 1.0,
   "null_share": {
@@ -232,6 +234,7 @@
    "low_load": 0,
    "normal": 0
   },
+  "restamped": "from 25676d4631f1cedb: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
   "seeds": {
    "feed_pump_trip": [
     1706622111,
@@ -951,7 +954,7 @@
   ]
  },
  "mpc": {
-  "fingerprint": "8ec9d24474a8e3bb",
+  "fingerprint": "049c048fa1a8d586",
   "generated": "2026-11-15T20:16:04+00:00",
   "line": {
    "J": 1.2899740034705956e-06,
@@ -1040,11 +1043,12 @@
    },
    "trips": 0
   },
+  "restamped": "from 8ec9d24474a8e3bb: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
   "source": "episodes from the oracle back-off session (#207), commit 9e46d15, same mpc fingerprint as int c8f0b2d; scripts/reference_ladder protocol"
  },
  "nulls": {
   "broken": {},
-  "fingerprint": "a7c9cead32cc0235",
+  "fingerprint": "c4514d7b2d70d86a",
   "generated": "2026-11-23T16:25:18+00:00",
   "lines": {
    "constant 0.0": {
@@ -1482,10 +1486,11 @@
     },
     "trips": 50
    }
-  }
+  },
+  "restamped": "from a7c9cead32cc0235: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed"
  },
  "reference": {
-  "fingerprint": "262a22feb7290756",
+  "fingerprint": "56e9a62b580aed63",
   "generated": "2026-11-23T16:24:32+00:00",
   "kept": "cascade",
   "kind": "ladder",
@@ -1579,6 +1584,7 @@
    },
    "trips": 0
   },
+  "restamped": "from 262a22feb7290756: 2026-11-23, int's base.py change (5a8bbc2, dccfb8b) moved every env stamp: a reading's interval in control steps, delta_t for the boiler (control_period 1), and reward terms in the step's info, which no score reads; no boiler output changed",
   "rungs": {
    "cascade": {
     "J": 7.302206131555804e-06,
@@ -1601,7 +1607,7 @@
  "task": "boiler_drum",
  "version": {
   "env": "boiler_drum-v6",
-  "stamp": "c05d0a708dadb2ba"
+  "stamp": "f33c353e274eecf1"
  },
  "weights": {
   "feed_pump_trip": 0.0003498163464181305,
