@@ -759,6 +759,26 @@ def noise_terms(name: str, points) -> list:
     return [float(b) for b in np.max(terms, axis=0)]
 
 
+#: A task whose plan rides a trip level exactly, and the module whose
+#: ``ceiling_backoffs`` sizes the plant-precision term: the float32 plant the
+#: score runs ends about 1e-6 m off the float64 plan, so a plan on the level
+#: trips. The receding slot backs off by the same one sigma of the level's
+#: reading as the ceiling.
+PRECISION = {"boiler_drum": "target_gym.boiler_drum.oracle"}
+
+
+def precision_terms(name: str) -> list:
+    """The plant-precision term of each limit, in ``TaskModel.limits`` order."""
+    if name not in PRECISION:
+        return []
+    spec = REGISTRY[name]
+    module = importlib.import_module(PRECISION[name])
+    return [
+        float(b)
+        for b in module.ceiling_backoffs(spec.make_env(), spec.make_test_params())
+    ]
+
+
 def main(tasks) -> None:
     for name in tasks:
         points = probes(name) if name in SITES or name in NOISY else []
@@ -775,12 +795,16 @@ def main(tasks) -> None:
                 if name == "compressor_surge"
                 else {}
             )
-        n = max(len(gaps), len(noise))
+        precision = precision_terms(name)
+        n = max(len(gaps), len(noise), len(precision))
         gaps, noise = gaps or [0.0] * n, noise or [0.0] * n
-        backoffs = [g + b for g, b in zip(gaps, noise)]
+        precision = precision or [0.0] * n
+        backoffs = [g + b + c for g, b, c in zip(gaps, noise, precision)]
         row = {
             "sites": sites, "limit_backoffs": backoffs, "limit_gaps": gaps,
-            "limit_noise": noise, "guards": GUARDS[name], "protocol": PROTOCOL,
+            "limit_noise": noise,
+            **({"limit_precision": precision} if name in PRECISION else {}),
+            "guards": GUARDS[name], "protocol": PROTOCOL,
             **zone,
             "probes": f"the expert's states, training seeds {SEEDS.start} to "
             f"{SEEDS.stop - 1}, every {EVERY}th step" if points else None,
