@@ -24,7 +24,9 @@ Contract:
     reset callout [S21]: $1,600.
 - Observation (rule 16): the controller's readings plus the nacelle
   accelerometer [S3, S5] and the nacelle anemometer [S6]; the rating, a
-  schedule known ahead, is read.
+  schedule known ahead, is read. The anemometer stands at the hub, so it reads
+  the hub's point wind, the mean plus the hub's own turbulence and any gust,
+  not the wind the rotor averages over its disc (owner, 2026-11-23).
 - Episode (rule 17): established above-rated operation, 10 min [S7, S2], at a
   mean wind between 13 and 25 m/s [S2 Table 2], starting at rated speed and
   power with the tower at its static deflection under the rotor's thrust.
@@ -213,7 +215,59 @@ def test_the_observation_carries_the_rating_accelerometer_and_anemometer(env):
     obs = np.asarray(env.get_obs(state, PARAMS))
     assert obs.shape == (7,)
     assert obs[4] == pytest.approx(5.0)
-    assert obs[6] == pytest.approx(float(state.v_wind), rel=1e-6)
+    # The hub's point wind: the mean plus the hub's turbulence (no gust on a
+    # normal day), from the plant's definition of it.
+    assert obs[6] == pytest.approx(float(state.v_mean + state.v_turb), rel=1e-6)
+
+
+def test_the_anemometer_reads_the_hub_not_the_rotor(env):
+    """Through a minute of turbulence the channel follows the hub's point wind
+    step by step, which the rotor's averaged wind does not: at 18 m/s the two
+    differ by about 1 m/s (standard deviation), 0.2 m/s at the very least."""
+    p = PARAMS.replace(v_mean_range=(18.0, 18.0), overspeed_factor=1e9)
+    state = _reset(env, seed=2, params=p)
+    held = env.initial_action(state, p)
+
+    def body(s, k):
+        obs, s1, *_ = env.step_env(k, s, held, p)
+        return s1, (obs[6], s1.v_mean + s1.v_turb, s1.v_wind)
+
+    read, hub, rotor = (
+        np.asarray(x, float)
+        for x in jax.lax.scan(
+            body, state, jax.random.split(jax.random.PRNGKey(2), 240)
+        )[1]
+    )
+    np.testing.assert_allclose(read, hub, rtol=1e-6)
+    assert np.std(read - rotor) > 0.2
+
+
+def test_the_anemometer_sees_the_gust(env):
+    """An extreme operating gust is one coherent rise over the hub and the disc
+    alike [S13]. Its size follows the turbulence (3.3 sigma1 / 1.3), so the gust
+    is the run with it less the same seed's run without: the same wind on the
+    anemometer and on the rotor, 4.4 m/s at its peak at 15 m/s."""
+
+    def run(gust):
+        p = PARAMS.replace(
+            gust=gust,
+            gust_window=(2.0, 2.0),
+            v_mean_range=(15.0, 15.0),
+            overspeed_factor=1e9,
+        )
+        state = _reset(env, params=p)
+        held = env.initial_action(state, p)
+
+        def body(s, k):
+            obs, s1, *_ = env.step_env(k, s, held, p)
+            return s1, (obs[6], s1.v_wind)
+
+        keys = jax.random.split(jax.random.PRNGKey(0), 80)
+        return [np.asarray(x, float) for x in jax.lax.scan(body, state, keys)[1]]
+
+    (read, rotor), (read0, rotor0) = run(1.0), run(0.0)
+    assert np.abs(rotor - rotor0).max() == pytest.approx(4.43, rel=0.02)
+    np.testing.assert_allclose(read - read0, rotor - rotor0, atol=1e-4)
 
 
 def test_the_accelerometer_reads_the_tower_tops_acceleration(env):

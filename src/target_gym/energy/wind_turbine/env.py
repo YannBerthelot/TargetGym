@@ -288,6 +288,9 @@ class WindTurbineState(EnvState):
     #: (``rotor_turbulence``).
     v_lag_fast: float = 0.0
     v_lag_slow: float = 0.0
+    #: The hub's point wind (m/s): the mean, the hub's turbulence and the gust.
+    #: The nacelle anemometer stands there and reads it [S6].
+    v_hub: float = 0.0
     #: 1 once the safety system has fed the blades to feather (a trip).
     feathered: float = 0.0
     #: When this episode's gust and curtailment start, s (-1 for none).
@@ -679,12 +682,10 @@ def compute_next_state(
         state.v_lag_fast, state.v_lag_slow, v_turb, state.v_mean, p
     )
     t_gust = (state.time + 1 - state.gust_c0) * p.delta_t
-    v_wind = jnp.maximum(
-        state.v_mean
-        + v_rotor
-        + gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size),
-        0.1,
-    )  # 0.1 m/s: a numerical floor, never reached
+    gust_now = gust(t_gust, state.v_mean, state.gust_t0, p, state.gust_size)
+    # 0.1 m/s: a numerical floor, never reached
+    v_wind = jnp.maximum(state.v_mean + v_rotor + gust_now, 0.1)
+    v_hub = jnp.maximum(state.v_mean + v_turb + gust_now, 0.1)
 
     rates = (
         _ramp(pitch_cmd, state.pitch, p.pitch_rate_max, p.delta_t),
@@ -733,6 +734,7 @@ def compute_next_state(
             w_induced=new[5],
             a_tower=accel,
             v_wind=v_wind,
+            v_hub=v_hub,
             v_turb=v_turb,
             v_lag_fast=lag_fast,
             v_lag_slow=lag_slow,
@@ -762,7 +764,8 @@ def get_obs(state: WindTurbineState, params: WindTurbineParams):
     The turbine controller's readings: rotor speed, pitch, generator torque and
     power [S1 Sec. 7]; the rating's power, a set point known ahead [S9 Ex. 29];
     the nacelle accelerometer's fore-aft reading, m/s^2 [S3, S5]; the nacelle
-    anemometer, m/s [S6].
+    anemometer, m/s [S6], which stands at the hub and reads the hub's point
+    wind, not the wind the rotor averages over its disc.
     """
     p = params
     return jnp.array(
@@ -773,7 +776,7 @@ def get_obs(state: WindTurbineState, params: WindTurbineParams):
             state.power / 1.0e6,
             state.target_power / 1.0e6,
             state.a_tower,
-            state.v_wind,
+            state.v_hub,
         ]
     )
 

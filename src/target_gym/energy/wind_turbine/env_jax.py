@@ -68,6 +68,7 @@ class WindTurbine(
         "derate_c0",
         "v_lag_fast",
         "v_lag_slow",
+        "v_hub",
     )
     #: Runs as a continuing plant (``target_gym.stream``): its gust and its
     #: curtailment start through ``start_event`` and carry their size, the
@@ -94,7 +95,7 @@ class WindTurbine(
         FieldReading("pitch", sigma=0.2),
         FieldReading("torque", sigma=90.0),
         FieldReading("power", sigma=1e3),
-        FieldReading("v_wind", sigma=0.36),
+        FieldReading("v_hub", sigma=0.36),
     )
 
     def __init__(self, integration_method: str = "rk4_2"):
@@ -229,6 +230,7 @@ class WindTurbine(
             v_turb=v_turb,
             v_lag_fast=lag_fast,
             v_lag_slow=lag_slow,
+            v_hub=jnp.maximum(v_mean + v_turb, 0.1),
             feathered=jnp.zeros_like(x0),
             gust_t0=gust_t0,
             derate_t0=derate_t0,

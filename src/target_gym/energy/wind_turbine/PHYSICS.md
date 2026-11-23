@@ -175,6 +175,9 @@ rated over the six scenarios (seeds 100 to 103), so the edge less 2 sigma is 1.0
 Observation (rule 16): `[omega_rpm, pitch_deg, torque_pct, P_MW, rating_P_MW, a_fa,
 v_nacelle]`: S1's controller readings, the current rating's power [S9 Ex. 29], the
 nacelle accelerometer [S3, S5] (noise not found, none) and the nacelle anemometer [S6].
+The anemometer stands at the hub, so it reads the hub's point wind (`v_hub`: the mean,
+the hub's own turbulence and any gust), not the wind the rotor averages over its disc
+(owner, 2026-11-23). A controller that wants the rotor's wind has to infer it.
 No delays (not found). A curtailment shows in channel 4 when it starts: advance notice
 of a TSO set point is not sourced.
 
@@ -281,6 +284,23 @@ the scenario suite.
 - D7. Cut-out at 25 m/s is not modelled.
 - D8. The sensor sigmas other than the anemometer's are not in REALITY.md.
 - D9. No sensor delays (not found).
+- D12. Rotor speed is free up to the overspeed trip (owner, 2026-11-23). The trip, at
+  about 20 % over rated, is the only speed limit the sources give [S4, S17]. S1's
+  operating range ends at rated speed [S1 Table 1-1] and published runs visit +7 to
+  +16 % only as transients [S26]; what keeps a real rotor near rated (blade and
+  drivetrain loads, tip-speed noise) is not modelled and no source prices it. So a
+  controller may use the rotor as a flywheel, and the ceiling does. Effect on the room,
+  one seed (`normal`, seed 100, on the filtered wind before the converter's limit was
+  in the plant; S1's published controller costs 5.2e-5 a step there):
+
+  | Ceiling's plan | cost a step | room | rotor speed, mean and range |
+  |---|---|---|---|
+  | no limit | 6.6e-6 | 7.8 | 1.10, 0.91 to 1.200 (power 5.43 MW on average) |
+  | power held at the set point | 8.4e-6 | 6.2 | 1.08, 0.91 to 1.195, over 1.10 half the time |
+  | power held, speed planned under 1.05 | 1.17e-5 | 4.4 | 0.99, 0.91 to 1.050 |
+
+  Holding speed under 1.05 would raise the ceiling's cost 1.4 times. One seed; the
+  first row was planned 0.04 % inside the trip level and the others 0.57 %.
 - D11. The converter's limit acts within the step: at a curtailment the generator
   torque falls 10 % in one step, past S1's 15 kN m/s, which is the limit on the
   controller's command (a converter's own loop is far faster: CART's is 500 rad/s
@@ -370,7 +390,7 @@ changes: a scored window is bit-identical to what it was.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 32 |
+| `wind_turbine` | 2400 | 0.25 | 10 min | 2 in [-1, 1] | 7 | 33 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
