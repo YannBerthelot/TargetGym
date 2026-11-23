@@ -20,7 +20,6 @@ from target_gym.plane.dynamics import (
     overspeed,
     read_angles,
     scheduled_airspeed,
-    total_wind_2d,
     trim_level,
 )
 from target_gym.plane.env import (
@@ -35,6 +34,7 @@ from target_gym.plane.env import (
     compute_reward_terms,
     get_obs,
     target_airspeed,
+    wind_on,
 )
 
 # Both panels come from target_gym.render_aircraft, the kit every aircraft
@@ -54,6 +54,24 @@ from target_gym.plane.stream_events import (
     start_zone,
 )
 from target_gym.video import SavesVideo
+
+#: Salt for the wave's draws, apart from every other draw a reset makes.
+_WAVE = 0x57415645
+
+
+def _draw_wave(key, onset_low, onset_high, air_speed, params):
+    """``(start s, end s, downdraft m/s, tailwind m/s)`` of a mountain wave met
+    between ``onset_low`` and ``onset_high``: its sizes drawn over the scenario's
+    ranges, its length ``wave_length`` of track at ``air_speed``."""
+    k_onset, k_draft, k_shear = jax.random.split(key, 3)
+    start = jax.random.uniform(k_onset, minval=onset_low, maxval=onset_high)
+    draft = jax.random.uniform(
+        k_draft, minval=params.wave_draft_range[0], maxval=params.wave_draft_range[1]
+    )
+    shear = jax.random.uniform(
+        k_shear, minval=params.wave_shear_range[0], maxval=params.wave_shear_range[1]
+    )
+    return start, start + params.wave_length / air_speed, draft, shear
 
 
 class Airplane2D(
@@ -78,6 +96,10 @@ class Airplane2D(
         "zone_start",
         "zone_end",
         "zone_sigma",
+        "wave_start",
+        "wave_end",
+        "wave_draft",
+        "wave_shear",
         "m",
         "fuel",
         "cleared_speed",
@@ -93,7 +115,17 @@ class Airplane2D(
     #: size, the sinusoid wraps on whole periods.
     STREAM_READY = True
     #: What a new sortie flies into: the weather carries on (S1b).
-    WEATHER = ("zone_start", "zone_end", "zone_sigma", "gust_x", "gust_z")
+    WEATHER = (
+        "zone_start",
+        "zone_end",
+        "zone_sigma",
+        "gust_x",
+        "gust_z",
+        "wave_start",
+        "wave_end",
+        "wave_draft",
+        "wave_shear",
+    )
 
     registry_name: str = "plane"
 
@@ -307,6 +339,13 @@ class Airplane2D(
             minval=params.zone_duration_range[0],
             maxval=params.zone_duration_range[1],
         )
+        wave_start, wave_end, wave_draft, wave_shear = _draw_wave(
+            jax.random.fold_in(zone_key, _WAVE),
+            params.wave_onset_range[0],
+            params.wave_onset_range[1],
+            air_speed,
+            params,
+        )
 
         state = PlaneState(
             x=0.0,
@@ -332,6 +371,10 @@ class Airplane2D(
             zone_start=zone_start,
             zone_end=zone_start + zone_length,
             zone_sigma=jnp.asarray(params.turbulence_sigma, jnp.float32),
+            wave_start=wave_start,
+            wave_end=wave_end,
+            wave_draft=wave_draft,
+            wave_shear=wave_shear,
             level_change_at=jnp.zeros((), jnp.int32),
         )
 
@@ -355,8 +398,21 @@ class Airplane2D(
         return pick(event_kind(k_kind, params), sortie, zone, task)
 
     def _task_event(self, state: PlaneState, key, params: PlaneParams):
-        """The task's own event in a stream; the altitude hold has none."""
-        return state
+        """The task's own event in a stream: the aircraft meets a mountain wave
+        now, of the scenario's sizes (zero outside the wave scenarios). One
+        still under way is left to finish."""
+        now = state.time * params.delta_t
+        start, end, draft, shear = _draw_wave(
+            key, now, now, airspeed(state, params), params
+        )
+        busy = (now >= state.wave_start) & (now < state.wave_end)
+        # The tailwind a past wave left stays: a new one adds to it.
+        return state.replace(
+            wave_start=jnp.where(busy, state.wave_start, start),
+            wave_end=jnp.where(busy, state.wave_end, end),
+            wave_draft=jnp.where(busy, state.wave_draft, draft),
+            wave_shear=jnp.where(busy, state.wave_shear, shear),
+        )
 
     def restart_plant(self, key, state: PlaneState, params: PlaneParams):
         """After a crash, the sortie's replacement (long-strata R8; owner,
@@ -395,8 +451,8 @@ class Airplane2D(
         state = read_angles(state, params, gamma=gamma)
         obs = get_obs(state, params, xp=jnp)
         if self.observe_wind:
-            # Realized wind = steady mean + altitude shear + current gust.
-            wx, wz = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+            # Realized wind = steady mean + altitude shear + gust + wave.
+            wx, wz = wind_on(state, params)
             obs = jnp.concatenate([obs, jnp.array([wx, wz])])
         return obs
 
