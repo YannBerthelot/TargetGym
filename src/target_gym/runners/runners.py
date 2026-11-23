@@ -167,7 +167,9 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
         # ``spec.noise_fields``, as the batched recorder does.
         from target_gym.experts.mpc import plan_params
 
-        mpc = spec.make_mpc(spec.make_env(), plan_params(spec, params))
+        mpc = spec.make_mpc(
+            spec.make_env(), plan_params(spec, params), disturbances=params
+        )
         mpc.reset()
         return lambda obs, state: np.atleast_1d(mpc.step(obs, state))
 
@@ -210,7 +212,9 @@ def rollout_mpc_batch(spec, params, n_seeds: int):
     from target_gym.experts.mpc import plan_params
 
     env = spec.make_env()
-    planner = _BatchedPlanner(spec.make_mpc(env, plan_params(spec, params)))
+    planner = _BatchedPlanner(
+        spec.make_mpc(env, plan_params(spec, params), disturbances=params)
+    )
     task = task_info(spec.name, env, params, n_seeds)
     out = run_policy(planner, env, params, task, seeds=range(n_seeds))
     return (
@@ -252,7 +256,7 @@ def mpc_policy(spec, env, params) -> Callable | None:
 
     if not spec.has_mpc:
         return None
-    mpc = spec.make_mpc(env, plan_params(spec, params))
+    mpc = spec.make_mpc(env, plan_params(spec, params), disturbances=params)
     mpc.reset()
 
     def policy(obs, state):
