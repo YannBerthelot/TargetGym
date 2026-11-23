@@ -273,6 +273,10 @@ def test_observation_hides_the_thermal_mass(params):
 
 
 def test_action_maps_to_the_heating_range(params):
+    # With a source large enough to follow the valve: since 2026-11-23 the source
+    # has a size, and at +1 the plant's own gives cooler water than the valve asks
+    # (tests/hvac/test_hvac_job.py).
+    params = params.replace(source_capacity=1000.0)
     env = BuildingHVAC()
     _, state = env.reset_env(jax.random.PRNGKey(0), params)
     for raw, expected in ((-1.0, params.T_supply_min), (1.0, params.T_supply_max)):

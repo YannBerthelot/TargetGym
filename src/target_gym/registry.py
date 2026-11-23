@@ -1076,9 +1076,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_reactor_pid_controller", module="target_gym.reactor.experts"
         ),
+        # The oracle plans the whole day on a knot model with the turbine as a
+        # move (reactor/oracle.py), on the shared solver. It reads no data file:
+        # the horizon summary stays as the record of the rods' loop on Tavg, and
+        # naming it keeps the solver's modules in the oracle's fingerprint. The
+        # smoothing widths left with the five-minute oracle it replaced.
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
-        oracle_data=_shared_oracle("reactor"),
+        oracle_data=("data/oracle_horizons/reactor.json",),
         # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=10,
         noise_fields=("demand_sigma",),
@@ -1106,6 +1111,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # and a scenario suite.
         scenarios=_hvac_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Re-stamped in place on 2026-11-23 (v6 is in no release): the heat
+        # source's size, 38 W/m^2 [13], and a reset that meets the band when
+        # the office opens (hvac review; owner's decision).
         version=6,
     ),
     EnvSpec(

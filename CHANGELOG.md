@@ -42,6 +42,58 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
+  the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
+  release shipped, keeps its number). Upgrade notes:
+  - The action is `[rod demand, boron flow, turbine loading rate]`: a policy with
+    two outputs must be rebuilt. With the third action at +1 the turbine follows
+    the dispatch's plan, as it always did before. The plan the turbine does not
+    take is charged as lost output at $80/MWh.
+  - The observation has 16 channels: the core's cycle point (13), the plan's load
+    now (14) and the offset's penalty time in hours (15) joined.
+  - The core sits at a point drawn evenly over the first 90 % of its cycle, with
+    that point's boron (1690 ppm at the start, 0 at the end), moderator
+    coefficient and boron worth. `ReactorParams(cycle_range=(0.0, 0.0))` is the
+    start-of-cycle core of before. `renewal_days` is gone: a stream's core burns
+    through the range and refuels at its end (`refuels`).
+  - The turbine takes no more load than its valves pass wide open on the steam
+    it has: 105 % of rated flow at rated steam, less on colder steam
+    (`valve_margin`, `steam_slope`, `env.turbine_capacity`). On Tavg's program it
+    never binds; with Tavg 3.5 K under it at full load the turbine falls under its
+    plan, and what it does not take is lost output.
+  - The turbine does not load while Tavg is 10 F (5.556 K) or more under its
+    program at the turbine's load, and loads again once Tavg is back
+    (`loading_stop`, the units' interlock C-16). It holds the load and unloads
+    nothing. What it does is Vogtle's safety report's; the setpoint is a training
+    card's, flagged in `REALITY.md`.
+  - The steam generators' safety valves relieve the steam over 1176 psig
+    (570.0 K; `relief_temperature`, `relief_accumulation`, `env.steam_relief`).
+    On Tavg's program they never lift. They bound how hot the primary can sit
+    at part load: 7.7 K over its program at half load, past which added
+    reactivity raises the power and blows steam.
+  - The offset's band is 5 % of rated delta I at every power (it was 5 % of
+    offset, so half as wide at half power). Penalty time counts in full at 50 %
+    of rated power and above, by half from 15 % to 50 % and not below; at 90 %
+    and above the flux difference must be back in its band within 30 min; from
+    50 % to 90 % it must stay inside the acceptable operation limits (NUREG-1431,
+    Bases B 3.2.3A).
+  - The expert is rebuilt for it: the same procedure, run from the curve book at
+    the day's cycle point, with the turbine loaded at the rate the boron line
+    carries. `ReferenceParams` lost `t_Kc`, `t_Ti`, `ff` and `dead_band` and
+    gained `theta`, `backoff` and `longest`; the helpers `curve_book`,
+    `ppm_per_load`, `tavg_per_ppm`, `tavg_spread`, `carried_rate` and
+    `turbine_demand` are new. `make_reactor_pid_controller(plant=..., wd_Kc=...,
+    wd_Ti=..., theta=...)` builds the expert on a family member's own curve book
+    and bump-test numbers; with no argument it is the shipped expert. Its boron
+    dead time `theta` is 600 s, the recipe's reading on this plant (it carried the
+    previous plant's 615 s).
+  - The oracle is rebuilt too: `make_oracle("reactor")` now plans the whole day
+    ahead on a 5 min knot model, with the turbine's load as one of its moves, and
+    solves again every half hour (`reactor/oracle.py`, `reactor/oracle_model.py`).
+    It replaces the five-minute plan of the rods and the boron, which kept the
+    turbine on its plan. Its first step of an episode solves for a minute or
+    two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
+    gone with the model it described.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts

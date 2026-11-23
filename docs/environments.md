@@ -85,7 +85,7 @@ To pick one by what you want to test, see
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
 | `glass_furnace` | `glass_furnace-v6` | (12,) | (1,) | fining share read at the cold end | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
-| `reactor` | `reactor-v10` | (13,) | (2,) | Tavg (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
+| `reactor` | `reactor-v10` | (16,) | (3,) | Tavg (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 | `hvac` | `hvac-v6` | (12,) | (1,) | zone air temperature (deg C) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
 | `cement_kiln` | `cement_kiln-v5` | (8,) | (2,) | discharge free lime (%) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 | `boiler_drum` | `boiler_drum-v6` | (12,) | (2,) | drum level (m), drum pressure (bar) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
