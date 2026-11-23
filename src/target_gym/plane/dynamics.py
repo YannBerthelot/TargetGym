@@ -737,8 +737,15 @@ def pitch_inertia(mass, params):
 
 def tail_section(params):
     """The horizontal tail as a section for ``aero_coefficients``: symmetric, on
-    its own lift slope, span and sweep, with its own stall."""
+    its own lift slope, span and sweep, with its own stall.
+
+    It has no zero-lift drag of its own: ``cd0`` is the whole airframe's, tail
+    included (PHYSICS.md, figures of merit), and the wing-body's term already
+    holds it. Until 2026-11-23 the tail added ``cd0`` on its own area a second
+    time, 23 % more of it on the airliner, which put the green dot 0.02 to
+    0.044 Mach under Airbus's [SF21]. Its induced drag stays."""
     return params.replace(
+        cd0=0.0,
         cl0=0.0,
         cl_alpha=params.tail_cl_alpha,
         aspect_ratio=params.tail_aspect_ratio,

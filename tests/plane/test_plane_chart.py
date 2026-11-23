@@ -7,7 +7,9 @@ Sources (src/target_gym/plane/REALITY.md):
   the figure's vector paths, with the axes from its own grid lines (0.02 Mach by
   1 000 ft), so each number below is the chart's, not an eye's.
 - [EASA.A.064] the A320-233 carries two IAE V2527E-A5; [EASA IM.E.069] each gives
-  11 031 daN at take-off, sea level static.
+  9 892 daN at its maximum continuous rating, sea level static. Its take-off
+  rating, 11 031 daN, "shall not be used continuously more than 5 minutes" (note
+  1), so the most the engines hold in flight is the maximum continuous one.
 - [HAMMAMI] Hammami, HAW Hamburg, 2021, eq. 2.1 and 2.2: Mattingly's law for the
   fuel a high-bypass turbofan burns per unit of thrust, as Roux and Scholz adjusted
   it: ``3.38e-8 V + 1.04e-5 sqrt(T / T0)`` kg/(N s), V the true airspeed in m/s.
@@ -18,21 +20,32 @@ Contract, at 70 t in the standard atmosphere:
   aircraft's engines to maintain +300ft/minute at a constant Mach" [SF21 p. 5]. The
   plant's residual climb at full thrust falls to 300 ft/min within 1 000 ft of the
   chart's curve.
-- Top speed in level flight at max climb thrust: thrust equals drag there, so the
-  residual climb is zero. The plant's zero-climb altitude is within 1 000 ft of the
-  chart's curve.
 - ECON speed at cost index 0, the max-range Mach: the plant's Mach of least fuel
-  per air distance is within 0.02 of the chart's curve.
-- The wing's polar is ``CD = cd0 + k CL^2`` on the lift the wing makes, so its best
-  lift over drag is ``1 / (2 sqrt(cd0 k))`` at any Mach below the drag rise
-  (PHYSICS.md, figures of merit).
+  per air distance is within 0.02 of the chart's curve, up to 33 000 ft.
+- Green dot, "an estimate of the speed for best lift-to-drag ratio" [SF21 p. 3]:
+  the plant's Mach of least drag in level flight is within 0.02 of the chart's.
+- The polar is ``CD = cd0 + k CL^2`` on the lift the wing makes, the whole
+  airframe's (PHYSICS.md, figures of merit): the wing's best lift over drag is
+  ``1 / (2 sqrt(cd0 k))`` at any Mach below the drag rise, and the trimmed
+  airframe's is within 5 % of it (ours: the tail's lift and its induced drag,
+  which the polar leaves out).
 
 Residual climb is ``V (T_max - D) / W`` with D the level-trim thrust: the
 definition, as in test_plane_energy_reality.py. Tolerances are one division of the
-chart's own grid, written before the plant was changed. Two stretches of the
-chart are outside the tests: below green dot, where "the crew should not fly"
-[SF21 p. 4] and the plant's parabolic polar carries no high-lift drag
-(PHYSICS.md, known deviations), and above MMO, 0.82 [TCDS].
+chart's own grid, written before the plant was changed.
+
+Outside the tests, each a known deviation with its numbers in PHYSICS.md
+(Amendment 5), accepted by the owner on 2026-11-23:
+
+- below green dot, where "the crew should not fly" [SF21 p. 4], and above MMO,
+  0.82 [TCDS]: the parabolic polar carries no high-lift drag;
+- the chart's top speed in level flight at max climb thrust, where the residual
+  climb is zero: the plant's is 700 to 1 700 ft higher;
+- the ECON curve above 33 000 ft, where the plant's max-range Mach is 0.024 to
+  0.045 over the chart's.
+
+The last two ask for drag that grows with lift near M 0.75 to 0.80, which the
+plant does not have.
 """
 
 import jax
@@ -64,20 +77,23 @@ VZ_300 = [
     (0.7991, 36_016.0),
     (0.8128, 33_760.0),
 ]
-VMAX_AT_MAX_CLIMB = [
-    (0.7681, 39_000.0),
-    (0.7921, 38_043.0),
-    (0.8067, 36_919.0),
-    (0.8174, 35_128.0),
-]
-# (ft, Mach) along the ECON speed curve at cost index 0.
+# (ft, Mach) along the ECON speed curve at cost index 0, up to 33 000 ft.
 ECON_CI_0 = [
     (25_484.0, 0.6604),
     (28_025.0, 0.6908),
     (29_946.0, 0.7130),
     (31_620.0, 0.7303),
-    (33_978.0, 0.7511),
-    (36_467.0, 0.7600),
+    (32_610.0, 0.7408),
+]
+# (ft, Mach) along the green dot curve, up to where the buffet line still lets
+# the plant trim either side of it.
+GREEN_DOT = [
+    (23_000.0, 0.5205),
+    (25_472.0, 0.5534),
+    (27_167.0, 0.5766),
+    (29_782.0, 0.6153),
+    (32_075.0, 0.6513),
+    (35_447.0, 0.7091),
 ]
 ONE_LEVEL = 1_000.0  # ft, the chart's vertical grid
 ONE_MACH_LINE = 0.02  # the chart's horizontal grid
@@ -119,11 +135,6 @@ def test_residual_climb_falls_to_300_fpm_at_the_charts_service_ceiling(mach, cha
     )
 
 
-@pytest.mark.parametrize("mach, chart_ft", VMAX_AT_MAX_CLIMB)
-def test_level_flight_at_full_thrust_tops_out_on_the_charts_curve(mach, chart_ft):
-    assert _altitude_where_climb_is(0.0, mach) == pytest.approx(chart_ft, abs=ONE_LEVEL)
-
-
 @pytest.mark.parametrize("altitude_ft, chart_mach", ECON_CI_0)
 def test_the_max_range_mach_is_the_charts_econ_speed_at_cost_index_0(
     altitude_ft, chart_mach
@@ -139,6 +150,22 @@ def test_the_max_range_mach_is_the_charts_econ_speed_at_cost_index_0(
     assert best == pytest.approx(chart_mach, abs=ONE_MACH_LINE)
 
 
+@pytest.mark.parametrize("altitude_ft, chart_mach", GREEN_DOT)
+def test_the_least_drag_mach_is_the_charts_green_dot(altitude_ft, chart_mach):
+    machs = np.arange(chart_mach - 0.08, chart_mach + 0.0801, 0.005)
+    drag = [float(_level_flight(float(mach), altitude_ft)[0]) for mach in machs]
+    best = float(machs[int(np.argmin(drag))])
+    assert best == pytest.approx(chart_mach, abs=ONE_MACH_LINE)
+
+
+def test_the_trimmed_airframes_best_lift_over_drag_is_the_polars():
+    """16.67 from the polar; at FL330 the trimmed airframe, tail and all,
+    reaches it within 5 %."""
+    machs = np.arange(0.55, 0.8001, 0.005)
+    drag = min(float(_level_flight(float(mach), 33_000.0)[0]) for mach in machs)
+    assert MASS * P.gravity / drag == pytest.approx(16.67, rel=0.05)
+
+
 @pytest.mark.parametrize("mach", [0.30, 0.78])
 def test_the_wings_best_lift_over_drag_does_not_grow_with_mach(mach):
     """``1 / (2 sqrt(cd0 k))`` = 1 / (2 sqrt(0.02 x 0.045)) = 16.67, below the
@@ -148,10 +175,10 @@ def test_the_wings_best_lift_over_drag_does_not_grow_with_mach(mach):
     assert float(jnp.max(lift / drag)) == pytest.approx(16.67, rel=0.01)
 
 
-def test_static_thrust_at_sea_level_is_two_v2527e_a5():
-    """2 x 11 031 daN [EASA IM.E.069, section 6] = 220 620 N."""
+def test_full_thrust_is_two_v2527e_a5_at_their_maximum_continuous_rating():
+    """2 x 9 892 daN [EASA IM.E.069, section 6] = 197 840 N, sea level static."""
     static = compute_thrust_output(1.0, P.thrust_output_at_sea_level, 0.0, 1.225)
-    assert float(static) == pytest.approx(220_620.0, rel=1e-6)
+    assert float(static) == pytest.approx(197_840.0, rel=1e-6)
 
 
 def test_fuel_per_thrust_follows_the_published_law():
