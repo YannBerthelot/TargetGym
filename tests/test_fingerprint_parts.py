@@ -43,11 +43,11 @@ def _moved(spec, change) -> set[str]:
     "name,rel,parts",
     [
         ("cstr", "pc_gym/cstr/oracle.py", {"oracle"}),
-        # cstr's oracle is on the shared solver, the pH task's not yet.
+        # cstr's and the pH task's oracles are on the shared solver (pH since #199).
         ("cstr", "experts/mpc.py", set()),
-        ("ph_neutralization", "experts/mpc.py", {"oracle"}),
+        ("ph_neutralization", "experts/mpc.py", set()),
         ("cstr", "oracles/shooting.py", {"oracle"}),
-        ("ph_neutralization", "oracles/shooting.py", set()),
+        ("ph_neutralization", "oracles/shooting.py", {"oracle"}),
         ("cstr", "pc_gym/cstr/experts.py", {"expert"}),
         ("cstr", "experts/pid.py", {"expert"}),
         ("cstr", "pc_gym/cstr/env.py", {"expert", "oracle", "stamp"}),
