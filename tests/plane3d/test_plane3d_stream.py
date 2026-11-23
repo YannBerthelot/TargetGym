@@ -73,9 +73,12 @@ def test_without_an_event_no_vector_comes_however_long_it_runs():
 
 
 def test_after_a_switch_the_wind_moves_to_the_new_one_as_a_first_order_lag():
-    stream, step = _task("plane3d_heading")
+    # On the hold: the heading suite has had no steady wind since 2026-11-23
+    # (a uniform wind does nothing a vector charges), and the lag is the 3D
+    # plant's, shared by every task.
+    stream, step = _task("plane3d_racetrack")
     env = stream.env
-    calm, windy = _scenario(stream, "calm"), _scenario(stream, "strong_wind")
+    calm, windy = _scenario(stream, "calm"), _scenario(stream, "low_hold_wind")
     _, s = env.reset_env(jax.random.PRNGKey(3), calm)
     assert float(s.mean_wind_x) == 0.0
     hold = env.trim_action(s, calm)
