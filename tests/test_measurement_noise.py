@@ -722,11 +722,19 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
     plane_sine the altitudes 6147.9111 and 6147.9116 m, one float32 step apart,
     read 6147.816 and 6148.121 m (2026-11-23).
 
-    - The plant: the scanned states are the stepped ones, within float32 fusion.
+    - The plant: what the instruments look at, the observation with none of
+      them in the way (``true_obs``), is the same in both within float32
+      fusion, and so, exactly, are the sensor key, the clock and every other
+      integer in the state. Not every state field: one the observation does
+      not read can drift further on a stiff plant (one of the glass furnace's
+      20 cells by 1.3e-5 of its value in 8 steps), and the readings were never
+      held to more than this.
     - The instruments: each scanned reading is the reading of the scanned state
       it came with, which holds the sensor key and the clock the noise is
       drawn from. Same state in, same reading out, rounding included.
     """
+    from target_gym.base import true_obs
+
     env, params = spec.make_env(), spec.make_test_params()
     keys = jax.random.split(jax.random.PRNGKey(4), 3)
     low, high = _bounds(env, params)
@@ -765,18 +773,21 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
     )
     atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
 
-    def close(got, want):
+    def same_integers(got, want):
         got, want = np.asarray(got), np.asarray(want)
-        if np.issubdtype(want.dtype, np.floating):
-            np.testing.assert_allclose(got, want, rtol=1e-5, atol=atol)
-        else:  # the sensor key, the clock, a counter: the same, exactly
+        if not np.issubdtype(want.dtype, np.floating):
             np.testing.assert_array_equal(got, want)
 
     ours = jax.tree_util.tree_map(lambda leaf: leaf[1], states)
     for t, (_, stepped, *_) in enumerate(rows[1:]):
         jax.tree_util.tree_map(
-            close, jax.tree_util.tree_map(lambda leaf: leaf[t], ours), stepped
+            same_integers, jax.tree_util.tree_map(lambda leaf: leaf[t], ours), stepped
         )
+    seen = jax.jit(jax.vmap(lambda s: true_obs(env, s, params)))(ours)
+    stepped_seen = np.stack(
+        [np.asarray(true_obs(env, stepped, params)) for _, stepped, *_ in rows[1:]]
+    )
+    np.testing.assert_allclose(seen, stepped_seen, rtol=1e-5, atol=atol)
     read = jax.jit(jax.vmap(lambda s: env.get_obs(s, params)))(ours)
     np.testing.assert_allclose(obs[1], read, rtol=1e-5, atol=atol)
     np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=atol)
