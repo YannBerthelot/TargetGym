@@ -318,9 +318,11 @@ def test_observed_margin_matches_the_state(env, params):
     ps = pair_init(obs.T)
     np.testing.assert_allclose(ps.I_N, np.asarray(states.N_ramp, float), rtol=1e-6)
     np.testing.assert_allclose(ps.I_x, np.asarray(states.x, float), rtol=1e-6)
-    # The episode moved both actuators over their working range.
+    # The episode moved both actuators over their working range. From
+    # established operation the speed that holds a constant header moves
+    # little: more than 2 % of rated, two hundred of its reading's steps.
     assert np.ptp(np.asarray(states.x)) > 0.2
-    assert np.ptp(np.asarray(states.N)) > 0.05
+    assert np.ptp(np.asarray(states.N)) > 0.02
 
 
 def test_actuators_are_rate_limited_per_substep(params):
@@ -524,7 +526,8 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     """Full travel low (70 %, recycle shut) trips. The step is charged
     ``restart_steps x failure_cost`` in version 2 and exactly
     ``-restart_steps`` in version 1, and the window continues from the plant
-    ``reset_env`` draws from the step's key, with ``time`` running on. The
+    ``restart_plant`` puts back from the step's key, in established operation
+    for the demand the world carries on with, with ``time`` running on. The
     outside world (``OUTSIDE_WORLD``: the schedule, its clock, the demand) and
     the surge record (``RECORDS``) run on as if no trip had happened
     (long-strata S2)."""
@@ -542,21 +545,25 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
         pytest.fail("full travel low did not trip within 400 steps")
 
     assert not bool(terminated)
-    # Equal to float32 rounding: the step's copy of the reset is compiled
-    # inside the step, where XLA may fuse its arithmetic differently.
-    # The instruments stay through a restart, so the sensor key does too.
-    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(
-        time=new.time, sensor_key=new.sensor_key
-    )
     # The proposal the step made before the trip, whose outside world carries on.
     _, proposal, _, _, _ = step(key, state, low, params.replace(continuing=False))
+    # Equal to float32 rounding: the step's copy of the restart is compiled
+    # inside the step, where XLA may fuse its arithmetic differently.
+    # The instruments stay through a restart, so the sensor key does too.
+    fresh = env.restart_plant(restart_key(key, new.time), proposal, params).replace(
+        time=new.time, sensor_key=new.sensor_key
+    )
     for name in CompressorSurgeState.__dataclass_fields__:
         kept = name in env.OUTSIDE_WORLD or name in env.RECORDS
         source = proposal if kept else fresh
+        # ``atol``: the held raw speed command sits near 0 (the established
+        # speed is near the middle of the command range), where the action
+        # map's subtraction leaves float32's absolute rounding, 1.2e-7.
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),
             np.asarray(getattr(source, name)),
             rtol=1e-6,
+            atol=1e-6,
             err_msg=name,
         )
     assert int(new.time) == n
@@ -714,14 +721,14 @@ def _travel(env, params, action, seeds, n=None):
 
 def test_zero_action_never_trips(env, params):
     """Raw 0 (87.5 % speed, recycle half open) over 20 schedules of 1200
-    steps: no trip, and the smallest phi_min is at least 0.55. Zero action's
-    lowest Phi is the reset's (derived: 0.581 at the lowest drawable first
-    opening, 0.29, and 0.568 for a drop from there to the clip floor 0.2);
-    its own equilibrium at opening 0.2 is 0.632. Measured here: 0.610
-    (scripts/compressor_surge_numbers.py --section reach prints all four)."""
+    steps: no trip, and the smallest phi_min is at least 0.547. Zero action's
+    lowest Phi is the reset's: established operation sits on the 10 % control
+    line, Phi 0.55, read through the soft minimum over substeps, which is
+    conservative by at most T ln 10 = 2.3e-3, as the drive speeds up over the
+    first step. Its own equilibrium at opening 0.2 is 0.632."""
     states, tripped = _travel(env, params, jnp.zeros(2), range(20))
     assert not tripped.any()
-    assert float(np.min(states.phi_min)) >= 0.55
+    assert float(np.min(states.phi_min)) >= 0.547
     # Why: the recycle alone carries the surge flow at any pressure from an
     # opening of 1 / (k_r sqrt(K)) = 0.454 (derived), under zero action's 0.5.
     x_alone = 1.0 / (params.k_r * math.sqrt(float(surge_constant(params))))
