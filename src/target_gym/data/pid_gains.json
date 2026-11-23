@@ -235,19 +235,19 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "wind_turbine": {
-    "Kp": 7.0512614276929275,
-    "Ki": 3.021969183296969,
-    "theta_K_deg": 0.015260586305121303,
-    "schedule_lo_deg": 3.5987370366807205,
+    "Kp": 0.032316313484108,
+    "Ki": 0.013849848636046288,
+    "theta_K_deg": 3.4678115750390592,
+    "schedule_lo_deg": 3.5987370366807236,
     "schedule_hi_deg": 22.839432509805743,
     "model": {
-      "dP_dtheta": -68136.11296669637,
-      "theta_K_deg": 0.015260586305121303,
+      "dP_dtheta": -14866966.35218803,
+      "theta_K_deg": 3.4678115750390592,
       "zeta": 0.7,
       "wn": 0.6
     },
     "tuning_rule": "jonkman_pole_placement",
-    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta of the Cp table along the region-3 curve, with his schedule read at the last pitch command and held on that curve (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
+    "note": "NREL 5 MW baseline (Jonkman et al. 2009, ch. 7): pitch PI on the filtered generator speed, Kp and Ki by pole placement (wn 0.6, zeta 0.7) on the best-fit dP/dtheta along the region-3 curve, read from the Cp and Ct tables with the wake frozen as the plant's inflow lag holds it, with his schedule read at the last pitch command and held on that curve (scripts/wind_turbine_gains.py). Generator speed in rad/s to pitch in rad."
   },
   "cement_kiln": {
     "Kp_inner": 0.04060008779803512,

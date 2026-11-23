@@ -185,11 +185,12 @@ present. The floor of the score, in closed form: 0, at the available power with 
 tower still and the pitch still; the measured reward adds the meter's scatter on
 `lost`, at most E|N(0, 1 kW)| = 798 W, $3.3e-6 per step.
 
-Those figures predate Oye's lag and the stored gains (review of 2026-11-23). The shipped
-expert at sensor noise 1, seeds 100 to 109, per 10 min: lost $0.29 to $0.61, tower $3.6
-to $11.1, pitch $0.20 to $0.24 as scenario means, and it trips in 6 of the 60 windows
-(8 of 180 on seeds 100 to 129), none in `near_rated`. S1's published gains halve the
-tower term on the same seeds.
+Those figures predate Oye's lag (review of 2026-11-23). With the gains fitted on the
+steady table, as stored until that day, the expert at sensor noise 1 on seeds 100 to 109
+cost, per 10 min as scenario means, lost $0.29 to $0.61, tower $3.6 to $11.1, pitch
+$0.20 to $0.24, and tripped in 6 of the 60 windows (8 of 180 on seeds 100 to 129). With
+the wake-frozen gains: lost $0.30 to $0.63, tower $0.9 to $7.7, pitch $0.16 to $0.20,
+and trips in 2 of the 60 windows (3 of 180), in `gusty_class_a` and `extreme_gust`.
 
 ## 6. Behaviour tests (charter step 3, Amendment 3)
 
@@ -225,11 +226,11 @@ the scenario suite.
 ## 7. Deviations still in the model
 
 - D1. Dynamic inflow is one lumped Oye lag (tau1 only, no radial split). The oracle's
-  planner carries the same lag as its sixth state (`oracle.velocity`). The expert's gain
-  recipe does not: `scripts/wind_turbine_gains.py` fits the steady table, while the
-  speed loop now sees the wake-frozen sensitivity, which on this plant is within 3 to
-  19 % of S1's published line. The stored gains are 2.5 times S1's at 12 m/s (review of
-  2026-11-23).
+  planner carries the same lag as its sixth state (`oracle.velocity`), and the expert's
+  gain recipe reads the sensitivity with the wake frozen, as the speed loop meets it
+  (`scripts/wind_turbine_gains.py`, since 2026-11-23; before, it fitted the steady table
+  and stored gains 2.5 times S1's at 12 m/s). On this plant that sensitivity is within
+  3 to 19 % of S1's published line (behaviour test 5b).
 - D2. One tower mode: no side-side, second fore-aft, drivetrain or blade modes, no 1p or
   3p loading. So blade-root loads are not priced, and S5's trade of 2.1 % tower DEL for
   1.26 % blade DEL is only half in the score; pitch wear stands in for the rest.

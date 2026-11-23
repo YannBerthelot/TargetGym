@@ -165,6 +165,37 @@ def test_power_sensitivity_grows_as_the_blades_feather():
     assert size[-1] >= 2.0 * size[0], size
 
 
+# 5b. The published sensitivity, with the wake frozen. S1 linearises with the
+# wake frozen and publishes KP(0) = 0.01882681 s for 0.6 rad/s and damping 0.7
+# (Table 7-2), which is dP/dtheta(0) = 2 I W0 zeta wn / (N KP(0)) = -25.5 MW/rad,
+# doubling at 6.302336 deg (pp. 22-25, Fig. 7-4). On this plant Oye's lag holds
+# the induced velocity through a pitch move, so the dynamics' own right-hand
+# side gives that sensitivity: at rated speed, 12 to 25 m/s, a 0.5 deg move
+# either side of the rated-power pitch with the wake left where it was.
+# Tolerance 25 %: S1's line is a fit through scattered points (Fig. 7-4), and
+# the table here is ROSCO's, not S1's own AeroDyn run.
+def test_the_wake_frozen_sensitivity_lies_on_the_published_line():
+    p = _params()
+    w0 = RATED_ROTOR
+    inertia = float(W.drivetrain_inertia(p))
+    at_fine_pitch = -2.0 * inertia * w0 * 0.7 * 0.6 / (float(p.N_gear) * 0.01882681)
+
+    def power(v, theta, wake_of):
+        w_induced, _ = W.induction(w0, v, wake_of, p)
+        state = jnp.stack([w0, theta, 0.0, 0.0, 0.0, w_induced]).astype(jnp.float32)
+        return float(W.compute_velocity(state, (0.0, 0.0), v, p)[0][0]) * inertia * w0
+
+    for v in np.arange(12.0, 25.5, 1.0):
+        grid = np.arange(0.0, 30.0, 0.01)
+        _, steady = W.aerodynamic_torque(jnp.asarray(w0), v, jnp.asarray(grid), p)
+        theta = float(grid[int(np.argmax(np.asarray(steady) < 5.296610e6))])
+        seen = (power(v, theta + 0.5, theta) - power(v, theta - 0.5, theta)) / (
+            math.radians(1.0)
+        )
+        published = at_fine_pitch * (1.0 + theta / 6.302336)
+        assert seen == pytest.approx(published, rel=0.25), (v, theta)
+
+
 # 6. Actuator limits are hard saturations. S1 Table 7-2: pitch rate 8 deg/s,
 # torque 47,402.91 N m, torque rate 15,000 N m/s; pitch 0 to 90 deg (S1 p. 26).
 # Full-range step commands. No excess at all on the rates and the torque;
