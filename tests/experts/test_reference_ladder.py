@@ -21,7 +21,12 @@ leaves the zone on none of the ladder's seeds in any scenario. Where the plant's
 reset depends on the setpoint, each candidate's episodes start on it, and so do the
 kept one's from then on. A seed of a scenario that leaves from every candidate does
 not constrain the placement and is reported as unheld; when none can be held from
-any candidate, the centre is kept and every one is reported. On ``first_order`` the
+any candidate, the centre is kept and every one is reported. Each rung is placed on
+its own (owner, the same day): it gets its own first candidate that never leaves,
+and the ladder keeps the cheapest rung that trips no seed and leaves its zone on none
+of the seeds it can hold; ``row.placed``, ``row.scans``, ``row.unheld`` and the start
+in ``row.score`` are the pi rung's until a rung is kept, then the kept one's. On
+``first_order`` the
 band is the tracking term's own: with ``e_tol`` 0.5 around a target pinned at 1.0, it
 charges x outside 0.5 to 1.5 and nothing else is charged.
 """
@@ -302,6 +307,47 @@ def test_a_zone_no_seed_can_be_held_in_keeps_its_centre_and_reports_every_seed(
     assert setpoint == pytest.approx(1.0)
     assert list(row.scans["x on u"]) == pytest.approx(zone_grid(0.5, 1.5, "high"))
     assert row.unheld["x on u"] == {"normal": list(range(100, 110))}
+
+
+def test_each_rung_holds_its_own_setpoint_and_a_loose_one_does_not_set_the_others(
+    ladder,
+):
+    # Two rungs on the priced band 0.5 to 1.5. The feedforward's "balance" here asks
+    # three times the actuator's top: the valve sits on its stop (2.0 units at a
+    # gain of 1, the datasheet's), x rests at 2.0 and leaves the band on every seed
+    # from every candidate. The pi rung, around the plant's own rest, holds as it
+    # did alone. Each is placed for itself, and the ladder keeps the pi rung.
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    alone = dataclasses.replace(base, loops=(x,), balance=None, score=BAND)
+    ladder.build("first_order", alone)
+    alone_setpoint = alone.placed["x on u"][1]
+
+    def stuck(o, xp):
+        return xp.reshape(xp.asarray(3.0, dtype=xp.float32), (1,))
+
+    row = dataclasses.replace(base, loops=(x,), balance=stuck, score=BAND)
+    rungs = ladder.build("first_order", row)
+    pi, forward = (row.placements[k]["x on u"] for k in ("pi", "feedforward"))
+    grid = zone_grid(0.5, 1.5, "high")
+    # The pi rung: where it sat alone, nothing unheld.
+    assert pi["setpoint"] == pytest.approx(alone_setpoint)
+    assert pi["unheld"] == {} and pi["holds"]
+    # The feedforward: the whole grid run, the centre kept, every seed unheld.
+    assert list(forward["exits"]) == pytest.approx(grid)
+    assert forward["setpoint"] == pytest.approx(1.0)
+    assert forward["unheld"] == {"normal": list(range(100, 110))}
+    # Kept: the pi rung, which costs nothing; the other pays on every seed.
+    results = {k: ladder.run_rung("first_order", row, k, c) for k, c in rungs.items()}
+    assert min(results["feedforward"]["costs"]) > 0.0
+    assert ladder.keep_rung(row, results) == "pi"
+    assert row.placed["x on u"][1] == pytest.approx(pi["setpoint"])
 
 
 def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):
