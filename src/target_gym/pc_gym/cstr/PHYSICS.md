@@ -298,3 +298,39 @@ The credibility check on a sourced real figure has nothing to read here. The own
 accepted a class exception on 2026-11-06: no published figure could be found or opened
 after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
 says what was tried.
+
+## Production prototype (unregistered, 2026-11-23)
+
+The owner asked for a version of this task scored on what the reactor makes, to
+be prepared to replace the tracking task and brought back to him first. It is
+`scripts/prototypes/cstr_production.py`: this plant with the feed as a second
+handle, scored in lost nameplate production. Nothing in it is registered,
+recorded or fingerprinted, and the task above is unchanged by it.
+
+Why: on the tracking task a PI of the ladder's own form at four times its gain
+closes most of the room, since nothing in the plant makes gain cost. With the
+feed to move, the cooling's limit and the interlock come into play, and what
+practice does when the cooling saturates, cut the feed [S13], becomes the job.
+
+Its own numbers, each the project's and none from a source (REALITY.md, third
+search, says what was looked for):
+
+| number | value | why it is ours | range the sweep draws |
+|---|---|---|---|
+| band on the temperature | 1 K either side of the setpoint; product made outside it counts for nothing | no tolerance found in [S1], [S9] or [S12] | 0.5 to 2 K |
+| feed's floor | 40 g/s | S1's range starts at 0 [S1, Table 1]; no turndown found | 0 to 40 g/s |
+| start of a window | full cooling: the reactor on its setpoint, the water valve at its top and the feed that takes (or the feed at its top and the water that takes) | a choice of established production; no source | none |
+| setpoint move | S1's 2 C [S1, Fig. 2] as a ramp over 60 min | derived: S1's closed loop took about an hour to its peak, and a band that jumped 2 K could not be kept | 30 to 120 min |
+| feed build-up | 10 % | sourced as an event [S3], its size ours; with a feed to cut it can be held | 3 to 10 % |
+| cooling loss | 5 min | as the task above | 2 to 8 min |
+| weights | normal 0.7, setpoint move 0.1, catalyst loss 0.1, feed build-up 0.05, cooling loss 0.05 | no source says how often each occurs | normal 0.5 to 0.9, the rest in proportion |
+| trip | 4 h of nameplate production | as the task above | none |
+
+Sourced: the feed's top, 110 g/s [S1, Table 1]; the structure of the reference
+and its valve position loop's closed-loop time of 30 dead times [S13].
+
+The reference is the ladder's, with its valve position rung
+(`scripts/reference_ladder.py`): the temperature on the water by SIMC, the
+water valve held by the feed. Set points are placed on a fixed grid by the
+owner's rule of 2026-11-23, the cheapest at which no deciding seed of the
+normal day leaves the band.
