@@ -295,6 +295,22 @@ no air side: firing is heat, and in the long run the fuel is the steam's
 enthalpy rise whatever the controller does. So this cost cannot be priced
 here without adding that side of the plant (REALITY.md section 5).
 
+That side was prototyped the same day, unregistered, on the reference's
+firing traces: [S25]'s oxygen and efficiency tables, [S3]'s 6.492 s oxygen
+lag, an air flow moving 1 % of span a second, an analyser reaching 90 % in 5 s
+with 0.05 % oxygen of scatter, and the lowest oxygen held under automatic
+control on natural gas, 1.8 % dry (REALITY.md section 5 for each). A reference
+by the charter's recipe (the metered fuel sets the air, a PI by SIMC trims it
+on the oxygen reading, the setpoint two standard deviations above the edge)
+burns 0.037 % more fuel than a controller holding the edge: 0.36 GWh of 976 a
+year, room 1.0004. That room is the reference's margin for its analyser's
+noise: 0.004 % with a noise-free analyser, 0.09 % with 0.125 % of scatter. The
+loop holds true oxygen to 0.015 %, and pipeline gas quality (ours: 0 to 2 %
+of spread over 15 minutes to a day, or a 6 % front in 15 minutes) changes
+nothing. Only a fuel moving by several percent within minutes does (5 % in 5
+minutes: 0.14 %), and no source for such a member's variation was looked for.
+The fuel loop was therefore not added.
+
 Nothing unsourced is added. The boiler's room stays as measured: this family
 is close to solved by a three-element controller on its normal days, and its
 cost lies in rare upsets.

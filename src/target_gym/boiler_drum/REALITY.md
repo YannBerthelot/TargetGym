@@ -237,7 +237,30 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   well-designed natural gas-fired systems, an excess air level of 10% is
   attainable", and "boiler efficiency can be increased by 1% for each 15%
   reduction in excess air or 40°F reduction in stack gas temperature" [S25].
-  A low-oxygen limit with its value and kind: not found (not searched).
+- **The oxygen loop's numbers (added 2026-11-23; read twice unless said).**
+  Oxygen follows the air and fuel flows through a first-order lag, "TAIR =
+  6.492 s", and [S3]'s unit runs at 2.5 % oxygen [S3, pp. 61 and 63]. In the
+  control contest built on [S3]'s model the air flow alone has a rate limit,
+  "la limitación actual es de 1%/s", the steam demand is measured with an
+  unmeasured noisy part, and an unmeasured disturbance stands for "variaciones
+  en las características del combustible" [S26, read once]. An in situ
+  zirconia analyser: "Response of 90% within 5 seconds", repeatability
+  "± 0.5% Maximum value of set range" below a 0 to 25 % range [S27]. Typical
+  flue gas oxygen under automatic control on natural gas: 1.5 % wet (1.8 dry)
+  at least, 3.0 (3.6) at most; under positioning control 3.0 (3.6) to 7.0
+  (8.0); No. 2 oil 2.0 (2.2) to 3.0 (3.3) [S28]. With trim, "the O2 setpoint
+  should be set to 1.7%, which corresponds to 10% excess air" [S29]. One
+  analyser's low oxygen alarm is "Typically set at 2.0% oxygen, depending on
+  the burner", and its very low alarm, default 0.5 %, "can be used as a shut
+  down on a boiler as the normal operating level should never be this low"
+  [S30]: a vendor's defaults, not a code. Pipeline gas: "variations at nearly
+  all entry points are within 4 MJ/m3" of Wobbe index over two years, and
+  "only 2 points out of 29 registered changes greater than 3 MJ/m3 in a 15 min
+  period" [S31]; the index is near 50 MJ/m3.
+- Not found for the oxygen loop: carbon monoxide against oxygen as numbers; a
+  code's low-oxygen limit (NFPA 85, EN 12952-8 not retrieved); a measured
+  spread of flue oxygen under automatic control; the fan's stroke time; the
+  variation of a fast-changing fuel (biomass, refinery gas), not searched.
 - **Bad day, swell at low load.** "most trips occur due to high-level trip
   events", because fixed setpoints at low flow and pressure leave too little
   room for swell [S11]. Swell is larger at low load: "a given change in input
@@ -417,6 +440,24 @@ Sources for this section:
   https://docs.nlr.gov/docs/fy02osti/31496.pdf (2002) and
   https://www.energy.gov/sites/prod/files/2014/05/f16/steam4_boiler_efficiency.pdf
   (2012); the table and both sentences match.
+- [S26] F. Morilla (UNED), "Benchmark 2009-10", Grupo Temático de Ingeniería
+  de Control de CEA: the boiler control contest on [S3]'s model.
+  https://www.dia.uned.es/~fmorilla/benchmark09_10/BenchmarkIC2009_10.pdf
+  (read once, 2026-11-23).
+- [S27] Yokogawa, "Model ZR22G, ZR402G, and ZR202G Direct In Situ Zirconia
+  Oxygen Analyzers", General Specifications GS 11M12A01-01E.
+  https://yokogawa.com/pdf/provide/E/GW/GS/0000004611/0/GS11M12A01-01E.pdf
+- [S28] US EPA, "Boiler Tune-up Guide" (area source NESHAP), table "Typical
+  Flue Gas Oxygen Content Control Parameters".
+  https://www.epa.gov/sites/production/files/2016-09/documents/tune-up_guide.pdf
+- [S29] K. Carpenter, C. Schmidt, K. Kissock, "Common Boiler Excess Air
+  Trends and Strategies to Optimize Efficiency", ACEEE Summer Study 2008.
+  https://www.aceee.org/files/proceedings/2008/data/papers/3_349.pdf
+- [S30] Teledyne 9060 zirconia oxygen analyser manual, alarm settings.
+  https://www.manualslib.com/manual/527005/Teledyne-9060.html?page=67
+- [S31] ENTSOG, "WI and GCV values in European networks", INT1124-170918,
+  18 September 2017 (hourly data, 2015 and 2016).
+  https://www.entsog.eu/sites/default/files/entsog-migration/publications/Events/2017/INT1124-170918%20WI%20and%20GCV%20in%20European%20networks.rev%204.pdf
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 
