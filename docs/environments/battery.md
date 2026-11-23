@@ -1,5 +1,8 @@
 # Battery
 
+!!! note "Extra since 2026-11-15"
+    Battery is kept in the repository but is not part of the benchmark: it failed acceptance (J2), so it is out of the headline and the capability claims. The reasons are in its [physics contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md), Status.
+
 <p align="center"><img src="../../videos/battery/pid_output.gif" width="480px"/></p>
 
 Run a grid battery that sells a frequency service: keep its reported stored energy inside the window the market requires at the start of each 30 min period, at the least cost of energy. The only lever is the declared baseline power, and a change reaches the meter 60 to 90 min after it is made. The policy reads the BMS's reported state of charge, cell voltage and temperature, the meter, the required power, the three locked baselines, the period's energy requirements and the day-ahead prices; the true state of charge is hidden. Each step is charged, in GBP, the availability payment of a lost period, the energy the unit loses, and the energy's cost against the base price. Nothing trips.

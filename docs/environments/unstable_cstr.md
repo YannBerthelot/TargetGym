@@ -1,5 +1,8 @@
 # Unstable CSTR
 
+!!! note "Extra since 2026-11-15"
+    This task is kept in the repository but is not part of the benchmark: on 4 of its 5 scenarios the oracle, which reads the true state, tracks exactly, so its room measures a perfect state reading rather than control. It is out of the headline and the capability claims. The reasons are in its [physics contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md), Status.
+
 <p align="center"><img src="../../videos/unstable_cstr/pid_output.gif" width="480px"/></p>
 
 Hold the temperature of an LDPE autoclave at its setpoint with the initiator feed, at an operating point that is unstable without control. The policy reads the temperature, its own initiator feed and the setpoint. Conversion and the initiator in the reactor are hidden. Each step is charged the squared temperature error, counted in units of 1 K. A reactor that reaches 573 K trips, which is charged as a restart; a reactor that cools down pays only the tracking cost.
