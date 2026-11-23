@@ -180,7 +180,12 @@ def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
     the env's half-cycle count, so the whole score, tower included, is what the
     env charges. The env closes a half-cycle at each turning point of the base
     moment, 0.5 (range / 1 MN m)^m at the tower's price per unit of design
-    damage (env.compute_reward_terms)."""
+    damage (env.compute_reward_terms).
+
+    Since the converter holds power at the set point (owner, 2026-11-23), the
+    model and the env agree only under that limit, so the moves start with the
+    torque 20 % under it and move it a fifth as fast as the pitch; the run
+    checks that it stays under."""
     from target_gym.energy.wind_turbine.env import tower_base_moment
     from target_gym.energy.wind_turbine.oracle import (
         ceiling_data,
@@ -188,21 +193,27 @@ def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
         wind_model,
     )
 
-    moves = np.random.default_rng(0).uniform(-1.0, 1.0, (40, 2))
+    moves = np.random.default_rng(0).uniform(-1.0, 1.0, (40, 2)) * [1.0, 0.2]
+
+    def start(s):
+        return s.replace(torque=0.8 * s.torque)
+
     spec = REGISTRY["wind_turbine"]
     env = spec.make_env()
     p = spec.make_test_params()
     resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
     with enable_x64():
         p64 = float64(p)
-        st = float64(env.reset_env(resets[0], p)[1])
+        st = start(float64(env.reset_env(resets[0], p)[1]))
         tm = wind_model(env, p64)
         task = float64(ceiling_data(env, p64, st, steps[:, 0], run_as=as_called))
         d = {"task": task, "widths": jnp.zeros(5)}
-        x, moments = tm.state_x(st), []
+        x, moments, above = tm.state_x(st), [], []
         for t, u in enumerate(moves):
-            x = tm.step(d, x, jnp.asarray(u), t)[0]
+            x, _, y = tm.step(d, x, jnp.asarray(u), t)[:3]
             moments.append(float(tower_base_moment(x[3], p64)))
+            above.append(float(y[3]))  # W over the set point
+    assert max(above) < 0.0  # under the converter's limit throughout
     frozen = turning_points(
         float(st.moment), float(st.moment_turn), float(st.moment_dir), moments
     )
@@ -212,7 +223,7 @@ def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
         return (*ceiling_data(env, p, st, keys, run_as=as_called), frozen)
 
     planned, replayed, terms = plan_and_replay(
-        "wind_turbine", wind_model, data_of, moves.tolist()
+        "wind_turbine", wind_model, data_of, moves.tolist(), start=start
     )
     assert terms["tower"] > 0.0 and terms["lost"] > 0.0
     np.testing.assert_allclose(planned, replayed, rtol=1e-9)
