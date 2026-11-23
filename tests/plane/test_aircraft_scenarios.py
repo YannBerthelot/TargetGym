@@ -24,6 +24,16 @@ def test_each_kept_task_has_a_sourced_suite(name):
     assert all(s.source for s in suite)
 
 
+def test_the_heading_suite_has_no_steady_wind():
+    """A vector is a heading [IFH ch. 7]: a uniform steady wind moves the track,
+    which is ATC's, and nothing the task scores
+    (tests/plane3d/test_plane3d_reality.py). A wind scenario would repeat the
+    normal day under another name and weight (owner, 2026-11-23)."""
+    suite = scenarios.suite(registry.get("plane3d_heading"))
+    windy = [s.name for s in suite if {"wind_x", "wind_y"} & set(s.overrides)]
+    assert windy == []
+
+
 def test_a_hold_in_wind_starts_established_in_that_wind():
     spec = registry.get("plane3d_racetrack")
     (strong,) = [s for s in scenarios.suite(spec) if s.name == "low_hold_wind"]
