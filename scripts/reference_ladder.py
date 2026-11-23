@@ -21,7 +21,9 @@ A zone whose exit the score prices as a violation is placed otherwise (J1, owner
 2026-11-23): its loop names the reward terms charged for leaving (``Cv.exit_terms``)
 and holds the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which
 the pi rung leaves the zone on none of the seeds in any scenario (``zone_exits``,
-``ladder.first_without_exit``), as the ladder keeps a rung that trips none. Where the
+``ladder.first_without_exit``), as the ladder keeps a rung that trips none. A seed of
+a scenario that leaves from every candidate does not constrain the placement: the
+reference pays for its exits there and it is listed (``Row.unheld``). Where the
 plant's reset depends on the setpoint (``Cv.established``), each candidate's episodes
 start on it, and the kept one's overrides join ``Row.score``, so every later run
 starts on it too. A row whose reset no balance can compute starts ``bumpless``, and
@@ -165,8 +167,9 @@ class Row:
     rung left out, and ``points`` for a task with one operating point. ``rest_at``
     gives the rest at a point's parameters where ``rest`` can't read it. ``build``
     fills ``placed``: each zone loop's measured deviation (None under the exit rule)
-    and setpoint; and ``scans``: under the exit rule, the seeds that left at each
-    candidate it ran.
+    and setpoint; ``scans``: under the exit rule, the seeds that left at each
+    candidate it ran, by scenario; and ``unheld``: those no candidate holds, by
+    scenario, which did not constrain the placement.
     ``bumpless`` starts every rung from ``rest`` at the reset
     (``ladder_controller``'s ``start``), for a task whose reset stands on a steady
     state its balances can't compute, because something they need is hidden."""
@@ -188,6 +191,7 @@ class Row:
     why: dict = dataclasses.field(default_factory=dict)
     placed: dict = dataclasses.field(default_factory=dict)
     scans: dict = dataclasses.field(default_factory=dict)
+    unheld: dict = dataclasses.field(default_factory=dict)
     bumpless: bool = False
 
 
@@ -410,12 +414,34 @@ def build(name: str, row: Row, spec=None) -> dict:
                     left = zone_exits(
                         name, row, Reference("pi", probe), c.exit_terms, spec, extra
                     )
-                    print(f"    {c.name}: setpoint {point:.4g}, {left} seeds leave")
+                    seeds = len({seed for _, seed in left})
+                    print(
+                        f"    {c.name}: setpoint {point:.4g}, {len(left)} episodes "
+                        f"leave, on {seeds} seeds"
+                    )
                     return left
 
-                setpoint, row.scans[c.name] = first_without_exit(
+                setpoint, scan, unheld = first_without_exit(
                     zone_grid(*c.zone), exits_at
                 )
+                row.scans[c.name] = {k: _by_scenario(v) for k, v in scan.items()}
+                row.unheld[c.name] = _by_scenario(unheld)
+                still = _by_scenario(set(scan[setpoint]) - set(unheld))
+                if unheld:
+                    said = (
+                        "no seed can be held, so the rule decided nothing and the "
+                        "centre is kept"
+                        if len(unheld) == _episodes(spec)
+                        else "they do not constrain the placement"
+                    )
+                    print(
+                        f"    {c.name}: no candidate holds {row.unheld[c.name]}: {said}"
+                    )
+                if still:
+                    print(
+                        f"    {c.name}: no candidate holds every seed that some "
+                        f"candidate holds; at the centre {still} leave"
+                    )
                 row.placed[c.name] = (None, setpoint)
                 if c.established:
                     started.update(c.established(setpoint))
@@ -660,20 +686,34 @@ def _suite_episodes(name, row, policy, spec, seeds=None, extra=None):
         yield s.name, episodes_of(run_policy(policy, env, params, task, seeds=own))
 
 
-def zone_exits(name, row, policy, terms, spec=None, extra=None) -> int:
-    """The ladder's seeds on which ``policy`` leaves a zone, in any scenario: a step
-    charged one of the reward ``terms`` the score prices the exit with, or a trip.
-    ``extra`` joins the row's scored parameters."""
+def zone_exits(name, row, policy, terms, spec=None, extra=None) -> tuple:
+    """The ladder's seeds on which ``policy`` leaves a zone, each as ``(scenario,
+    seed)``, in order: a step charged one of the reward ``terms`` the score prices
+    the exit with, or a trip. ``extra`` joins the row's scored parameters."""
     spec = spec or REGISTRY[name]
-    left = np.zeros(len(SEEDS), bool)
-    for _, episodes in _suite_episodes(name, row, policy, spec, None, extra):
-        for k, e in enumerate(episodes):
+    left = []
+    for scenario, episodes in _suite_episodes(name, row, policy, spec, None, extra):
+        for seed, e in zip(SEEDS, episodes, strict=True):
             unknown = sorted(set(terms) - set(e.terms))
             if unknown:
                 raise KeyError(f"{name}: no reward term {unknown}")
             charged = any(bool(np.any(e.terms[t] > 0.0)) for t in terms)
-            left[k] |= charged or bool(np.any(e.failed))
-    return int(left.sum())
+            if charged or bool(np.any(e.failed)):
+                left.append((scenario, seed))
+    return tuple(sorted(left))
+
+
+def _by_scenario(left) -> dict:
+    """``(scenario, seed)`` pairs as ``{scenario: seeds}``, for a record."""
+    out: dict = {}
+    for scenario, seed in sorted(left):
+        out.setdefault(scenario, []).append(seed)
+    return out
+
+
+def _episodes(spec) -> int:
+    """The episodes of one run over the suite on the ladder's seeds."""
+    return len(SEEDS) * len(scenarios.suite(spec))
 
 
 def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
@@ -718,7 +758,8 @@ def climb(name: str, nulls: bool = False) -> dict:
     print(f"  kept: {kept}", flush=True)
     placed = {k: {"sigma": v[0], "setpoint": v[1]} for k, v in row.placed.items()}
     for k, scan in row.scans.items():  # the exit rule's candidates, as run
-        placed[k]["exits"] = {f"{point:.6g}": n for point, n in scan.items()}
+        placed[k]["exits"] = {f"{point:.6g}": left for point, left in scan.items()}
+        placed[k]["unheld"] = row.unheld[k]
     out = {"rungs": results, "kept": kept, "left_out": row.why, "placed": placed}
     if nulls and kept:
         out["nulls"] = check_nulls(name, row, results[kept])

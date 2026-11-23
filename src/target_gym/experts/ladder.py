@@ -94,16 +94,34 @@ def first_without_exit(grid, exits_at: Callable) -> tuple:
     """Charter J1 on a zone priced as a violation: the first setpoint of ``grid``,
     which runs from the cheap edge, at which the reference leaves the zone on none of
     its seeds, as ``best_rung`` keeps a rung that trips none. ``exits_at(setpoint)``
-    is the number of seeds that leave there; candidates past the kept one are not
-    run. Returns ``(setpoint, scan)``, ``scan`` the exits at each candidate run. When
-    every candidate leaves, the last one (the centre) is kept, and ``scan`` shows
-    its exits."""
+    gives the seeds that leave there, as sortable ids (a seed, or a scenario and a
+    seed); candidates past the kept one are not run.
+
+    Seeds that can be held decide (owner, 2026-11-23): a seed that leaves from every
+    candidate does not constrain the placement. The reference pays for its exits
+    there, and it is returned as unheld for the record to state. Knowing that takes
+    the whole grid, so the grid is run to its end whenever no candidate holds every
+    seed.
+
+    Returns ``(setpoint, scan, unheld)``: ``scan`` the seeds leaving at each
+    candidate run, ``unheld`` those no candidate holds. Two cases keep the last
+    candidate, the centre: no candidate holds every seed that some candidate holds
+    (``scan`` then shows who leaves at the centre), and no seed can be held from any
+    candidate, where the rule has nothing to decide with and ``unheld`` is every
+    seed."""
     scan = {}
     for point in grid:
-        scan[point] = int(exits_at(point))
-        if scan[point] == 0:
-            break
-    return float(point), scan
+        scan[point] = tuple(sorted(set(exits_at(point))))
+        if not scan[point]:
+            return float(point), scan, ()
+    leaving = [set(seeds) for seeds in scan.values()]
+    unheld = set.intersection(*leaving)
+    holdable = set.union(*leaving) - unheld
+    if holdable:
+        for point, seeds in scan.items():
+            if not holdable & set(seeds):
+                break
+    return float(point), scan, tuple(sorted(unheld))
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:

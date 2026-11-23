@@ -238,6 +238,8 @@ at the charged cost.
   valve there depends on the buffer flow the tanks meet, which is hidden, so no
   balance gives it. Measured on 2026-11-23: every seed leaves at 6.0 and 6.1,
   eight at 6.2, five at 6.3, one at 6.4 and none at 6.5, which is `setpoint_pH`.
+  A seed no candidate could hold would not constrain the placement and would be
+  listed; here every seed is held at 6.5, so none is.
   Stage 1 has no zone and follows the same
   setpoint.
 - Scenarios: the five of section 6.

@@ -19,9 +19,11 @@ A zone whose exit the score prices as a violation is placed otherwise (J1, owner
 the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which the pi rung
 leaves the zone on none of the ladder's seeds in any scenario. Where the plant's
 reset depends on the setpoint, each candidate's episodes start on it, and so do the
-kept one's from then on. On ``first_order`` the band is the tracking term's own:
-with ``e_tol`` 0.5 around a target pinned at 1.0, it charges x outside 0.5 to 1.5
-and nothing else is charged.
+kept one's from then on. A seed of a scenario that leaves from every candidate does
+not constrain the placement and is reported as unheld; when none can be held from
+any candidate, the centre is kept and every one is reported. On ``first_order`` the
+band is the tracking term's own: with ``e_tol`` 0.5 around a target pinned at 1.0, it
+charges x outside 0.5 to 1.5 and nothing else is charged.
 """
 
 import importlib.util
@@ -247,7 +249,9 @@ def test_a_seed_leaves_a_zone_when_its_exit_term_is_charged(ladder, raw, leaving
 
     row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
     left = ladder.zone_exits("first_order", row, Constant(raw), ("tracking",))
-    assert left == leaving
+    # Each is named by its scenario and seed: this plant's one window, the
+    # ladder's seeds 100 to 109.
+    assert left == tuple(("normal", seed) for seed in range(100, 100 + leaving))
 
 
 def test_a_zone_priced_on_exit_holds_the_first_grid_point_that_never_leaves(ladder):
@@ -267,12 +271,37 @@ def test_a_zone_priced_on_exit_holds_the_first_grid_point_that_never_leaves(ladd
     # The candidates run from the cheap edge, in order, and stop at the kept one.
     assert list(scan) == pytest.approx(grid[: len(scan)])
     assert setpoint == pytest.approx(grid[len(scan) - 1])
-    assert all(n > 0 for n in list(scan.values())[:-1])
+    assert all(list(scan.values())[:-1])  # every earlier candidate left somewhere
+    assert row.unheld["x on u"] == {}  # every seed is held at the kept one
     # Kept: the pi rung is never charged for leaving. The band's term is the only
     # cost of this plant short of a trip, so every seed costs nothing.
     kept = ladder.run_rung("first_order", row, "pi", rungs["pi"])
     assert kept["trips"] == 0
     assert kept["costs"] == pytest.approx([0.0] * 10, abs=0.0)
+
+
+def test_a_zone_no_seed_can_be_held_in_keeps_its_centre_and_reports_every_seed(
+    ladder,
+):
+    # The loop's zone is 0.5 to 1.5, but the score's band is put at 2.0 to 3.0 (the
+    # target pinned at 2.5): every candidate holds x outside it, so every seed is
+    # charged from every candidate. The rule has nothing to decide with: the centre
+    # is kept, the whole grid was run, and every seed is reported as unheld.
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    away = {**BAND, "target_x_range": (2.5, 2.5)}
+    row = dataclasses.replace(base, loops=(x,), balance=None, score=away)
+    ladder.build("first_order", row)
+    _, setpoint = row.placed["x on u"]
+    assert setpoint == pytest.approx(1.0)
+    assert list(row.scans["x on u"]) == pytest.approx(zone_grid(0.5, 1.5, "high"))
+    assert row.unheld["x on u"] == {"normal": list(range(100, 110))}
 
 
 def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):

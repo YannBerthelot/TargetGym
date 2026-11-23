@@ -48,10 +48,12 @@ def test_the_ph_reference_holds_the_lowest_setpoint_that_never_leaves_the_permit
     # one; every one before it left the permit on some seed.
     assert list(scan) == pytest.approx(grid[: len(scan)])
     assert setpoint == pytest.approx(grid[len(scan) - 1])
-    assert all(n > 0 for n in list(scan.values())[:-1])
-    # Kept: no seed is charged an excursion, in any scenario.
+    assert all(list(scan.values())[:-1])
+    # Kept: no seed is charged an excursion, in any scenario, and none is left
+    # out of the placement as unheld.
     kept = ladder.Reference("pi", rungs["pi"])
-    assert ladder.zone_exits("ph_neutralization", row, kept, ("excursion",)) == 0
+    assert ladder.zone_exits("ph_neutralization", row, kept, ("excursion",)) == ()
+    assert row.unheld["pH on trim"] == {}
     # Every later run starts on it, and so does the task as scored.
     assert row.score["setpoint_pH"] == pytest.approx(setpoint)
     scored = REGISTRY["ph_neutralization"].make_test_params()

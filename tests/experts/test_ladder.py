@@ -19,7 +19,12 @@ Contract, from docs/proposals/task-charter.md rule 3 and textbook control:
   exit the score prices as a violation, the candidates are the cheap edge and ten
   equal steps to the centre, and the reference keeps the first, from the cheap edge,
   at which it leaves the zone on none of its seeds. Candidates past it are not run.
-  If every candidate leaves, the centre is kept and the scan shows it.
+  Seeds that can be held decide (owner's clause, the same day): a seed that leaves
+  from every candidate does not constrain the placement, and is returned as unheld,
+  for the record to state. When no candidate holds every seed that some candidate
+  can hold, the centre is kept and the scan shows who leaves there. When no seed can
+  be held from any candidate, the rule has nothing to decide with: the centre is
+  kept and every seed is returned as unheld.
 - ``null_verdict`` (J2): a null policy wins a seed by costing strictly less than the
   reference; a task fails when any null wins more than half the seeds.
 - ``best_rung``: the lowest median cost among rungs that trip no seed; none if all
@@ -186,18 +191,44 @@ def test_a_zone_with_no_cheap_side_or_no_centre_has_no_grid(zone):
 
 
 def test_the_first_candidate_that_never_leaves_the_zone_is_kept():
-    # Seeds leaving at each candidate, from the cheap edge. 6.3 is the first with
+    # The seeds leaving at each candidate, from the cheap edge. 6.3 is the first with
     # none; 6.4 leaves again and 6.5 does not, but neither is run.
-    exits = {6.0: 10, 6.1: 4, 6.2: 1, 6.3: 0, 6.4: 2, 6.5: 0}
-    setpoint, scan = first_without_exit(tuple(exits), exits.__getitem__)
+    exits = {6.0: "abcd", 6.1: "ab", 6.2: "a", 6.3: "", 6.4: "ab", 6.5: ""}
+    setpoint, scan, unheld = first_without_exit(tuple(exits), exits.__getitem__)
     assert setpoint == 6.3
-    assert scan == {6.0: 10, 6.1: 4, 6.2: 1, 6.3: 0}
+    assert scan == {6.0: ("a", "b", "c", "d"), 6.1: ("a", "b"), 6.2: ("a",), 6.3: ()}
+    assert unheld == ()
 
 
-def test_when_every_candidate_leaves_the_centre_is_kept_and_the_scan_shows_it():
-    setpoint, scan = first_without_exit((6.0, 6.5, 7.0), lambda point: 3)
+def test_a_seed_no_candidate_can_hold_does_not_constrain_the_placement():
+    # Seed c leaves from every candidate; a and b are both held from 6.2 on. The
+    # reference sits at 6.2 and pays for c's exits there; c is reported, and the
+    # whole grid had to be run to know that nothing holds it.
+    exits = {6.0: "abc", 6.1: "ac", 6.2: "c", 6.3: "c", 6.4: "c"}
+    setpoint, scan, unheld = first_without_exit(tuple(exits), exits.__getitem__)
+    assert setpoint == 6.2
+    assert unheld == ("c",)
+    assert scan == {k: tuple(v) for k, v in exits.items()}
+
+
+def test_when_no_seed_can_be_held_the_centre_is_kept_and_all_are_unheld():
+    # Every seed leaves from every candidate: there is no seed left to decide the
+    # placement. Not the cheap edge, which "none of no seeds" would allow: the
+    # centre, the farthest the zone lets the reference stand from that edge.
+    setpoint, scan, unheld = first_without_exit((6.0, 6.5, 7.0), lambda point: "ab")
     assert setpoint == 7.0
-    assert scan == {6.0: 3, 6.5: 3, 7.0: 3}
+    assert unheld == ("a", "b")
+    assert scan == {6.0: ("a", "b"), 6.5: ("a", "b"), 7.0: ("a", "b")}
+
+
+def test_when_no_candidate_holds_every_holdable_seed_the_centre_is_kept():
+    # a is held at 6.5 only, b at 6.0 and 7.0 only: each can be held somewhere, and
+    # nowhere together. The centre is kept, and the scan shows a leaves there.
+    exits = {6.0: "a", 6.5: "b", 7.0: "a"}
+    setpoint, scan, unheld = first_without_exit(tuple(exits), exits.__getitem__)
+    assert setpoint == 7.0
+    assert unheld == ()
+    assert scan[7.0] == ("a",)
 
 
 def test_cv_sigma_pools_seeds_after_the_burn_in():
