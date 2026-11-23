@@ -45,15 +45,26 @@ transmitters' response, with the disturbance's speed. The plant now has both.
 
 - **The machine.** Each episode's machine has its true surge line a hidden fraction
   `line_shift` off the map, drawn uniformly within `line_shift_max` either side at
-  the reset. The model computes the machine's characteristic as the map's stretched
-  in Phi by `1 + line_shift`: the head peaks at Phi = 2W (1 + `line_shift`), at the
-  map's peak head. The map (`surge_flow_per_speed`, the margin a controller reads off
-  the observation) is unchanged, and no observation channel carries the shift. A
-  trip's restart keeps the machine: the sources tie the line's position to the
-  machine's condition and to the map's error [C10; C1], which a trip does not change.
+  the reset. The head peaks at Phi = 2W (1 + `line_shift`), at the map's peak head.
+  The difference is local to the line (`on_the_map`; owner, 2026-11-23): a plant
+  cannot measure where its line has drifted [C10], so in normal operation the
+  machine must read as its map. "Near the line" is inside the control margin: from
+  the map's control line on, `reset_margin` (10 %) right of the map's surge line,
+  the line the plant is established on and holds [C6; C1], the machine's head is
+  the map's exactly. At and left of its true line it is the map moved by
+  2W `line_shift`, and between the two the move fades by a smoothstep, so the head
+  stays one-humped with no jump in slope while the shift is under the margin. The
+  shape of the fade is ours: no source gives one. A first version stretched the
+  whole map, and the speed that held 24 kPa at a given flow then gave the shift
+  away (0.7 % for 5 %, seventy steps of the speed reading). The map
+  (`surge_flow_per_speed`, the margin a controller reads off the observation) is
+  unchanged, and no observation channel carries the shift. A trip's restart keeps
+  the machine: the sources tie the line's position to the machine's condition and
+  to the map's error [C10; C1], which a trip does not change.
 - **Established operation** is on the map's 10 % line, the one the plant's control
-  system knows. A machine whose line is right of its map therefore starts closer to
-  its true line than its controller reads, 4.8 % from it at the largest shift.
+  system knows. There every machine is its map, so the reset gives no machine
+  away; one whose line is right of its map starts closer to its true line than its
+  controller reads, 4.8 % from it at the largest shift.
 - **The transmitters.** The flow and pressure readings lag first order, 0.15 s and
   0.3 s [C10, pp. 29-30]. The score reads the true state.
 - **The oracle and the ceiling** know the machine: their limit is its true line.

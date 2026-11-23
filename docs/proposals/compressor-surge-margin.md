@@ -1,7 +1,7 @@
 # compressor_surge: a margin the plant earns
 
-Status: the owner chose option 1, the lag and the hidden line shift, and its four
-values (2026-11-23). It is built in the plant. One point is still open, at the end.
+Status: the owner chose option 1, the lag and the hidden line shift, its four values,
+and a shift local to the line (2026-11-23). It is built in the plant.
 
 ## The finding
 
@@ -86,47 +86,52 @@ whether the observation gains a suction temperature channel [C4, C5].
 
 ## As built, and what it gives (2026-11-23)
 
-The plant has a first-order lag of 0.15 s on its flow reading and 0.3 s on its
-pressure reading [C10], and each episode's machine has its true surge line a hidden
-fraction off the map, uniform within 5 % either side. The model computes the
-machine's characteristic as the map's stretched in Phi by one plus that fraction. A
-trip's restart keeps the machine. The oracle and the ceiling know the true line.
+Decided by the owner: the shift is uniform within 5 % either side of the map; a
+restart keeps the machine; no suction temperature channel; the flow reading lags
+0.15 s and the pressure reading 0.3 s [C10]; and the shift is local to the line.
 
-The reference's margin by the owner's rule, on seeds 100 to 109: no surge on any seed
-from 0.15 down to 0.09, one fast-day seed at 0.08. So 0.09.
+**Local to the line.** A first build stretched the whole map, and the speed that held
+24 kPa at a given flow then gave the shift away (0.7 % for 5 %, seventy steps of the
+speed reading), which a plant cannot do [C10]. Now the machine differs from its map
+only inside the control margin: from the map's control line on (10 % right of the
+map's surge line, the line the plant is established on and holds [C6; C1]) its head
+is the map's exactly; at and left of its true line it is the map moved; between the
+two the move fades smoothly (the fade's shape is ours). Two machines with opposite
+shifts then read alike to within their instruments' resolution in normal operation,
+and part as the line nears: on a demand fall that carries the map's own machine
+onto its line, the one whose line is 5 % right surges and the one whose line is 5 %
+left does not (`tests/compressor_surge/test_compressor_surge_hidden_line.py`).
 
-Room on held-out seeds 200 to 209, the reference at 0.09 against the ceiling on the
-true line, paired by seed, kJ per step, with a 95 % interval from a bootstrap over
-seeds within each scenario:
+**The reference's margin by the owner's rule**, on seeds 100 to 109: no surge on any
+seed from 0.13 down to 0.09, two fast-day seeds at 0.08. So 0.09.
+
+**Room** on held-out seeds 200 to 209, the reference at 0.09 against the ceiling on
+the true line, paired by seed, kJ per step, with a 95 % interval from a bootstrap
+over seeds within each scenario:
 
 | scenario | reference | ceiling | balance floor | room |
 |---|---|---|---|---|
-| normal | 0.722 | 0.129 | 0.103 | 5.57 [3.13, 14.70] |
-| slow_approach | 11.10 | 8.83 | 8.64 | 1.26 [1.20, 1.32] |
-| fast_approach | 12.59 | 9.45 | 9.34 | 1.33 [1.27, 1.40] |
-| load_swings | 5.24 | 3.48 | 3.40 | 1.51 [1.37, 1.75] |
-| J | 3.03 | 1.97 | 1.91 | 1.54 [1.45, 1.65] |
+| normal | 0.722 | 0.116 | 0.103 | 6.22 [3.67, 15.99] |
+| slow_approach | 11.10 | 8.75 | 8.64 | 1.27 [1.23, 1.32] |
+| fast_approach | 12.69 | 9.45 | 9.34 | 1.34 [1.27, 1.43] |
+| load_swings | 5.24 | 3.51 | 3.40 | 1.49 [1.36, 1.73] |
+| J | 3.04 | 1.95 | 1.91 | 1.55 [1.46, 1.66] |
 
-- The ceiling costs less than the reference on 40 seeds of 40, trips on none, and
-  sits 3 % above the balance floor on J.
-- The reference surges once, on the one held-out machine near the top of the range
-  (line 4.9 % right of its map). A margin placed on ten machines is not safe on an
-  eleventh: that is the margin being the plant's.
+The ceiling costs less than the reference on 40 seeds of 40, trips on none, and sits
+2 % above the balance floor on J. 34 of its 40 solves end on the 1200-iteration cap.
+The fast and load_swings solves ran on JAX 0.6.2, the other two on 0.11.2.
 
-## Decided by the owner (2026-11-23)
+**What the rule's margin is worth on machines it was not placed on.** The reference
+on 200 other machines per scenario (seeds 1000 to 1199):
 
-1. The shift is uniform within 5 % either side of the map.
-2. A restart keeps the machine.
-3. The observation gains no suction temperature channel; the inlet stays fixed.
-4. The flow reading lags 0.15 s and the pressure reading 0.3 s.
+| margin | fast days with a surge, of 200 | other days with a surge, of 600 | trips | J |
+|---|---|---|---|---|
+| 0.09 (the rule's, from 10 seeds) | 11 | 0 | 0 | 3.04 |
+| 0.10 | 7 | 0 | 0 | 3.19 |
+| 0.12 | 0 | 0 | 0 | 3.53 |
 
-## Still open
+Every surging machine has its line right of its map: none of 97 with it left, 2 of 46
+within 2.5 % right, 9 of 57 beyond. A margin placed on ten machines surges on about
+one fast day in twenty elsewhere, never trips, and the margin that surges on none of
+200 is 0.12, inside practice's 10 to 15 % [C1], at 16 % more recycle energy.
 
-**The shift can be read off the readings.** Because the whole characteristic is
-stretched, the speed that holds 24 kPa at a given flow differs by about 0.7 % for a
-5 % shift, seventy steps of the speed reading. A controller that knew the map's shape
-could invert it and find the line without going near it, which the sources say a
-plant cannot do [C10]. Options: keep the stretch local to the line (the shape is
-ours, and with shifts up to 5 % it hides only part of the difference at the 10 %
-line); keep the whole-map stretch as a known deviation; or add a hidden head error
-of a few percent, so that one steady reading no longer gives the shift.

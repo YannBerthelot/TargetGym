@@ -172,7 +172,9 @@ class CompressorSurgeParams(EnvParams):
     #: fraction left or right of the map's, drawn uniformly within this at the
     #: reset. Field and shop curves differ, the line drifts with the machine's
     #: condition [C1; C10], and invariant coordinates leave 2.6 to 7 % at low
-    #: suction pressure [C14]. Ours, inside that range.
+    #: suction pressure [C14]. Ours, inside that range. The machine differs
+    #: from its map only between its true line and the map's control line
+    #: (``on_the_map``), so it must stay under ``reset_margin``.
     line_shift_max: float = 0.05
     #: Version 2's reset point (rated speed, recycle 0.35), which the reset no
     #: longer reads: with it a normal day's demand started the plant below its
@@ -371,17 +373,36 @@ def surge_constant(params: CompressorSurgeParams):
 # ---------------------------------------------------------------------------
 
 
+def on_the_map(phi, params: CompressorSurgeParams, xp=jnp, shift=0.0):
+    """Where on the map a machine at flow coefficient ``phi`` reads its head.
+
+    The machine's true surge line sits at Phi = 2W (1 + shift), and it cannot
+    be found from normal operation: a plant cannot measure where its line has
+    drifted [C10]. So the difference from the map is local to the line. From
+    the map's control line on, ``reset_margin`` right of the map's surge line
+    (the line the plant is established on and holds [C6; C1]), the machine is
+    its map. At and left of its true line it is the map moved by 2W shift.
+    Between the two the move fades by a smoothstep, whose slope is zero at
+    both ends, so the head has no jump in slope and stays one-humped while the
+    shift is smaller than the margin. At ``shift`` 0 it is ``phi`` itself.
+    """
+    line = 2.0 * params.W
+    start = line * (1.0 + shift)
+    end = line * (1.0 + params.reset_margin)
+    t = xp.clip((phi - start) / (end - start), 0.0, 1.0)
+    return phi - line * shift * (1.0 - 3.0 * t**2 + 2.0 * t**3)
+
+
 def characteristic(phi, params: CompressorSurgeParams, xp=jnp, shift=0.0):
     """Psi_c(Phi): the Moore-Greitzer cubic for Phi <= ``phi_join``, and its
     tangent line beyond, so the head keeps falling past the reachable range
     without the cubic's turn.
 
-    ``shift`` is the machine's (``state.line_shift``): its characteristic is
-    the map's stretched in Phi by 1 + shift, so its head peaks, and its surge
-    line sits, at Phi = 2W (1 + shift), at the map's peak head. At 0 it is the
-    map.
+    ``shift`` is the machine's (``state.line_shift``): near its surge line its
+    head is the map's read at ``on_the_map``, so it peaks, and its surge line
+    sits, at Phi = 2W (1 + shift), at the map's peak head. At 0 it is the map.
     """
-    phi = phi / (1.0 + shift)
+    phi = on_the_map(phi, params, xp, shift)
     y = phi / params.W - 1.0
     cubic = params.psi_c0 + params.H * (1.0 + 1.5 * y - 0.5 * y**3)
     y_j = params.phi_join / params.W - 1.0

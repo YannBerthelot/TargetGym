@@ -172,7 +172,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         # Against the machine's true line, 2W (1 + shift): scaled so that the
         # limit's bound stays the map's 2W.
         y = jnp.stack([phi_min / (1.0 + shift)])
-        return x1, cost, y, (dp / KPA)[None], p.phi_join - phis / (1.0 + shift)
+        return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
     K = history(p)
     return TaskModel(

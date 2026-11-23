@@ -1,5 +1,5 @@
 {
-  "fingerprint": "bce33c7c1d57e074",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). compressor_surge (owner, 2026-11-23): the reset and a trip's restart are established operation on a 10 % control line at the header setpoint (charter B5); the valve's dead time is counted in whole substeps; each episode's machine has its true surge line a hidden fraction off the map, and the flow and pressure readings lag first order. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-23T17:53:16+00:00"
+  "fingerprint": "84a7a107b733ce52",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). compressor_surge (owner, 2026-11-23): the reset and a trip's restart are established operation on a 10 % control line at the header setpoint (charter B5); the valve's dead time is counted in whole substeps; each episode's machine has its true surge line a hidden fraction off the map, a difference local to the line, and the flow and pressure readings lag first order. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T19:08:02+00:00"
 }

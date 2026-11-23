@@ -6,9 +6,16 @@ not from the code:
 1. The plant's true surge line sits a hidden fraction off the map the controller
    reads: field and shop curves differ, the line drifts with the machine's
    condition, and invariant coordinates leave 2.6 to 7 % at low suction pressure
-   [C1; C10; C14]. The model computes its characteristic with the cubic's width
-   scaled by ``1 + shift``: the head peaks at Phi = 2W (1 + shift), at the same
-   peak head.
+   [C1; C10; C14]. The head peaks at Phi = 2W (1 + shift), at the map's peak
+   head.
+   The difference is local to the line (owner, 2026-11-23): a plant cannot
+   measure where its line has drifted [C10], so in normal operation the machine
+   must read as its map. From the map's control line on (10 % right of the map's
+   surge line, the line the plant is established on and holds [C6; C1]) the
+   machine's head is the map's. Between its true line and that control line the
+   head falls smoothly, with no second hump and no jump in slope.
+   The property: two machines with opposite shifts read alike, to within their
+   instruments' resolution, in normal operation, and part as the line nears.
 2. The shift is the machine's: drawn at the reset from the episode's key,
    uniformly within ``line_shift_max`` either side (ours, inside [C14]'s range),
    and kept through a trip's restart.
@@ -79,21 +86,84 @@ def test_no_observation_channel_carries_the_shift():
     np.testing.assert_array_equal(np.asarray(one), np.asarray(other))
 
 
-def test_the_duct_feels_the_true_characteristic():
-    """Two machines in one state, 10 % right of the map's line (Phi 0.55). By
-    hand, the cubic there gives Psi = 0.6575 with the line 5 % right of the map
-    and 0.6302 with it 5 % left, against the map's 0.6485: after one step the
-    first machine's flow is the higher."""
-    p = CompressorSurgeParams(demand_range=(0.4, 0.4), demand_sigma=0.0)
+def test_right_of_the_control_line_every_machine_is_its_map():
+    """From the map's 10 % control line, Phi = 0.5 x 1.10 = 0.55, each machine's
+    head is the map's, exactly."""
+    p = CompressorSurgeParams()
+    phi = np.linspace(0.55, 0.85, 301)
+    on_map = np.asarray(characteristic(phi, p, np))
+    for shift in (0.05, -0.05, 0.02):
+        np.testing.assert_array_equal(
+            np.asarray(characteristic(phi, p, np, shift=shift)), on_map
+        )
+
+
+@pytest.mark.parametrize("shift", [0.05, -0.05])
+def test_a_machines_head_falls_smoothly_from_its_line_to_the_control_line(shift):
+    """One hump: from its true line to the control line the head only falls.
+    And no jump in slope where the stretch starts and ends: one-sided slopes
+    over 1e-5 of Phi agree to 1e-3 (the head's curvature is of order 10, so each
+    one-sided slope is good to 1e-4)."""
+    p = CompressorSurgeParams()
+    line, control = 0.5 * (1.0 + shift), 0.55
+
+    def head(phi):
+        return np.asarray(characteristic(np.asarray(phi, float), p, np, shift=shift))
+
+    assert np.all(np.diff(head(np.linspace(line, control, 2001))) <= 1e-12)
+    for at in (line, control):
+        left = (head(at) - head(at - 1e-5)) / 1e-5
+        right = (head(at + 1e-5) - head(at)) / 1e-5
+        assert float(left) == pytest.approx(float(right), abs=1e-3)
+
+
+def test_two_machines_read_alike_in_normal_operation_and_part_near_the_line():
+    """The owner's property. Two machines in one episode's world, their lines 5 %
+    right and 5 % left of the map, the recycle shut and the speed held.
+
+    Normal operation, the consumers at 0.92 and the plant right of its control
+    line: over 60 s every reading of the two machines agrees to within its
+    instrument's resolution (PHYSICS.md, Readings: pressure 9.17 Pa, flows
+    0.021 kg/s, speed 1e-4 of rated, valve 1.5e-3).
+
+    Then the demand falls to 0.725 over 5 s, which carries the map's own machine
+    onto its surge line. By hand: at 0.92 the consumers take 0.12 x 0.92 x
+    sqrt(14000) = 13.06 kg/s, which 24 kPa needs 89.3 % speed for; at that speed
+    the line passes 24.5 x 0.893 x 0.5 = 10.94 kg/s under a peak head of
+    25.79 kPa, where consumers at u take 0.12 u sqrt(15790) = 15.08 u, so u =
+    0.725. There the first machine is 4.8 % left of its own line and the second
+    5.3 % right of its own: the first surges, the second does not, and their
+    pressure readings part by more than ten of the transmitter's sigma."""
+    p = CompressorSurgeParams(demand_range=(0.92, 0.92), demand_sigma=0.0)
     env = CompressorSurge()
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     hold = env.initial_action(s, p)
+    assert float(s.x) == 0.0
 
-    def flow_after(shift):
-        at = s.replace(line_shift=jnp.float32(shift))
-        return float(compute_next_state(hold, at, p, jax.random.PRNGKey(0))[0].m_c)
+    def run(state, steps, first):
+        def body(st, k):
+            obs, st, _, _, _ = env.step_env(jax.random.PRNGKey(k), st, hold, p)
+            return st, (obs, st.surges)
 
-    assert flow_after(0.05) > flow_after(0.0) > flow_after(-0.05)
+        return jax.lax.scan(body, state, first + jnp.arange(steps))
+
+    normal, approach = {}, {}
+    for name, shift in (("right", 0.05), ("left", -0.05)):
+        machine = s.replace(line_shift=jnp.float32(shift))
+        at_60s, (obs, _) = run(machine, 600, 0)
+        normal[name] = np.asarray(obs)
+        falling = at_60s.replace(demand_levels=at_60s.demand_levels.at[3:].set(0.725))
+        _, (obs, surges) = run(falling, 300, 600)
+        approach[name] = (np.asarray(obs), float(np.sum(np.asarray(surges))))
+
+    # [dp kPa, m_c, m_d, N %, N_ramp %, x %, setpoint kPa, surge count]
+    resolution = np.array([9.17e-3, 0.021, 0.021, 0.01, 0.01, 0.15, 1e-6, 0.5])
+    assert np.all(np.abs(normal["right"] - normal["left"]) <= resolution)
+
+    assert approach["right"][1] >= 1.0
+    assert approach["left"][1] == 0.0
+    parted = np.abs(approach["right"][0][:, 0] - approach["left"][0][:, 0])
+    assert parted.max() > 10 * 9.17e-3
 
 
 def test_the_plant_is_established_on_the_map_line_whatever_its_machine():
@@ -107,6 +177,9 @@ def test_the_plant_is_established_on_the_map_line_whatever_its_machine():
     s = jax.vmap(lambda k: env.reset_env(k, p)[1])(keys)
     np.testing.assert_allclose(np.asarray(s.dp), p.header_setpoint, atol=AT_SETPOINT)
     np.testing.assert_allclose(np.asarray(s.m_c), MAP_LINE_FLOW, atol=0.01)
+    # The reset does not give the machine away: on the control line every
+    # machine is its map, so all start at one speed.
+    assert np.ptp(np.asarray(s.N)) <= 1e-6
     true_line = 2.0 * p.W * (1.0 + np.asarray(s.line_shift))
     assert np.all(np.asarray(s.phi_min) > true_line)
 
