@@ -196,6 +196,42 @@ def test_the_wake_frozen_sensitivity_lies_on_the_published_line():
         assert seen == pytest.approx(published, rel=0.25), (v, theta)
 
 
+# The design rates (PHYSICS.md sec. 3): the tower's and the pitch system's prices
+# are set so that 20 years at these rates use each up exactly, and the rates are
+# what S1's controller with its published gains does on the normal scenario:
+# the mean rainflow damage and the mean pitch travel per step over 2400 steps of
+# seeds 100 to 107, the plant stepped without sensor noise. The travel is stored
+# to four digits, 1e-3. The damage is a fourth power, and S1's torque law
+# switches regions on a comparison: on seed 101 that switch falls the other way
+# on an x86 server than on the ARM machine the rate was measured on, one swing of
+# about 40 MN m is counted or not, and the eight-seed mean moves 7 % (1041 against
+# 965). Tolerance 20 %: three times that, and under half of the 43 % by which the
+# stored rate was stale after the inflow lag went in.
+@pytest.mark.medium
+def test_the_design_rates_are_what_s1s_controller_does_on_the_normal_scenario():
+    p = _params()
+    cp = _published(p)
+    from target_gym.energy.wind_turbine.env_jax import WindTurbine
+
+    env = WindTurbine()
+
+    def one(seed):
+        key = jax.random.PRNGKey(seed)
+        s0 = env.reset_env(key, p)[1]
+
+        def body(carry, _):
+            s, c = carry
+            a, c = nrel_baseline_step(cp, c, W.get_obs(s, p))
+            s, _ = W.compute_next_state(a, s, p, key)
+            return (s, c), (s.damage, s.pitch_travel)
+
+        return jax.lax.scan(body, (s0, NRELBaselineState()), None, length=2400)[1]
+
+    damage, travel = jax.jit(jax.vmap(one))(jnp.arange(100, 108))
+    assert float(damage.mean()) == pytest.approx(p.tower_damage_design, rel=0.20)
+    assert float(travel.mean()) == pytest.approx(p.pitch_travel_design, rel=1e-3)
+
+
 # 6. Actuator limits are hard saturations. S1 Table 7-2: pitch rate 8 deg/s,
 # torque 47,402.91 N m, torque rate 15,000 N m/s; pitch 0 to 90 deg (S1 p. 26).
 # Full-range step commands. No excess at all on the rates and the torque;

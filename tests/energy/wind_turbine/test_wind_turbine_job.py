@@ -16,8 +16,9 @@ Contract:
     power at peak Cp), at 60 $/MWh; over-production is free;
   * the tower's fatigue: its cost, 1750 $/kW x 5000 kW x 0.75 x 0.263 =
     $1,726,031 [S20], spread so that 20 years [S20] at the design damage rate
-    cost exactly that; damage closes per half-cycle of the base moment between
-    turning points, 0.5 (range / 1 MN m)^4;
+    cost exactly that; damage is the rainflow count of the base moment (owner,
+    2026-11-23; ASTM E1049, test_wind_turbine_fatigue.py), (range / 1 MN m)^4 a
+    cycle and half that a half cycle;
   * the pitch system's wear: 1750 x 5000 x 0.75 x 0.0266 = $174,563 [S20], the
     same way over its design travel;
   * a trip: 2 h of rated production at 60 $/MWh, $600, plus a $1,000 manual
@@ -197,17 +198,20 @@ def test_twenty_years_at_the_design_rates_cost_the_tower_and_the_pitch_system(en
 
 
 def test_a_sine_moment_closes_two_half_cycles_of_its_range_per_period(env):
-    """A base moment swinging +/- 10 MN m: each half-cycle spans 20 MN m, damage
-    0.5 x 20^4 = 80,000, two per period."""
-    state = _reset(env).replace(moment=0.0, moment_turn=0.0, moment_dir=0.0)
-    total = 0.0
+    """A base moment swinging +/- 10 MN m from 0. By ASTM's rule every range of a
+    constant swing holds the record's first point, so each closes as a half
+    cycle: 19 of 20 MN m between the 20 extremes of 10 periods, 0.5 x 20^4 =
+    80,000 each, and the two end ranges of 10 MN m, 0.5 x 10^4 each."""
+    stack = jnp.zeros(W.RAINFLOW_DEPTH)
+    depth, moment, direction, total = jnp.int32(1), jnp.zeros(()), jnp.zeros(()), 0.0
     for k in range(1, 12 * 10 + 1):  # 10 periods of 12 samples
-        moment = 10e6 * np.sin(2 * np.pi * k / 12 + 1e-3)
-        m, turn, d, damage = W.count_half_cycles(state, jnp.asarray(moment), PARAMS)
-        state = state.replace(moment=m, moment_turn=turn, moment_dir=d)
+        new = jnp.asarray(10e6 * np.sin(2 * np.pi * k / 12 + 1e-3), jnp.float32)
+        stack, depth, direction, damage = W.rainflow_step(
+            stack, depth, moment, direction, new, PARAMS.fatigue_exponent
+        )
+        moment = new
         total += float(damage)
-    # The first half-cycle starts at 0, not at a peak: 19 full ranges, one half.
-    assert total == pytest.approx(19 * 80_000 + 0.5 * 10**4, rel=1e-3)
+    assert total == pytest.approx(19 * 80_000 + 10**4, rel=1e-3)
 
 
 def test_the_observation_carries_the_rating_accelerometer_and_anemometer(env):

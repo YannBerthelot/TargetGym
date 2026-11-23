@@ -13,6 +13,7 @@ from target_gym.base import (
     measured_obs,
 )
 from target_gym.energy.wind_turbine.env import (
+    RAINFLOW_DEPTH,
     WindTurbineParams,
     WindTurbineState,
     balance_pitch,
@@ -235,7 +236,11 @@ class WindTurbine(
             gust_t0=gust_t0,
             derate_t0=derate_t0,
             moment=tower_base_moment(x0, params),
-            moment_turn=tower_base_moment(x0, params),
+            # The fatigue record starts here: its first point opens the stack.
+            moment_stack=jnp.zeros(RAINFLOW_DEPTH)
+            .at[0]
+            .set(tower_base_moment(x0, params)),
+            moment_depth=jnp.ones((), jnp.int32),
             v_mean_z=v_mean_z,
             v_mean_lo=lo + jnp.zeros_like(v_mean),
             v_mean_hi=hi + jnp.zeros_like(v_mean),

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "9bd110669dea1eb6",
-  "note": "Re-stamped in place, unreleased v6 (owner's choices of 2026-11-23, wind_turbine review): the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7), the converter holds electrical power at the set point, and the anemometer channel reads the hub's point wind. No release carries v6, and its records are superseded. Merged with the shared change of 2026-11-14 (a reading's interval counts control steps; two unused rollout helpers removed), which changes no step, reward or observation.",
-  "stamped": "2026-11-23T18:34:57+00:00"
+  "fingerprint": "2a34d608c2304e8f",
+  "note": "Re-stamped in place, unreleased v6 (owner's choices of 2026-11-23, wind_turbine review): the rotor sees the hub's turbulence through its spatial filter (Petru 2001, Eq. 5.7), the converter holds electrical power at the set point, the anemometer channel reads the hub's point wind, and the tower's fatigue is the rainflow count of its base moment (ASTM E1049), with the design rates measured again on the rebuilt plant. No release carries v6, and its records are superseded. Merged with the shared change of 2026-11-14 (a reading's interval counts control steps; two unused rollout helpers removed), which changes no step, reward or observation.",
+  "stamped": "2026-11-23T18:47:00+00:00"
 }

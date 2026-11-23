@@ -59,6 +59,10 @@ RPM_PER_RAD_S = 60.0 / (2.0 * jnp.pi)
 EOG_SECONDS = 10.5
 #: Salt for the mean wind's draw, apart from the turbulence's ``fold_in(key, t)``.
 _MEAN_WIND = 0x4D45414E
+#: Open turning points the tower's rainflow count keeps (ours: a ring-down at the
+#: tower's 5 to 8 % damping nests one range a half cycle, and the 16th is under a
+#: tenth of the first).
+RAINFLOW_DEPTH = 16
 
 
 @struct.dataclass
@@ -184,11 +188,12 @@ class WindTurbineParams(EnvParams):
     #: S-N slope for the damage-equivalent load: the average of the welded
     #: tower curve's two slopes, 3 and 5 (DNV-RP-C203 type E) [S23].
     fatigue_exponent: float = 4.0
-    #: The design rates, (MN m)^m and deg per step: 20 years at these use the
-    #: tower and the pitch system up exactly. Ours, measured once from S1's
-    #: controller on seeds 100 to 107 of the normal scenario (PHYSICS.md).
-    tower_damage_design: float = 2.126e5
-    pitch_travel_design: float = 0.1754
+    #: The design rates, (MN m)^m of rainflow damage and deg per step: 20 years
+    #: at these use the tower and the pitch system up exactly. Ours, measured
+    #: from S1's controller on seeds 100 to 107 of the normal scenario
+    #: (PHYSICS.md; test_wind_turbine_reality.py pins the recipe).
+    tower_damage_design: float = 1041.0
+    pitch_travel_design: float = 0.06644
     #: A trip's restart: an overspeed trip needs a manual reset [S21]; ours,
     #: 2 h, between ROSCO's automatic 400 s start-up [S9 Ex. 32] and a site
     #: visit. At 0.25 s steps.
@@ -314,12 +319,16 @@ class WindTurbineState(EnvState):
     #: stream sets each at its event's onset, so float32 keeps them exact.
     gust_c0: jax.Array = 0
     derate_c0: jax.Array = 0
-    #: Tower-base moment (N m) last step and at the last turning point, its
-    #: direction (+1, -1, 0), and the damage the last step closed, (MN m)^m:
-    #: half-cycles counted between turning points (PHYSICS.md, Score).
+    #: Tower-base moment (N m) last step, the way it last moved (+1, -1, 0), its
+    #: open turning points (N m, bottom first, ``moment_depth`` of them) and the
+    #: damage the last step added, (MN m)^m: the rainflow count's increase
+    #: (``rainflow_step``; PHYSICS.md, Score).
     moment: float = 0.0
-    moment_turn: float = 0.0
     moment_dir: float = 0.0
+    moment_stack: jax.Array = struct.field(
+        default_factory=lambda: jnp.zeros(RAINFLOW_DEPTH)
+    )
+    moment_depth: jax.Array = 1
     damage: float = 0.0
     #: How far the pitch moved over the last step (deg).
     pitch_travel: float = 0.0
@@ -571,21 +580,56 @@ def tower_base_moment(x_tower, params: WindTurbineParams):
     return tower_stiffness(params) * x_tower * params.tower_height
 
 
-def count_half_cycles(state, moment, params):
-    """Half-cycle counting between turning points of the base moment: when the
-    moment turns, the half-cycle from the last turning point closes, with
-    damage 0.5 (range / 1 MN m)^m. Returns (moment, last turn, direction,
-    damage this step)."""
-    step = moment - state.moment
-    direction = jnp.sign(step)
-    turned = (
-        (state.moment_dir != 0.0) & (direction != 0.0) & (direction != state.moment_dir)
-    )
-    span = jnp.abs(state.moment - state.moment_turn) / 1.0e6
-    damage = jnp.where(turned, 0.5 * span**params.fatigue_exponent, 0.0)
-    turn = jnp.where(turned, state.moment, state.moment_turn)
-    direction = jnp.where(direction == 0.0, state.moment_dir, direction)
-    return moment, turn, direction, damage
+def _open_ranges(stack, depth, last):
+    """Each open range (MN m), bottom first: between neighbours in the stack, and
+    from its top to ``last``; 0 past the top."""
+    index = jnp.arange(stack.shape[0])
+    partner = jnp.where(index + 1 < depth, jnp.roll(stack, -1), last)
+    return jnp.where(index < depth, jnp.abs(partner - stack) / 1.0e6, 0.0)
+
+
+def rainflow_step(stack, depth, moment, direction, new, exponent):
+    """One step of the tower's rainflow count (ASTM E1049, three-point rule) as
+    the base moment goes from ``moment`` to ``new`` (N m).
+
+    ``stack`` holds the open turning points, bottom first, ``depth`` of them, the
+    record's first point at the bottom; ``direction`` is the way the moment last
+    moved. Returns (stack, depth, direction, damage): the damage is the increase
+    of the record's count so far, in (MN m)^m, with every open range a half cycle
+    and ``new`` the record's last point. That count never falls: where a range Y
+    closes under X, the ranges W, Y, X become the cycle Y and one range V = W - Y
+    + X, and V^m + Y^m >= W^m + X^m.
+
+    A reversal makes ``moment`` a turning point. Then, against ``new``: while the
+    range X from the top to ``new`` is at least the range Y under it, Y closes,
+    as a half cycle if it holds the record's first point (which goes), else as a
+    cycle (both its points go). A turning point that finds the stack full first
+    closes the innermost pair as a cycle (PHYSICS.md, D5)."""
+    size = stack.shape[0]
+    slot = jnp.arange(size)
+    before = _open_ranges(stack, depth, moment)
+    way = jnp.sign(new - moment)
+    turned = (direction != 0.0) & (way != 0.0) & (way != direction)
+    full = turned & (depth >= size)
+    inner = jnp.abs(stack[size - 1] - stack[size - 2]) / 1.0e6
+    closed = jnp.where(full, inner**exponent, 0.0)
+    depth = jnp.where(full, depth - 2, depth)
+    stack = jnp.where(turned & (slot == depth), moment, stack)
+    depth = jnp.where(turned, depth + 1, depth)
+    for _ in range(size):
+        top = stack[jnp.maximum(depth - 1, 0)]
+        under = stack[jnp.maximum(depth - 2, 0)]
+        y = jnp.abs(top - under)
+        close = (depth >= 2) & (jnp.abs(new - top) >= y)
+        first = close & (depth == 2)
+        count = jnp.where(first, 0.5, 1.0)
+        closed = closed + jnp.where(close, count * (y / 1.0e6) ** exponent, 0.0)
+        stack = jnp.where(first & (slot == 0), stack[1], stack)
+        depth = jnp.where(first, 1, jnp.where(close, depth - 2, depth))
+    after = _open_ranges(stack, depth, new)
+    damage = closed + 0.5 * jnp.sum(after**exponent - before**exponent)
+    direction = jnp.where(way == 0.0, direction, way)
+    return stack, depth, direction, jnp.maximum(damage, 0.0)
 
 
 def compute_velocity(
@@ -719,8 +763,14 @@ def compute_next_state(
     position = jnp.stack([omega, pitch, torque, new[3], new[4], new[5]])
     accel = compute_velocity(position, (0.0, 0.0), v_wind, p)[0][4]
     over = omega >= p.overspeed_factor * omega_rated(p)
-    moment, turn, direction, damage = count_half_cycles(
-        state, tower_base_moment(new[3], p), p
+    moment = tower_base_moment(new[3], p)
+    stack, depth, direction, damage = rainflow_step(
+        state.moment_stack,
+        state.moment_depth,
+        state.moment,
+        state.moment_dir,
+        moment,
+        p.fatigue_exponent,
     )
     v_mean_z, v_mean, v_mean_lo, v_mean_hi = mean_wind(state, key, p)
 
@@ -747,8 +797,9 @@ def compute_next_state(
             target_power=set_point,
             feathered=jnp.where(tripped | over, 1.0, 0.0),
             moment=moment,
-            moment_turn=turn,
             moment_dir=direction,
+            moment_stack=stack,
+            moment_depth=depth,
             damage=damage,
             pitch_travel=jnp.abs(pitch - state.pitch),
             time=state.time + 1,

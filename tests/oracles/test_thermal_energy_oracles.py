@@ -174,13 +174,14 @@ def test_wind_plan_pays_for_power_the_converter_will_not_deliver():
     assert paid == pytest.approx(10.0 * 60.0 * mwh, rel=1e-9)
 
 
-def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
+def test_wind_plan_on_its_own_rainflow_rows_costs_what_the_env_charges():
     """The outer loop's contract (Loew and Bottasso 2022, online rainflow): with
-    the tower's turning points frozen at the plan's own, the planned fatigue is
-    the env's half-cycle count, so the whole score, tower included, is what the
-    env charges. The env closes a half-cycle at each turning point of the base
-    moment, 0.5 (range / 1 MN m)^m at the tower's price per unit of design
-    damage (env.compute_reward_terms).
+    the tower's rows frozen at the plan's own turning points, the planned
+    fatigue is the env's rainflow count (ASTM E1049, owner 2026-11-23), so the
+    whole score, tower included, is what the env charges. Rainflow pairs up the
+    record's turning points; each pair's range is charged at its two ends, about
+    their midpoint where both are in the plan, which is exact at the plan the
+    rows were counted on (oracle.rainflow_rows).
 
     Since the converter holds power at the set point (owner, 2026-11-23), the
     model and the env agree only under that limit, so the moves start with the
@@ -189,7 +190,7 @@ def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
     from target_gym.energy.wind_turbine.env import tower_base_moment
     from target_gym.energy.wind_turbine.oracle import (
         ceiling_data,
-        turning_points,
+        rainflow_rows,
         wind_model,
     )
 
@@ -212,12 +213,16 @@ def test_wind_plan_on_its_own_turning_points_costs_what_the_env_charges():
         for t, u in enumerate(moves):
             x, _, y = tm.step(d, x, jnp.asarray(u), t)[:3]
             moments.append(float(tower_base_moment(x[3], p64)))
-            above.append(float(y[3]))  # W over the set point
+            above.append(float(y[4]))  # W over the set point
     assert max(above) < 0.0  # under the converter's limit throughout
-    frozen = turning_points(
-        float(st.moment), float(st.moment_turn), float(st.moment_dir), moments
+    frozen = rainflow_rows(
+        np.asarray(st.moment_stack, float),
+        int(st.moment_depth),
+        float(st.moment),
+        np.asarray(moments),
+        float(p.fatigue_exponent),
     )
-    assert frozen[0].sum() >= 2  # the moves swing the tower
+    assert (frozen[1] > 0).sum() >= 4  # the moves swing the tower
 
     def data_of(env, p, st, keys):
         return (*ceiling_data(env, p, st, keys, run_as=as_called), frozen)
