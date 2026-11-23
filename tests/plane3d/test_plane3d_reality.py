@@ -366,7 +366,10 @@ def test_a_90_deg_change_at_25_deg_bank_takes_its_kinematic_time():
 def test_the_pattern_fits_the_holding_rules(level):
     """B5: inbound leg 60 s at or below 14 000 ft (4 267 m) and 90 s above,
     within 5 s; turns no tighter than 3 deg/s and 30 deg of bank; the assigned
-    speed's band stays at or under the cap, 230 KIAS to 14 000 ft, 265 above."""
+    speed stays at or under the cap, 230 KIAS to 14 000 ft, 265 above. Until
+    2026-11-23 the speed had a +-10 kt band about it and the test kept that
+    band's edge under the cap; the cap is now the one priced limit, and at
+    73.5 t on a low hold the aircraft is assigned it."""
     env, _ = tg.make(RACETRACK)
     params = _params(RACETRACK, target_altitude_range=(level, level))
     _, state = env.reset_env(KEY, params)
@@ -378,7 +381,7 @@ def test_the_pattern_fits_the_holding_rules(level):
     assert leg == pytest.approx(minute, abs=5.0)
     assert np.rad2deg(tas / r) <= 3.0 + 1e-3
     assert np.rad2deg(np.arctan(tas**2 / (G * r))) <= 30.0 + 1e-3
-    assert cas + 10.0 * KT <= cap * KT + 1e-3
+    assert cas <= cap * KT + 1e-3
 
 
 def _on_pattern(offset=0.0, backwards=False):
@@ -455,9 +458,11 @@ def test_the_hold_reference_flies_its_assigned_speed(wind_kt):
     is 1.2 times the level stall, "20% higher than level flight stall speed"
     (ARSPD_FBW_MIN [P409]), raised by the load factor of the bank it demands,
     as STALL_PREVENTION's "roll limits based on aerodynamic load factor in
-    turns" [P409]. So on a low hold, 220 KIAS under the 230 cap [IFH ch. 10],
-    in still air and in a steady 30 kt wind across the pattern, its airspeed
-    stays inside +-10 kt [AIM 4-4-12] after its first 60 s, through 600 s."""
+    turns" [P409]. So on a low hold, in still air and in a steady 30 kt wind
+    across the pattern, its airspeed stays inside +-10 kt [AIM 4-4-12] of the
+    assigned speed after its first 60 s, through 600 s. Since 2026-11-23 the
+    assigned speed there is the 230 KIAS maximum and the reference holds 5 kt
+    under it (tests/plane3d/test_plane3d_hold.py)."""
     env, _ = tg.make(RACETRACK)
     params = _params(
         RACETRACK,

@@ -30,7 +30,7 @@ from target_gym.plane3d.env import (
 #: its level-flight thrust is least at 218.1 to 222.2 kt CAS at 73.5 t between
 #: 3 000 and 8 000 m, and that speed goes as the square root of the mass
 #: within 0.4 kt from 60 to 78 t (``scripts/plane3d_review.py polar``).
-GREEN_DOT_CAS = 219.5 * 1852.0 / 3600.0
+GREEN_DOT_CAS = 231.5 * 1852.0 / 3600.0
 GREEN_DOT_MASS = 73_500.0
 
 

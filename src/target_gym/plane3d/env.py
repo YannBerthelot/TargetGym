@@ -130,7 +130,10 @@ class PlaneState3D(EnvState):
 class PlaneParams3D(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 73_500.0
-    thrust_output_at_sea_level: float = 240_000.0
+    #: Two IAE V2527E-A5 at their maximum continuous rating, as the 2D
+    #: aircraft's (plane/env.py; EASA IM.E.069): the A320-233 of the published
+    #: envelope the shared plant is checked against.
+    thrust_output_at_sea_level: float = 197_840.0
     air_density_at_sea_level: float = 1.225
     frontal_surface: float = 12.6
     wings_surface: float = 122.6
@@ -357,7 +360,7 @@ class PlaneParams3D(EnvParams):
     #: What the operator pays inside the bands (plane.dynamics.economy_cost).
     cost_index: float = 30.0
     economy_weight: float = 0.0
-    economy_scale: float = 1.242
+    economy_scale: float = 1.231
     #: Heading select is vectoring (rule 17, Amendment 3): a new heading every
     #: this many seconds, drawn over ``target_heading_range`` (ours: vectors come
     #: one after another; no source gives their spacing). 0: one clearance.

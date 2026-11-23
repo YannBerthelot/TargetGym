@@ -13,6 +13,7 @@ with its speed target moved by ``shift`` kt CAS, its bank limit by ``bank`` deg
 (heading) or its guidance read on a pattern ``widen`` m wider, same centre and
 half leg (racetrack), on paired seeds; the first row is the baseline.
 ``polar``: the plant's level-flight fuel flow against CAS, wings level.
+``backoff``: the reference's margin under the maximum holding airspeed.
 ``--set name=value`` overrides a float parameter. One process, a few seconds.
 """
 
@@ -25,24 +26,28 @@ import numpy as np
 from target_gym import scenarios as S
 from target_gym.plane import dynamics as D
 from target_gym.plane3d import env as E
+from target_gym.plane3d import hold as H
 from target_gym.registry import REGISTRY
 
 KT = 1852.0 / 3600.0
 
 
 def runner(name):
-    """``run(params, seeds, shift, widen, bank)`` -> per-seed sums and extremes."""
+    """``run(params, seeds, shift, widen, bank, margin)`` -> per-seed sums and
+    extremes. ``margin`` (kt) is the reference's ``cap_margin``; negative keeps
+    its own."""
     spec = REGISTRY[name]
     env, ctrl = spec.make_env(), spec.make_pid_controller(None)
     steps = int(spec.make_test_params().max_steps_in_episode)
     hold = name.endswith("racetrack")
 
-    def episode(params, seed, shift, widen, bank):
+    def episode(params, seed, shift, widen, bank, margin):
         key = jax.random.PRNGKey(seed)
         obs, state = env.reset_env(key, params)
         gains = ctrl.params.replace(
             max_bank_rad=ctrl.params.max_bank_rad + jnp.deg2rad(bank),
             cruise_cas=ctrl.params.cruise_cas + shift * KT,
+            cap_margin=jnp.where(margin < 0.0, ctrl.params.cap_margin, margin * KT),
         )
 
         def seen(obs, state):
@@ -71,6 +76,7 @@ def runner(name):
                 path=jnp.abs(E.distance_to_racetrack(new)) if hold else 0.0 * new.z,
                 bank=jnp.abs(new.phi),
                 cas=D.calibrated_airspeed(new.z, E.airspeed_3d(new, params)),
+                cap=H.holding_cap(new.target_altitude, params),
                 fuel=new.fuel,
             )
             return (obs, new, memory), out
@@ -88,6 +94,7 @@ def runner(name):
             path_max=o["path"].max(),
             bank_max=jnp.rad2deg(o["bank"].max()),
             cas=o["cas"].mean() / KT,
+            over_cap=(o["cas"] - o["cap"]).max() / KT,
             turn_share=o["turning"].mean(),
             flow_turn=o["turn_flow"].sum() / n_turn,
             flow_leg=(burned - o["turn_flow"].sum())
@@ -113,7 +120,7 @@ def costs(args):
     spec, run = runner(args.task)
     weights, total = S.weights(spec), 0.0
     for s, p in scenario_params(spec, args):
-        r = run(p, jnp.arange(args.seeds), 0.0, 0.0, 0.0)
+        r = run(p, jnp.arange(args.seeds), 0.0, 0.0, 0.0, -1.0)
         total += weights[s.name] * r["cost"].mean()
         print(f"\n{args.task} / {s.name} (weight {weights[s.name]:.4f})")
         for k in ("cost", "tracking", "running", "economy", "burned", "alt_max",
@@ -131,7 +138,7 @@ def fuel(args):
         for widen in args.widens:
             for bank in args.banks:
                 for shift in args.shifts:
-                    r = run(p, seeds, shift, widen, bank)
+                    r = run(p, seeds, shift, widen, bank, -1.0)
                     ref = r if ref is None else ref
                     d = 100.0 * (r["burned"] / ref["burned"] - 1.0)
                     se = d.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else 0.0
@@ -147,6 +154,29 @@ def fuel(args):
                         f" {r['flow_turn'].mean():.3f} against {r['flow_leg'].mean():.3f} kg/s"
                         f" | path {r['path_max'].max():4.0f} m"
                     )  # fmt: skip
+
+
+def backoff(args):
+    """The reference's margin under the maximum holding airspeed, by the rule
+    for a reference resting on a priced limit (owner, 2026-11-23): on a fixed
+    grid of 1 kt, the smallest margin at which it passes the limit on none of
+    the nominal seeds, 100 to 109, in the normal day. Flown where the limit
+    binds: the low holds, at the scored mass."""
+    spec, run = runner("plane3d_racetrack")
+    normal = next(s for s in S.suite(spec) if s.name == "normal")
+    low = (3_000.0, 14_000.0 * 0.3048)
+    p = S.params_for(spec, normal, target_altitude_range=low)
+    for margin in range(0, 9):
+        r = run(p, jnp.arange(100, 110), 0.0, 0.0, 0.0, float(margin))
+        exits = int((r["over_cap"] > 0.0).sum())
+        print(
+            f"margin {margin} kt: {exits} of 10 seeds pass the cap, the furthest by"
+            f" {r['over_cap'].max():+.2f} kt; cost {r['cost'].mean():.2f} a window,"
+            f" of which the cap {r['running'].mean():.3f}"
+        )
+        if exits == 0:
+            print(f"kept: {margin} kt")
+            break
 
 
 def polar(args):
@@ -180,7 +210,7 @@ def polar(args):
 if __name__ == "__main__":
     floats = lambda text: [float(x) for x in text.split(",")]  # noqa: E731
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mode", choices=("costs", "fuel", "polar"))
+    parser.add_argument("mode", choices=("costs", "fuel", "polar", "backoff"))
     parser.add_argument("task", nargs="?", default="plane3d_racetrack")
     parser.add_argument("--seeds", type=int, default=8)
     parser.add_argument("--scenarios", type=lambda t: t.split(","), default=[])
@@ -189,4 +219,5 @@ if __name__ == "__main__":
     parser.add_argument("--banks", type=floats, default=[0.0])
     parser.add_argument("--set", nargs="*", default=[], metavar="name=value")
     arguments = parser.parse_args()
-    {"costs": costs, "fuel": fuel, "polar": polar}[arguments.mode](arguments)
+    modes = {"costs": costs, "fuel": fuel, "polar": polar, "backoff": backoff}
+    modes[arguments.mode](arguments)
