@@ -21,6 +21,7 @@ from target_gym.identification import simc
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 __all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
+__all__ += ["binding_setpoint", "cycle_extremes"]
 
 #: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
 #: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
@@ -66,6 +67,34 @@ def zone_setpoint(low: float, high: float, sigma: float, cheap, k: float = K_BAC
     if bounded and (point - centre) * inward > 0:
         point = centre
     return float(point)
+
+
+def cycle_extremes(trace, priced, cycle: int, cheap: str) -> np.ndarray:
+    """The controlled variable's closest approach to the ``cheap`` edge in each full
+    cycle of ``cycle`` steps of ``trace``, over the steps where ``priced`` holds: the
+    minimum toward a low edge, the maximum toward a high one. A cycle with no priced
+    step gives nothing, and a part cycle at the end is left out."""
+    y, on = np.asarray(trace, float), np.asarray(priced, bool)
+    pick = np.min if cheap == "low" else np.max
+    cycles = range(len(y) // cycle)
+    spans = [slice(k * cycle, (k + 1) * cycle) for k in cycles]
+    return np.array([pick(y[s][on[s]]) for s in spans if on[s].any()])
+
+
+def binding_setpoint(low, high, held, extremes, cheap: str, k: float = K_BACKOFF):
+    """The setpoint of a zone priced on a schedule (owner, 2026-11-23): ``held``
+    moved so that the cycles' closest approaches to the ``cheap`` edge (``extremes``,
+    read with the loop holding ``held``) average ``k`` of their own standard
+    deviations inside it, never past the centre. The approach is taken to follow
+    the setpoint one for one; the caller re-reads at the new setpoint until it
+    stops moving."""
+    approach = np.asarray(extremes, float)
+    edge = {"low": low, "high": high}[cheap]
+    inward = 1.0 if cheap == "low" else -1.0
+    wanted = edge + inward * k * float(np.std(approach, ddof=1))
+    point = held + wanted - float(np.mean(approach))
+    centre = 0.5 * (low + high)
+    return float(centre if (point - centre) * inward > 0 else point)
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:

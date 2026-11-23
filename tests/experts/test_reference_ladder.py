@@ -205,6 +205,38 @@ def test_a_zone_loop_holds_two_sigma_inside_its_cheap_edge(ladder):
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
 
 
+def test_a_zone_priced_on_a_schedule_holds_its_closest_approach_inside(ladder):
+    # Owner, 2026-11-23: on a zone priced on a schedule, what can leave the zone is
+    # the controlled variable's closest approach to the cheap edge in each cycle, so
+    # the setpoint is where those approaches average two of their own standard
+    # deviations inside the edge. Zone 0.5 to 1.5 on x, cheap side high, cycles of
+    # ten steps, every step priced: each cycle's maximum of x, over the second half
+    # of each episode from a cycle's start, averages 1.5 - 2 sigma.
+    import dataclasses
+
+    import numpy as np
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), cycle=(10, lambda o, xp: True)
+    )
+    row = dataclasses.replace(base, loops=(x,), balance=None)
+    rungs = ladder.build("first_order", row)
+    sigma, setpoint = row.placed["x on u [pi]"]
+    assert sigma > 0
+    assert 1.0 < setpoint < 1.5  # between the centre and the cheap edge
+    held = ladder.cv_traces("first_order", row, rungs["pi"], 0)
+    peaks = []
+    for t in held:
+        start = -(-(len(t) // 2) // 10) * 10  # the first cycle start past the half
+        cycles = (len(t) - start) // 10
+        peaks += list(np.max(t[start : start + 10 * cycles].reshape(cycles, 10), 1))
+    # The mean of n maxima has a standard error of sigma / sqrt(n): four of them.
+    tolerance = 4.0 * sigma / len(peaks) ** 0.5
+    assert np.mean(peaks) == pytest.approx(1.5 - 2.0 * sigma, abs=tolerance)
+    assert np.std(peaks, ddof=1) == pytest.approx(sigma, rel=0.2)
+
+
 def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):
     # A row may quiet its bump tests (here, no sensor noise). The zone's spread is
     # still the normal day's, so it matches the spread of a row whose tests are

@@ -50,6 +50,14 @@ def row() -> Row:
     def raw_of(T_supply):
         return 2.0 * (T_supply - lo) / (hi - lo) - 1.0
 
+    opens, closes = float(scored.occupied_start_h), float(scored.occupied_end_h)
+
+    def occupied(o, xp):
+        # The office hours the score prices (env.is_occupied), read off the clock
+        # channels 6 and 7. The margin is a rounding guard, far under a step.
+        hour = xp.mod(xp.arctan2(o[6], o[7]), 2.0 * xp.pi) * 24.0 / (2.0 * xp.pi)
+        return (hour > opens - 0.01) & (hour < closes - 0.01)
+
     def held_supply(q):
         # The reset's own steady state (env.steady_state) at the point's outdoor
         # mean: the supply that holds the room at the band's low edge.
@@ -101,6 +109,10 @@ def row() -> Row:
         valve=False,
         # PHYSICS.md sec. 4: the comfort band is the zone, its cheap side low.
         zone=(float(scored.band_low), float(scored.band_high), "low"),
+        # The band is priced in office hours only, and the room swings through the
+        # day: what can fall under the band is each day's occupied minimum, at the
+        # start of the office day (owner, 2026-11-23).
+        cycle=(DAY_STEPS, occupied),
     )
     # Rung 3, PHYSICS.md sec. 8: the core's sensor (channel 3) [7, 12] as the
     # inner loop; the room loop sets its setpoint around the balance's core. The

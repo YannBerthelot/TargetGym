@@ -19,6 +19,11 @@ zone's centre, then at each placed setpoint until the setpoint stops moving, sin
 a nonlinear plant the spread depends on where the loop holds.
 Bumps are read against the same seed's unstepped run (``Plant(paired=True)``), so a
 slow walk or drift the two runs share leaves the response.
+A zone priced on a schedule (``Cv.cycle``; owner, 2026-11-23) is placed on what can
+leave it: the controlled variable's closest approach to the cheap edge in each
+cycle, over the priced steps. Each rung's setpoint is where its own approaches
+average ``k = 2`` of their standard deviations inside the edge
+(``ladder.binding_setpoint``), since the cycle's shape depends on the rung.
 
 A rung a task doesn't have is reported with the reason from its row.
 """
@@ -56,7 +61,9 @@ from target_gym.experts.ladder import (  # noqa: E402
     Pi,
     Rung,
     best_rung,
+    binding_setpoint,
     cv_sigma,
+    cycle_extremes,
     decoupler,
     ladder_controller,
     most_sensitive,
@@ -86,7 +93,10 @@ class Cv:
     ``window`` size its bump test, on the reading named ``inst``. ``valve`` says the
     MV has a valve's dead band. ``room`` replaces the plant's own limit. ``zone`` is
     ``(low, high, cheap)`` for a loop kept inside a zone: ``target`` is then unused,
-    and the loop holds the setpoint the module docstring describes."""
+    and the loop holds the setpoint the module docstring describes. ``cycle`` is
+    ``(steps, priced)`` for a zone priced on a schedule: the cycle's length, from
+    the episode's start, and ``priced(obs, xp)``, true on the steps the zone is
+    priced."""
 
     name: str
     mv: int
@@ -99,6 +109,7 @@ class Cv:
     valve: bool = True
     room: float | None = None
     zone: tuple | None = None
+    cycle: tuple | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -362,6 +373,9 @@ def build(name: str, row: Row, spec=None) -> dict:
             centres[i] = _constant(0.5 * (low + high))
         for i in zoned:
             c = row.loops[i]
+            if c.cycle:  # placed on each rung's own cycle, in ``make``
+                targets[i] = centres[i]
+                continue
             setpoint, at = None, list(centres)
             # The spread is the controlled variable's where its loop holds, which on
             # a nonlinear plant moves with the setpoint: start at the centre, then
@@ -385,11 +399,48 @@ def build(name: str, row: Row, spec=None) -> dict:
             else:
                 print(f"    {c.name}: placement still moving after {PLACE_ROUNDS}")
             targets[i] = _constant(setpoint)
-    target = stacked(targets)
+    cycled = [i for i in zoned if row.loops[i].cycle]
+    start = row.rest if row.bumpless else None
+
+    def on_cycle(rung, bias, i, at):
+        """Loop ``i``'s setpoint on ``rung``: where its closest approaches to the
+        cheap edge, one a cycle over the priced steps of the second half of each
+        episode, average two sigma inside it; re-read until it stops moving."""
+        c = row.loops[i]
+        (low, high, cheap), (steps, priced) = c.zone, c.cycle
+        held, at = 0.5 * (low + high), list(at)
+        for _ in range(PLACE_ROUNDS):
+            at[i] = _constant(held)
+            probe = ladder_controller(rung, read, stacked(at), bias, dt, start)
+            ys, on = traces(name, row, probe, (c.read, priced), spec)
+            approach = np.concatenate(
+                [
+                    cycle_extremes(y[a:], m[a:], steps, cheap)
+                    for y, m in zip(ys, on)
+                    for a in [-(-(len(y) // 2) // steps) * steps]
+                ]
+            )
+            sigma = float(np.std(approach, ddof=1))
+            last, held = held, binding_setpoint(low, high, held, approach, cheap)
+            row.placed[f"{c.name} [{rung.name}]"] = (sigma, held)
+            print(
+                f"    {c.name} [{rung.name}]: approach sigma {sigma:.4g}, "
+                f"setpoint {held:.4g}",
+                flush=True,
+            )
+            # The mean of n approaches is known to sigma / sqrt(n): a move under
+            # that is inside the reading's own resolution.
+            if abs(held - last) <= sigma / len(approach) ** 0.5:
+                break
+        else:
+            print(f"    {c.name} [{rung.name}]: still moving after {PLACE_ROUNDS}")
+        return held
 
     def make(rung, bias):
-        start = row.rest if row.bumpless else None
-        return ladder_controller(rung, read, target, bias, dt, start)
+        own = list(targets)
+        for i in cycled:
+            own[i] = _constant(on_cycle(rung, bias, i, own))
+        return ladder_controller(rung, read, stacked(own), bias, dt, start)
 
     loops = tuple(pis)
     rungs["pi"] = make(Rung("pi", loops, mix), flat)
@@ -545,22 +596,23 @@ class Reference:
 
 
 class Recorder(Reference):
-    """A ``Reference`` that also keeps ``read(obs)`` for every episode and step."""
+    """A ``Reference`` that also keeps each of ``reads(obs)`` for every episode and
+    step."""
 
-    def __init__(self, name, controller, read):
+    def __init__(self, name, controller, reads):
         super().__init__(name, controller)
-        self.read, self.values = read, []
+        self.reads, self.values = tuple(reads), []
 
     def act(self, carry, obs, t):
         rows = np.asarray(obs)
-        self.values.append([float(self.read(o, np)) for o in rows])
+        self.values.append([[float(r(o, np)) for o in rows] for r in self.reads])
         return super().act(carry, obs, t)
 
 
-def cv_traces(name, row, controller, i, spec=None) -> list:
-    """Loop ``i``'s reading under ``controller``, one array per bump-test seed, on
-    the scored normal day: the suite's first scenario at the scored parameters, so
-    a disturbance a row quiets for its bump tests still moves it."""
+def traces(name, row, controller, reads, spec=None) -> list:
+    """Each of ``reads(obs, xp)`` under ``controller``, as one array per bump-test
+    seed, on the scored normal day: the suite's first scenario at the scored
+    parameters, so a disturbance a row quiets for its bump tests still moves it."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
     normal = scenarios.suite(spec)[0]
@@ -568,11 +620,19 @@ def cv_traces(name, row, controller, i, spec=None) -> list:
         spec, normal, **{"sensor_noise_scale": NOISE, **row.score}
     )
     task = task_info(name, env, params, len(SEEDS))
-    policy = Recorder(row.loops[i].name, controller, row.loops[i].read)
+    policy = Recorder("traces", controller, reads)
     rollout = run_policy(policy, env, params, task, seeds=SEEDS)
-    values = np.asarray(policy.values)  # (steps, seeds)
+    values = np.asarray(policy.values)  # (steps, reads, seeds)
     lengths = np.asarray(rollout["length"], int)
-    return [values[:L, k] for k, L in enumerate(lengths)]
+    return [
+        [values[:L, r, k] for k, L in enumerate(lengths)] for r in range(len(reads))
+    ]
+
+
+def cv_traces(name, row, controller, i, spec=None) -> list:
+    """Loop ``i``'s reading under ``controller``, one array per bump-test seed
+    (``traces``)."""
+    return traces(name, row, controller, (row.loops[i].read,), spec)[0]
 
 
 def run_rung(name, row, label, controller, spec=None) -> dict:
