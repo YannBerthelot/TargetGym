@@ -301,6 +301,119 @@ coefficient keeps the day's burnup inside Tavg's free band, and the dilution owe
 is never charged. Not measured on those two draws: the sweep keeps no
 trajectories.
 
+### The five baseload losses, and two fixes (2026-11-23)
+
+The owner asked for the cause of the five baseload days the planner lost
+before they were written down as accepted. There are two causes, and the
+uncharged end of the day is neither.
+
+**Three days (seeds 115, 116, 121): the solver stopped on a dearer plan.** These
+days start with xenon off its balance: it burns off for four hours, then builds
+back. The reference borates through the dip and dilutes back. The planner
+absorbed it with about 24 rod steps, 9 of them drawn back later.
+
+- On seed 116 the first plan of the day costs $159.84 in the planner's own
+  model. The plan found with the rods' travel a hundred times dearer moves no
+  rod and costs $146.24 at the task's prices in the same model. Both solves
+  converge.
+- The rods' worth grows with their insertion (the integral worth of a cosine
+  flux), so the problem has two basins: parked rods see no gain in a first step
+  in, and deep rods none in a step out. The solver walks into the rods' basin
+  from a start that moves none.
+- Closed loop with rods priced out of the planner's reach: $130, $140 and $91
+  on the three seeds, against the reference's $138.3, $141.1 and $99.7.
+- The day's end does not explain them: the planner ended those days with the
+  rods still 15 steps in, so pricing the end makes its loss larger.
+
+Fix (`reactor/oracle.py`, `_attempt`): a cold solve also solves with the rods'
+travel `DEAR_RODS` = 100 times dearer, solves the task's own problem from that
+plan, and keeps the cheaper of the two. A second first guess did not work: on a
+baseload day the rods already sit where the offset wants them, so both guesses
+are the same. The new test states the property (a dearer rod price can never
+make the best plan cheaper), red at $132.20 against $118.90 and green after.
+
+**Two days (seeds 117, 129): the plant's boron mixing rounded small flows.** A
+trickle changes the boron by less over a 5 s sub-step than a single-precision
+number near 1690 ppm can hold (1.2e-4 ppm), and the mixing fraction came from
+`1 - exp(-x)`, itself rounded to steps of 6e-8.
+
+| Command held 10 h | Water or acid passed | Boron change due | Boron change before the fix |
+|---|---:|---:|---:|
+| dilution at 0.0001 of full flow | 36 kg | -0.243 ppm | 0 |
+| dilution at 0.0002 | 72 kg | -0.487 ppm | -0.879 ppm |
+| dilution at 0.001 | 360 kg | -2.432 ppm | -1.758 ppm |
+| boration at 0.0002 | 21.6 kg | +0.528 ppm | 0 |
+
+Every kilogram was charged either way. On seed 117 the reference got 0.49 ppm
+of dilution it did not pay for, $5.1 of its $5.8 win; on seed 129 the swing was
+$3.3 against a $1.8 loss. A policy could have chosen its trickle to dilute at
+half price. Load-follow days use large flows, where the error is 0.02 %.
+
+Fix (`reactor/env.py`; the owner's word, 2026-11-23): the mixing fraction is
+`-expm1(-x)` and the sum carries its rounding in a new state field,
+`boron_carry`. reactor-v10 keeps its number, re-stamped in place.
+
+**After both fixes, the 40 baseload seeds, dollars a day:**
+
+| Seed | Reference before | Reference after | Planner before | Planner after |
+|---:|---:|---:|---:|---:|
+| 115 | 138.3 | 139.6 | 141.3 | 130.3 |
+| 116 | 141.1 | 143.4 | 154.0 | 139.8 |
+| 117 | 21.6 | 26.2 | 27.5 | 27.4 |
+| 121 | 99.7 | 106.7 | 105.9 | 91.1 |
+| 129 | 35.0 | 36.2 | 36.8 | 34.8 |
+
+Over the 40 seeds the reference costs $62.7 a day (it was $61.9) and the
+planner $49.3 (it was $51.7): a room of 1.27 (it was 1.20). The paired saving
+is $13.4 with a standard error of $2.3 (t 5.9). The planner wins 32 days, ties
+7 (within 50 cents, mostly days that cost neither anything), and loses one,
+seed 117, by $1.2. It moves no rod
+on any of the 40 days, no solve failed or stopped at its cap, and nothing
+trips. On the ladder seeds it loses none.
+
+Seed 117 is the day's end: the reference dilutes 0.23 ppm less ($2.5 of
+water), ends the day 0.14 K colder, and pays $1.2 of Tavg charge for it.
+
+**Both rooms on baseload.** With the day's end priced
+(`reactor_ladder.owed`, the change over the day) the planner leaves $2.1 a day
+more owed than the reference. Charged for that difference, the baseload room is
+1.22 against 1.27 as scored. Priced in full on both sides the two days cost
+$140.0 and $128.7, a ratio of 1.09: each policy lets Tavg settle under its
+program, inside its free band, from a reset that puts it on the program, worth
+$77 of dilution a day on average over these seeds. That is the reset's gift to every policy, not
+a day's debt, and it makes the priced figure noisy day by day: 28 days won, 4
+lost, the worst by $6.1.
+
+**Single against double precision.** The package review's precision test (draft
+PR 248, `tests/test_plant_numerics.py`) holds each raw action at 0, 0.005,
+0.02, -0.02 and 0.1 for a day with the noise off and asks that float32 and
+float64 cost the same to 0.1 %. Before the fix the reactor was 0.26 % apart on
+the 0.1 action, and on 0.02 it tripped at step 2770 in float32 against 2615 in
+float64. On the fixed plant the five costs are 1.1e-5, 1.7e-5, 1.9e-6, 5.1e-6
+and 2.3e-6 apart, and the first trips fall at steps 2616 and 2615.
+
+**Family sweep (B7) on the new table.** The loading stop is drawn between 10 and
+20 F (owner, 2026-11-23), which changes every draw, and the property is judged
+with the day's end priced. **It holds on 8 of 8 draws**, and on 6 of 8 as
+scored. No reference trips on any draw, the null at rest costs nothing, and on
+every load-follow scenario the null is at least 135 times dearer.
+
+| Draw | MTC, pcm/K, start / end | Worth, pcm/ppm | Stop, K | Baseload as scored, reference / null | Baseload with the end priced | Holds as scored |
+|---:|---:|---:|---:|---:|---:|---|
+| 0 | -12.0 / -60.5 | -8.1 | 7.3 | $42.8 / $66.4 | $107 / $240 | yes |
+| 1 | -9.7 / -59.6 | -7.0 | 10.6 | $45.8 / $71.0 | $117 / $246 | yes |
+| 2 | -10.4 / -63.9 | -7.3 | 8.1 | $36.0 / $43.8 | $112 / $228 | yes |
+| 3 | -16.3 / -74.6 | -10.1 | 6.4 | $22.8 / $14.1 | $88 / $218 | no |
+| 4 | -12.5 / -46.6 | -8.3 | 9.2 | $71.0 / $255.4 | $110 / $347 | yes |
+| 5 | -17.4 / -70.6 | -10.6 | 6.2 | $26.2 / $24.1 | $86 / $217 | no |
+| 6 | -13.7 / -52.5 | -8.9 | 9.0 | $59.0 / $152.2 | $103 / $289 | yes |
+| 7 | -15.1 / -55.0 | -9.6 | 10.1 | $53.6 / $121.9 | $97 / $269 | yes |
+
+The two draws that fail as scored are again the two strongest end-of-cycle
+moderator coefficients, and priced the null costs two and a half times the
+reference there. That settles the cause the first sweep only suggested: the
+null wins a baseload day by leaving its dilution for the next one.
+
 ### Not measured yet
 
 - A ceiling that is certified: the candidate above is the planner's own plan
@@ -318,10 +431,10 @@ trajectories.
   planner never lifts them, and the steam they blow is free, though it takes a
   Tavg at least 7.7 K hot at half load, $11.7 a step in Tavg charge.
 - Whether the reference may use the return on colder water.
-- Acceptance (J2) and a learning check (J7). The family sweep ran on 2026-11-23,
-  above; the numbers flagged since (`loading_stop`, `relief_temperature`,
-  `relief_accumulation`, `valve_margin`) have no range in `ours.json`, so it does
-  not draw them yet.
+- Acceptance (J2) and a learning check (J7). The family sweep draws the loading
+  stop since 2026-11-23; `relief_temperature`, `relief_accumulation` and
+  `valve_margin` have no range in `ours.json` (the owner's choice: the stop
+  only).
 - The foresight run on the plant as it stands (the $460 against $461 was measured
   with the hot side still held to the band), the planner's own choices swept
   (knot length, back-offs, timed limits planned as hard), and the stop at 20 F on
