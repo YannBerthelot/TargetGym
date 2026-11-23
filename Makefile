@@ -41,11 +41,14 @@ ci-docs:  ## Generated pages are current and the site builds with no dangling li
 	uv run python scripts/check_doc_drift.py --check
 	uv run mkdocs build --strict
 
-# A plain pytest is the small tier on every core (pyproject.toml's addopts);
-# tests/conftest.py holds each worker to one compute thread so they do not
-# fight over them. Pass -n0 to turn that off, which --pdb needs.
+# A plain pytest is the small tier in one process (pyproject.toml's addopts).
+# Each worker is a JAX process of several GB, so the targets here ask for
+# WORKERS of them, 2 unless told otherwise: `make test WORKERS=8` on a machine
+# with the memory. tests/conftest.py holds each worker to one compute thread.
+WORKERS ?= 2
+
 ci-test:  ## Small then medium tests, as the CI test job runs them
-	$(CPU_ENV) uv run pytest -q
+	$(CPU_ENV) uv run pytest -q -n $(WORKERS)
 	$(CPU_ENV) uv run pytest -q -m medium -n 2
 
 all:
@@ -84,11 +87,11 @@ baselines-%:  ## Re-measure one environment's recorded baseline
 time-constants:  ## Measure each plant's actuator-to-output time constant
 	uv run python scripts/measure_time_constants.py
 
-test:  ## Small tests only, the default pytest run
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings
+test:  ## Small tests only, on WORKERS processes
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -n $(WORKERS)
 
 test-all:  ## Every tier, including the large closed-loop controller checks
-	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -m ""
+	$(CPU_ENV) uv run pytest --tb=short --disable-warnings -m "" -n $(WORKERS)
 
 # Modules that type-check cleanly today and are enforced in CI. Grow this
 # list by making a module pass and then adding it; pyproject.toml's [tool.mypy]
@@ -105,7 +108,7 @@ mypy-all:  ## Type-check everything -- exploratory, currently reports ~324
 # runs in parallel and still reports exactly the same total as a serial run --
 # 86s rather than 278s, measured. Threshold and omissions are in pyproject.toml.
 coverage:  ## Small tests with coverage, enforcing the threshold, as CI does
-	$(CPU_ENV) uv run pytest -q --cov=target_gym
+	$(CPU_ENV) uv run pytest -q --cov=target_gym -n $(WORKERS)
 
 missing-annotations:
 	uv run mypy --disallow-untyped-calls --disallow-untyped-defs --ignore-missing-imports src

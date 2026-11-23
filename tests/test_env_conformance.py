@@ -581,6 +581,19 @@ def test_env_is_vmappable_over_seeds(spec):
     assert np.all(np.isfinite(np.asarray(rewards)))
     assert jnp.asarray(terminated).shape == (n,)
 
+    # Each row is that seed's own episode: the batch gives what one seed at a
+    # time gives. Tolerances as in the jit test above, for the same reordering.
+    one = jax.jit(lambda k, s, a: env.step_env(k, s, a, params))
+    for i in range(n):
+        state_i = jax.tree_util.tree_map(lambda leaf: leaf[i], states)
+        obs_i, _, reward_i, terminated_i, _ = one(keys[i], state_i, action[i])
+        scale = float(jnp.max(jnp.abs(obs_i)))
+        np.testing.assert_allclose(
+            obs2[i], obs_i, atol=1e-4 + 1e-6 * scale, err_msg=f"seed row {i}"
+        )
+        assert float(rewards[i]) == pytest.approx(float(reward_i), rel=1e-4, abs=1e-4)
+        assert bool(terminated[i]) == bool(terminated_i)
+
 
 def test_env_runs_under_lax_scan(spec):
     """The env must compose with ``lax.scan``, which is how rollouts are done."""
@@ -595,9 +608,20 @@ def test_env_runs_under_lax_scan(spec):
         _, s2, r, _, _ = env.step_env(sub, s, action, params)
         return (s2, k), r
 
-    (_, _), rewards = jax.lax.scan(body, (state, key), None, length=10)
+    (last, _), rewards = jax.lax.scan(body, (state, key), None, length=10)
     assert rewards.shape == (10,)
     assert np.all(np.isfinite(np.asarray(rewards)))
+
+    # The scanned rollout is the rollout: ten steps taken one call at a time,
+    # on the same keys, cost the same. The jit tolerance per step, times ten
+    # for the steps the reordering can compound over.
+    one = jax.jit(lambda k, s: env.step_env(k, s, action, params))
+    s, k = state, key
+    for i in range(10):
+        k, sub = jax.random.split(k)
+        _, s, r, _, _ = one(sub, s)
+        assert float(rewards[i]) == pytest.approx(float(r), rel=1e-3, abs=1e-3), i
+    assert int(last.time) == int(s.time)
 
 
 # ---------------------------------------------------------------------------
