@@ -66,7 +66,7 @@ density path. Harmless at 0.01 %, but the two should be unified.
 | aspect ratio AR | 9.48 | – | `span²/S = 34.1²/122.6` | ✅ |
 | `initial_mass` m | 73 500 | kg | Typical A320 takeoff mass; MTOW 78 000, OEW ≈ 42 600 | ✅ |
 | `initial_fuel_quantity` | 19 088 | kg | A *component* of `initial_mass`, not additional | ✅ |
-| `thrust_output_at_sea_level` | 240 000 | N | 2 × CFM56-5B ≈ 2 × 120 kN static SL | ✅ |
+| `thrust_output_at_sea_level` | 220 620 | N | 2 × V2527E-A5 at 11 031 daN, the A320-233's engines [EASA.A.064, EASA IM.E.069] (Amendment 5) | ✅ |
 | `I` | 9.0 × 10⁶ | kg·m² | TUNED — not sourced. Order-of-magnitude plausible for a 37 m fuselage. | ⚠️ |
 | `moment_arm_stabilizer` | 15.0 | m | TUNED — plausible tail arm for A320 geometry | ⚠️ |
 | `moment_arm_wings` | 1.5 | m | TUNED — wing AC to CG offset | ⚠️ |
@@ -153,7 +153,8 @@ inside its reference band.
 
 | Quantity | Model | Reference | |
 |---|---|---|---|
-| L/D max = `1/(2√(cd0·k))` | 16.67 | A320 ≈ 17 | ✅ |
+| L/D max = `1/(2√(cd0·k))`, the wing's, at any Mach below the drag rise | 16.67 | A320 ≈ 17 | ✅ |
+| L/D max of the airframe, with the tail's own drag (Amendment 5) | 15.8 | A320 ≈ 17 | ⚠️ |
 | CL at L/D max = `√(cd0/k)` | 0.667 | — | ✅ |
 | Cruise CL, FL350 M0.78 | 0.579 | Jet cruise typically 0.4–0.6 | ✅ |
 | Cruise trim AoA | 1.85° | A320 ≈ 1.5–3° | ✅ |
@@ -693,7 +694,7 @@ FL370 by the model's own line).
 | engine lag | 1.7 s sqrt(theta) / delta | derived: corrected time |
 | `ap_load_increment` | 0.2 g | ours, family range 0.1 to 0.2 g [KFC 500, TM 1-1510-225-10] |
 | cost index | 30 kg/min | ours, family range 6 to 40 (secondary) |
-| `economy_scale` | 1.242 kg/s | derived: the model's reference cruise |
+| `economy_scale` | 1.337 kg/s | derived: the model's reference cruise (Amendment 5) |
 | `turbulence_sigma` | 0.684 m/s | derived, above |
 | severe zone | 5.12 m/s, share 1e-4 | cited: MIL-F-8785C Figure 7; the share ours |
 | heavy corner | FL340 to 350 | derived: 1.3 g to the buffet line |
@@ -719,6 +720,64 @@ family's installed maximum climb, 5 630 to 6 420 lb a engine as a brochure is in
 (secondary; its table is paywalled), so the heavy member's residual climb at the
 lower end would be near the AIM's 500 fpm, which `plane_energy`'s Extra verdict
 (EXTRA.md) does not yet account for.
+
+## Amendment 5: the A320-233's envelope (2026-11-23)
+
+The owner's decisions of 2026-11-23, after the review of `plane` and `plane_energy`:
+the plant is checked against Airbus's published envelope [SF21 p. 6; REALITY.md, "The
+cruise envelope"], and three things change. `tests/plane/test_plane_chart.py` holds the
+chart's curves as read from its vector paths.
+
+**Induced drag on the lift the wing makes.** `aero_coefficients` computed `CD = cd0 +
+k CL^2` on the lift before the Mach corrections, then multiplied the lift by the
+compressibility growth (1.31 at M 0.77). The induced term was therefore 1 / growth^2 of
+its value, 58 % at M 0.77, and the airframe had a lift over drag of 18.5 at the chart's
+ceiling point where its own polar says 16.67 at best. It is now computed on the lift
+after the corrections. The drag rise (`M_crit`, `k_drag`), the stall and the post-stall
+blend are unchanged. The tail goes through the same function.
+
+**The plant is the chart's aircraft.** `thrust_output_at_sea_level` is 220 620 N, two
+V2527E-A5 at 11 031 daN each [EASA.A.064, EASA IM.E.069], where 240 000 N stood for two
+CFM56-5B4, the A320-214's [EASA E.003]. The thrust lapse, density ratio over `1 + 0.5
+M^2`, is unchanged (ours).
+
+**Fuel per unit of thrust follows a published law.** `fuel_flow`: thrust times
+`fuel_speed_slope V + fuel_static sqrt(T / T0)`, with 3.38e-8 kg/(N m) and 1.04e-5
+kg/(N s), Mattingly's law for high-bypass turbofans in the SI form of Roux and Scholz
+[HAMMAMI eq. 2.1 and 2.2]. It gives 17.0 mg/(N s) at the reference cruise and replaces
+the constant 17.5. A constant put the max-range Mach at 0.80 from 32 600 ft up, above
+the cruise Mach, where the chart has 0.74 to 0.76.
+
+| At 70 t, ISA | Chart [SF21] | Plant before | Plant now |
+|---|---|---|---|
+| Residual climb at M 0.765, 37 093 ft | 300 ft/min | 1 025 | 274 (251 on PR 204's atmosphere) |
+| 300 ft/min ceiling, M 0.739 to 0.813 | the curve | above 41 000 ft | within 642 ft |
+| Zero-climb ceiling, M 0.768 to 0.817 | the curve | above 41 000 ft | within 924 ft on PR 204's atmosphere |
+| Max-range Mach, 25 500 to 36 500 ft | 0.660 to 0.760 | 0.68 to 0.80 | 0.62 to 0.78 |
+| Green dot, 23 000 to 35 400 ft | 0.521 to 0.709 | 0.505 to 0.455 | 0.500 to 0.665 |
+
+What the change moves at the reference cruise (FL330, M 0.78, 73.5 t): drag 42.4 to
+49.2 kN, lift over drag 17.0 to 14.7, fuel 2 674 to 3 014 kg/h, residual climb 1 218
+to 472 ft/min. `economy_scale` follows, 1.242 to 1.337 kg/s. The 300 ft/min ceiling at
+M 0.78 is now 40 200 ft at 60 t, 36 300 at 70 t, 35 000 at 73.5 t and 33 300 at 78 t;
+the scenario levels above it are still to be brought under it.
+
+**Known deviations of this amendment.**
+- The plant's max-range Mach is 0.025 to 0.04 under the chart's ECON curve from 25 500
+  to 31 600 ft and 0.02 over it at 36 500 ft: five of the six ECON cases of the chart
+  test fail. Its green dot is 0.02 to 0.044 under the chart's.
+- Cruise drag and fuel are about 13 % above the plant's earlier figures, and the fuel
+  above the 2 400 to 2 600 kg/h this page quotes for an A320. The tail adds a
+  zero-lift drag of its own (`cd0` on its area, 23 % of the wing's) to an airframe
+  `cd0` the figures of merit read as the whole aircraft's. Until this amendment the
+  understated induced drag hid it; the two nearly cancelled in cruise. Leaving the
+  tail's `cd0` out and fitting one factor of 0.906 on thrust at altitude lands the
+  green dot within 0.01 and the fuel at 2 633 kg/h, but puts the zero-climb curve
+  1 000 to 2 000 ft high. Not done: the owner's choice.
+- Below green dot the 300 ft/min ceiling is 560 to 770 ft/min too generous: the
+  parabolic polar has no high-lift drag. "The crew should not fly below GD" [SF21].
+- Neither variant has drag that grows with lift near M 0.75 to 0.80, which the chart's
+  ECON curve above 33 000 ft asks for.
 
 ## 5. Known deviations
 
@@ -812,9 +871,9 @@ correctness, and fails in exactly the same way as a wrong formula.
 
 **✅ D4 — RESOLVED: mass now follows the tanks.** Fuel burn is charged against
 the thrust actually produced, `ṁ = c_T · T`, so the aircraft lightens as it
-flies and `state.m` tracks `state.fuel` exactly. `specific_fuel_consumption` is
-thrust-specific — 17.5 g per kilonewton-second, i.e. 1.75 × 10⁻⁵ kg/(N·s), the
-right order for a high-bypass turbofan.
+flies and `state.m` tracks `state.fuel` exactly. Since Amendment 5 `c_T` follows a
+published law in speed and temperature (`fuel_flow`): 17.0 mg/(N s) at the
+reference cruise, where a constant 17.5 stood before.
 
 The figure is anchored rather than asserted. In level cruise thrust equals drag,
 and drag is weight over the lift-to-drag ratio, so the fuel flow follows from
