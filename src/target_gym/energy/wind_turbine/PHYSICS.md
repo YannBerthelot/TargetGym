@@ -299,8 +299,10 @@ the scenario suite.
   | power held at the set point | 8.4e-6 | 6.2 | 1.08, 0.91 to 1.195, over 1.10 half the time |
   | power held, speed planned under 1.05 | 1.17e-5 | 4.4 | 0.99, 0.91 to 1.050 |
 
-  Holding speed under 1.05 would raise the ceiling's cost 1.4 times. One seed; the
-  first row was planned 0.04 % inside the trip level and the others 0.57 %.
+  Holding speed under 1.05 would raise the ceiling's cost 1.4 times. One seed, and
+  the first two rows were not planned on the same margin to the trip: the first
+  0.04 % inside the trip level, the second 0.57 % (at 0.04 % its plans tripped on
+  replay). The third never nears it.
 - D11. The converter's limit acts within the step: at a curtailment the generator
   torque falls 10 % in one step, past S1's 15 kN m/s, which is the limit on the
   controller's command (a converter's own loop is far faster: CART's is 500 rad/s
