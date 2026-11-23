@@ -288,3 +288,182 @@ def test_speed_and_power_hold_on_held_out_seeds():
                 o = np.asarray(obs)
                 speed_ok.append(abs(o[0] / float(p.omega_rated_rpm) - 1.0) <= 0.10)
         assert np.mean(speed_ok) >= 0.99, f"seed {seed}: {np.mean(speed_ok):.3f}"
+
+
+# ---------------------------------------------------------------------------
+# The second published candidate: S1's controller with S2's peak shaving
+# ---------------------------------------------------------------------------
+# Contract, from Abbas et al. (2022) [S2 Sect. 5.3] and ROSCO's toolbox (its
+# `ps_percent`, default 0.8, and wind filter, 0.20944 rad/s):
+#
+# * Peak shaving is a minimum pitch scheduled on wind speed, so that the
+#   steady rotor thrust stays under `ps_percent` of its peak over the
+#   operating curve. The schedule comes from the Ct table alone: at each wind,
+#   the smallest pitch at the operating tip-speed ratio whose thrust is under
+#   the cap.
+# * The minimum pitch is the lower saturation of the pitch loop, integral
+#   included, read at the low-passed wind.
+# * Ours: the wind is the anemometer channel (ROSCO has its own estimator), and
+#   S1's switch to its constant-power torque law, 1 deg of pitch, is measured
+#   from the shaved minimum; on the pitch alone the rotor would be held at
+#   rated power below rated wind, and stall.
+# * With no schedule it is S1's controller.
+
+SHAVE = 0.8
+
+
+def _obs7(gen_rpm, pitch, wind, torque_gen=0.0, target_MW=5.0):
+    return np.array(
+        [
+            gen_rpm / N,
+            pitch,
+            100.0 * torque_gen / float(WP.torque_max),
+            0.0,
+            target_MW,
+            0.0,
+            wind,
+        ],
+        np.float32,
+    )
+
+
+def _shaved():
+    from target_gym.energy.wind_turbine.experts import (
+        make_wind_turbine_shaved_controller,
+    )
+
+    return make_wind_turbine_shaved_controller()
+
+
+def _operating_thrust(v):
+    """Steady thrust (N) on the operating curve at wind ``v``, and the speed."""
+    from target_gym.energy.wind_turbine.env import power_coefficient, rotor_thrust
+
+    lam = np.arange(4.0, 12.0, 0.05)
+    best = float(lam[int(np.argmax(np.asarray(power_coefficient(lam, 0.0, WP))))])
+    w0 = float(WP.omega_rated_rpm) * RPM
+    speed = min(w0, best * v / float(WP.R))
+    P0 = float(WP.P_rated) / ETA
+    pitch = 0.0
+    if float(aerodynamic_torque(speed, v, 0.0, WP)[1]) > P0:
+        pitch = _rated_power_pitch(v)
+    return float(rotor_thrust(speed, v, pitch, WP)), speed
+
+
+def test_the_shaving_schedule_holds_the_steady_thrust_under_its_cap():
+    """At every wind of the schedule the thrust at the scheduled minimum pitch is
+    under 0.8 of the operating curve's peak, and where the minimum is above 0 it
+    is the smallest such pitch: half a degree less is over the cap. 1 %: the
+    schedule's pitch is found to 0.05 deg, about 4 kN of thrust."""
+    from target_gym.energy.wind_turbine.env import rotor_thrust
+
+    params = _shaved().params
+    winds = np.asarray(params.shave_wind, float)
+    floors = np.asarray(params.shave_pitch_deg, float)
+    assert winds[0] <= 4.0 and winds[-1] >= 25.0 and len(winds) == len(floors)
+    peak = max(_operating_thrust(v)[0] for v in np.arange(8.0, 14.01, 0.1))
+    cap = SHAVE * peak
+    assert floors.max() > 2.0  # it does shave: several degrees near rated wind
+    for v, floor in zip(winds, floors):
+        speed = _operating_thrust(v)[1]
+        assert float(rotor_thrust(speed, v, floor, WP)) <= cap * 1.01
+        if floor > 0.5:
+            assert float(rotor_thrust(speed, v, floor - 0.5, WP)) > cap
+
+
+def _floor_at(wind):
+    params = _shaved().params
+    return float(np.interp(wind, params.shave_wind, params.shave_pitch_deg))
+
+
+def test_the_shaved_pitch_never_goes_under_the_scheduled_minimum():
+    """At rated wind and 10 % underspeed S1's loop asks for fine pitch; the
+    shaved one holds the minimum scheduled at that wind."""
+    floor = _floor_at(11.4)
+    expert = _shaved().host()
+    expert.reset()
+    for _ in range(40):  # 10 s: the command settles on the minimum
+        a = expert(_obs7(0.9 * RATED_GEN_RPM, floor, 11.4))
+    assert _pitch(a) == pytest.approx(floor, abs=1e-3)
+
+
+def test_the_shaved_integral_waits_at_the_minimum():
+    """Long underspeed does not wind the integral under the minimum, so the pitch
+    leaves it as soon as the filtered speed passes rated. From 0.90 of rated
+    speed the 0.25 Hz filter passes rated on the fifth reading of 1.02; by the
+    eighth, 2 s in, the error is 1.5 % of rated speed and the proportional term
+    alone is 0.9 deg over the minimum. An integral wound down to 0 would still
+    be climbing the 2.9 deg back to it."""
+    floor = _floor_at(11.4)
+    expert = _shaved().host()
+    expert.reset()
+    for _ in range(100):
+        expert(_obs7(0.9 * RATED_GEN_RPM, floor, 11.4))
+    for _ in range(8):
+        a = expert(_obs7(1.02 * RATED_GEN_RPM, floor, 11.4))
+    assert _pitch(a) > floor + 0.3
+
+
+def test_the_minimum_follows_the_wind_through_rosco_s_filter():
+    """A first-order low-pass at 0.20944 rad/s: after a step of the anemometer
+    from 8 m/s (no shaving) to rated wind, held 4.775 s (one time constant, 19
+    steps of 0.25 s is 4.75 s), the scheduled wind has moved 1 - exp(-4.75 x
+    0.20944) = 63.0 % of the way."""
+    params = _shaved().params
+    expert = _shaved().host()
+    expert.reset()
+    expert(_obs7(0.9 * RATED_GEN_RPM, 0.0, 8.0))
+    for _ in range(19):
+        a = expert(_obs7(0.9 * RATED_GEN_RPM, 0.0, 11.4))
+    seen = 8.0 + (11.4 - 8.0) * (1.0 - math.exp(-19 * TS * 0.20944))
+    expected = float(np.interp(seen, params.shave_wind, params.shave_pitch_deg))
+    # The command climbs to the minimum at 8 deg/s from 0 deg: well within 4.75 s.
+    assert _pitch(a) == pytest.approx(expected, abs=0.02)
+
+
+def test_below_rated_speed_the_shaved_rotor_keeps_s1s_below_rated_torque():
+    """At rated wind the minimum pitch is several degrees, over S1's 1 deg
+    switch. Read from the minimum, the switch stays off at 90 % of rated speed,
+    and the torque is S1's 10 % slip line or its optimal curve, whichever is
+    higher, far under the constant-power torque that would stall the rotor."""
+    floor = _floor_at(11.4)
+    assert floor > 1.0
+    gen = 0.9 * RATED_GEN_RPM
+    expert = _shaved().host()
+    expert.reset()
+    tq0 = 30_000.0
+    for _ in range(40):
+        a = expert(_obs7(gen, floor, 11.4, torque_gen=tq0))
+        tq0 = _torque(a)
+    w = gen * RPM
+    rated3 = 1161.963 * RPM
+    sync = rated3 / 1.10
+    power = 5.0e6 / ETA
+    line = (power / rated3) / (rated3 - sync) * (w - sync)
+    curve = K2 * gen**2
+    assert _torque(a) == pytest.approx(max(line, curve), rel=1e-3)
+    assert _torque(a) < 0.8 * power / w
+
+
+def test_without_a_schedule_the_shaved_controller_is_s1s():
+    """The same step function with an empty schedule gives S1's actions, on
+    whatever it reads."""
+    from target_gym.energy.wind_turbine.experts import (
+        NRELBaselineState,
+        nrel_baseline_step,
+    )
+
+    plain = tg.make_expert("wind_turbine").params
+    emptied = _shaved().params.replace(shave_wind=(), shave_pitch_deg=())
+    rng = np.random.default_rng(0)
+    s_plain, s_empty = NRELBaselineState(), NRELBaselineState()
+    for _ in range(50):
+        obs = _obs7(
+            RATED_GEN_RPM * rng.uniform(0.8, 1.15),
+            rng.uniform(0.0, 20.0),
+            rng.uniform(8.0, 25.0),
+            torque_gen=rng.uniform(1e4, 4.5e4),
+        )
+        a, s_plain = nrel_baseline_step(plain, s_plain, obs, np)
+        b, s_empty = nrel_baseline_step(emptied, s_empty, obs, np)
+        np.testing.assert_array_equal(a, b)

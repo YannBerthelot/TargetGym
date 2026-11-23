@@ -116,8 +116,17 @@ def row() -> Row:
     )
 
     def published(s):
-        # S1's baseline controller, the family's published one (experts.py).
-        return s.make_pid_controller()
+        # The family's published controllers (experts.py): S1's baseline, and
+        # S1's with S2's peak shaving at ROSCO's default. The ladder keeps the
+        # cheaper one that trips on no seed (charter J1).
+        from target_gym.energy.wind_turbine.experts import (
+            make_wind_turbine_shaved_controller,
+        )
+
+        return {
+            "published": s.make_pid_controller(),
+            "published_shaved": make_wind_turbine_shaved_controller(),
+        }
 
     return Row(
         480,

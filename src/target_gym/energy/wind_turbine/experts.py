@@ -53,24 +53,33 @@ class NRELBaselineParams:
     torque_max: float = 47_402.91
     torque_rate: float = 15_000.0
     pitch_rate_deg: float = 8.0
+    #: S2's peak shaving [S2 Sect. 5.3]: the minimum pitch (deg) against wind
+    #: (m/s), read at the anemometer low-passed at ``wind_filter`` rad/s (ROSCO's
+    #: 0.20944). Empty for S1's controller alone.
+    shave_wind: tuple = ()
+    shave_pitch_deg: tuple = ()
+    wind_filter: float = 0.20944
 
 
 @struct.dataclass
 class NRELBaselineState:
     """The filtered speed, the pitch integral (rad of pitch, as ROSCO keeps it),
-    the previous commands, and whether the first observation has been read."""
+    the previous commands, whether the first observation has been read, and
+    the filtered wind peak shaving schedules on."""
 
     speed_f: float = 0.0
     integral: float = 0.0
     pitch_prev: float = 0.0
     torque_prev: float = 0.0
     started: float = 0.0
+    wind_f: float = 0.0
 
 
 def nrel_baseline_step(params, state, obs, xp=jnp):
     """One 0.25 s step of the NREL 5 MW baseline controller.
 
-    obs: ``[omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]``.
+    obs: ``[omega_rpm, pitch_deg, torque_pct, P_MW, target_P_MW]``, and with a
+    shaving schedule the anemometer, channel 6.
     """
     p = params
     w = obs[..., 0] * p.N_gear * (2.0 * np.pi / 60.0)
@@ -83,6 +92,18 @@ def nrel_baseline_step(params, state, obs, xp=jnp):
     speed_f = xp.where(first, w, alpha * state.speed_f + (1.0 - alpha) * w)
     pitch_prev = xp.where(first, pitch, state.pitch_prev)
     torque_prev = xp.where(first, torque, state.torque_prev)
+
+    # Peak shaving: a minimum pitch scheduled on the low-passed wind, the pitch
+    # loop's lower saturation [S2 Sect. 5.3]. None without a schedule.
+    if len(p.shave_wind) > 0:
+        keep = np.exp(-p.wind_filter * p.dt)
+        wind = obs[..., 6]
+        wind_f = xp.where(first, wind, keep * state.wind_f + (1.0 - keep) * wind)
+        pitch_min = xp.radians(
+            xp.interp(wind_f, xp.asarray(p.shave_wind), xp.asarray(p.shave_pitch_deg))
+        )
+    else:
+        wind_f, pitch_min = state.wind_f + 0.0 * w, 0.0
 
     # Torque. Region 3 is constant power at the dispatch (ours: the target
     # over the generator efficiency); below it the baseline table, capped at
@@ -103,7 +124,9 @@ def nrel_baseline_step(params, state, obs, xp=jnp):
         0.0,
         xp.where(speed_f < p.region15_hi, ramp, xp.maximum(curve, line)),
     )
-    in_region3 = (pitch_prev >= np.radians(p.region3_pitch_deg)) | (
+    # S1 switches to region 3 once the pitch is 1 deg up. Ours: measured from the
+    # shaved minimum, or shaving would hold rated power below rated wind.
+    in_region3 = (pitch_prev >= pitch_min + np.radians(p.region3_pitch_deg)) | (
         speed_f >= p.region3_speed
     )
     tq = xp.where(in_region3, region3, xp.minimum(below, region3))
@@ -120,8 +143,8 @@ def nrel_baseline_step(params, state, obs, xp=jnp):
     read = xp.clip(xp.degrees(pitch_prev), p.schedule_lo_deg, p.schedule_hi_deg)
     gk = 1.0 / (1.0 + read / p.theta_K_deg)
     integral = xp.where(first, pitch, state.integral) + gk * p.Ki * error * p.dt
-    integral = xp.clip(integral, 0.0, pitch_max)
-    command = xp.clip(gk * p.Kp * error + integral, 0.0, pitch_max)
+    integral = xp.clip(integral, pitch_min, pitch_max)
+    command = xp.clip(gk * p.Kp * error + integral, pitch_min, pitch_max)
     step_pitch = np.radians(p.pitch_rate_deg) * p.dt
     command = xp.clip(command, pitch - step_pitch, pitch + step_pitch)
 
@@ -138,18 +161,31 @@ def nrel_baseline_step(params, state, obs, xp=jnp):
         pitch_prev=command,
         torque_prev=tq,
         started=1.0 + 0.0 * w,
+        wind_f=wind_f,
     )
     return action, new_state
 
 
-def make_wind_turbine_pid_controller() -> Controller:
+def make_wind_turbine_pid_controller(shaved: bool = False) -> Controller:
     """The expert: the NREL 5 MW baseline controller as a
     :class:`~target_gym.experts.pid.Controller`. The pitch gains are stored in
-    ``pid_gains.json`` by ``scripts/wind_turbine_gains.py``."""
+    ``pid_gains.json`` by ``scripts/wind_turbine_gains.py``, and so is the peak
+    shaving schedule ``shaved`` adds."""
     from target_gym.energy.wind_turbine.env import WindTurbineParams
+    from target_gym.experts.pid import load_gains
 
     wp = WindTurbineParams()
+    stored = load_gains()["wind_turbine"]
+    schedule = (
+        dict(
+            shave_wind=tuple(float(v) for v in stored["shave_wind"]),
+            shave_pitch_deg=tuple(float(v) for v in stored["shave_pitch_deg"]),
+        )
+        if shaved
+        else {}
+    )
     params = NRELBaselineParams(
+        **schedule,
         Kp=gain("wind_turbine", "Kp"),
         Ki=gain("wind_turbine", "Ki"),
         theta_K_deg=gain("wind_turbine", "theta_K_deg"),
@@ -162,3 +198,10 @@ def make_wind_turbine_pid_controller() -> Controller:
         dt=float(wp.delta_t),
     )
     return Controller(params, NRELBaselineState(), nrel_baseline_step)
+
+
+def make_wind_turbine_shaved_controller() -> Controller:
+    """The second published candidate (charter J1): S1's controller with S2's
+    peak shaving [S2 Sect. 5.3] at ROSCO's default, a minimum pitch scheduled
+    on the low-passed anemometer."""
+    return make_wind_turbine_pid_controller(shaved=True)

@@ -272,7 +272,12 @@ def build(name: str, row: Row, spec=None) -> dict:
     p = spec.make_test_params(**_test_params(row))
     rungs = {}
     if row.published:
-        rungs["published"] = row.published(spec)
+        # One published controller, or several by rung name (charter J1: the
+        # cheapest published candidate that trips on no seed is kept).
+        published = row.published(spec)
+        rungs.update(
+            published if isinstance(published, dict) else {"published": published}
+        )
     if not row.loops:
         return rungs
 
@@ -640,7 +645,15 @@ def climb(name: str, nulls: bool = False) -> dict:
 #: rule's own resolution at 1 %, or after PLACE_ROUNDS reads.
 PLACE_TOLERANCE, PLACE_ROUNDS = 0.01, 8
 
-_ORDER = ("pi", "feedforward", "cascade", "decoupler", "override", "published")
+_ORDER = (
+    "pi",
+    "feedforward",
+    "cascade",
+    "decoupler",
+    "override",
+    "published",
+    "published_shaved",
+)
 
 
 class HoldReset:

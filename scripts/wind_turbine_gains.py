@@ -62,11 +62,16 @@ from target_gym.energy.wind_turbine.env import (  # noqa: E402
     aerodynamic_torque,
     drivetrain_inertia,
     induction,
+    power_coefficient,
+    rotor_thrust,
 )
 from target_gym.identification import rga  # noqa: E402
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
 
 ZETA, WN = 0.7, 0.6
+#: Peak shaving's share of the peak thrust it leaves: ROSCO's ``ps_percent``
+#: default (Abbas et al. 2022, sect. 5.3; rosco.readthedocs.io, toolbox input).
+SHAVE = 0.8
 #: The pairing's operating points, dispatch in W and mean wind in m/s.
 POWERS, WINDS = (3.5e6, 4.25e6, 5.0e6), (13.5, 16.75, 20.0)
 
@@ -99,6 +104,39 @@ def sensitivity_curve(p):
         held = induction(w0, v, th, p)[0]
         rows.append((th, float(dP(th, v, held)) * 180.0 / np.pi))
     return np.array(rows)
+
+
+def shaving_schedule(p, percent: float = SHAVE):
+    """Peak shaving's minimum pitch against wind, as ROSCO's toolbox computes it
+    from the Ct table: ``(winds in m/s, minimum pitch in deg)``.
+
+    The operating curve is the best tip-speed ratio at fine pitch up to rated
+    speed, then rated speed with the pitch that leaves rated power. Its largest
+    thrust, at rated wind, times ``percent`` is the cap; at each wind the
+    minimum is the smallest pitch, at that wind's operating speed, whose thrust
+    is under the cap (0 where fine pitch already is)."""
+    w0 = float(p.omega_rated_rpm) * 2 * np.pi / 60
+    P0 = float(p.P_rated) / float(p.eta_gen)
+    lam = np.arange(4.0, 12.0, 0.05)
+    best = float(lam[int(np.argmax(np.asarray(power_coefficient(lam, 0.0, p))))])
+
+    def operating(v):
+        speed = min(w0, best * v / float(p.R))
+        power = lambda th: float(aerodynamic_torque(speed, v, th, p)[1])  # noqa: E731
+        pitch = brentq(lambda t: power(t) - P0, 0.0, 45.0) if power(0.0) > P0 else 0.0
+        return speed, pitch
+
+    peak = max(
+        float(rotor_thrust(*operating(v)[:1], v, operating(v)[1], p))
+        for v in np.arange(8.0, 14.01, 0.1)
+    )
+    grid = np.arange(0.0, 30.0, 0.05)
+    winds = np.arange(3.0, 25.01, 0.5)
+    floors = []
+    for v in winds:
+        thrust = np.asarray(rotor_thrust(operating(v)[0], v, grid, p))
+        floors.append(float(grid[int(np.argmax(thrust <= percent * peak))]))
+    return winds, np.array(floors)
 
 
 def pairing(p, P_e: float, v: float) -> float:
@@ -144,12 +182,22 @@ def gains(p) -> dict:
     for P_e in POWERS:
         row = "  ".join(f"{v}: {pairing(p, P_e, v):.3f}" for v in WINDS)
         print(f"  {P_e / 1e6:.2f}: {row}")
+    shave_wind, shave_pitch = shaving_schedule(p)
+    print(
+        "peak shaving's minimum pitch (m/s: deg): "
+        + " ".join(
+            f"{v:.0f}:{b:.2f}" for v, b in zip(shave_wind[::4], shave_pitch[::4])
+        )
+    )
     return {
         "Kp": 2 * I * W0 * ZETA * WN / den,
         "Ki": I * W0 * WN**2 / den,
         "theta_K_deg": float(theta_K),
         "schedule_lo_deg": float(curve[0, 0]),
         "schedule_hi_deg": float(curve[-1, 0]),
+        "shave_percent": SHAVE,
+        "shave_wind": [round(float(v), 2) for v in shave_wind],
+        "shave_pitch_deg": [round(float(b), 2) for b in shave_pitch],
         "model": {
             "dP_dtheta": float(intercept),
             "theta_K_deg": float(theta_K),
