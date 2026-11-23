@@ -694,6 +694,12 @@ a gap measured by watching the trip. Tasks in `PRECISION`
 
 ## Amendment 6, 2026-11-23: the actuator's window
 
+Written on the wind turbine as it stands (wind_turbine-v6, stamp f5a12e6ff030327b, before the
+rebuild the owner chose the same day in the wind review, draft PR #224), where
+over-production is free and the plan therefore rides the overspeed level. Its numbers
+must be re-derived on the rebuilt plant (rotor-averaged wind, the published S1
+controller, power held at rating) when it lands; the rule K11a stands.
+
 Decided by the owner for `wind_turbine`: "Actuator window, about 2 s". The receding
 oracle tripped the overspeed level on 35 of 60 MPC-line seeds. Its plan forecasts the
 turbulence decaying to the mean wind, as the receding slot must (only the ceiling knows
