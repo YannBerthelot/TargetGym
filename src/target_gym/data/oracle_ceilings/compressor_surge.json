@@ -1,7 +1,10 @@
 {
  "task": "compressor_surge",
- "reference": "override",
- "maxiter": 2000,
+ "method": "process (cstr, distillation, compressor_surge, unstable_cstr, ph_neutralization): ``pc_gym.foresight`` L-BFGS-B from the reset's hold (the reference's first move held) and the kept reference's moves, the cheaper untripped plan kept; compressor_surge also from their midpoint, each start restarted twice from its own end plan.",
+ "start_option": [
+  "mpc+expert"
+ ],
+ "J_ceiling": 2.786897833381588,
  "scenarios": {
   "normal": {
    "weight": 0.7,
@@ -17,25 +20,20 @@
     108,
     109
    ],
-   "reference_mean": 7.287465304499788,
-   "ceiling_mean": 1.7672843532729998,
    "ceiling_costs": [
-    1.6493585614075854,
-    2.094104231372306,
-    1.2522856755119036,
-    1.7190092983509953,
-    1.9673584009597591,
-    1.3016151054944158,
-    1.9603030322587776,
-    2.404423329007483,
-    1.8407323044636845,
-    1.4836535939030875
+    0.914834602723519,
+    1.1984203684593921,
+    0.5180146083980799,
+    0.6815920933674897,
+    1.2668002062249313,
+    0.4974944656485847,
+    1.3533098048139558,
+    1.8193358180791257,
+    1.382914773306305,
+    0.8450663874740348
    ],
    "ceiling_trips": 0,
-   "room": 4.123538632027974,
-   "room_is_lower_bound": true,
-   "planned_minus_replayed_max": 4.633511663243439e-07,
-   "previous_ceiling_mean": 2.5013506574419373,
+   "ceiling_mean": 1.0477783128495417,
    "solver": {
     "status": [
      0,
@@ -45,28 +43,409 @@
      0,
      0,
      0,
-     0,
+     2,
      0,
      0
     ],
-    "projected_gradient_max": 0.2877371816352924,
     "capped": 0,
-    "min_margin": -32.15414047241211,
-    "start": [
-     "hold",
-     "hold+restart2",
-     "hold",
-     "hold+restart2",
-     "mid",
-     "hold",
-     "mid+restart2",
-     "mid+restart2",
-     "mid+restart2",
-     "hold"
-    ],
-    "best_two_starts_rel_gap_median": 0.1942120365617067,
-    "best_two_starts_rel_gap_max": 0.386436638009775
-   }
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10,
+    "expert_fallback": 0,
+    "improved_on_expert": 10
+   },
+   "per_seed": [
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 100,
+     "seconds": 2039.4162425994873,
+     "start_option": "mpc+expert",
+     "cost": 0.914834602723519,
+     "trips": 0,
+     "planned": 0.9148344993591309,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 45,
+      "projected_gradient": 0.06934855410121854,
+      "min_margin": -12.51693344116211
+     },
+     "oracle_run": {
+      "cost": 1.337998156202957,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 1.337998156202957,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.768143954481929,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.768143954481929,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 101,
+     "seconds": 4455.962413549423,
+     "start_option": "mpc+expert",
+     "cost": 1.1984203684593921,
+     "trips": 0,
+     "planned": 1.1984202861785889,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.036048511382355874,
+      "min_margin": -14.798261642456055
+     },
+     "oracle_run": {
+      "cost": 1.8726750730839559,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 1.8726750730839559,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 7.342624637858243,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 7.342624637858243,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 102,
+     "seconds": 1813.2521061897278,
+     "start_option": "mpc+expert",
+     "cost": 0.5180146083980799,
+     "trips": 0,
+     "planned": 0.5180146098136902,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 2,
+      "projected_gradient": 0.03072531779023946,
+      "min_margin": -0.011757816188037395
+     },
+     "oracle_run": {
+      "cost": 0.6265058721041229,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.6265058721041229,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 5.995529159982446,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 5.995529159982446,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 103,
+     "seconds": 3552.190593957901,
+     "start_option": "mpc+expert",
+     "cost": 0.6815920933674897,
+     "trips": 0,
+     "planned": 0.6815920472145081,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.05464588434999951,
+      "min_margin": -1.0741405487060547
+     },
+     "oracle_run": {
+      "cost": 0.8525175994448364,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.8525175994448364,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.523197651214044,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.523197651214044,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 104,
+     "seconds": 5070.482081413269,
+     "start_option": "mpc+expert",
+     "cost": 1.2668002062249313,
+     "trips": 0,
+     "planned": 1.2668004035949707,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.06284762118956877,
+      "min_margin": -15.149608612060547
+     },
+     "oracle_run": {
+      "cost": 1.854622283828491,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 1.854622283828491,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 8.03305683872837,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 8.03305683872837,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 105,
+     "seconds": 4655.075793266296,
+     "start_option": "mpc+expert",
+     "cost": 0.4974944656485847,
+     "trips": 0,
+     "planned": 0.4974943697452545,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 24,
+      "projected_gradient": 0.02416527697666393,
+      "min_margin": -0.008984378539025784
+     },
+     "oracle_run": {
+      "cost": 0.6619163095066324,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.6619163095066324,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.039800822565643,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.039800822565643,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 106,
+     "seconds": 4369.646334171295,
+     "start_option": "mpc+expert",
+     "cost": 1.3533098048139558,
+     "trips": 0,
+     "planned": 1.3533097505569458,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 2,
+      "projected_gradient": 0.02822189712961387,
+      "min_margin": -17.16615104675293
+     },
+     "oracle_run": {
+      "cost": 1.9510708762261493,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 1.9510708762261493,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 7.709458427683761,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 7.709458427683761,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 107,
+     "seconds": 3327.7377734184265,
+     "start_option": "mpc+expert",
+     "cost": 1.8193358180791257,
+     "trips": 0,
+     "planned": 1.8193358182907104,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 2,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 1,
+      "projected_gradient": 0.034599363233171476,
+      "min_margin": -32.15414047241211
+     },
+     "oracle_run": {
+      "cost": 2.773030643851962,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 2.773030643851962,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.6176157903896335,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.6176157903896335,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 108,
+     "seconds": 2613.897808790207,
+     "start_option": "mpc+expert",
+     "cost": 1.382914773306305,
+     "trips": 0,
+     "planned": 1.3829147815704346,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 14,
+      "projected_gradient": 0.10690648027323657,
+      "min_margin": -25.01331901550293
+     },
+     "oracle_run": {
+      "cost": 2.29409184089823,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 2.29409184089823,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.190704901300681,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.190704901300681,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "normal",
+     "seed": 109,
+     "seconds": 2975.6059930324554,
+     "start_option": "mpc+expert",
+     "cost": 0.8450663874740348,
+     "trips": 0,
+     "planned": 0.8450663685798645,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 1.9859108947981778,
+      "min_margin": -2.664980411529541
+     },
+     "oracle_run": {
+      "cost": 1.1890229944285586,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 1.1890229944285586,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.7209887273687245,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.7209887273687245,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    }
+   ]
   },
   "slow_approach": {
    "weight": 0.1,
@@ -82,25 +461,20 @@
     108,
     109
    ],
-   "reference_mean": 12.7227269068559,
-   "ceiling_mean": 9.52944307009379,
    "ceiling_costs": [
-    9.547441556453705,
-    9.452450658480327,
-    8.670107311407724,
-    8.673842687209447,
-    11.746500524282455,
-    7.967736532886823,
-    10.594162991841634,
-    10.937160326441129,
-    8.93367549975713,
-    8.77135261217753
+    9.54744120836258,
+    9.452450628678005,
+    8.670107353925705,
+    8.67384270310402,
+    11.746500540177028,
+    7.96773662408193,
+    10.594163020849228,
+    9.925616549452146,
+    6.676276816129684,
+    8.771352585951487
    ],
    "ceiling_trips": 0,
-   "room": 1.3350965857368493,
-   "room_is_lower_bound": true,
-   "planned_minus_replayed_max": 1.9812583929024186e-06,
-   "previous_ceiling_mean": 10.040254931072393,
+   "ceiling_mean": 9.202548803071181,
    "solver": {
     "status": [
      0,
@@ -114,24 +488,405 @@
      0,
      0
     ],
-    "projected_gradient_max": 1.5444326693095096,
     "capped": 0,
-    "min_margin": -38.49900436401367,
-    "start": [
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference+restart",
-     "reference",
-     "reference+restart2",
-     "reference",
-     "reference",
-     "reference"
-    ],
-    "best_two_starts_rel_gap_median": 0.13492140354586868,
-    "best_two_starts_rel_gap_max": 0.2901265946416045
-   }
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10,
+    "expert_fallback": 0,
+    "improved_on_expert": 10
+   },
+   "per_seed": [
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 100,
+     "seconds": 12132.803827524185,
+     "start_option": "mpc+expert",
+     "cost": 9.54744120836258,
+     "trips": 0,
+     "planned": 9.547439575195312,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 9,
+      "projected_gradient": 0.022861418676868084,
+      "min_margin": -9.151406288146973
+     },
+     "oracle_run": {
+      "cost": 2194517.8675347576,
+      "trips": 133,
+      "moves_replayed": {
+       "cost": 2194517.8675347576,
+       "trips": 133
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 13.593380227088929,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 13.593380227088929,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 101,
+     "seconds": 11585.747765541077,
+     "start_option": "mpc+expert",
+     "cost": 9.452450628678005,
+     "trips": 0,
+     "planned": 9.452451705932617,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.036628637944773224,
+      "min_margin": -9.458691596984863
+     },
+     "oracle_run": {
+      "cost": 2194525.3168107127,
+      "trips": 133,
+      "moves_replayed": {
+       "cost": 2194525.3168107127,
+       "trips": 133
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 13.147849867741266,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 13.147849867741266,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 102,
+     "seconds": 12933.452903032303,
+     "start_option": "mpc+expert",
+     "cost": 8.670107353925705,
+     "trips": 0,
+     "planned": 8.670106887817383,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.007073639469972637,
+      "min_margin": 4.55322265625
+     },
+     "oracle_run": {
+      "cost": 4290024.1060945345,
+      "trips": 260,
+      "moves_replayed": {
+       "cost": 4290024.1060945345,
+       "trips": 260
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 11.986677033106487,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 11.986677033106487,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 103,
+     "seconds": 11263.69375371933,
+     "start_option": "mpc+expert",
+     "cost": 8.67384270310402,
+     "trips": 0,
+     "planned": 8.673843383789062,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.010407820663627998,
+      "min_margin": 2.0852344036102295
+     },
+     "oracle_run": {
+      "cost": 4372522.339753446,
+      "trips": 265,
+      "moves_replayed": {
+       "cost": 4372522.339753446,
+       "trips": 265
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 12.114162383476893,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 12.114162383476893,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 104,
+     "seconds": 11144.06666970253,
+     "start_option": "mpc+expert",
+     "cost": 11.746500540177028,
+     "trips": 0,
+     "planned": 11.746500968933105,
+     "start": "reference+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 25,
+      "projected_gradient": 1.5444326693095096,
+      "min_margin": -12.358437538146973
+     },
+     "oracle_run": {
+      "cost": 2178014.6498603863,
+      "trips": 132,
+      "moves_replayed": {
+       "cost": 2178014.6498603863,
+       "trips": 132
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 15.227992486953735,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 15.227992486953735,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 105,
+     "seconds": 13613.646600961685,
+     "start_option": "mpc+expert",
+     "cost": 7.96773662408193,
+     "trips": 0,
+     "planned": 7.96773624420166,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.009548876463417733,
+      "min_margin": 4.354257583618164
+     },
+     "oracle_run": {
+      "cost": 4290023.525493548,
+      "trips": 260,
+      "moves_replayed": {
+       "cost": 4290023.525493548,
+       "trips": 260
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 11.494088797569274,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 11.494088797569274,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 106,
+     "seconds": 12488.283213615417,
+     "start_option": "mpc+expert",
+     "cost": 10.594163020849228,
+     "trips": 0,
+     "planned": 10.594162940979004,
+     "start": "reference+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.006431259970766323,
+      "min_margin": -13.255624771118164
+     },
+     "oracle_run": {
+      "cost": 4174526.1439429047,
+      "trips": 253,
+      "moves_replayed": {
+       "cost": 4174526.1439429047,
+       "trips": 253
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 14.473307712078094,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 14.473307712078094,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 107,
+     "seconds": 12275.731736660004,
+     "start_option": "mpc+expert",
+     "cost": 9.925616549452146,
+     "trips": 0,
+     "planned": 9.925615310668945,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 2,
+      "projected_gradient": 1.6100458016810038e-07,
+      "min_margin": 0.029726557433605194
+     },
+     "oracle_run": {
+      "cost": 2211024.042883665,
+      "trips": 134,
+      "moves_replayed": {
+       "cost": 2211024.042883665,
+       "trips": 134
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 15.378044253985086,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 15.378044253985086,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 108,
+     "seconds": 11600.98838019371,
+     "start_option": "mpc+expert",
+     "cost": 6.676276816129684,
+     "trips": 0,
+     "planned": 6.676276683807373,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.01099386337702557,
+      "min_margin": 0.003710933728143573
+     },
+     "oracle_run": {
+      "cost": 13.41644368271033,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 13.41644368271033,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 12.071909412940343,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 12.071909412940343,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "slow_approach",
+     "seed": 109,
+     "seconds": 12945.463004112244,
+     "start_option": "mpc+expert",
+     "cost": 8.771352585951487,
+     "trips": 0,
+     "planned": 8.77135181427002,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.009015823458166872,
+      "min_margin": 1.6003124713897705
+     },
+     "oracle_run": {
+      "cost": 4273517.21503944,
+      "trips": 259,
+      "moves_replayed": {
+       "cost": 4273517.21503944,
+       "trips": 259
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 12.246228225231171,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 12.246228225231171,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    }
+   ]
   },
   "fast_approach": {
    "weight": 0.05,
@@ -147,25 +902,20 @@
     108,
     109
    ],
-   "reference_mean": 13.717153358340264,
-   "ceiling_mean": 11.037433864156403,
    "ceiling_costs": [
-    10.825689679384231,
-    11.847936144272486,
-    9.418458097775778,
-    10.145927110513052,
-    13.085024431546529,
-    10.207478810548782,
-    12.464147376616795,
-    12.888567776282628,
-    10.174984961748123,
-    9.316124252875646
+    10.82568968852361,
+    11.847936125596364,
+    9.418458184401194,
+    10.145927114884058,
+    13.085024399757385,
+    9.4128176009655,
+    12.464147415161133,
+    14.375613796710969,
+    8.607974277734757,
+    9.316123934785525
    ],
    "ceiling_trips": 0,
-   "room": 1.2427846478778128,
-   "room_is_lower_bound": true,
-   "planned_minus_replayed_max": 1.5052159625383865e-06,
-   "previous_ceiling_mean": 11.225227137327192,
+   "ceiling_mean": 10.949971253852048,
    "solver": {
     "status": [
      0,
@@ -179,24 +929,405 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.0419286081605873,
     "capped": 0,
-    "min_margin": -16.921621322631836,
-    "start": [
-     "reference+restart",
-     "reference+restart",
-     "reference",
-     "reference",
-     "reference+restart",
-     "reference",
-     "reference",
-     "mid",
-     "mid",
-     "reference"
-    ],
-    "best_two_starts_rel_gap_median": 0.06040320289870682,
-    "best_two_starts_rel_gap_max": 0.2429378016341026
-   }
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10,
+    "expert_fallback": 0,
+    "improved_on_expert": 10
+   },
+   "per_seed": [
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 100,
+     "seconds": 13317.81939125061,
+     "start_option": "mpc+expert",
+     "cost": 10.82568968852361,
+     "trips": 0,
+     "planned": 10.825690269470215,
+     "start": "reference+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 5,
+      "projected_gradient": 0.015192482690764342,
+      "min_margin": -6.487011432647705
+     },
+     "oracle_run": {
+      "cost": 4422017.931781067,
+      "trips": 268,
+      "moves_replayed": {
+       "cost": 4422017.931781067,
+       "trips": 268
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 13.99513027270635,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 13.99513027270635,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 101,
+     "seconds": 14812.441843986511,
+     "start_option": "mpc+expert",
+     "cost": 11.847936125596364,
+     "trips": 0,
+     "planned": 11.847936630249023,
+     "start": "reference+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.0419286081605873,
+      "min_margin": -5.067089557647705
+     },
+     "oracle_run": {
+      "cost": 4504519.504064795,
+      "trips": 273,
+      "moves_replayed": {
+       "cost": 4504519.504064795,
+       "trips": 273
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 33.38531833648682,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 33.38531833648682,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 102,
+     "seconds": 13041.01974606514,
+     "start_option": "mpc+expert",
+     "cost": 9.418458184401194,
+     "trips": 0,
+     "planned": 9.41845703125,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.02599744514853397,
+      "min_margin": 0.17246092855930328
+     },
+     "oracle_run": {
+      "cost": 4471519.097882058,
+      "trips": 271,
+      "moves_replayed": {
+       "cost": 4471519.097882058,
+       "trips": 271
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 25.44834574818611,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 25.44834574818611,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 103,
+     "seconds": 12968.452184438705,
+     "start_option": "mpc+expert",
+     "cost": 10.145927114884058,
+     "trips": 0,
+     "planned": 10.145927429199219,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.021785799594562505,
+      "min_margin": -0.0033593785483390093
+     },
+     "oracle_run": {
+      "cost": 2244024.094404019,
+      "trips": 136,
+      "moves_replayed": {
+       "cost": 2244024.094404019,
+       "trips": 136
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 33.19378931641579,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 33.19378931641579,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 104,
+     "seconds": 14024.619300365448,
+     "start_option": "mpc+expert",
+     "cost": 13.085024399757385,
+     "trips": 0,
+     "planned": 13.085022926330566,
+     "start": "reference+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 2,
+      "projected_gradient": 0.011022798438580006,
+      "min_margin": -8.258554458618164
+     },
+     "oracle_run": {
+      "cost": 4455022.352115379,
+      "trips": 270,
+      "moves_replayed": {
+       "cost": 4455022.352115379,
+       "trips": 270
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 16.38504428466161,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 16.38504428466161,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 105,
+     "seconds": 11055.0979347229,
+     "start_option": "mpc+expert",
+     "cost": 9.4128176009655,
+     "trips": 0,
+     "planned": 9.41281795501709,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 48,
+      "projected_gradient": 1.0242816984605247,
+      "min_margin": -0.6010546684265137
+     },
+     "oracle_run": {
+      "cost": 2260514.2012095666,
+      "trips": 137,
+      "moves_replayed": {
+       "cost": 2260514.2012095666,
+       "trips": 137
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 27.91563706477483,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 27.91563706477483,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 106,
+     "seconds": 14700.584453105927,
+     "start_option": "mpc+expert",
+     "cost": 12.464147415161133,
+     "trips": 0,
+     "planned": 12.46414852142334,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.024382621410737326,
+      "min_margin": -10.455156326293945
+     },
+     "oracle_run": {
+      "cost": 4488021.918596749,
+      "trips": 272,
+      "moves_replayed": {
+       "cost": 4488021.918596749,
+       "trips": 272
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 25.98200984954834,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 25.98200984954834,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 107,
+     "seconds": 16918.54923439026,
+     "start_option": "mpc+expert",
+     "cost": 14.375613796710969,
+     "trips": 0,
+     "planned": 14.375614166259766,
+     "start": "reference+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 2,
+      "projected_gradient": 0.12662382017351592,
+      "min_margin": -37.236328125
+     },
+     "oracle_run": {
+      "cost": 6715521.116912891,
+      "trips": 407,
+      "moves_replayed": {
+       "cost": 6715521.116912891,
+       "trips": 407
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 37.52167862613996,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 37.52167862613996,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 108,
+     "seconds": 14437.209745407104,
+     "start_option": "mpc+expert",
+     "cost": 8.607974277734757,
+     "trips": 0,
+     "planned": 8.607975006103516,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 5,
+      "projected_gradient": 0.1419626493443669,
+      "min_margin": 0.04869140312075615
+     },
+     "oracle_run": {
+      "cost": 2260515.3240725994,
+      "trips": 137,
+      "moves_replayed": {
+       "cost": 2260515.3240725994,
+       "trips": 137
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 22.951476668914157,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 22.951476668914157,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "fast_approach",
+     "seed": 109,
+     "seconds": 12919.65404176712,
+     "start_option": "mpc+expert",
+     "cost": 9.316123934785525,
+     "trips": 0,
+     "planned": 9.31612491607666,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 10,
+      "projected_gradient": 0.022675455455226978,
+      "min_margin": 0.0024804649874567986
+     },
+     "oracle_run": {
+      "cost": 2227521.1870955173,
+      "trips": 135,
+      "moves_replayed": {
+       "cost": 2227521.1870955173,
+       "trips": 135
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 14.046962875922521,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 14.046962875922521,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    }
+   ]
   },
   "load_swings": {
    "weight": 0.15,
@@ -212,25 +1343,20 @@
     108,
     109
    ],
-   "reference_mean": 10.142487643124216,
-   "ceiling_mean": 6.271179645854203,
    "ceiling_costs": [
-    6.828529110153516,
-    7.61352761188522,
-    4.942885535803313,
-    5.550880884503325,
-    8.876600210269292,
-    3.8124613703057793,
-    7.532462749706659,
-    7.623900877957543,
-    4.064952638085233,
-    5.865595469872157
+    3.4329261772825492,
+    4.9007771455061935,
+    2.597697089465655,
+    3.6969266824036215,
+    6.085828186319171,
+    3.153780713652571,
+    4.717704809998783,
+    4.920890657456281,
+    2.3440114663968172,
+    3.196095163997573
    ],
    "ceiling_trips": 0,
-   "room": 1.617317349508443,
-   "room_is_lower_bound": true,
-   "planned_minus_replayed_max": 1.3013680772999692e-06,
-   "previous_ceiling_mean": 7.039216236815426,
+   "ceiling_mean": 3.9046638092479213,
    "solver": {
     "status": [
      0,
@@ -238,39 +1364,414 @@
      0,
      0,
      0,
-     2,
+     0,
      0,
      0,
      0,
      0
     ],
-    "projected_gradient_max": 1.37217906050195,
     "capped": 0,
-    "min_margin": -29.012420654296875,
-    "start": [
-     "mid",
-     "hold+restart2",
-     "mid+restart",
-     "mid+restart2",
-     "hold+restart2",
-     "reference",
-     "mid+restart",
-     "mid+restart2",
-     "mid+restart",
-     "mid+restart"
-    ],
-    "best_two_starts_rel_gap_median": 0.1624973029790442,
-    "best_two_starts_rel_gap_max": 0.4701867158782398
-   }
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10,
+    "expert_fallback": 0,
+    "improved_on_expert": 10
+   },
+   "per_seed": [
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 100,
+     "seconds": 11469.46810746193,
+     "start_option": "mpc+expert",
+     "cost": 3.4329261772825492,
+     "trips": 0,
+     "planned": 3.4329257011413574,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 11,
+      "projected_gradient": 1.905364943382669,
+      "min_margin": -0.06001953408122063
+     },
+     "oracle_run": {
+      "cost": 4.026572966817961,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 4.026572966817961,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 11.193668338060379,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 11.193668338060379,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 101,
+     "seconds": 8029.666284799576,
+     "start_option": "mpc+expert",
+     "cost": 4.9007771455061935,
+     "trips": 0,
+     "planned": 4.900777339935303,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.015745778136233235,
+      "min_margin": 0.0003515587595757097
+     },
+     "oracle_run": {
+      "cost": 5.349410003231218,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 5.349410003231218,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 12.465637130792407,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 12.465637130792407,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 102,
+     "seconds": 7539.614419698715,
+     "start_option": "mpc+expert",
+     "cost": 2.597697089465655,
+     "trips": 0,
+     "planned": 2.5976967811584473,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 11,
+      "projected_gradient": 1.7918175847697635,
+      "min_margin": -0.0029687536880373955
+     },
+     "oracle_run": {
+      "cost": 3.003536876960134,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 3.003536876960134,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 7.0127038022332515,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 7.0127038022332515,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 103,
+     "seconds": 5479.704318284988,
+     "start_option": "mpc+expert",
+     "cost": 3.6969266824036215,
+     "trips": 0,
+     "planned": 3.6969268321990967,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 15,
+      "projected_gradient": 0.024885944787765513,
+      "min_margin": 0.0017773399595171213
+     },
+     "oracle_run": {
+      "cost": 4.0231124583585185,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 4.0231124583585185,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 17.785797838435197,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 17.785797838435197,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 104,
+     "seconds": 10807.382894039154,
+     "start_option": "mpc+expert",
+     "cost": 6.085828186319171,
+     "trips": 0,
+     "planned": 6.085827827453613,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 1.6228836040891461,
+      "min_margin": -0.0028906287625432014
+     },
+     "oracle_run": {
+      "cost": 6.8587223939100905,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.8587223939100905,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 13.965593725244204,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 13.965593725244204,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 105,
+     "seconds": 5009.501181125641,
+     "start_option": "mpc+expert",
+     "cost": 3.153780713652571,
+     "trips": 0,
+     "planned": 3.153780698776245,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 10,
+      "projected_gradient": 1.3453202431603406,
+      "min_margin": -0.0018750036833807826
+     },
+     "oracle_run": {
+      "cost": 3.495203537431856,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 3.495203537431856,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 6.150574235008923,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.150574235008923,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 106,
+     "seconds": 9778.977886915207,
+     "start_option": "mpc+expert",
+     "cost": 4.717704809998783,
+     "trips": 0,
+     "planned": 4.7177042961120605,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 16,
+      "projected_gradient": 1.8638886017288687,
+      "min_margin": -0.0017187537159770727
+     },
+     "oracle_run": {
+      "cost": 5.283085149805993,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 5.283085149805993,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 12.029345098709067,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 12.029345098709067,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 107,
+     "seconds": 8551.463026046753,
+     "start_option": "mpc+expert",
+     "cost": 4.920890657456281,
+     "trips": 0,
+     "planned": 4.920890808105469,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.22467163968815795,
+      "min_margin": -29.012420654296875
+     },
+     "oracle_run": {
+      "cost": 6.235978908467029,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 6.235978908467029,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 11.064363550685036,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 11.064363550685036,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 108,
+     "seconds": 4158.317360639572,
+     "start_option": "mpc+expert",
+     "cost": 2.3440114663968172,
+     "trips": 0,
+     "planned": 2.3440113067626953,
+     "start": "mpc+restart2",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.31530071741394305,
+      "min_margin": -15.104179382324219
+     },
+     "oracle_run": {
+      "cost": 2.8873884562261325,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 2.8873884562261325,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 7.676467410978318,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 7.676467410978318,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    },
+    {
+     "task": "compressor_surge",
+     "scenario": "load_swings",
+     "seed": 109,
+     "seconds": 5893.278089046478,
+     "start_option": "mpc+expert",
+     "cost": 3.196095163997573,
+     "trips": 0,
+     "planned": 3.1960949897766113,
+     "start": "mpc+restart1",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.02392428167109195,
+      "min_margin": 0.000546871277038008
+     },
+     "oracle_run": {
+      "cost": 3.5952322679494197,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 3.5952322679494197,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false,
+     "expert_run": {
+      "cost": 7.911335901649048,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 7.911335901649048,
+       "trips": 0
+      }
+     },
+     "improved_on_expert": true,
+     "expert_fallback": false
+    }
+   ]
   }
  },
- "weights_covered": 1.0,
- "J_reference": 8.580729218221087,
- "J_ceiling": 3.6825919943864296,
- "room_J": 2.3300787139333243,
- "room_is_lower_bound": true,
- "previous_room_J": 1.9626038467197011,
- "method": "pc_gym.foresight.solve: L-BFGS-B in float32 on env.step_env and the reward's smooth terms (CEILING_TERMS), the step terms as margins (ceiling_margins), the seed's own keys, from three starts (the reset's hold, the kept reference's actions, their midpoint), each restarted twice from its own end plan; the cheapest untripped plan replayed through benchmark.run_policy at sensor noise 1 on seeds 100-109.",
- "replay": "PlanPolicy (open loop)",
- "convergence": "not converged: the starts end in different local minima (best_two_starts_rel_gap_* per scenario, the second-best start family's cost over the best's, minus 1), and restarts from an end plan rarely move it. The ceiling is the best plan found, so its cost is an upper bound on the optimum's and the room a lower bound."
+ "generated": "2026-11-17",
+ "cpu": "scool-bob",
+ "stamp": "c15987230f1fa1ce"
 }

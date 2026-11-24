@@ -58,6 +58,7 @@ def krsko_day():
     loop keeps the gain it was written with, in K per K."""
     env = Reactor()
     p = ReactorParams(
+        cycle_range=(0.0, 0.0),  # Krsko's day is a start-of-cycle day (1690 ppm)
         demand_sigma=0.0,
         initial_xenon_power_range=(1.0, 1.0),
         load_ramp_rate=0.08 / 3600.0,
@@ -78,7 +79,7 @@ def krsko_day():
         rods = 1.0 - 2.0 * steps_in / STROKE
         error = s.T_ref - 0.5 * (s.T_coolant + s.T_cold)  # K, positive when cold
         boron = jnp.clip(-trim * error, -1.0, 1.0)  # dilute when cold
-        a = jnp.stack([rods, boron]).astype(jnp.float32)
+        a = jnp.stack([rods, boron, jnp.ones_like(rods)]).astype(jnp.float32)
         _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, a, p)
         return (s, steps_in), (s.delta_I, s.time, s.Xe_hat, s.target_n)
 

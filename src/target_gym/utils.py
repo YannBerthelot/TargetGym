@@ -28,6 +28,14 @@ def log_scaled_reward(error, floor, envelope, xp=jnp):
     return xp.clip(1.0 - xp.log1p(error / floor) / xp.log1p(envelope / floor), 0.0, 1.0)
 
 
+def stationary_innovation(std, decay, xp=jnp):
+    """The innovation's spread ``s`` for which ``x' = decay * x + s * xi``, with
+    ``xi ~ N(0, 1)``, keeps the stationary standard deviation ``std``:
+    ``std * sqrt(1 - decay**2)``. An Euler step's ``std * sqrt(2 theta dt)``
+    leaves the process ``1 / sqrt(1 - theta dt / 2)`` wider than stated."""
+    return std * xp.sqrt(1.0 - decay**2)
+
+
 def convert_raw_action_to_range(raw_action, min_action, max_action):
     """
     Assuming the action is roughly in (-1,1), we rescale to it (min_action,max_action).

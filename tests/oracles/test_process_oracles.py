@@ -68,8 +68,12 @@ C2 = (
     "boiler_drum",
     "wind_turbine",
     "cement_kiln",
-    "reactor",
 )  # fmt: skip  (battery holds a stand-in, labelled non-compliant, for 0.8.0)
+#: The reactor's oracle is its own whole-day planner on the shared solver's
+#: ``Shooting`` (reactor/oracle.py, 2026-11-16), not a ``TaskModel`` under the
+#: shared ``Oracle``, so the model checks below do not apply to it; its own tests
+#: are in tests/reactor/test_reactor_oracle.py. It still reads no expert code.
+OWN_PLANNER = ("reactor",)
 # ``plane`` and ``plane_energy`` score bands since Amendment 2, and their
 # oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
 # plant on the old cost.
@@ -294,7 +298,7 @@ def _imports(path: pathlib.Path) -> set[pathlib.Path]:
     return found
 
 
-@pytest.mark.parametrize("name", ON_SOLVER)
+@pytest.mark.parametrize("name", ON_SOLVER + OWN_PLANNER)
 def test_the_oracle_reads_no_expert_code(name):
     """Every module the oracle imports, followed to the end, is outside
     experts/ and no experts*.py, and the spec declares no expert reads."""
@@ -368,6 +372,40 @@ def test_the_compressors_planned_surge_limit_is_the_surge_line():
         y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
     planned = float(y[0]) - limit.lo
     assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+
+
+@pytest.mark.parametrize("ramp_s", [1.0, 15.0])
+def test_the_compressors_plan_follows_the_episodes_own_demand_ramp(ramp_s):
+    """The oracle is the problem definition, so its model reads the demand
+    ramp the episode's schedule carries (``state.demand_ramp``: 1 s on
+    fast_approach, 15 s on slow_approach), not its own params' 5 s (owner,
+    2026-11-23). The shipped oracle plans on the registered task's params. From
+    the start of the second demand block, with the consumers' noise off and the
+    move held, its header pressure follows the env's over 80 steps (8 s, inside
+    the ramp) to well under the transmitter's 0.0275 kPa; a plan read at 5 s is
+    off by over 1 kPa there."""
+    spec = REGISTRY["compressor_surge"]
+    quiet = QUIET["compressor_surge"]
+    env, run = spec.make_env(), spec.make_test_params(demand_ramp_s=ramp_s, **quiet)
+    _, _, oracle = _oracle("compressor_surge", **quiet)
+    m, key = oracle.model, jax.random.PRNGKey(0)
+    _, state = env.reset_env(key, run)
+    hold, step = m.hold(state), jax.jit(env.step_env)
+    for _ in range(run.demand_block_steps):
+        state = step(key, state, hold, run)[1]
+    with enable_x64():
+        s = float64(state)
+        d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
+        x, planned = m.state_x(s), []
+        for t in range(80):
+            x = m.step(d, x, jnp.asarray(hold, jnp.float64), t)[0]
+            planned.append(float(x[1]))
+    actual = []
+    for _ in range(80):
+        state = step(key, state, hold, run)[1]
+        actual.append(float(state.dp))
+    worst = np.max(np.abs(np.subtract(planned, actual))) / 1e3  # kPa
+    assert worst < 0.1 * run.precision_floor
 
 
 def test_the_compressors_planned_zone_cost_has_no_kink_at_the_setpoint():
@@ -476,8 +514,6 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
         # step at 60 $/MWh.
         ("wind_turbine", 850.0e-6 * 0.25 / 3600.0 * 60.0),
-        # p = 1, in dollars: half the 0.05 K floor for a 30 s step at $230/h per K.
-        ("reactor", 230.0 / 3600.0 * 30.0 * 0.025),
         # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
         # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
         ("hvac", 9.54 * 0.25 * 0.05),
@@ -502,7 +538,6 @@ PRICED = {
     "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
     "wind_turbine": 1,  # power
     "cement_kiln": 2,  # free lime, fuel
-    "reactor": 2,  # Tavg past its dead band, the offset past its band (its clock)
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
     "ph_neutralization": 1,  # reagent; both valves' sum at a steady state
 }  # fmt: skip

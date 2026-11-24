@@ -1,15 +1,13 @@
 {
  "task": "boiler_drum",
- "protocol": "charter J3: the score's own reward planned with the true model, the true state and the episode's future, replayed on the env in float32 on seeds 100 to 109 at sensor noise 1; room = the kept reference's mean cost per step over the oracle's replayed one, on the same seeds",
- "solver": "shared shooting IPM (oracles.shooting), one plan over the 1800-step episode, block 1, cap 500 iterations, from the reset state; level limits backed off by the level reading's sigma (0.5 mm), V_sd >= 0 held",
- "reference": "cascade",
- "J_reference": 1.4531317731737375e-05,
- "J_ceiling": 2.750831088558601e-06,
- "room_J": 5.28251908747752,
+ "method": "shooting (boiler_drum, hvac, wind_turbine): the shared interior-point solver (``oracles.shooting``) on the oracle's own model, one plan over the episode, block 1, through K7's width rungs (``data/oracle_widths``), limits backed off by the task's ``ceiling_backoffs`` (wind: the widths row's K11 back-off on near_rated and on a seed that tripped, as first measured; hvac: its slab edge through 1, 0.1, 0.01 K, a capped seed re-solved through 1, 0.3, 0.1, 0.03, 0.01 K at cap 1500); the wind turbine re-solved with the tower's rainflow turning points frozen until they stop changing (``OUTER`` solves at most).",
+ "start_option": [
+  "cold"
+ ],
+ "J_ceiling": 1.2838482628365848e-06,
  "scenarios": {
   "normal": {
-   "weight": 0.6995627732667083,
-   "reference_mean": 0.0,
+   "weight": 0.699632692836261,
    "seeds": [
     100,
     101,
@@ -22,281 +20,188 @@
     108,
     109
    ],
-   "ceiling_mean": 0.0,
-   "ceiling_per_seed": [
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0
+   "ceiling_costs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ],
-   "planned_mean": 0.0,
-   "replay_trips": 0,
-   "reference_mean_same_seeds": 0.0,
-   "room": "undefined (0/0)",
-   "terms_mean": {
-    "failure": 0.0,
-    "imbalance": 0.0
-   },
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.0,
    "solver": {
-    "max_kkt_error": 4.577187414400523e-09,
-    "max_iterations": 15,
-    "capped": 0,
-    "failed": 0,
-    "max_violation": 9.999900187060728e-09,
-    "max_planned_limit_excess": -0.22522903880061124
+    "converged": 10
    },
    "per_seed": [
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 100,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 3.2097449041094267e-09,
-       "iterations": 15,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 114.33624625205994,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 3.209741366357738e-09,
+      "iterations": 15,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 101,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.577187414400523e-09,
-       "iterations": 11,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999900187060728e-09
-      }
-     ]
+     "seconds": 131.85468554496765,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.577187414400873e-09,
+      "iterations": 11,
+      "capped": false,
+      "failed": false,
+      "violation": 9.99990018706229e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 102,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.341006874285464e-09,
-       "iterations": 11,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898674831112e-09
-      }
-     ]
+     "seconds": 132.18675994873047,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.341006874288473e-09,
+      "iterations": 11,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898674831109e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 103,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.090913837216053e-10,
-       "iterations": 14,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909083e-09
-      }
-     ]
+     "seconds": 131.54013228416443,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.090913837216054e-10,
+      "iterations": 14,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909083e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 104,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.37458719659148e-09,
-       "iterations": 11,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898676980603e-09
-      }
-     ]
+     "seconds": 130.0569007396698,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.374587196634673e-09,
+      "iterations": 11,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898676980536e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 105,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.251487931008115e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898683633563e-09
-      }
-     ]
+     "seconds": 131.10335731506348,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.251487931005567e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898683631278e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 106,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.091438930140293e-10,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909083e-09
-      }
-     ]
+     "seconds": 131.64322471618652,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.091438930139682e-10,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909083e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 107,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.1256492893283526e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898691512283e-09
-      }
-     ]
+     "seconds": 130.68940782546997,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.125649289413958e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898691512283e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 108,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.090987498063006e-10,
-       "iterations": 12,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909083e-09
-      }
-     ]
+     "seconds": 132.49067974090576,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.090987498061743e-10,
+      "iterations": 12,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909083e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "normal",
      "seed": 109,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5066005459449433e-09,
-       "iterations": 12,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 132.72221064567566,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5066005459449983e-09,
+      "iterations": 12,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     }
    ]
   },
   "industrial_swing": {
-   "weight": 0.09993753903810118,
-   "reference_mean": 8.15767605190053e-06,
+   "weight": 0.09994752754803728,
    "seeds": [
     100,
     101,
@@ -309,281 +214,188 @@
     108,
     109
    ],
-   "ceiling_mean": 0.0,
-   "ceiling_per_seed": [
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0
+   "ceiling_costs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ],
-   "planned_mean": 0.0,
-   "replay_trips": 0,
-   "reference_mean_same_seeds": 8.15767605190053e-06,
-   "room": "unbounded",
-   "terms_mean": {
-    "failure": 0.0,
-    "imbalance": 0.0
-   },
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.0,
    "solver": {
-    "max_kkt_error": 9.965934658587962e-09,
-    "max_iterations": 13,
-    "capped": 0,
-    "failed": 0,
-    "max_violation": 9.999899578999705e-09,
-    "max_planned_limit_excess": -0.20858064868275833
+    "converged": 10
    },
    "per_seed": [
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 100,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 6.138453815637256e-09,
-       "iterations": 12,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898700668821e-09
-      }
-     ]
+     "seconds": 131.8131868839264,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 6.138453815518231e-09,
+      "iterations": 12,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898700668601e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 101,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.872021600531169e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898688411437e-09
-      }
-     ]
+     "seconds": 127.99111795425415,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.8720216005098195e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.99989868841151e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 102,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 5.019462047556823e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999899578999705e-09
-      }
-     ]
+     "seconds": 156.4731478691101,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 5.019462047400752e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999899579002918e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 103,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 5.22502387500563e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898681043913e-09
-      }
-     ]
+     "seconds": 129.053368806839,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 5.2250238751026955e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.99989868104391e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 104,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 6.140081651434892e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898504197613e-09
-      }
-     ]
+     "seconds": 130.87203192710876,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 6.140081651634124e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898504199322e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 105,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5064258690337658e-09,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319882e-09
-      }
-     ]
+     "seconds": 156.52745056152344,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5064258690338878e-09,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319882e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 106,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 6.1040965834578814e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898646241733e-09
-      }
-     ]
+     "seconds": 156.65115928649902,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 6.1040965834943295e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898646239961e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 107,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.1256492893283526e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898691512283e-09
-      }
-     ]
+     "seconds": 130.70386910438538,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.125649289413958e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898691512283e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 108,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.965934658587962e-09,
-       "iterations": 11,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999894053653732e-09
-      }
-     ]
+     "seconds": 150.26939225196838,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.965934677537105e-09,
+      "iterations": 11,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999894053657633e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "industrial_swing",
      "seed": 109,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.648835144996804e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.99989869696703e-09
-      }
-     ]
+     "seconds": 154.63218879699707,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.648835144978438e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898696969234e-09
+     }
     }
    ]
   },
   "low_load": {
-   "weight": 0.19987507807620236,
-   "reference_mean": 0.0,
+   "weight": 0.19989505509607455,
    "seeds": [
     100,
     101,
@@ -596,281 +408,188 @@
     108,
     109
    ],
-   "ceiling_mean": 0.0,
-   "ceiling_per_seed": [
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0
+   "ceiling_costs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ],
-   "planned_mean": 0.0,
-   "replay_trips": 0,
-   "reference_mean_same_seeds": 0.0,
-   "room": "undefined (0/0)",
-   "terms_mean": {
-    "failure": 0.0,
-    "imbalance": 0.0
-   },
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.0,
    "solver": {
-    "max_kkt_error": 7.318583063724112e-09,
-    "max_iterations": 14,
-    "capped": 0,
-    "failed": 0,
-    "max_violation": 9.999898689648878e-09,
-    "max_planned_limit_excess": -0.22579631535511746
+    "converged": 10
    },
    "per_seed": [
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 100,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 6.0125954325765e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999897617637175e-09
-      }
-     ]
+     "seconds": 155.77076721191406,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 6.012595432505919e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999897617638198e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 101,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5059046480423907e-09,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 136.75112009048462,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.505904648042385e-09,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 102,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 7.318583063724112e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898670413625e-09
-      }
-     ]
+     "seconds": 138.344251871109,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 7.318583063618885e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898670412826e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 103,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5061138441198408e-09,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 134.5192289352417,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.506113844119871e-09,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 104,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.090910063846276e-10,
-       "iterations": 14,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909083e-09
-      }
-     ]
+     "seconds": 129.3838174343109,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.090910063846277e-10,
+      "iterations": 14,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909083e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 105,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.505948239933599e-09,
-       "iterations": 12,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 131.46560907363892,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5059482399336047e-09,
+      "iterations": 12,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 106,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.307653606389485e-09,
-       "iterations": 10,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898689648878e-09
-      }
-     ]
+     "seconds": 139.42520427703857,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.307653606424161e-09,
+      "iterations": 10,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898689648878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 107,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.50660435325867e-09,
-       "iterations": 11,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319878e-09
-      }
-     ]
+     "seconds": 141.59288144111633,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5066043532586513e-09,
+      "iterations": 11,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319878e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 108,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 5.457614465942952e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898674626628e-09
-      }
-     ]
+     "seconds": 137.59721875190735,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 5.4576144659795705e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898674626694e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "low_load",
      "seed": 109,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 4.452703700832783e-09,
-       "iterations": 9,
-       "capped": false,
-       "failed": false,
-       "violation": 9.999898680344472e-09
-      }
-     ]
+     "seconds": 138.95843744277954,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 4.452703700801926e-09,
+      "iterations": 9,
+      "capped": false,
+      "failed": false,
+      "violation": 9.999898680344472e-09
+     }
     }
    ]
   },
   "id_fan_runback": {
-   "weight": 0.00037476577139287947,
-   "reference_mean": 0.036354893987419146,
+   "weight": 0.00017490817320906524,
    "seeds": [
     100,
     101,
@@ -883,281 +602,188 @@
     108,
     109
    ],
-   "ceiling_mean": 0.007340134287970533,
-   "ceiling_per_seed": [
-    0.01317291781187761,
-    0.002264509035161508,
-    0.001528557086680343,
-    0.004444643816517703,
-    0.005351252530448234,
-    0.0005924136096696328,
-    0.01693325995287902,
-    0.021157364623116404,
-    0.006153888475821263,
-    0.0018025359375336179
+   "ceiling_costs": [
+    0.013172890497152959,
+    0.002264506027125511,
+    0.0015285549243102044,
+    0.0044446514503308126,
+    0.005351253204683768,
+    0.0005924145449096506,
+    0.016933275613141126,
+    0.02115730130644028,
+    0.006153890006709517,
+    0.0018025357494575347
    ],
-   "planned_mean": 0.0073401083098282565,
-   "replay_trips": 0,
-   "reference_mean_same_seeds": 0.036354893987419146,
-   "room": 4.9528922171083165,
-   "terms_mean": {
-    "failure": 0.0,
-    "imbalance": 0.007340133825395034
-   },
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.007340127332426137,
    "solver": {
-    "max_kkt_error": 6.209167208170996e-09,
-    "max_iterations": 75,
-    "capped": 0,
-    "failed": 0,
-    "max_violation": 9.808353129692193e-09,
-    "max_planned_limit_excess": -0.0005000101922951194
+    "converged": 10
    },
    "per_seed": [
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 100,
-     "replay_cost_per_step": 0.01317291781187761,
-     "planned_cost_per_step": 0.013172845439062792,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.013172916866082636
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.508419541948235e-09,
-       "iterations": 66,
-       "capped": false,
-       "failed": false,
-       "violation": 9.788066912541638e-09
-      }
-     ]
+     "seconds": 146.52355313301086,
+     "cost": 0.013172890497152959,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.508419541537756e-09,
+      "iterations": 66,
+      "capped": false,
+      "failed": false,
+      "violation": 9.788066912541638e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 101,
-     "replay_cost_per_step": 0.002264509035161508,
-     "planned_cost_per_step": 0.002264508969105726,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.002264508967163642
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.506534495566183e-09,
-       "iterations": 68,
-       "capped": false,
-       "failed": false,
-       "violation": 9.500357112113278e-09
-      }
-     ]
+     "seconds": 147.2633020877838,
+     "cost": 0.002264506027125511,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5065344951126544e-09,
+      "iterations": 68,
+      "capped": false,
+      "failed": false,
+      "violation": 9.500357112113278e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 102,
-     "replay_cost_per_step": 0.001528557086680343,
-     "planned_cost_per_step": 0.0015285556744564705,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0015285569084355505
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 6.209167208170996e-09,
-       "iterations": 68,
-       "capped": false,
-       "failed": false,
-       "violation": 9.104497544765167e-09
-      }
-     ]
+     "seconds": 142.97299146652222,
+     "cost": 0.0015285549243102044,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 6.209168235127294e-09,
+      "iterations": 68,
+      "capped": false,
+      "failed": false,
+      "violation": 9.104497544765167e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 103,
-     "replay_cost_per_step": 0.004444643816517703,
-     "planned_cost_per_step": 0.004444604107774285,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.004444643171078882
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5902369167462394e-09,
-       "iterations": 62,
-       "capped": false,
-       "failed": false,
-       "violation": 9.597755812329467e-09
-      }
-     ]
+     "seconds": 136.6824917793274,
+     "cost": 0.0044446514503308126,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5902369699673957e-09,
+      "iterations": 62,
+      "capped": false,
+      "failed": false,
+      "violation": 9.597755812329467e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 104,
-     "replay_cost_per_step": 0.005351252530448234,
-     "planned_cost_per_step": 0.005351250657424946,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.005351251897067029
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5061076944807625e-09,
-       "iterations": 58,
-       "capped": false,
-       "failed": false,
-       "violation": 9.626564489995104e-09
-      }
-     ]
+     "seconds": 148.10790300369263,
+     "cost": 0.005351253204683768,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5061076932929138e-09,
+      "iterations": 58,
+      "capped": false,
+      "failed": false,
+      "violation": 9.626564489995104e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 105,
-     "replay_cost_per_step": 0.0005924136096696328,
-     "planned_cost_per_step": 0.0005924106471835145,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0005924133207922624
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.6249460866825184e-09,
-       "iterations": 49,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319898e-09
-      }
-     ]
+     "seconds": 143.95171213150024,
+     "cost": 0.0005924145449096506,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.6249467752023585e-09,
+      "iterations": 49,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319898e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 106,
-     "replay_cost_per_step": 0.01693325995287902,
-     "planned_cost_per_step": 0.016933383197770373,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.016933259414320473
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.505980593131491e-09,
-       "iterations": 75,
-       "capped": false,
-       "failed": false,
-       "violation": 9.783235666027679e-09
-      }
-     ]
+     "seconds": 158.6808466911316,
+     "cost": 0.016933275613141126,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.505980593101117e-09,
+      "iterations": 75,
+      "capped": false,
+      "failed": false,
+      "violation": 9.783235666027679e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 107,
-     "replay_cost_per_step": 0.021157364623116404,
-     "planned_cost_per_step": 0.021157141845379625,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.021157364140166175
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5078213224448037e-09,
-       "iterations": 73,
-       "capped": false,
-       "failed": false,
-       "violation": 9.808353129692193e-09
-      }
-     ]
+     "seconds": 153.11764407157898,
+     "cost": 0.02115730130644028,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.507821334845883e-09,
+      "iterations": 73,
+      "capped": false,
+      "failed": false,
+      "violation": 9.808353129692193e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 108,
-     "replay_cost_per_step": 0.006153888475821263,
-     "planned_cost_per_step": 0.006153860497738475,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.006153887817603947
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5442123559206252e-09,
-       "iterations": 58,
-       "capped": false,
-       "failed": false,
-       "violation": 9.640248987974331e-09
-      }
-     ]
+     "seconds": 152.1423144340515,
+     "cost": 0.006153890006709517,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5442123648541006e-09,
+      "iterations": 58,
+      "capped": false,
+      "failed": false,
+      "violation": 9.640248987974331e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "id_fan_runback",
      "seed": 109,
-     "replay_cost_per_step": 0.0018025359375336179,
-     "planned_cost_per_step": 0.0018025220623863669,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.001802535751239734
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.548481236917224e-09,
-       "iterations": 66,
-       "capped": false,
-       "failed": false,
-       "violation": 9.34355232073969e-09
-      }
-     ]
+     "seconds": 154.58974504470825,
+     "cost": 0.0018025357494575347,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5484813041129172e-09,
+      "iterations": 66,
+      "capped": false,
+      "failed": false,
+      "violation": 9.34355232073969e-09
+     }
     }
    ]
   },
   "feed_pump_trip": {
-   "weight": 0.00024984384759525296,
-   "reference_mean": 0.00036618781938990545,
+   "weight": 0.0003498163464181305,
    "seeds": [
     100,
     101,
@@ -1170,278 +796,189 @@
     108,
     109
    ],
-   "ceiling_mean": 0.0,
-   "ceiling_per_seed": [
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0,
-    -0.0
+   "ceiling_costs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ],
-   "planned_mean": 0.0,
-   "replay_trips": 0,
-   "reference_mean_same_seeds": 0.00036618781938990545,
-   "room": "unbounded",
-   "terms_mean": {
-    "failure": 0.0,
-    "imbalance": 0.0
-   },
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.0,
    "solver": {
-    "max_kkt_error": 8.019114958015294e-09,
-    "max_iterations": 16,
-    "capped": 0,
-    "failed": 0,
-    "max_violation": 9.090909090909758e-09,
-    "max_planned_limit_excess": -0.17644478442395206
+    "converged": 10
    },
    "per_seed": [
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 100,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5059336144925246e-09,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319887e-09
-      }
-     ]
+     "seconds": 141.64543676376343,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5059336144925097e-09,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319887e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 101,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.505912234536948e-09,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319883e-09
-      }
-     ]
+     "seconds": 159.9925661087036,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.505912234536947e-09,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319883e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 102,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 8.019114958015294e-09,
-       "iterations": 15,
-       "capped": false,
-       "failed": false,
-       "violation": 8.019114958015294e-09
-      }
-     ]
+     "seconds": 163.584290266037,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 8.01911478588535e-09,
+      "iterations": 15,
+      "capped": false,
+      "failed": false,
+      "violation": 8.01911478588535e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 103,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5059534234980123e-09,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319883e-09
-      }
-     ]
+     "seconds": 157.07830023765564,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5059534234980657e-09,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319883e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 104,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.226519468690662e-10,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909758e-09
-      }
-     ]
+     "seconds": 141.81495451927185,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.226519468688378e-10,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909758e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 105,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 3.0176163013685697e-09,
-       "iterations": 13,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319882e-09
-      }
-     ]
+     "seconds": 137.1892695426941,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 3.017606868809669e-09,
+      "iterations": 13,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319882e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 106,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 7.024821633248857e-09,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319887e-09
-      }
-     ]
+     "seconds": 132.3875036239624,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 7.0248247921803064e-09,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319887e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 107,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.505913578395976e-09,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319887e-09
-      }
-     ]
+     "seconds": 134.17937469482422,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5059135783959755e-09,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319887e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 108,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 9.195090379045824e-10,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 9.090909090909748e-09
-      }
-     ]
+     "seconds": 156.1093306541443,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 9.195090379041958e-10,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 9.090909090909748e-09
+     }
     },
     {
+     "task": "boiler_drum",
+     "scenario": "feed_pump_trip",
      "seed": 109,
-     "replay_cost_per_step": -0.0,
-     "planned_cost_per_step": 0.0,
-     "replay_trips": 0,
-     "replay_terms_per_step": {
-      "failure": 0.0,
-      "imbalance": 0.0
-     },
-     "limit_backoffs": [
-      0.0005,
-      0.0
-     ],
-     "certificates": [
-      {
-       "widths": [],
-       "error": 2.5059262003584114e-09,
-       "iterations": 16,
-       "capped": false,
-       "failed": false,
-       "violation": 7.494096440319883e-09
-      }
-     ]
+     "seconds": 134.47467827796936,
+     "cost": 0.0,
+     "trips": 0,
+     "solver": {
+      "converged": true,
+      "error": 2.5059262003584164e-09,
+      "iterations": 16,
+      "capped": false,
+      "failed": false,
+      "violation": 7.494096440319883e-09
+     }
     }
    ]
   }
  },
- "generated": "2026-11-08, AMD EPYC 9454 (bob)"
+ "generated": "2026-11-15",
+ "cpu": "scool-bob",
+ "restamped": "from c05d0a708dadb2ba: 2026-11-23, int base.py change (5a8bbc2, dccfb8b); no boiler output changed (control_period 1; reward terms in info only)",
+ "stamp": "f33c353e274eecf1"
 }

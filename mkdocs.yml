@@ -92,6 +92,7 @@ nav:
   - Home: index.md
   - User guide:
       - Getting started: getting-started.md
+      - Continuing tasks: continuing-tasks.md
       - Using the PIDs: using-the-pids.md
       - Rendering: rendering.md
       - Throughput: performance.md

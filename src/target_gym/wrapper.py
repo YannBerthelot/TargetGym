@@ -61,6 +61,10 @@ class GymnasiumEnv(gym.Env):
                 dtype=np.float32,
             )
 
+        # Compiled once. Called as plain Python, a task's sub-step loops are
+        # rebuilt and compiled again on every step, and JAX keeps each program.
+        self._step = jax.jit(self.jax_env.step_env)
+
         # Internal state
         self.state = None
         self.env_params = (
@@ -96,7 +100,7 @@ class GymnasiumEnv(gym.Env):
 
     def step(self, action: np.ndarray):
         self.key, key = jax.random.split(self.key)
-        obs, new_state, reward, terminated, info = self.jax_env.step_env(
+        obs, new_state, reward, terminated, info = self._step(
             key,
             self.state,
             jnp.array(action, dtype=jnp.float32),

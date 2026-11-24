@@ -147,7 +147,7 @@ def test_a_physics_sub_step_moves_the_physics_clock_alone(method):
     state = _default_state(params)
 
     new_state, _ = compute_next_state(
-        action=jnp.array([0.3, 0.0]),
+        action=jnp.array([0.3, 0.0, 1.0]),
         state=state,
         params=params,
         integration_method=method,
@@ -171,12 +171,12 @@ def test_action_rate_limiting():
 
     # One step toward max withdrawal, and one toward max insertion, at one speed.
     new_state, _ = compute_next_state(
-        action=jnp.array([1.0, 0.0]), state=state, params=params
+        action=jnp.array([1.0, 0.0, 1.0]), state=state, params=params
     )
     assert float(new_state.rod_in) - start == pytest.approx(-step, rel=1e-4)
     assert float(new_state.rod_in) > 0.0  # not out yet
     new_state, _ = compute_next_state(
-        action=jnp.array([-1.0, 0.0]), state=state, params=params
+        action=jnp.array([-1.0, 0.0, 1.0]), state=state, params=params
     )
     assert float(new_state.rod_in) - start == pytest.approx(step, rel=1e-4)
 
@@ -184,7 +184,7 @@ def test_action_rate_limiting():
     st = state
     for _ in range(200):
         st, _ = compute_next_state(
-            action=jnp.array([1.0, 0.0]), state=st, params=params
+            action=jnp.array([1.0, 0.0, 1.0]), state=st, params=params
         )
     assert float(st.rod_in) == pytest.approx(0.0, abs=1e-6)
 
@@ -253,7 +253,7 @@ def test_settles_toward_lower_power_when_rods_inserted():
     # Insert rods hard (-1 raw → rho_ext_min).
     for _ in range(20):
         state, _ = compute_next_state(
-            action=jnp.array([-1.0, 0.0]), state=state, params=params
+            action=jnp.array([-1.0, 0.0, 1.0]), state=state, params=params
         )
 
     assert float(state.n) < 1.0

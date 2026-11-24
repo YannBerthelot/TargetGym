@@ -84,7 +84,7 @@ family's documented range, or ours with a reason.
 | `sewer_floor` | 5.0 | pH | cited [P9] |
 | `basin_volume` | 236.2 | L | ours, family "hours of flow" (Amendment 3): 2 h of nominal discharge |
 | `pumpback_flow` | 4.15 | mL/s | ours: a quarter of the influent, so the basin drains in about 16 h |
-| `setpoint_pH` | 7 | pH | ours: the permit centre; the set point is the operator's [P3, p. 4] |
+| `setpoint_pH` | 6.5 | pH | ours: where the reference's rule places it (section 10), the lowest tenth of a pH above 6 at which the reference never leaves the permit; the set point is the operator's [P3, p. 4], lowered toward the limit while the discharge stays comfortably above it [P3, pp. 4-5] |
 | `delta_t`, `max_steps_in_episode` | 5, 1440 | s, steps | ours: 2 h, past the 60 min excursion [P8] |
 | `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
@@ -128,13 +128,35 @@ and the plant runs on (D5).
 The buffer flow, the acid strength and the invariants are hidden: no source
 shows them measured.
 
+### Task: `ph_neutralization`
+
+Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6
+to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without
+overdosing. The policy reads both stages' pH probes, its two valves, the
+influent flow, the time spent outside the permit and the diversion basin's
+level. The buffer flow and the acid strength are hidden. Each step is charged,
+in litres of reagent, the reagent used, the time outside the permit, and the
+effluent diverted while the discharge is below pH 5. One excursion longer than
+60 min, or an overrun basin, is a violation and is charged as a restart.
+
+| obs | meaning |
+|---|---|
+| 0 | discharge pH, stage 2's probe |
+| 1 | stage-1 reagent valve, percent of its range |
+| 2 | pH set point |
+| 3 | minutes outside the permit in this excursion |
+| 4 | stage-1 pH, its probe |
+| 5 | stage-2 trim valve, percent of its maximum |
+| 6 | influent flow (mL/s) |
+| 7 | diversion basin level, percent of its volume |
+
 ---
 
 ## 5. Episode (rule 17)
 
-Both tanks start on the steady state that holds pH 7 under the buffer flow
-they meet, the trim valve shut and the basin empty, as a loop in automatic
-leaves them. What then moves is set by the scenario (section 6): influent acid
+Both tanks start on the steady state that holds the operator's set point, pH
+6.5 (section 10), under the buffer flow they meet, the trim valve shut and the
+basin empty, as a loop in automatic leaves them. What then moves is set by the scenario (section 6): influent acid
 strength [P3, p. 4], influent flow, and the buffer's Ornstein-Uhlenbeck drift
 [P1; P2]. Each upset comes twice, at times drawn over the episode, to a level
 drawn within its size, ramped over 10 min.
@@ -229,11 +251,27 @@ at the charged cost.
 
 - Zone: the discharge pH in 6 to 8 [P7]; the cheap side is low (pH 6), since
   less base holds a lower pH (19 % less at pH 6 than at 7 at nominal buffer).
-  The reference sits 2 sigma above 6 (`ladder.zone_setpoint`, rule 22); stage
-  1 has no zone and follows the same setpoint.
+  The score charges every step outside the permit at the price of a violation
+  (section 7), so the reference is not placed 2 sigma inside the edge: each rung
+  holds the lowest tenth of a pH above 6 at which it leaves the permit on none of
+  the ladder's seeds, in any scenario, and the ladder keeps the cheapest rung
+  (`ladder.zone_grid`, `ladder.first_without_exit`; charter J1, owner,
+  2026-11-23). Each candidate is run from episodes started on
+  it, and every rung takes over from the valves as the reset left them: stage 1's
+  valve there depends on the buffer flow the tanks meet, which is hidden, so no
+  balance gives it. Measured on 2026-11-23, of 50 episodes: the pi rung leaves
+  on 50, 46, 23, 9, 2 and 0 at 6.0 to 6.5, the feedforward and the override on 50,
+  48, 17, 7, 2 and 0. All three keep 6.5, which is `setpoint_pH`; the feedforward
+  is the cheapest. A seed no candidate could hold would not constrain a rung's
+  placement and would be listed; here every seed is held at 6.5, so none is.
+  Stage 1 has no zone and follows the same
+  setpoint.
 - Scenarios: the five of section 6.
-- Two valves: stage 1 coarse, stage 2 trim. Bump tests at the reset steady
-  state with `acid_upset_size`, `flow_swing` and `q2_noise_std` at 0.
+- Two valves: stage 1 coarse, stage 2 trim. Bump tests on the steady state at
+  the permit's centre, pH 7, with `acid_upset_size`, `flow_swing` and
+  `q2_noise_std` at 0: between the cheap edge and the centre the titration curve
+  is steepest at the centre, so the most sensitive point is there whatever set
+  point is placed, and the gains do not depend on the set point they place.
 - Feedforward is now available from the metered influent flow (obs 6), through
   the steady balance (`steady_base_flow`), as the field case names [P3, p. 3].
 - The expert (`experts.py`) runs the linearised PI on stage 1 and a trim PI on
@@ -251,6 +289,19 @@ valve's dead time (`data/oracle_widths/ph_neutralization.json`), and the excursi
 diversion and trip terms are charged by the replay if a plan leaves the permit. Its
 plan runs to the end of the episode, in moves of 11 steps
 (`data/oracle_horizons/ph_neutralization.json`).
+
+**The ceiling is the perfect hold** (owner, 2026-11-23), not a solve:
+`oracle.perfect_hold(env, params, reset_key, step_keys)` holds the discharge
+exactly on the permit's low edge, pH 6.00, through the episode those keys name
+(a seed's, as `benchmark.episode_keys` draws them; the oracle module draws none). At every step its base
+flow is the steady balance's (`env.steady_base_flow`) for what enters stage 1
+during that step: the influent's flow and acid strength, and the buffer flow the
+step draws. Mixing is linear in the invariants and so is the charge balance at a
+fixed pH, so tanks that start on the edge stay on it; `test_ph_ceiling.py` doses a
+plant with these flows and reads the discharge within 0.005 pH of 6.00. Nothing is
+planned, so a window's start or end gains it nothing, and it spends no base the
+tanks hold at the reset. It reads the buffer flow and the acid strength, which the
+observation hides, and the buffer's next draw.
 
 ---
 

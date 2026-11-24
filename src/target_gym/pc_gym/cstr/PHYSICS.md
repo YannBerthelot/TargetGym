@@ -100,6 +100,21 @@ and the setpoint. No composition: an online analyser on such a reactor was not
 found, and Bayer sampled for the lab once a day [S3]. Pressure, level and
 circulation flow [S3, Fig. 11] are not modelled (D2).
 
+### Task: `cstr`
+
+Hold the temperature of a jacketed exothermic reactor at its setpoint with the
+cooling water flow. The policy reads the reactor and jacket temperatures, its
+own water flow and the setpoint, and never the composition. Each step is
+charged the squared temperature error, counted in units of 0.1 K. A reactor
+that reaches 75 C trips its interlock, which is charged as a restart.
+
+| obs | meaning |
+|---|---|
+| 0 | `T`, reactor temperature (K) |
+| 1 | `T_j`, jacket temperature (K) |
+| 2 | cooling water flow, percent of its 40 to 136 g/s range |
+| 3 | reactor temperature setpoint (K) |
+
 ---
 
 ## 5. Episode and scenarios (rules 17 and 20)

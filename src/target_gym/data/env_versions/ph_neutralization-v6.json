@@ -1,5 +1,5 @@
 {
-  "fingerprint": "35bc082d15c78f64",
-  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-14T14:45:07+00:00"
+  "fingerprint": "03d0cf194a26ff2c",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass. Stamped again on the merge with int/amendment3 (the review fixes, PR 242): Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.5 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Also carries PR 203's change, which moves no step, reward or observation of a shipped task: a reading's interval counts control steps, and utils.py lost two unused rollout helpers. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-24T01:52:54+00:00"
 }

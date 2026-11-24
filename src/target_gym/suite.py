@@ -74,7 +74,9 @@ LABELS = {
 CAPABILITIES = {
     "first_order": (),  # a sanity fixture: it runs, and moves no spoke
     "cstr": ("basic", "nonlinearity"),
-    "unstable_cstr": ("instability", "disturbance", "safety"),
+    # Extra (owner, 2026-11-15): its room measures a perfect state reading,
+    # not control, so it moves no spoke (pc_gym/unstable_cstr/PHYSICS.md).
+    "unstable_cstr": (),
     "ph_neutralization": ("nonlinearity", "disturbance"),
     "four_tank": ("coupling", "inverse_response"),
     "distillation": ("coupling", "delay"),
@@ -85,7 +87,9 @@ CAPABILITIES = {
     "reactor": ("delay", "partial_observability", "economic", "moving_target"),
     "compressor_surge": ("safety", "nonlinearity", "disturbance"),
     "wind_turbine": ("disturbance", "economic", "safety"),
-    "battery": ("economic", "moving_target", "safety"),
+    # Extra (owner, 2026-11-15): out of the capability claims, so like the
+    # first_order fixture it moves no spoke (energy/battery/PHYSICS.md, Status).
+    "battery": (),
     "plane": ("disturbance",),
     "plane_energy": ("moving_target", "coupling"),
     "plane_sine": ("moving_target",),
