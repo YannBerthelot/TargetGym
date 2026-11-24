@@ -17,6 +17,7 @@ env, params = tg.make("cstr")
 | Tracked variable(s) | T (K) |
 | Episode length | 960 steps of 15 s (4 h) |
 | Cite as | `cstr-v7` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 
 ## Action space
@@ -64,6 +65,19 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The interlock: high reactor temperature cuts the feed [S3]. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 960 steps.
+
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies (`hold reset`) | 1722 | 0 |
+| Reference | the controller to beat | 98.37 | 0 |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | 70.64 | 0 |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | 65.28 | 0 |
+
+Room, the reference's cost divided by the ceiling's, is 1.51.
 
 ## Baselines
 

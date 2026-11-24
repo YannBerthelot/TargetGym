@@ -17,6 +17,7 @@ env, params = tg.make("ph_neutralization")
 | Tracked variable(s) | pH |
 | Episode length | 1440 steps of 5 s (2 h) |
 | Cite as | `ph_neutralization-v6` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 
 ## Action space
@@ -69,6 +70,19 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The trip is a permit violation: one excursion past the allowed 60 min [P8], or an overrun diversion basin (Amendment 3). See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 1440 steps.
+
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies (`hold reset`) | 0.726 | 4 |
+| Reference | the controller to beat | 0.1945 | 0 |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | 0.05673 | 0 |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | 0.0556 | 0 |
+
+Room, the reference's cost divided by the ceiling's, is 3.5.
 
 ## Baselines
 

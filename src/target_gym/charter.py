@@ -68,12 +68,38 @@ MPC_NOT_MEASURED: dict[str, str] = {
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
+#: The flagship (charter Words and J5): the scored suite, the owner's choice of
+#: 2026-11-24. This is the one place its membership is written. The results,
+#: the headline, the radar and the records held current all follow it, and a
+#: task outside it ships registered, not scored. A task joins by the bar the
+#: owner set the same day: a review score of 8 or more, a room whose interval
+#: is above 1 from a converged ceiling, J2 and the sweep (B7) passed, and its
+#: plant, reference and tests merged.
+FLAGSHIP = ("reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization")
+
+SCORED, UNDER_REVIEW, EXTRA, FIXTURE = "scored", "under review", "extra", "fixture"
+
+
+def status(name: str) -> str:
+    """Where task ``name`` stands, derived and never stored: ``"scored"`` in
+    the flagship, ``"extra"`` with a reason in ``EnvSpec.extra``, ``"fixture"``
+    in ``FIXTURES``, and ``"under review"`` otherwise: registered and runnable,
+    its charter lines not measured. ``KeyError`` for an unregistered name."""
+    from target_gym.registry import get
+
+    spec = get(name)
+    if name in FLAGSHIP:
+        return SCORED
+    if spec.extra is not None:
+        return EXTRA
+    return FIXTURE if name in FIXTURES else UNDER_REVIEW
+
 
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
-    """Every task with a ladder row, less the fixtures and the Extra tasks, plus
-    the expert-reference tasks. An Extra task (``EnvSpec.extra``) is never
-    scored, so its record is kept but no longer held current (owner's
-    decision, 2026-11-15)."""
+    """The candidates the recorder can run: every task with a ladder row, less
+    the fixtures and the Extra tasks, plus the expert-reference tasks. Only
+    the flagship's records are held current (owner's decisions, 2026-11-15
+    for Extra and 2026-11-24 for every task outside the flagship)."""
     from target_gym.registry import REGISTRY
 
     if not rows_dir.is_dir():
@@ -465,7 +491,8 @@ def current(task: str) -> dict:
     return out
 
 
-def stale_report(tasks=None) -> dict:
-    """``{task: stale parts}`` over the charter tasks, the current ones left out."""
-    report = {t: stale_parts(load(t), current(t)) for t in tasks or charter_tasks()}
+def stale_report(tasks=FLAGSHIP) -> dict:
+    """``{task: stale parts}`` over the flagship, whose records are the ones
+    held current, or over ``tasks``; the current ones are left out."""
+    report = {t: stale_parts(load(t), current(t)) for t in tasks}
     return {t: parts for t, parts in report.items() if parts}

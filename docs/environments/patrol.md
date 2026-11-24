@@ -1,5 +1,8 @@
 # Patrol - wingman
 
+!!! note "Under review"
+    Patrol - wingman is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/patrol/pid_output.gif" width="480px"/></p>
 
 Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. The slot moves whenever the lead turns, so the reference is non-stationary, the heading difference to the lead is charged too, and coming too close to the lead trips the plant.
@@ -17,6 +20,7 @@ env, params = tg.make("patrol")
 | Tracked variable(s) | slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `patrol-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -76,14 +80,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -2.845e+04 | 142.3 |
-| MPC | -3908 | 19.54 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

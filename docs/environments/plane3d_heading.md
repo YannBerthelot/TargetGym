@@ -1,5 +1,8 @@
 # 3D heading
 
+!!! note "Under review"
+    3D heading is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane3d_heading/pid_output.gif" width="480px"/></p>
 
 Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. The aileron commands a roll rate, not a bank angle, so heading is controlled through a cascade of two integrators, and the turbulence is hidden.
@@ -17,6 +20,7 @@ env, params = tg.make("plane3d_heading")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 600 steps of 1 s (10 min) |
 | Cite as | `plane3d_heading-v9` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -84,7 +88,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (heading select scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
 ## Arguments
 

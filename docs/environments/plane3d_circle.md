@@ -1,5 +1,8 @@
 # 3D circle
 
+!!! note "Under review"
+    3D circle is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane3d_circle/pid_output.gif" width="480px"/></p>
 
 Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. The orbit asks for a sustained, coordinated bank, and the circle is large compared with what the aircraft can change in a few steps.
@@ -17,6 +20,7 @@ env, params = tg.make("plane3d_circle")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 600 steps of 1 s (10 min) |
 | Cite as | `plane3d_circle-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -73,7 +77,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

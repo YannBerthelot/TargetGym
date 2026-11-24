@@ -126,9 +126,10 @@ neither, so a trip adds no move of its own. `first_order` and `cstr`,
 whose expert already holds within the resolution, are scored on reaching.
 `settling_ratio` says how much sooner the policy's tracking cost enters the
 plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is
-shown as the best known, for information. [The capability
-profile](capability-profile.md) puts both kinds of score on a radar per
-capability.
+shown as the best known, for information. The capability profile, a radar of
+both kinds of score per kind of difficulty, is not published in this release:
+it was drawn from the tracking score, which the scored tasks priced in money
+do not have. It returns when it is rebuilt on the saving over the reference.
 
 **One number per training seed: `seed_scores`.** A test that compares trained
 agents, such as AdaStop, needs one number per seed, defined on every task. This

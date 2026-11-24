@@ -1,9 +1,9 @@
-"""Every charter task's record (docs/proposals/task-charter.md, J2 to J4) is
-present, schema-valid and current. Charter tasks: every row in
-scripts/ladder_rows less the fixture first_order and the Extra tasks, plus the
-reactor, whose reference is its shipped expert
-(``target_gym.charter.charter_tasks``). An Extra task's record is kept but no
-longer held current (owner's decision, 2026-11-15).
+"""Every scored task's record (docs/proposals/task-charter.md, J2 to J4) is
+present, schema-valid and current. The scored tasks are the flagship
+(``target_gym.charter.FLAGSHIP``). The record of a task outside it, Extra or
+under review, is kept but not held current (owner's decisions, 2026-11-15 for
+Extra and 2026-11-24 for the rest: boiler_drum, distillation, glass_furnace
+and wind_turbine left this check that day).
 
 Marked ``records``: a stale record fails here alone, and
 ``scripts/record_charter.py --tasks T`` refreshes it.
@@ -17,7 +17,7 @@ from target_gym import charter
 
 
 @pytest.mark.records
-@pytest.mark.parametrize("task", charter.charter_tasks())
+@pytest.mark.parametrize("task", charter.FLAGSHIP)
 def test_each_charter_task_has_a_current_valid_record(task):
     record = charter.load(task)
     assert record is not None, f"{task}: no record in {charter.DATA}"
@@ -35,7 +35,7 @@ RTOL, ATOL = 1e-5, 1e-9
 
 
 @pytest.mark.records
-@pytest.mark.parametrize("task", charter.charter_tasks())
+@pytest.mark.parametrize("task", charter.FLAGSHIP)
 def test_the_ceiling_never_costs_more_than_the_oracle_on_the_same_seed(task):
     """Charter Words "Ceiling" (owner, 2026-11-13): the ceiling plans with the true
     model, the true state and the whole future, which is all the receding-horizon

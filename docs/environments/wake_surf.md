@@ -1,5 +1,8 @@
 # Wake surfing - A320 in trail
 
+!!! note "Under review"
+    Wake surfing - A320 in trail is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/wake_surf/pid_output.gif" width="480px"/></p>
 
 Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The station sits 1.2 to 1.3 spans from the lead's centreline, where the extended-formation trials flew, and on the vortex plane, below the lead by the pair's sink. Inside a 30 m box across the wake and 250 ft along it only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the vortex core, 0.8 to 0.9 span inboard, where a vortex can roll the follower past 60 deg, an upset (REALITY.md).
@@ -17,6 +20,7 @@ env, params = tg.make("wake_surf")
 | Tracked variable(s) | distance across the wake (m) |
 | Episode length | 1800 steps of 1 s (30 min) |
 | Cite as | `wake_surf-v3` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -76,7 +80,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No MPC ships yet: the patrol's twin-autopilot oracle plans the slot, not the station's economy, and the shared solver is not wired to this task (owner, 2026-11-10).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No MPC ships yet: the patrol's twin-autopilot oracle plans the slot, not the station's economy, and the shared solver is not wired to this task (owner, 2026-11-10).
 
 ## Arguments
 

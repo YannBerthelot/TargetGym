@@ -1,5 +1,8 @@
 # 3D figure-8
 
+!!! note "Under review"
+    3D figure-8 is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane3d_figure8/pid_output.gif" width="480px"/></p>
 
 Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The bank has to reverse through wings level at every crossover, and the observation gives the vector to the nearest point of the path and the path's heading there, but not its curvature. The half-width is 34 to 36 km, so the tips, of radius a / 3, take 25 deg of bank at 230 m/s and less at the speed flown. They used to be 2.7 to 4 km, 46 to 57 deg at 200 m/s. A lap is 183 km, so 1000 steps reach both tips at the slowest speed the schedule flies.
@@ -17,6 +20,7 @@ env, params = tg.make("plane3d_figure8")
 | Tracked variable(s) | distance to path (m) |
 | Episode length | 1000 steps of 1 s (16.7 min) |
 | Cite as | `plane3d_figure8-v7` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -75,7 +79,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

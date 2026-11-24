@@ -1,5 +1,8 @@
 # Boiler Drum
 
+!!! note "Under review"
+    Boiler Drum is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/boiler_drum/pid_output.gif" width="480px"/></p>
 
 Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. The level first moves the wrong way after a steam or feedwater change (shrink and swell). The policy reads the level, the pressure, the steam flow, its two actuators, the load plan and the caps an upset puts on firing and feedwater. Each step is charged, in GBP, the steam delivered off the plan beyond the meter's resolution. A level past either trip level for more than 10 s trips the unit, which is charged as a hot restart.
@@ -17,6 +20,7 @@ env, params = tg.make("boiler_drum")
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
 | Episode length | 1800 steps of 2 s (60 min) |
 | Cite as | `boiler_drum-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
 
 ## Action space
@@ -76,14 +80,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1800-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1.794 | 0.0009965 |
-| MPC | -8.5e-06 | 4.722e-09 |
-
-The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 
