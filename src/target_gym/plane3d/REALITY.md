@@ -52,6 +52,19 @@ source was found it says "not found". Arithmetic on these figures is in
   (FAA Order 8260.3 and ICAO Doc 8168 were not read).
 - A price on a hold flown badly (a deviation report, a go-around, a separation
   loss): not found.
+- **The lowest speed.** "VLS is the lowest selectable speed for the autopilot and
+  the autothrust. Even if the selected target speed is below VLS, the A/THR will
+  maintain VLS as a minimum" [SF24]. "For descent and approach flight phases, VLS of
+  Fly-By-Wire aircraft is obtained using the Stall speed demonstrated during flight
+  tests (VS1G) of the corresponding configuration, multiplied by a factor of 1.23.
+  On A320 family aircraft, the factor may be increased for some Slats/Flaps
+  configurations", so "A320 family: VLS = k x VS1G with 1.23 <= k <= 1.28" [SF24].
+  Which k applies in clean configuration: not found. The PDF was fetched a second
+  time on 2026-11-24 and its text is identical; Airbus's own page of the article
+  returned no body text to an automated reader.
+- A rule against holding under green dot in clean configuration, or a margin a
+  crew must keep over VLS in a hold: not found. Green dot is "the recommended
+  speed ... for a holding in clean configuration" [SF24], no more.
 
 ## How a hold is flown
 

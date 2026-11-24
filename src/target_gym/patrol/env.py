@@ -271,6 +271,10 @@ class PatrolParams(PlaneParams3D):
     moment_arm_aileron: float = hornet.AILERON_ARM
     thrust_output_at_sea_level: float = hornet.THRUST_SEA_LEVEL
     specific_fuel_consumption: float = hornet.SFC
+    #: The Hornet has no fuel law of its own and keeps its constant dry
+    #: figure (owner, 2026-11-24; ``plane.dynamics.fuel_flow``).
+    fuel_static: float = 0.0
+    fuel_speed_slope: float = 0.0
     power_response_rate: float = hornet.POWER_RESPONSE_RATE
     load_factor_max: float = hornet.LOAD_FACTOR_MAX
     load_factor_min: float = hornet.LOAD_FACTOR_MIN
@@ -474,6 +478,8 @@ class WakeSurfParams(PatrolParams):
     moment_arm_aileron: float = _A320.moment_arm_aileron
     thrust_output_at_sea_level: float = _A320.thrust_output_at_sea_level
     specific_fuel_consumption: float = _A320.specific_fuel_consumption
+    fuel_static: float = _A320.fuel_static
+    fuel_speed_slope: float = _A320.fuel_speed_slope
     power_response_rate: float = _A320.power_response_rate
     load_factor_max: float = _A320.load_factor_max
     load_factor_min: float = _A320.load_factor_min

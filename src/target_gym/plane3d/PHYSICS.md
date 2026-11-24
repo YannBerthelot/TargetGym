@@ -1115,8 +1115,12 @@ fuel, and nothing past the maximum; the heading task's 640.7. On the heading tas
 8 kt fast now costs 0.44 % less and 10 kt slow 0.81 % more (8 paired seeds): still
 a small lever, less flat than it was.
 
-**A floor on the racetrack's room**, the reference's speed moved under its assigned
-one (10 paired seeds, the task's own cost):
+**A floor on the racetrack's room: superseded, and wrong as a steady figure.** The
+table below sums the whole window, so a reference told to fly slower is credited
+once with the speed it sheds in its first minutes. Over the settled second half of
+the window the same moves on this plant save -0.15 to +0.8 % (nothing), and only
+the wider turns are real, -0.2 to -0.56 %. The next section has the steady figures.
+The reference's speed moved under its assigned one (10 paired seeds, whole window):
 
 | Move | Calm | 30 kt wind | High hold, 50 kt |
 |---|---|---|---|
@@ -1142,3 +1146,95 @@ consumption; the 2D one now follows a fuel law that rises with speed
 it the 2D session finds the least-fuel speed near 212.5 kt at 73.5 t, 19 kt under
 green dot, which would widen the gap above. Baselines of every aircraft task are
 out of date until the next re-record.
+
+## The A320's fuel law on the 3D aircraft (2026-11-24)
+
+The owner's two decisions on the section above: the reference stays at green dot,
+as Airbus holds, and the speed is the agent's; and the 3D A320 takes the 2D
+aircraft's fuel law, the Hornet does not. Tests:
+`tests/plane3d/test_plane3d_physics.py`, `tests/plane3d/test_plane3d_hold.py`.
+
+**The law.** Fuel per newton of thrust is `fuel_speed_slope` times the true airspeed
+plus `fuel_static` times sqrt(T / T0), 3.38e-8 kg/(N m) and 1.04e-5 kg/(N s), as the
+2D aircraft's (`plane.dynamics.fuel_flow`, plane/PHYSICS.md), and the 3D plant burns
+by that one function. An aircraft whose parameters carry the two numbers at 0 keeps
+its constant `specific_fuel_consumption`: the Hornet (`patrol`,
+`patrol_range_bearing`, `formation`) sets both to 0 and keeps 22.9 mg/(N s);
+`wake_surf`, an A320, takes the law.
+
+**Green dot is no longer the least-fuel speed.** Green dot is the best lift-to-drag
+speed [SF24], the least thrust; with a consumption that rises with speed the least
+fuel is slower. Level flight, wings level (`scripts/plane3d_review.py polar`):
+
+| Mass | Least fuel | Green dot (least thrust) | Fuel at green dot | Maximum to 14 000 ft | VLS, 1.23 to 1.28 x the 1 g stall |
+|---|---|---|---|---|---|
+| 60 t | 192.3 to 192.8 kt, 1 713 to 1 750 kg/h | 207.4 to 209.2 kt | +1.1 to +1.4 % | 230 | 174 to 182 kt |
+| 73.5 t | 212.2 to 212.6 kt, 2 162 to 2 218 kg/h | 229.9 to 232.2 kt | +1.2 to +1.6 % | 230 | 192 to 202 kt |
+| 78 t | 218.5 to 218.7 kt, 2 316 to 2 378 kg/h | 236.9 to 239.5 kt | +1.3 to +1.6 % | 230 | 198 to 208 kt |
+
+At 73.5 t the assigned speed, 231.5 kt, is 19 kt over the least-fuel speed; the
+230 KIAS maximum is 17.5 kt over it and the reference's 225 kt on a low hold 12.5 kt
+over. The assigned speed and `GREEN_DOT_CAS` do not move: the drag did not. The
+reference's margin under the maximum is still 5 kt by the no-exit rule (the same
+table, seed for seed).
+
+**The lowest speed the sources give.** "VLS is the lowest selectable speed for the
+autopilot and the autothrust. Even if the selected target speed is below VLS, the
+A/THR will maintain VLS as a minimum", and on the A320 family "VLS = k x VS1G with
+1.23 <= k <= 1.28" [SF24, fetched twice; REALITY.md]. On the plant that is 192 to
+202 kt at 73.5 t, 30 to 40 kt under green dot and 10 to 20 kt under the least-fuel
+speed. So it does not stop a hold 15 to 25 kt under green dot, and the plant does
+not model it: the low side is held by the incidence protection alone. No source
+read here forbids a clean hold under green dot.
+
+**What the reference does on it**, whole-window cost on seeds 0 to 4:
+
+| Scenario | `plane3d_heading` (bands; `economy`) | `plane3d_racetrack` (bands; fuel, kg) |
+|---|---|---|
+| normal | 0; 607 to 625 | 0; 773 to 804 |
+| calm | 0; 611 to 624 | 0; 774 to 806 |
+| worst zone | 0 to 0.39; 601 to 626 | 0; 772 to 801 |
+| zone over the window | 0; 606 to 624 | |
+| severe zone (share 1e-4) | 373 to 3 281 | |
+| 30 kt wind | | 0; 761 to 792 |
+| low hold, 50 kt | | 0; 745 to 753 |
+| low hold, 67 kt | | 0 to 0.15; 742 to 748 |
+| high hold, 50 kt | | 0; 765 to 792 |
+
+Weighted, the racetrack's reference costs 784.2 a window, 0.653 kg a second (910.4
+on the constant figure); the heading task's 616.2. On the heading task the speed is
+flat again: 8 kt fast costs 0.15 % more, 10 kt slow 0.07 % more.
+
+**A floor on the racetrack's room, settled.** The reference's speed moved under its
+assigned one, 10 paired seeds, the task's own cost over the second half of the
+window, when the speed has settled (`scripts/plane3d_review.py fuel`):
+
+| Move | Calm | 30 kt wind | High hold, 50 kt |
+|---|---|---|---|
+| 10 kt slower | -1.50 % (se 0.14) | -1.08 % (se 0.17) | -1.45 % (se 0.13) |
+| 20 kt slower | -2.39 % (se 0.21) | -1.36 % (se 0.19) | -2.34 % (se 0.20) |
+| 25 kt slower | -2.36 % (se 0.22) | -1.32 % (se 0.19) | -2.52 % (se 0.22) |
+| 30 kt slower, about VLS at 1.28 | -2.22 % (se 0.23) | -1.31 % (se 0.19) | -2.38 % (se 0.21) |
+| 35 kt slower | -1.81 % | -0.86 % | -1.86 % |
+| turns 300 m wider | -0.52 % (se 0.06) | -0.23 % (se 0.13) | -0.21 % (se 0.06) |
+| 25 kt slower, turns 300 m wider | -2.70 % (se 0.19) | -1.78 % (se 0.19) | -2.78 % (se 0.21) |
+
+So the steady floor is 1.4 to 2.8 %, every seed gaining at 20 to 25 kt under green
+dot (-0.6 to -3.7 %), and it comes from the fuel law. A VLS limit at either end of
+its range would leave it as it is.
+
+**The window also pays a one-off.** A policy that slows from its established speed
+sheds kinetic energy once: over the whole window the same moves read -4.1 to -5.1 %
+at 20 to 30 kt slower, of which about half is that speed, not a rate. Nothing in the
+score charges the state the window ends in. On the constant figure the whole of the
+1.2 % reported on 2026-11-23 was this one-off.
+
+**Open, for the owner.** Whether the one-off is to count: a tail charge on the
+energy the window ends with, or a window that starts at the speed the policy would
+hold. And whether the plant should hold VLS for the agent, as the autothrust does
+[SF24]; the family range 1.23 to 1.28 is all the source gives for the clean
+configuration.
+
+**Known deviations.** `specific_fuel_consumption` stays in `PlaneParams3D` as the
+constant figure of an aircraft without a law; on the A320 it is no longer read.
+Baselines of every aircraft task are out of date until the next re-record.

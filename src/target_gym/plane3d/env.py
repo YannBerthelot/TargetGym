@@ -34,6 +34,7 @@ from target_gym.plane.dynamics import (
     compute_thrust_output,
     economy_cost,
     engine_response_rate,
+    fuel_flow,
     in_zone,
     outside_envelope,
     protected_pitch_demand,
@@ -140,7 +141,15 @@ class PlaneParams3D(EnvParams):
     C_x0: float = 0.095
     C_z0: float = 0.9
     initial_fuel_quantity: float = 23860 / 1.25
+    #: The constant figure, kg/(kN s), of an aircraft with no fuel law of its
+    #: own (the Hornet, ``fuel_static`` 0): ``plane.dynamics.fuel_flow``.
     specific_fuel_consumption: float = 17.5 / 1000
+    #: The A320's fuel law, as the 2D aircraft's (plane/env.py; owner,
+    #: 2026-11-24): fuel per newton of thrust, kg/(N s), is ``fuel_speed_slope``
+    #: times the true airspeed plus ``fuel_static`` times sqrt(T / T0)
+    #: [HAMMAMI eq. 2.2]. One aircraft across the 2D and the 3D tasks.
+    fuel_static: float = 1.04e-5
+    fuel_speed_slope: float = 3.38e-8
 
     # PlaneParams3D does not inherit from PlaneParams, so the engine, the
     # surfaces and the inner loop are declared here as well; the values match
@@ -441,6 +450,8 @@ PARAM_UNITS = {
     "C_z0": "-",
     "initial_fuel_quantity": "kg",
     "specific_fuel_consumption": "kg/(kN.s)",
+    "fuel_static": "kg/(N.s)",
+    "fuel_speed_slope": "kg/(N.m)",
     "cl_alpha": "1/deg",
     "cl0": "-",
     "cd0": "-",
@@ -1305,7 +1316,7 @@ def compute_next_state_3d(
             method=integration_method,
         )
         # Fuel burned over the sub-step, charged against the thrust produced.
-        burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        burned = burned + fuel_flow(thrust, air_speed, z, params) * dt
         # Trips read the worst load inside the step, not the one it ends on.
         load = metrics[1][-1] / (mass_now * params.gravity)
         peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
