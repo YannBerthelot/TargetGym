@@ -5,7 +5,7 @@
 
 <p align="center"><img src="../../videos/glass_furnace/pid_output.gif" width="480px"/></p>
 
-Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end, about 18 minutes after the glass leaves; the melt answers a valve move over about two days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far from the defect limit costs fuel, too little loses glass.
+Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end, about 18 minutes after the glass leaves; the melt answers a valve move over about two days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far from the defect limit costs fuel, too little loses glass. Every rise of the bath where it touches its hot blocks, and fining pushed past the last port, costs plates.
 
 ```python
 import target_gym as tg
@@ -16,7 +16,7 @@ env, params = tg.make("glass_furnace")
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
-| Observation space | `Box((12,))` |
+| Observation space | `Box((13,))` |
 | Tracked variable(s) | fining share read at the cold end |
 | Episode length | 5040 steps of 120 s (7 days) |
 | Cite as | `glass_furnace-v6` |
@@ -34,7 +34,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-12 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
+13 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
@@ -50,6 +50,7 @@ actuator range inside the environment.
 | 9 | pull planned `pull_notice_h` ahead, kg/s |
 | 10 | cullet ratio charged |
 | 11 | batch line, m, every 30 min |
+| 12 | defects per plate read at the cold end, 0.3 h late |
 
 ## Rewards
 

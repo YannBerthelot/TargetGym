@@ -46,8 +46,9 @@ from target_gym.registry import REGISTRY
 #: not listed stay exact, apart from the held ones in ``HELD``.
 SCATTER = {
     # Crown, two floors and the canal at 0.36 K; the fining share read at the cold
-    # end, 0.005. The batch line is sampled, not noised.
-    "glass_furnace": {0: 0.36, 1: 0.36, 2: 0.36, 3: 0.36, 4: 0.005},
+    # end, 0.005, and the defects per plate from the same scanners, 0.005 (owner's
+    # go for the reading, 2026-11-15). The batch line is sampled, not noised.
+    "glass_furnace": {0: 0.36, 1: 0.36, 2: 0.36, 3: 0.36, 4: 0.005, 12: 0.005},
     # Tavg is the mean of two RTDs, so 0.045 over sqrt(2).
     "reactor": {0: 1.9e-4, 1: 0.045, 4: 0.045 / math.sqrt(2.0), 6: 2.7e-4},
     # Room, outdoor, slab core and return water; the 24 h mean (channel 2) is

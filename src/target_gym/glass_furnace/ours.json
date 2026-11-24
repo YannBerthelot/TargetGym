@@ -26,6 +26,10 @@
   "gas_swing",
   "plant.eps_surface",
   "plant.fining_time",
-  "plant.bubble_radius"
+  "plant.bubble_radius",
+  "plant.block_release",
+  "plant.block_release_T",
+  "plant.block_lag",
+  "plant.reboil_plate"
  ]
 }

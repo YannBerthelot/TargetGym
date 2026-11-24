@@ -1178,6 +1178,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_boiler_drum_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        extra=(
+            "solved as scored (charter J5, owner's decision of 2026-11-24): the "
+            "classical reference costs nothing on normal and low-load days and "
+            "never trips, the room that remains is worth GBP 90 to 170 a year on "
+            "this unit, and the two redesigns tried, a fuel and air loop and the "
+            "turbine valve as a third move, were measured and dropped "
+            "(boiler_drum/PHYSICS.md, Status)"
+        ),
     ),
     EnvSpec(
         name="wind_turbine",

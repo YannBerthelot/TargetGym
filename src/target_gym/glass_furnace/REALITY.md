@@ -170,6 +170,124 @@ counts when it was read twice on separate fetches; "seen once" marks the rest.
   with gas quality variations and melt glass with syngas from gasification",
   IFRF/GWI TOTeM 44, Essen, 2017. https://www.energigas.se/media/2515/1_2-joerg-leicher_gwi-s.pdf
 
+## 10. Transients: what a change of temperature or pull costs (2026-11-15)
+
+Searched for what makes glass defective when the furnace moves, as opposed to when it
+holds still. A figure counts when it was read twice on separate fetches; "seen once"
+marks the rest. Nothing here is a modelling choice.
+
+**The steps the glass passes, in order.** Batch melts to a rough melt near 1200 C; the
+sand grains dissolve, leaving a seedy melt near 1400 C; fining clears it near 1500 C;
+refining and conditioning bring it to about 1250 C [TR1, slide 5]. Fresh melt holds on the
+order of 100,000 bubbles per kg [TR1, slide 36]. In the blanket more than half the sand
+dissolves within 10 min once it is above 1200 C, and convection in the melt speeds
+dissolution up to five times over still glass [TR2, seen once].
+
+**Fining moves with the batch's redox.** In oxidised melts sulfate decomposes at 1430 to
+1480 C, the fining onset; in reduced melts sulfate and sulfide react between 1140 and
+1350 C. Organic contamination makes the fining range fluctuate, and bubbles and seeds
+follow [TR1, slides 54 to 56].
+
+**A second fining on the way down.** Bubbles under about 100 micrometres hardly rise. They
+dissolve back into the glass during controlled cooling, in a narrow temperature window,
+about 1350 to 1275 C for float glass, and only if the melt was left lean in dissolved gas
+[TR1, slides 43, 49, 51].
+
+**Heating glass again makes bubbles.**
+- A melt nearly saturated with gas forms new bubbles, or grows very small ones, when its
+  temperature, its chemistry or its stirring changes [TR1, slide 36].
+- SO3 dissolves less as the melt gets hotter: about 0.3 wt % at 1400 C in float glass, so
+  a glass holding 0.3 wt % starts to give it off at about 1400 C when heated [TR3]. Float
+  glass normally keeps about 0.2 wt % [S45], 0.25 wt % in one calculation [TR3].
+- Firing the front of the refiner too hard raises reboil bubbles [S45]. On one float
+  furnace, lowering the waist temperature from about 2920 to 2850 F cut the top bubbles
+  sharply; they were about 0.25 mm and mostly carbon dioxide [S45].
+- Under vacuum, reboil at the glass and refractory contact starts once the SO2 partial
+  pressure passes the absolute pressure [TR12, seen once, a vacuum degasser].
+- How many kelvin of reheating start reboil in a float refiner, how soon the bubbles
+  come, how long they last and how many: not found.
+
+**The tank blocks give off defects when their temperature rises.**
+- Fused-cast AZS exudes more glassy phase under temperature cycles than held steady. Held
+  at 1550 C it gives off 1.4 wt % over 80 h and then stops. Five swings between 1450 and
+  1550 C give 2.1 wt %, and five between 1500 and 1550 C give 1.8 wt %; swings of 100 K
+  or less act more slowly and for longer [TR4, section 2].
+- The cause is oxygen released in the block as it heats, which pushes the glassy reaction
+  layer and its zirconia seam into the melt as bubbles, knots and stones, from new and
+  used blocks alike, in high-alkali silicate glass. After 96 h at 1550 C, a dip of only
+  50 K and the return released them again [TR4, sections 4 and 5].
+- The paper's advice for a tank in operation is a constant process temperature [TR4,
+  section 6].
+- A control supplier says the same of working furnaces: a temperature change at the
+  contact between melt and refractory strips the corrosion layer into the glass as seeds,
+  stones and knots, and instability in the melter makes the bubble field from the batch
+  oscillate, raising the seed count. Disturbances from pull, batch or combustion that
+  are left alone travel through the waist and working end into forming [S7, section 3].
+
+**The crown wears faster when its temperature cycles.** On a furnace whose silica crown
+corroded about twice as fast as expected, with bricks of the best grade, the cause given
+is the repeated cycling of the crown's temperature: 1405 to 1430 C in the first zone and
+1575 to 1605 C in the hottest, swings of 25 to 30 K [TR5; an electrovacuum-glass furnace].
+After a process change that lowered the melter's temperature, one plant saw more crown
+corrosion and dripping [TR11, seen once]. A limit on how fast a silica crown may change
+temperature in operation, in K per hour: not found.
+
+**Foam.** Foam can cut the radiation reaching batch and melt by as much as 60 %, which
+cools the bath, slows refining and leaves more bubbles and undissolved sand in the
+product. A higher pull favours foaming, which caps the pull. A reducing atmosphere
+destabilises foam [S32, chapter introduction and section on atmosphere].
+
+**The bottom glass answers late.** Heat added at the surface takes several hours to show
+in the bottom glass, and the delay moves with the pull and with the batch cover, neither
+of them monitored [TR8, seen once]. Proportional-integral loops are still the usual
+temperature control in furnace sections; identification tests take several weeks because
+the furnace is slow, and their models hold only near the point tested [TR9, seen once].
+
+**Flow.** In a float working end, a side-to-side difference of more than 24 K in bottom
+temperature sends part of the returning bottom flow out with the product, which hurts
+uniformity [TR10, seen once, abstract only]. How the tank's currents answer a change of
+pull or firing, and with which defects: not found.
+
+**The batch blanket.** On one 455 t/d float furnace batch islands cover 85 % of the island
+zone [S10]. A claim that the blanket breaks up near the third or fourth port was not
+confirmed on reading its patent (US4329165), which says only that it reaches a
+considerable distance.
+How the batch line moves with pull, and how fast: not found.
+
+**How plants run a change.** Operators keep tables of the furnace's readings for each
+configuration and reproduce them, and they keep a safety factor from the optimum so as
+not to risk the glass; hand control is weakest in the transient phases, the changes of
+tonnage, glass type or colour [TR13]. A supervisory controller is not allowed its full
+correction in one step, because a very large step disturbs the furnace; a stable firing
+profile is what lets it absorb pull changes [S7, sections 3 and 4.1]. Float lines no
+longer run at steady pull, thickness and colour [TR14, seen once]. Ramp rates for a pull
+change, how far ahead temperatures are moved, the time to be steady again, any rule on
+setpoint steps, and how far ahead a plant knows its changes: not found.
+
+**What defects are worth.** With supervisory control, suppliers report energy savings of
+about 2 to 3 %, yield up to about 8 % better, and time and production lost in product
+changes cut by up to half [S7, section 4.4]. On one float furnace, dispersing the foam
+with a different flame cut the bubble density and raised the yield of 4 mm glass from
+50 % to over 90 % [TR7]. Hours or tonnes rejected after a pull change, defect counts
+against time after a change, and the share of a float line's losses due to melting
+defects: not found.
+
+### Sources for section 10
+
+- [TR1] M. Hubert, IMI-NFG Course on Processing of Glass, Lecture 2, "Industrial glass melting and fining processes", Lehigh University, https://www.lehigh.edu/imi/teched/GlassProcess/Lectures/Lecture02_Hubert_Melting%20and%20fining%20processes.pdf
+- [TR2] Beerkens, Muijsenberg, van der Heijden, Glastech. Ber. Glass Sci. Technol. 67 (1994) 179-188, abstract, https://oa.tib.eu/renate/items/5a415375-9e39-4a20-b756-faf0691ff903
+- [TR3] US5922097, Praxair (Kobayashi, Beerkens), 1999, https://patents.google.com/patent/US5922097A/en
+- [TR4] M. Dunkl, Glastech. Ber. 62 (1989) 389-395, https://oa.tib.eu/renate/bitstreams/4c2c2d07-cca4-4f29-a379-7664eec2cc96/download
+- [TR5] Balandis, Nizeviciene, Science of Sintering 43 (2011) 295-303, https://epubl.ktu.edu/object/elaba:3184407/3184407.pdf
+- [TR7] US6715319B2, Pilkington, 2004, https://patents.google.com/patent/US6715319B2/en
+- [TR8] P. J. Firth, "Bottom temperature control of a glass furnace using fuzzy logic", IEE Colloquium Digest 1994/018, abstract, https://manuscript.isc.ac/Inventory/49/323698.htm
+- [TR9] Auchet, Riedinger, Iung, Malasse, "Simplified first-principles modelling of glass furnaces for control purpose", IFAC, https://skoge.folk.ntnu.no/prost/proceedings/dycops04/pdffiles/papers/172.pdf
+- [TR10] Xu, Li, Feng, Yang, Liu, "3D fluid flow regularity in a float glass furnace, Part 1", Glass Technology, abstract, https://katalog.lib.cas.cz/KNAV/EdsRecord/edb,117206450
+- [TR11] R. Bei, ICG TC11, October 2024, https://icglass.org/wp-content/uploads/2024/11/3-Refractory-behavior-in-case-of-glass-melting-process-change-Rongxing-Bei.pdf
+- [TR12] US9352994B2, https://patents.google.com/patent/US9352994B2/en
+- [TR13] US6796147B2, Stein Heurtey, filed 1999, https://patents.google.com/patent/US6796147B2/en
+- [TR14] Muller, Chmelar, Glass Worldwide, Sept-Oct 2012, pp. 52-53, as summarised by British Glass, https://britglass.org.uk/knowledge-base/digital-library-and-information-services/advances-float-glass-furnace-control
+
 ## Sources
 
 - [S1] G. Noboa, Glass Service, Glassman Sao Paulo 2019 slides, https://glassmanevents.com/content-images/main/01-Gabriel-Noboa-Glassman-Sao-Paulo-05122019.pdf

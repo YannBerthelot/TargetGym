@@ -1,7 +1,7 @@
 # Boiler Drum
 
-!!! note "Under review"
-    Boiler Drum is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    Boiler Drum is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved as scored (charter J5, owner's decision of 2026-11-24): the classical reference costs nothing on normal and low-load days and never trips, the room that remains is worth GBP 90 to 170 a year on this unit, and the two redesigns tried, a fuel and air loop and the turbine valve as a third move, were measured and dropped (boiler_drum/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/boiler_drum/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("boiler_drum")
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
 | Episode length | 1800 steps of 2 s (60 min) |
 | Cite as | `boiler_drum-v6` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
 
 ## Action space

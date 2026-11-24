@@ -5,11 +5,6 @@ a name. Pick by what you want your method to face, and start with the simplest
 task that shows it. Every name below works with `tg.make`, and each task's page
 says what it observes and how it is scored.
 
-Five tasks are scored: they have a measured reference to beat, and results
-are published for them. The others run the same way but have no published
-result yet. The Status column under [Every task](#every-task) says which is
-which.
-
 ```python
 import target_gym as tg
 
@@ -73,11 +68,11 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | Status | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|---|
-| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Under review, not scored | Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. | 12 | 1 | 5040 steps, 7 days |
+| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Under review, not scored | Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. | 13 | 1 | 5040 steps, 7 days |
 | [Reactor](environments/reactor.md) | `reactor` | Scored | Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. | 16 | 3 | 2880 steps, 24 h |
 | [Building HVAC](environments/hvac.md) | `hvac` | Scored | Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. | 12 | 1 | 1344 steps, 14 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Under review, not scored | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
-| [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Under review, not scored | Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. | 12 | 2 | 1800 steps, 60 min |
+| [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Extra, never scored | Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. | 12 | 2 | 1800 steps, 60 min |
 | [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Scored | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 8 | 2 | 1200 steps, 2 min |
 
 ### Renewable Energy
