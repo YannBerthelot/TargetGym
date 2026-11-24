@@ -35,6 +35,8 @@ carried in, at the start of its cycle, xenon balanced with full load, on full lo
 all day, its rods held where they are.
 """
 
+import functools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -57,23 +59,31 @@ LINE = 40  # control steps for the last of it to reach the core (30 at most)
 ACID = 7800.0  # ppm
 
 
+@functools.cache
+def _plant():
+    """The quiet plant's first state and its run over a list of actions, compiled
+    once for the file."""
+    env = Reactor()
+    _, s0 = env.reset_env(jax.random.PRNGKey(0), QUIET)
+
+    def step(s, a):
+        _, s1, _, _, info = env.step_env(jax.random.PRNGKey(1), s, a, QUIET)
+        return s1, (info["reward_terms"]["running"], info["tripped"])
+
+    return s0, jax.jit(lambda s, actions: jax.lax.scan(step, s, actions))
+
+
 def _after(command):
     """The boron before and after ``command`` held for 10 h, the dollars of
     effluent charged, and whether the plant tripped."""
-    env = Reactor()
-    _, s0 = env.reset_env(jax.random.PRNGKey(0), QUIET)
+    s0, run = _plant()
     rods = 1.0 - 2.0 * float(s0.rod_in)
     flow = np.where(np.arange(STEPS + LINE) < STEPS, command, 0.0)
     actions = jnp.asarray(
         np.stack([np.full_like(flow, rods), flow, np.ones_like(flow)], axis=1),
         jnp.float32,
     )
-
-    def step(s, a):
-        _, s1, _, _, info = env.step_env(jax.random.PRNGKey(1), s, a, QUIET)
-        return s1, (info["reward_terms"]["running"], info["tripped"])
-
-    s1, (running, tripped) = jax.jit(lambda s: jax.lax.scan(step, s, actions))(s0)
+    s1, (running, tripped) = run(s0, actions)
     return float(s0.boron), float(s1.boron), float(running.sum()), bool(tripped.any())
 
 
