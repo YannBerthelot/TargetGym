@@ -1343,7 +1343,9 @@ _SPECS: tuple[EnvSpec, ...] = (
             "not the station's economy, and the shared solver is not wired to "
             "this task (owner, 2026-11-10)."
         ),
-        noise_fields=("turbulence_sigma",),
+        # The air's turbulence, and the wind estimate's error that puts the
+        # station given off the true one.
+        noise_fields=("turbulence_sigma", "wind_estimate_sigma"),
         fingerprint_sources=(
             "plane/dynamics.py",
             "plane3d/dynamics.py",
