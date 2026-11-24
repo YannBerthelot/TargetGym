@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c7865f435fde4af4",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-14T16:16:30+00:00"
+  "fingerprint": "6718cac7ea0d43fa",
+  "note": "Re-stamped in place on 2026-11-24 (engine batch, the owner's picks of 2026-11-24): integration.py gained the exponential step exp_N and a registry of steppers by name, utils.py gained ou_decay, and tables.py (a smooth table read, used by no plant yet) joined the hashed physics sources. No step, reward or observation of this task changes: 300 steps of a noisy square-wave run are bit-identical before and after, with params traced and with params constant (flanders, 2026-11-24). v6 has shipped in no release, so it keeps its number (owner, 2026-11-14). Earlier note: Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-24T01:20:53+00:00"
 }
