@@ -245,6 +245,16 @@ at the charged cost.
 **D6. Rig constants unverified.** The streams are the benchmark's copy of [P2]
 (REALITY.md, owner list).
 
+**D7. The limits never act at the shipped upsets** (owner, 2026-11-24: kept as a
+known deviation). The upset sizes (acid strength and influent flow within 20 % of
+nominal) are ours, and no source found gives one. At those sizes no working
+controller diverts, fills the basin or trips: the placed reference leaves the
+permit on 1 episode of 250 on fresh seeds, for 45 steps, and nothing reaches the
+sewer floor. The basin, the diversion's price and the 60 min rule price failing
+policies only. Effect on the score: none for a controller that holds the permit;
+the task measures the reagent saved on the permit's edge, not the defence of a
+limit. A source for larger upsets would make the limits part of the job.
+
 ---
 
 ## 10. What the reference ladder row needs
@@ -298,10 +308,28 @@ flow is the steady balance's (`env.steady_base_flow`) for what enters stage 1
 during that step: the influent's flow and acid strength, and the buffer flow the
 step draws. Mixing is linear in the invariants and so is the charge balance at a
 fixed pH, so tanks that start on the edge stay on it; `test_ph_ceiling.py` doses a
-plant with these flows and reads the discharge within 0.005 pH of 6.00. Nothing is
-planned, so a window's start or end gains it nothing, and it spends no base the
-tanks hold at the reset. It reads the buffer flow and the acid strength, which the
-observation hides, and the buffer's next draw.
+plant with these flows and reads the discharge within 0.005 pH of 6.00. It reads
+the buffer flow and the acid strength, which the observation hides, and the
+buffer's next draw.
+
+**The start's inventory is counted in the ceiling** (owner, 2026-11-24). An episode
+starts on the reference's set point, 6.5, where the two tanks hold base the edge
+does not need: about 1.6 L of the base stream on seeds 100 to 109 (0.5 to 2.9),
+1.9 % of the hold's reagent over 2 h. The reagent a policy adds, plus what the
+tanks hold at the start, less what they hold at the end, is what the outflow
+carries; an outflow inside the permit carries at least its water's need on the
+edge, and tanks inside the permit hold none below it. So no policy that never
+leaves the permit costs less than the hold less that inventory, and that is the
+ceiling (`perfect_hold(...)["cost"]`; `["hold"]` and `["inventory"]` give the
+parts, `start_inventory` the closed form, tested against counting base in
+`test_ph_ceiling.py`). The oracle reaches it nearly: it doses nothing for the first
+10 min and lets the discharge slide to the edge.
+
+**The planner reports the probe's pH.** The planner's limit uses the plant's
+bisection polished by Newton, for the slope the solver needs; the output it reports
+for K8's replay is the plant's own bisection, which the planner's polished root
+differs from by at most the bisection's half-width, 7e-6 pH, far under the limit's
+1e-3 pH back-off.
 
 ---
 
