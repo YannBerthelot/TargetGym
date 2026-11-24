@@ -1,5 +1,8 @@
 # Formation
 
+!!! note "Extra task"
+    Formation is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: one policy flies three aircraft (2026-11-24, owner's decision, aircraft five-task review): several agents, outside the charter's one plant, one agent (formation/PHYSICS.md, Status).
+
 <p align="center"><img src="../../videos/formation/pid_output.gif" width="480px"/></p>
 
 Fly a lead and two wingmen in a V, every aircraft controlled by the policy. The lead holds an altitude and a heading that follows a patrol route, and each wingman holds a slot fixed in the lead's frame. Because the lead is learned too, each wingman's reference is a co-player rather than a script; the team shares one cost, and a collision between any two aircraft trips all three. The action is the three aircraft's controls, the lead's first.

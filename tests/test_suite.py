@@ -14,7 +14,8 @@ Contract, from the user's decisions of 2026-10-27:
 And from the decision of 2026-11-24: an Extra task carries no tag, so the
 radar has the ten axes a core task carries. Instability and inverse response,
 which only boiler_drum and four_tank carried, are off it until a core task is
-shown to carry them.
+shown to carry them. The same day the owner sent formation to Extra, the one
+task that carried multi-agent, so the radar has nine.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ def test_every_task_is_tagged_with_known_capabilities():
     assert used == set(suite.AXES)
 
 
-def test_the_radar_has_the_ten_axes_a_core_task_carries():
+def test_the_radar_has_the_nine_axes_a_core_task_carries():
     assert set(suite.AXES) == {
         "basic",
         "nonlinearity",
@@ -50,7 +51,6 @@ def test_the_radar_has_the_ten_axes_a_core_task_carries():
         "moving_target",
         "economic",
         "partial_observability",
-        "multi_agent",
         "safety",
     }
     assert set(suite.LABELS) == set(suite.AXES)
