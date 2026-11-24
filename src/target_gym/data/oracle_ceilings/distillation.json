@@ -1,10 +1,10 @@
 {
  "task": "distillation",
- "reference": "cascade",
- "maxiter": 3000,
+ "method": "process (cstr, distillation, compressor_surge, unstable_cstr): ``pc_gym.foresight`` L-BFGS-B from the reset's hold (the reference's first move held) and the kept reference's moves, the cheaper untripped plan kept; compressor_surge also from their midpoint, each start restarted twice from its own end plan.",
+ "J_ceiling": 3.5473646141469484,
  "scenarios": {
-  "both_steps": {
-   "weight": 0.1,
+  "normal": {
+   "weight": 0.7,
    "seeds": [
     100,
     101,
@@ -17,23 +17,20 @@
     108,
     109
    ],
-   "reference_mean": 3.964758389651776,
-   "ceiling_mean": 3.525904745161533,
    "ceiling_costs": [
-    3.7342314553260803,
-    3.3280425804853437,
-    3.8035174560546876,
-    3.0889708900451662,
-    3.8948805129528044,
-    4.11780056476593,
-    3.1053006345033647,
-    3.062313498854637,
-    3.28593256354332,
-    3.8380572950839995
+    3.5290515583753588,
+    3.61272678732872,
+    3.638855919241905,
+    3.5293709057569504,
+    3.5297357237339018,
+    3.5302269423007964,
+    3.5311680608987808,
+    3.5311266392469407,
+    3.630822476148605,
+    3.5299878478050233
    ],
    "ceiling_trips": 0,
-   "room": 1.1244655418137615,
-   "planned_minus_replayed_max": 4.923343657203816e-07,
+   "ceiling_mean": 3.559307286083699,
    "solver": {
     "status": [
      0,
@@ -47,115 +44,191 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.05476954348981791,
     "capped": 0,
-    "iterations_max": 47,
-    "min_margin": -0.009701976552605629,
-    "start": [
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "hold",
-     "hold",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
-    "fell_back": 0,
-    "rho": [
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0
-    ],
-    "two_starts_max_rel_gap": 0.08511381571489611,
-    "two_starts_median_rel_gap": 0.0044404594630617225
-   }
-  },
-  "feed_composition_step": {
-   "weight": 0.1,
-   "seeds": [
-    100,
-    101,
-    102,
-    103,
-    104,
-    105,
-    106,
-    107,
-    108,
-    109
-   ],
-   "reference_mean": 3.9481496213078495,
-   "ceiling_mean": 3.5257216556668283,
-   "ceiling_costs": [
-    3.5321878826618196,
-    3.5332870763540267,
-    3.5059494370222093,
-    3.5148015928268435,
-    3.5155580377578737,
-    3.5305406337976457,
-    3.530722001194954,
-    3.534178988337517,
-    3.5306481570005417,
-    3.5293427497148513
-   ],
-   "ceiling_trips": 0,
-   "room": 1.1198131919920735,
-   "planned_minus_replayed_max": 3.367662428921392e-07,
-   "solver": {
-    "status": [
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0
-    ],
-    "projected_gradient_max": 0.015604800782845707,
-    "capped": 0,
-    "iterations_max": 36,
-    "min_margin": -0.004188546910881996,
-    "start": [
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
-    "fell_back": 0,
-    "rho": [
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0
-    ],
-    "two_starts_max_rel_gap": 0.005955381904954508,
-    "two_starts_median_rel_gap": 0.005040398867673712
-   }
+    "fell_back": 0
+   },
+   "per_seed": [
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 100,
+     "seconds": 470.54437041282654,
+     "cost": 3.5290515583753588,
+     "trips": 0,
+     "planned": 3.5290510654449463,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 34,
+      "projected_gradient": 0.00689506828094863,
+      "min_margin": -0.0018043611198663712
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 101,
+     "seconds": 386.8842206001282,
+     "cost": 3.61272678732872,
+     "trips": 0,
+     "planned": 3.6127266883850098,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.006093628289999813,
+      "min_margin": -0.0031454656273126602
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 102,
+     "seconds": 352.8829996585846,
+     "cost": 3.638855919241905,
+     "trips": 0,
+     "planned": 3.6388556957244873,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 13,
+      "projected_gradient": 0.013101222178530113,
+      "min_margin": -1.6221776604652405e-05
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 103,
+     "seconds": 577.7551927566528,
+     "cost": 3.5293709057569504,
+     "trips": 0,
+     "planned": 3.5293710231781006,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.004293110993723537,
+      "min_margin": -0.0021023843437433243
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 104,
+     "seconds": 509.1660976409912,
+     "cost": 3.5297357237339018,
+     "trips": 0,
+     "planned": 3.5297353267669678,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 17,
+      "projected_gradient": 0.006498579694398765,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 105,
+     "seconds": 544.4651296138763,
+     "cost": 3.5302269423007964,
+     "trips": 0,
+     "planned": 3.530226469039917,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.006610858687278565,
+      "min_margin": -0.001208314672112465
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 106,
+     "seconds": 429.83847308158875,
+     "cost": 3.5311680608987808,
+     "trips": 0,
+     "planned": 3.531167507171631,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 19,
+      "projected_gradient": 0.003998338382640021,
+      "min_margin": -0.001208314672112465
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 107,
+     "seconds": 484.73123002052307,
+     "cost": 3.5311266392469407,
+     "trips": 0,
+     "planned": 3.5311267375946045,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 14,
+      "projected_gradient": 0.006883450826941029,
+      "min_margin": -0.0031454656273126602
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 108,
+     "seconds": 337.16625571250916,
+     "cost": 3.630822476148605,
+     "trips": 0,
+     "planned": 3.6308224201202393,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 25,
+      "projected_gradient": 0.013740334723947662,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "normal",
+     "seed": 109,
+     "seconds": 440.06482791900635,
+     "cost": 3.5299878478050233,
+     "trips": 0,
+     "planned": 3.529987335205078,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 30,
+      "projected_gradient": 0.004510192634503141,
+      "min_margin": -0.001208314672112465
+     }
+    }
+   ]
   },
   "feed_rate_step": {
    "weight": 0.1,
@@ -171,27 +244,24 @@
     108,
     109
    ],
-   "reference_mean": 3.688197030067444,
-   "ceiling_mean": 3.5302105405330657,
    "ceiling_costs": [
-    3.7285630452632903,
-    3.281583625078201,
-    3.8413454377651215,
-    3.100207548737526,
-    3.9673673170804977,
-    4.134789663553238,
-    3.1148493933677672,
-    3.057147641181946,
-    3.251572449207306,
+    3.6753150534629824,
+    3.25944296836853,
+    3.8217690175771715,
+    3.1247559052705767,
+    3.9654139202833174,
+    4.13028056025505,
+    3.1214360076189043,
+    3.0544021463394166,
+    3.243578554391861,
     3.824679284095764
    ],
    "ceiling_trips": 0,
-   "room": 1.0447527102761758,
-   "planned_minus_replayed_max": 7.40289688216933e-07,
+   "ceiling_mean": 3.5221073417663575,
    "solver": {
     "status": [
      0,
-     2,
+     0,
      0,
      0,
      0,
@@ -201,41 +271,194 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.04768544149909154,
     "capped": 0,
-    "iterations_max": 62,
-    "min_margin": -0.0092549417167902,
-    "start": [
-     "reference",
-     "reference",
-     "hold",
-     "hold",
-     "hold",
-     "hold",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
-    "fell_back": 0,
-    "rho": [
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0
-    ],
-    "two_starts_max_rel_gap": 0.09107111300152247,
-    "two_starts_median_rel_gap": 0.01151373851510095
-   }
+    "fell_back": 0
+   },
+   "per_seed": [
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 100,
+     "seconds": 521.7162048816681,
+     "cost": 3.6753150534629824,
+     "trips": 0,
+     "planned": 3.6753151416778564,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 27,
+      "projected_gradient": 0.0014229110055317962,
+      "min_margin": -0.0026984307914972305
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 101,
+     "seconds": 663.7919135093689,
+     "cost": 3.25944296836853,
+     "trips": 0,
+     "planned": 3.2594430446624756,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 30,
+      "projected_gradient": 0.0025347120923816524,
+      "min_margin": -0.001506337895989418
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 102,
+     "seconds": 466.1142954826355,
+     "cost": 3.8217690175771715,
+     "trips": 0,
+     "planned": 3.8217689990997314,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 31,
+      "projected_gradient": 0.0019335769112260454,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 103,
+     "seconds": 611.4178395271301,
+     "cost": 3.1247559052705767,
+     "trips": 0,
+     "planned": 3.124755859375,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 21,
+      "projected_gradient": 0.002097633135324628,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 104,
+     "seconds": 469.9195382595062,
+     "cost": 3.9654139202833174,
+     "trips": 0,
+     "planned": 3.965414047241211,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 44,
+      "projected_gradient": 0.0011485231567823773,
+      "min_margin": -0.001506337895989418
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 105,
+     "seconds": 423.81138277053833,
+     "cost": 4.13028056025505,
+     "trips": 0,
+     "planned": 4.130280494689941,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 24,
+      "projected_gradient": 0.0035769628514529805,
+      "min_margin": -0.006721744313836098
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 106,
+     "seconds": 378.4584581851959,
+     "cost": 3.1214360076189043,
+     "trips": 0,
+     "planned": 3.1214358806610107,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 36,
+      "projected_gradient": 0.006481880333261192,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 107,
+     "seconds": 446.46062541007996,
+     "cost": 3.0544021463394166,
+     "trips": 0,
+     "planned": 3.0544018745422363,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 23,
+      "projected_gradient": 0.004817059693473236,
+      "min_margin": -0.001506337895989418
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 108,
+     "seconds": 690.0309159755707,
+     "cost": 3.243578554391861,
+     "trips": 0,
+     "planned": 3.2435786724090576,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 23,
+      "projected_gradient": 0.0037906599398874197,
+      "min_margin": -0.001506337895989418
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_rate_step",
+     "seed": 109,
+     "seconds": 549.1353244781494,
+     "cost": 3.824679284095764,
+     "trips": 0,
+     "planned": 3.824678897857666,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 34,
+      "projected_gradient": 0.007444284074971302,
+      "min_margin": -0.001506337895989418
+     }
+    }
+   ]
   },
-  "normal": {
-   "weight": 0.7,
+  "feed_composition_step": {
+   "weight": 0.1,
    "seeds": [
     100,
     101,
@@ -248,75 +471,448 @@
     108,
     109
    ],
-   "reference_mean": 3.6715674183368683,
-   "ceiling_mean": 3.5405983338952063,
    "ceiling_costs": [
-    3.5290515583753588,
-    3.5331483662128447,
-    3.5763952314853666,
-    3.5313026010990143,
-    3.5297357237339018,
-    3.5302269423007964,
-    3.5298128831386566,
-    3.5399269533157347,
-    3.5763952314853666,
-    3.5299878478050233
+    3.5321878826618196,
+    3.5354105204343798,
+    3.5059494370222093,
+    3.514844892024994,
+    3.5155580377578737,
+    3.5305406337976457,
+    3.531495313048363,
+    3.5355003553628923,
+    3.5306481570005417,
+    3.5293427497148513
    ],
    "ceiling_trips": 0,
-   "room": 1.0369906643145188,
-   "planned_minus_replayed_max": 5.125999451571772e-07,
+   "ceiling_mean": 3.526147797882557,
    "solver": {
     "status": [
      0,
      0,
-     2,
      0,
      0,
      0,
      0,
      0,
-     2,
+     0,
+     0,
      0
     ],
-    "projected_gradient_max": 0.017432127080384385,
     "capped": 0,
-    "iterations_max": 34,
-    "min_margin": -0.0024004075676202774,
-    "start": [
-     "reference",
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "hold",
-     "reference"
+    "fell_back": 0
+   },
+   "per_seed": [
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 100,
+     "seconds": 412.27433609962463,
+     "cost": 3.5321878826618196,
+     "trips": 0,
+     "planned": 3.5321879386901855,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 30,
+      "projected_gradient": 0.005679015922339728,
+      "min_margin": -0.002847442403435707
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 101,
+     "seconds": 479.43927121162415,
+     "cost": 3.5354105204343798,
+     "trips": 0,
+     "planned": 3.535410165786743,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 17,
+      "projected_gradient": 0.016683070396457278,
+      "min_margin": -0.005380639806389809
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 102,
+     "seconds": 493.91659474372864,
+     "cost": 3.5059494370222093,
+     "trips": 0,
+     "planned": 3.5059492588043213,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 26,
+      "projected_gradient": 0.012223754398937553,
+      "min_margin": -0.0021023843437433243
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 103,
+     "seconds": 468.8604893684387,
+     "cost": 3.514844892024994,
+     "trips": 0,
+     "planned": 3.5148446559906006,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.015723712109605215,
+      "min_margin": -0.0029964540153741837
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 104,
+     "seconds": 507.8272967338562,
+     "cost": 3.5155580377578737,
+     "trips": 0,
+     "planned": 3.5155577659606934,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 19,
+      "projected_gradient": 0.0036823210732705447,
+      "min_margin": -0.0016553495079278946
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 105,
+     "seconds": 497.7755057811737,
+     "cost": 3.5305406337976457,
+     "trips": 0,
+     "planned": 3.530540704727173,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 23,
+      "projected_gradient": 0.015604800782845707,
+      "min_margin": -0.004188546910881996
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 106,
+     "seconds": 429.94794821739197,
+     "cost": 3.531495313048363,
+     "trips": 0,
+     "planned": 3.5314953327178955,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 21,
+      "projected_gradient": 0.002175880764513194,
+      "min_margin": -0.0016553495079278946
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 107,
+     "seconds": 414.28777718544006,
+     "cost": 3.5355003553628923,
+     "trips": 0,
+     "planned": 3.5355000495910645,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 19,
+      "projected_gradient": 0.016367501716228444,
+      "min_margin": -0.004784593358635902
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 108,
+     "seconds": 549.6813876628876,
+     "cost": 3.5306481570005417,
+     "trips": 0,
+     "planned": 3.5306482315063477,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 29,
+      "projected_gradient": 0.002444331884036522,
+      "min_margin": -0.001208314672112465
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "feed_composition_step",
+     "seed": 109,
+     "seconds": 538.1100337505341,
+     "cost": 3.5293427497148513,
+     "trips": 0,
+     "planned": 3.5293426513671875,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 36,
+      "projected_gradient": 0.003094538479980813,
+      "min_margin": -0.0018043611198663712
+     }
+    }
+   ]
+  },
+  "both_steps": {
+   "weight": 0.1,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_costs": [
+    3.7342314553260803,
+    3.262748062610626,
+    3.786608725786209,
+    3.0876480597257614,
+    3.8921646988391876,
+    4.101869861483574,
+    3.1053006345033647,
+    3.042263147234917,
+    3.262548235654831,
+    3.827017111182213
+   ],
+   "ceiling_trips": 0,
+   "ceiling_mean": 3.5102399992346762,
+   "solver": {
+    "status": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ],
-    "fell_back": 0,
-    "rho": [
-     100.0,
-     100.0,
-     1.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     100.0,
-     1.0,
-     100.0
-    ],
-    "two_starts_max_rel_gap": 0.02643087168691634,
-    "two_starts_median_rel_gap": 0.013171852233700846
-   }
+    "capped": 0,
+    "fell_back": 0
+   },
+   "per_seed": [
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 100,
+     "seconds": 450.4626865386963,
+     "cost": 3.7342314553260803,
+     "trips": 0,
+     "planned": 3.734231472015381,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 26,
+      "projected_gradient": 0.00499510732951125,
+      "min_margin": -0.0018043611198663712
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 101,
+     "seconds": 472.21926975250244,
+     "cost": 3.262748062610626,
+     "trips": 0,
+     "planned": 3.2627480030059814,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 14,
+      "projected_gradient": 0.005172629799583439,
+      "min_margin": -0.0019533727318048477
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 102,
+     "seconds": 405.94540643692017,
+     "cost": 3.786608725786209,
+     "trips": 0,
+     "planned": 3.7866084575653076,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 26,
+      "projected_gradient": 0.030104660632112423,
+      "min_margin": -0.016705522313714027
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 103,
+     "seconds": 373.46878457069397,
+     "cost": 3.0876480597257614,
+     "trips": 0,
+     "planned": 3.0876476764678955,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 16,
+      "projected_gradient": 0.005159734473334371,
+      "min_margin": -0.001208314672112465
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 104,
+     "seconds": 419.8279142379761,
+     "cost": 3.8921646988391876,
+     "trips": 0,
+     "planned": 3.892165184020996,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 30,
+      "projected_gradient": 0.0025751042245826528,
+      "min_margin": -0.005678663030266762
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 105,
+     "seconds": 456.6586928367615,
+     "cost": 4.101869861483574,
+     "trips": 0,
+     "planned": 4.101869583129883,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 38,
+      "projected_gradient": 0.0012523474967884862,
+      "min_margin": -0.002847442403435707
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 106,
+     "seconds": 405.58237290382385,
+     "cost": 3.1053006345033647,
+     "trips": 0,
+     "planned": 3.1053004264831543,
+     "start": "reference",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 18,
+      "projected_gradient": 0.004841027921390129,
+      "min_margin": -0.002549419179558754
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 107,
+     "seconds": 682.1350929737091,
+     "cost": 3.042263147234917,
+     "trips": 0,
+     "planned": 3.042262554168701,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 16,
+      "projected_gradient": 0.003335493709185011,
+      "min_margin": -0.0018043611198663712
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 108,
+     "seconds": 521.3851790428162,
+     "cost": 3.262548235654831,
+     "trips": 0,
+     "planned": 3.262547731399536,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 26,
+      "projected_gradient": 0.0029316008874836763,
+      "min_margin": -0.001208314672112465
+     }
+    },
+    {
+     "task": "distillation",
+     "scenario": "both_steps",
+     "seed": 109,
+     "seconds": 478.69499349594116,
+     "cost": 3.827017111182213,
+     "trips": 0,
+     "planned": 3.827016592025757,
+     "start": "hold",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 29,
+      "projected_gradient": 0.002607825738833891,
+      "min_margin": -0.0024004075676202774
+     }
+    }
+   ]
   }
  },
- "weights_covered": 1.0,
- "J_reference": 3.730207696938515,
- "J_ceiling": 3.5366025278627866,
- "room_J": 1.0547432649132686,
- "method": "pc_gym.foresight.solve: L-BFGS-B in float32 on env.step_env and the reward's smooth terms (CEILING_TERMS), the step terms as margins (ceiling_margins), the seed's own keys, from two starts (the reset's hold and the kept reference's actions), the cheaper replayed; replayed through benchmark.run_policy at sensor noise 1 on seeds 100-109.",
- "replay": "PlanPolicy (open loop)",
- "convergence": "status is L-BFGS-B's at float32 resolution; two_starts_*_rel_gap is how far the two starts' plans ended apart, per seed"
+ "generated": "2026-11-13",
+ "cpu": "scool-bob",
+ "stamp": "c80527b6f15e06f2"
 }

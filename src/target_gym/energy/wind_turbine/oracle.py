@@ -14,7 +14,9 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   bilinear lookup at width 0 (``table_weights``); the wind after every step:
   on its noise-free mean path in the registry's receding slot, and on the
   episode's own path for the ceiling (``ceiling_data``), which knows the
-  turbulence ahead as a ceiling may;
+  turbulence ahead as a ceiling may; the gust and the de-rate as the episode
+  carries them (their own clocks, the gust's size, the de-rate's level and
+  end), not the params' (owner, 2026-11-23);
 - objective: the score's lost production against the available power (the
   rating, timed curtailment included, or the wind at peak Cp), a one-sided
   epigraph row, and the pitch system's wear, an absolute row on the pitch's
@@ -37,6 +39,8 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 The cold start holds the pitch and the torque where they are.
 """
 
+import functools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -53,6 +57,7 @@ from target_gym.energy.wind_turbine.env import (
     drivetrain_inertia,
     electrical_power,
     gust,
+    gust_magnitude,
     life_steps,
     omega_rated,
     pitch_system_cost,
@@ -61,6 +66,7 @@ from target_gym.energy.wind_turbine.env import (
     tower_cost,
     tower_damping,
     tower_stiffness,
+    turbulence_sigma,
     turbulence_time_constant,
     wind_power,
 )
@@ -68,9 +74,12 @@ from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import (
     Oracle,
     TaskModel,
+    enable_x64,
+    float64,
     raw_of,
     scored_run,
     softplus_clip,
+    widths_row,
 )
 from target_gym.oracles.shooting import Hinge, Limit
 from target_gym.reward import trip_cost
@@ -176,13 +185,20 @@ def wind_step(env, p, x, v, t, task, widths):
     """One env step from ``x`` = (omega, pitch, torque, x_tower, v_tower,
     w_induced) at the rates ``v`` (fractions of the limits): (x_next, the
     step's wind, the rating's power)."""
-    v_mean, v_turb, now, gust_t0, derate_t0, path = task[1:7]
-    after = (now + t + 1) * p.delta_t
+    v_mean, v_turb, now, (gust_t0, gust_c0, size), derate, path = task[1:7]
     if path is None:
+        # Each event as the episode carries it (env.py, ``step_env``): its own
+        # clock, the gust's size and the de-rate's level and end, so the plan
+        # sees the episode's curtailment, not the params' (owner, 2026-11-23).
+        derate_t0, derate_c0, level, until = derate
+        t_gust = (now + t + 1 - gust_c0) * p.delta_t
+        t_derate = (now + t + 1 - derate_c0) * p.delta_t
         decay = jnp.exp(-p.delta_t / turbulence_time_constant(v_mean, p))
-        v_wind = v_mean + v_turb * decay ** (t + 1) + gust(after, v_mean, gust_t0, p)
-        derated = (derate_t0 >= 0.0) & (after >= derate_t0)
-        rating = jnp.where(derated, p.derate_to, p.rating) * p.P_rated
+        v_wind = (
+            v_mean + v_turb * decay ** (t + 1) + gust(t_gust, v_mean, gust_t0, p, size)
+        )
+        derated = (derate_t0 >= 0.0) & (t_derate >= derate_t0) & (t_derate < until)
+        rating = jnp.where(derated, level, p.rating) * p.P_rated
     else:  # the episode's own wind and rating, t + 1 steps after the start
         k = jnp.minimum(t, path.shape[0] - 1)
         v_wind, rating = path[k, 0], path[k, 1]
@@ -217,7 +233,23 @@ def turning_points(m0, turn0, dir0, moments):
     return mask, z0
 
 
-def wind_model(env, p, rest: bool = True) -> TaskModel:
+def wind_model(
+    env, p, rest: bool = True, hold: float = 0.0, disturbances=None
+) -> TaskModel:
+    """The planner problem. ``hold`` lowers the overspeed limit beyond the
+    solver's own back-off (``make_wind_turbine_mpc``: K11h's term less K11's
+    one-step noise, which the widths file already carries); the ceiling plans on
+    the level itself. ``disturbances`` are the run's own params, whose turbulence
+    sizes the extreme gust as the env does where the state carries no size (a
+    window); ``p`` by default."""
+    sized = p if disturbances is None else disturbances
+
+    def gust_size(s):
+        """The gust's V_gust as ``step_env`` reads it: the state's, else the
+        size the run's turbulence gives at the mean wind."""
+        own = gust_magnitude(s.v_mean, sized).astype(s.v_mean.dtype)
+        return jnp.where(s.gust_size > 0.0, s.gust_size, own)
+
     per_W = float(1.0e-6 * p.delta_t / 3600.0)  # MWh per W per step
     rated = omega_rated(p)
     per_deg = float(pitch_system_cost(p) / (p.pitch_travel_design * life_steps(p)))
@@ -250,8 +282,10 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
             s.moment_turn,
         ]),  # fmt: skip
         data=lambda s: (
-            s.target_power, s.v_mean, s.v_turb, s.time, s.gust_t0, s.derate_t0, None
-        ),
+            s.target_power, s.v_mean, s.v_turb, s.time,
+            (s.gust_t0, s.gust_c0, gust_size(s)),
+            (s.derate_t0, s.derate_c0, s.derate_level, s.derate_until), None,
+        ),  # fmt: skip
         hold=lambda s: jnp.zeros(2, s.omega.dtype),
         action=lambda s, v: raw_command(p, jnp.stack([s.pitch, s.torque]), v),
         tracked=lambda s: electrical_power(s.omega, s.torque, p)[None],
@@ -263,7 +297,9 @@ def wind_model(env, p, rest: bool = True) -> TaskModel:
                 weight=per_range, absolute=True, power=int(p.fatigue_exponent)
             ),
         ),
-        limits=(Limit(hi=p.overspeed_factor * rated, price=float(trip_cost(p))),),
+        limits=(
+            Limit(hi=p.overspeed_factor * rated - hold, price=float(trip_cost(p))),
+        ),
         move_rows=lambda x, v, steps: reach(p, x[1:3], v, steps),
         move_scale=lambda steps: (1.0, 1.0),
         tie_budget=per_W * float(p.energy_price) * 0.5 * float(p.precision_floor),
@@ -305,11 +341,74 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
 
     path = jnp.asarray(run_as(run, state, p, step_keys), jnp.result_type(state.omega))
     return (
-        state.target_power, state.v_mean, state.v_turb, state.time, state.gust_t0,
-        state.derate_t0, path,
+        state.target_power, state.v_mean, state.v_turb, state.time,
+        (state.gust_t0, state.gust_c0, state.gust_size),
+        (state.derate_t0, state.derate_c0, state.derate_level, state.derate_until),
+        path,
     )  # fmt: skip
 
 
-def make_wind_turbine_mpc(env, params) -> Oracle:
-    """Registry factory: the shared solver's oracle on ``wind_model``."""
-    return Oracle(env, params, "wind_turbine", wind_model)
+#: K11h's window for the overspeed level, steps (protocol Amendment 6, owner
+#: 2026-11-23): the time the pitch rate limit needs to take back a 2-sigma gust,
+#: dbeta = 2 sigma (dtau/dv) / |dtau/dbeta| at the reset's operating point, over
+#: the registered mean winds, 13 to 25 m/s, where the pitch regulates. Longest
+#: at 13 m/s, 1.28 s, so 6 steps of 0.25 s. Fixed before any run; nearer rated
+#: the pitch sits on its fine stop and the linear formula overstates it.
+HOLD_WINDOW = 6
+
+
+def _mean_winds(p) -> np.ndarray:
+    """The mean winds K11h is taken over: the range's ends and every whole m/s
+    between."""
+    lo, hi = (float(x) for x in p.v_mean_range)
+    inner = np.arange(np.floor(lo) + 1.0, hi)
+    return np.unique(np.concatenate([[lo], inner, [hi]]))
+
+
+def hold_backoff(env, p) -> float:
+    """K11h's term on the overspeed level (protocol Amendment 6): the worst over
+    the mean winds of ``p.v_mean_range`` and j = 1 to ``HOLD_WINDOW`` of
+    2 s_j |d omega_j / d v|. ``d omega_j / d v`` is the planner's rotor speed j
+    steps after a solve under a wind deviation it does not forecast, held from
+    the start, with the move held, from the operating point the reset
+    establishes at that mean wind; s_j = sigma sqrt(1 - a^2j) is that
+    deviation's spread over j steps (``turbulence_sigma``, a = exp(-dt / T),
+    ``turbulence_time_constant``), from ``p``: a bound scenario's turbulence
+    moves it, the window does not."""
+    key, worst = jax.random.PRNGKey(0), 0.0
+    j = np.arange(1, HOLD_WINDOW + 1)
+    with enable_x64():
+        p64 = float64(p)
+        for v in _mean_winds(p):
+            still = p64.replace(v_mean_range=(v, v), turbulence_iref=0.0)
+            st = float64(env.reset_env(key, still)[1])
+            model = wind_model(env, still, rest=False)
+            task, x0 = model.data(st), model.state_x(st)
+
+            def omegas(dv, task=task, x0=x0, model=model):
+                d = {"task": (task[0], task[1] + dv, *task[2:]), "widths": jnp.zeros(5)}
+                x, out = x0, []
+                for t in range(HOLD_WINDOW):
+                    x = model.step(d, x, jnp.zeros(2), t)[0]
+                    out.append(x[0])
+                return jnp.stack(out)
+
+            gain = np.abs(np.asarray(jax.jvp(omegas, (0.0,), (1.0,))[1]))
+            a = np.exp(-float(p.delta_t) / float(turbulence_time_constant(v, p64)))
+            s_j = float(turbulence_sigma(v, p64)) * np.sqrt(1.0 - a ** (2 * j))
+            worst = max(worst, float(np.max(2.0 * s_j * gain)))
+    return worst
+
+
+def make_wind_turbine_mpc(env, params, disturbances=None) -> Oracle:
+    """Registry factory: the shared solver's oracle on ``wind_model``, its
+    overspeed level backed off by K11h (``hold_backoff``) in place of K11's
+    one-step noise term, plus K11's smoothing gap (the widths file).
+    ``params`` are the planner's, with no turbulence (``plan_params``);
+    ``disturbances``, the run's own, size the back-off and the extreme gust
+    (``params`` without them)."""
+    run = params if disturbances is None else disturbances
+    noise = widths_row("wind_turbine")["limit_noise"][0]
+    hold = hold_backoff(env, run) - float(noise)
+    build = functools.partial(wind_model, hold=hold, disturbances=run)
+    return Oracle(env, params, "wind_turbine", build)

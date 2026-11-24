@@ -197,6 +197,7 @@ def test_a_figure_says_what_kind_of_number_it_is():
 def test_a_sourced_figure_says_where_it_was_read_and_how():
     row = credibility_row("plane", {})
     assert row["expert_figure"]["status"] == "read, primary"
+    # RVSM height-keeping, 65 ft: 65 x 0.3048 m = 19.812 m.
     assert row["expert_figure"]["value"] == pytest.approx(19.812)
     assert credibility_row("glass_furnace", {})["expert_figure"]["status"] == (
         "read, secondary"

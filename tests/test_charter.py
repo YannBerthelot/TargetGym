@@ -255,6 +255,15 @@ def test_charter_tasks_are_the_ladder_rows_less_fixtures_plus_reactor(tmp_path):
     assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
 
 
+def test_charter_tasks_leave_out_extra_tasks(tmp_path):
+    """Owner's decision, 2026-11-15: an Extra task (EnvSpec.extra) is never
+    scored, so its record is kept but no longer held current. four_tank,
+    battery and unstable_cstr are Extra and have ladder rows."""
+    for stem in ("cstr", "four_tank", "battery", "unstable_cstr"):
+        (tmp_path / f"{stem}.py").write_text("")
+    assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
+
+
 def test_the_log_only_grows(tmp_path):
     log = tmp_path / "log.jsonl"
     charter.append_log({"run": 1}, log)
@@ -329,3 +338,18 @@ def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
 def test_one_draw_that_fails_fails_the_sweep():
     sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
+
+
+def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
+    """The ladder rows live in the repository's ``scripts/``, which an installed
+    package does not have. Asked there, the list is not silently the
+    expert-reference tasks alone."""
+    with pytest.raises(FileNotFoundError, match="source checkout"):
+        charter.charter_tasks(tmp_path / "absent")
+
+
+def test_the_distillation_oracle_is_not_measured_until_its_rebuild_lands():
+    """Owner's decision, 2026-11-13: the distillation oracle is rebuilt in its
+    own PR, so its MPC line stays out of the record until then, with the reason
+    J3 prints."""
+    assert "rebuil" in charter.MPC_NOT_MEASURED.get("distillation", "")
