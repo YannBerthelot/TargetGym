@@ -296,6 +296,23 @@ def test_scale_scales_the_noise(spec):
 
 
 @noisy_tasks
+def test_the_true_observation_has_no_instrument_in_the_way(spec):
+    """``true_obs`` is the plant now, what a claim about the plant is read on
+    (the time-in-band KPI). Instruments a hundred times noisier leave it where
+    it was, and move what the policy reads."""
+    from target_gym.base import true_obs
+
+    env, params = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(3), params)
+    loud = params.replace(sensor_noise_scale=100.0)
+
+    np.testing.assert_array_equal(
+        true_obs(env, state, loud), true_obs(env, state, params)
+    )
+    assert not np.array_equal(env.get_obs(state, loud), env.get_obs(state, params))
+
+
+@noisy_tasks
 def test_targets_stay_exact(spec):
     env, params = spec.make_env(), spec.make_test_params()
     key = jax.random.PRNGKey(2)

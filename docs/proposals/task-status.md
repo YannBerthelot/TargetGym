@@ -3,6 +3,44 @@
 Where each task stands under the [task charter](task-charter.md). This page changes as the
 work moves, while the charter holds the rules. Rule names (B1, J2, ...) are the charter's.
 
+## Status on 2026-11-23
+
+One review session per task ran on 2026-11-23, and the owner piloted their decisions.
+Scores are each session's own, out of 10 as a benchmark task, judged on realism and
+sources, room over the reference, and the oracle's integrity. "With its open work" depends
+on pull requests that are not merged. No record has been redone: every figure is a
+measurement from a session, not a charter record. The sections below this one date from
+2026-11-10 and are kept as they were.
+
+| Task | On the branch | With its open work | Where it stands |
+|---|---|---|---|
+| `reactor` | 8 | 8+ | Rebuilt task merged (#205), room 4.46. The day's end is not priced; five baseload days where the planner loses to its expert are being explained. |
+| `hvac` | 6 | 8 | Heat source at 38 W/m2 merged (#229). Room 1.36 (1.35 to 1.38) on 50 seeds once the reference is placed by the no-exit rule (#238). |
+| `cstr` | 6 | 7.5 | Tracking task repaired (#215, #221). Production prototype, feed as a second handle: room 1.34, acceptance checks under way (#237). |
+| `compressor_surge` | 5 | 7 | Reset in established operation and ceiling on the surge line merged (#223, #231). Reading lag and a hidden line shift in #243: margin 0.09, room 1.54 (1.45 to 1.65). The shift is being made local to the line. |
+| `ph_neutralization` | 5 | 7 | Room of 14 was the set point. Placed by the no-exit rule at pH 6.5, room 1.16, with the perfect hold as ceiling (#232). |
+| `distillation` | 5 | 7 | Bottoms rest where the score is cheapest (#219), room 1.02. Product priced in #228: room 1.056 (1.054 to 1.059). Oracle rebuild pending. |
+| `plane3d_racetrack` | 6 | 7 | Scored on the fuel burned in the hold (#222). No oracle; waits for the corrected A320. |
+| `wake_surf` | 6 | 7, then 8 | Station and reference fixed (#217). Next version in #240: drifting wake, predicted station, crossing as a trip. No oracle yet. |
+| `glass_furnace` | 3 | 6 | Stays in the benchmark (owner). Room 1.048 (1.041 to 1.056) on `study/glass-room`; four directions chosen, worked in order. |
+| `plane` | 5 | 7.5 | Excess climb margin traced to the induced drag and the engine. A320-233 on Airbus's chart with two mountain-wave scenarios in #239. No oracle. |
+| `plane3d_heading` | 5 | 5 | A clean solved task (#222). |
+| `wind_turbine` | 3.5 | not scored again | Recorded room of 136 not credible. Rebuild in #235: published controller as reference, power held at the set point, rotor-filtered wind, hub anemometer. Room 4.4 to 7.8 on one seed. |
+| `boiler_drum` | 4 | 4 | Solved as scored (J5). Fuel loop prototyped (room 1.0004) and the turbine valve lead searched; both dropped (#218, #227). |
+| `plane_energy` | 3.5 | Extra | Its cost was a climb-rate limit missing from its reference. Goes to Extra as solved once the reference has its rates (#239). |
+
+Decided the same day, for every task: a reference rests at the lowest set point it never
+leaves its zone from ([Amendment 7](charter-amendment-7-draft.md), adopted on 2026-11-24); a task with
+little room is kept when the room is beyond seed noise and worth something at the
+plant's scale. `battery` and `unstable_cstr` moved to Extra on 2026-11-15, so they are not in
+this table, though the older one below still lists them.
+
+On 2026-11-24 the owner also decided: `boiler_drum` goes to Extra as solved, and the
+`cstr` production prototype replaces the tracking task. Neither is done in the code yet.
+
+Not done for any task: the charter record on the plant as it now stands, and for
+`plane`, the 3D hold and `wake_surf`, an oracle.
+
 ## Applying the charter
 
 - **Scope.** Every benchmark candidate, the solved ones included, and `glass_furnace` and

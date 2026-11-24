@@ -340,6 +340,14 @@ def test_one_draw_that_fails_fails_the_sweep():
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
 
 
+def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
+    """The ladder rows live in the repository's ``scripts/``, which an installed
+    package does not have. Asked there, the list is not silently the
+    expert-reference tasks alone."""
+    with pytest.raises(FileNotFoundError, match="source checkout"):
+        charter.charter_tasks(tmp_path / "absent")
+
+
 def test_the_distillation_oracle_is_not_measured_until_its_rebuild_lands():
     """Owner's decision, 2026-11-13: the distillation oracle is rebuilt in its
     own PR, so its MPC line stays out of the record until then, with the reason

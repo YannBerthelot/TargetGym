@@ -157,14 +157,51 @@ def make_oracle(name: str, params=None):
     return oracle
 
 
-def make_gymnasium(name: str, render_mode: str | None = None, **overrides):
+def make_stream(name: str, **kwargs):
+    """Task ``name`` as a continuing plant: the stream.
+
+    It steps like :func:`make`'s environment and never ends: a trip restarts
+    the plant inside the task, the task's scenarios take turns in proportion to
+    their weights, and their events arrive at their rates. The observation is
+    the task's own, with no clock and no scenario label. The world's draws come
+    from the reset key alone, so two policies on one key meet the same world::
+
+        stream = tg.make_stream("hvac")
+        obs, state = stream.reset(key)
+        obs, state, reward, terminated, truncated, info = stream.step(key, state, a)
+
+    ``length=n`` truncates after ``n`` steps. It runs the task's scored
+    parameters, and refuses a task not wired for it yet.
+    """
+    from target_gym.stream import make_stream as build
+
+    return build(name, **kwargs)
+
+
+def make_gymnasium(
+    name: str, render_mode: str | None = None, stream: bool = False, **overrides
+):
     """Task ``name`` as a Gymnasium environment, on the scored configuration.
 
     For libraries that expect the classic stateful API. It steps on the host
     and returns NumPy, so it cannot sit inside ``jax.jit``; prefer
     :func:`make` for JAX training. ``overrides`` work as in :func:`make`.
+
+    ``stream=True`` gives the continuing plant of :func:`make_stream`: it
+    never ends, and the seed of ``reset`` fixes its world. It runs the scored
+    parameters, so it takes no ``overrides``.
     """
     from target_gym.wrapper import GymnasiumEnv
 
+    if stream:
+        if overrides:
+            raise ValueError(
+                f"a stream runs {name}'s scored parameters and takes no "
+                f"overrides: {sorted(overrides)}"
+            )
+        if render_mode is not None:
+            raise ValueError("a Gymnasium stream does not render yet")
+        plant = make_stream(name)
+        return GymnasiumEnv(plant, plant.default_params, render_mode=render_mode)
     env, params = make(name, **overrides)
     return GymnasiumEnv(env, params, render_mode=render_mode)

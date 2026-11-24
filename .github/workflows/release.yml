@@ -103,7 +103,7 @@ jobs:
     - name: Check every recorded row describes this tree
       run: uv run pytest tests/ -q -n auto -m records
     - name: Run the large closed-loop tests
-      run: uv run pytest -q -m "large and not records"
+      run: uv run pytest -q -n auto -m "large and not records"
 
   # Skipped jobs upstream skip every job after them unless it says always().
   package:

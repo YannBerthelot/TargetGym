@@ -241,11 +241,8 @@ def engine_response_rate(z, rate_sea_level):
     5 s at FL290, 6 s at FL350, against 1.7 s at sea level. Derived, from the
     standard atmosphere.
     """
-    temperature = jnp.maximum(288.15 - 0.0065 * z, 216.65)
-    theta = temperature / 288.15
-    troposphere = (jnp.minimum(temperature, 288.15) / 288.15) ** 5.2559
-    above = 0.22336 * jnp.exp(-(z - 11_000.0) / 6341.6)
-    delta = jnp.where(z <= 11_000.0, troposphere, above)
+    temperature, pressure = standard_atmosphere(z)
+    theta, delta = temperature / 288.15, pressure / 101325.0
     return rate_sea_level * delta / jnp.sqrt(theta)
 
 
@@ -342,25 +339,23 @@ def compute_thrust_output(
     return thrust
 
 
+def standard_atmosphere(z, xp=jnp):
+    """Temperature (K) and pressure (Pa) of the International Standard Atmosphere
+    at ``z`` metres: a lapse of 6.5 K/km to the tropopause at 11 000 m, then
+    216.65 K with the pressure falling as ``exp(-(z - 11 000) / 6 341.6)``."""
+    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    troposphere = (xp.minimum(temperature, 288.15) / 288.15) ** 5.2559
+    above = 0.22336 * xp.exp(-(z - 11_000.0) / 6341.6)
+    return temperature, 101325.0 * xp.where(z <= 11_000.0, troposphere, above)
+
+
 def compute_air_density_from_altitude(altitude: float) -> float:
-    """Compute the air density given the air density value (in kg.m-3) at sea level and a multiplicative factor (no unit) depending on altitude."""
-    # ISA up to 11 km, altitude is assumed to be in meters
-
-    T0 = 288.15  # K
-    P0 = 101325.0  # Pa
-    L = 0.0065  # K/m
-    g = 9.80665  # m/s^2
-    R = 287.05  # J/(kg·K)
-
-    # Clip to keep T > 0 so (T/T0)**5.26 stays finite. Termination bounds are
-    # well within [-50_000, 40_000]; clipping only matters for divergent
-    # gradient-tuning rollouts past the terminal state, where it prevents NaN
-    # from poisoning the backward pass via jnp.where.
+    """The standard atmosphere's air density (kg/m3) at ``altitude`` metres."""
+    # Clipped so a divergent gradient-tuning rollout past the terminal state
+    # stays finite; termination bounds are well inside.
     altitude = jnp.clip(altitude, -50_000.0, 40_000.0)
-    T = T0 - L * altitude
-    P = P0 * (T / T0) ** (g / (R * L))
-    rho = P / (R * T)
-    return rho
+    temperature, pressure = standard_atmosphere(altitude)
+    return pressure / (287.05 * temperature)
 
 
 def compressibility(mach, aspect_ratio, sweep_half_chord):
@@ -533,8 +528,7 @@ def scheduled_airspeed(z, cas, mach, xp=jnp):
     """The true airspeed of a schedule of ``cas`` (m/s) below the crossover and
     ``mach`` above it, by the standard atmosphere and the compressible pitot
     relation between CAS, impact pressure and Mach."""
-    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
-    pressure = 101325.0 * (temperature / 288.15) ** 5.2559
+    temperature, pressure = standard_atmosphere(z, xp)
     sound = xp.sqrt(1.4 * 287.0 * temperature)
     impact = 101325.0 * ((1.0 + 0.2 * (cas / 340.29) ** 2) ** 3.5 - 1.0)
     mach_of_cas = xp.sqrt(5.0 * ((impact / pressure + 1.0) ** (2.0 / 7.0) - 1.0))
@@ -615,8 +609,7 @@ def protected_pitch_demand(
 def calibrated_airspeed(z, tas, xp=jnp):
     """The CAS of true airspeed ``tas`` at ``z``, by the standard atmosphere and
     the compressible pitot relation (the inverse of ``scheduled_airspeed``)."""
-    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
-    pressure = 101325.0 * (temperature / 288.15) ** 5.2559
+    temperature, pressure = standard_atmosphere(z, xp)
     mach = tas / xp.sqrt(1.4 * 287.0 * temperature)
     impact = pressure * ((1.0 + 0.2 * mach**2) ** 3.5 - 1.0)
     return 340.29 * xp.sqrt(5.0 * ((impact / 101325.0 + 1.0) ** (2.0 / 7.0) - 1.0))
@@ -631,7 +624,7 @@ def speed_band_excess(z, tas, params, xp=jnp, cas=None):
     it, so the band is read in the unit the schedule assigns at ``z``.
     ``cas`` is the assigned CAS, ``params.target_cas`` by default.
     """
-    temperature = xp.maximum(288.15 - 0.0065 * z, 216.65)
+    temperature, _ = standard_atmosphere(z, xp)
     sound = xp.sqrt(1.4 * 287.0 * temperature)
     cas = params.target_cas if cas is None else cas
     target = scheduled_airspeed(z, cas, params.target_mach, xp)
@@ -681,14 +674,8 @@ def compute_alpha(theta: float, x_dot: float, z_dot: float) -> float:
 
 
 def compute_speed_of_sound_from_altitude(z):
-    h = z
-    gamma_air = 1.4
-    R = 287.0
-    T0 = 288.15
-    L = 0.0065
-    T11 = 216.65
-    T = jnp.where(h <= 11000, T0 - L * h, T11)
-    return jnp.sqrt(gamma_air * R * T)
+    temperature, _ = standard_atmosphere(z)
+    return jnp.sqrt(1.4 * 287.0 * temperature)
 
 
 def compute_Mach_from_velocity_and_speed_of_sound(velocity, speed_of_sound):
