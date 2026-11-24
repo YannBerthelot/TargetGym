@@ -1,10 +1,10 @@
-# Charter amendment 7 (draft): where a reference rests, and tasks with little room
+# Charter amendment 7: where a reference rests, and tasks with little room
 
-Status: draft, for the owner to read line by line. The decisions in it were taken by the
-owner on 2026-11-23, by picker, while piloting the per-task review sessions. It proposes
-edits to [task-charter.md](task-charter.md); this file only gives the text. Each change
-names the rule it edits, the wording to add or replace, and the case that showed the gap.
-Nothing here is in force until the owner adopts it.
+Status: adopted by the owner on 2026-11-24 ("Adopt and merge"). The rules are in
+[task-charter.md](task-charter.md) (the claim, J1, J3, J5); this file keeps the reasons and
+the cases. Its decisions were taken by the owner on 2026-11-23 and 2026-11-24, by picker,
+while piloting the per-task review sessions. J1 in the charter carries the pH session's
+wording of the zone rule, which says the same as the text below in one paragraph.
 
 It was first numbered 6. The charter's Amendment 6 is now the actuator's window, adopted
 the same day with the wind turbine's oracle ([charter-history.md](charter-history.md)).
@@ -55,9 +55,9 @@ its spec, room 1.056, two seeds of `both_steps` left out), compressor_surge (mar
 room 1.54 on held-out seeds).
 
 Decided as: "Lowest with no exit", then "Seeds that can be held decide", then "Each rung
-on its own". The last bullet is this draft's reading, not a decision: the owner was asked
-about tasks with a priced limit, and no task was named that keeps the 2 sigma rule. To
-confirm or strike.
+on its own". On the last bullet the owner answered "Keep 2 sigma there" on 2026-11-24. The
+charter keeps the 2 sigma rule's earlier wording for those zones: this bullet's clause on
+where the deviation is measured was not put to him and is not adopted.
 
 ### 2. The claim and J5: a task with little room is a kind of task
 
@@ -89,14 +89,16 @@ Decided as, in the owner's words: "Glass-furnace needs to stay as it is the moti
 example for this whole library. If it does not show room it means that we have not
 modeled it properly", and "almost saturated tasks (little room, but it DOES exist beyond
 noise) can be a specific type of task. The important part being that even if the room is
-little, improving score can have huge economic and energetic benefits." The threshold of
-1.2 and "where the interval includes 1, the task is treated as solved" are this draft's.
+little, improving score can have huge economic and energetic benefits." The threshold and
+the solved rule were this draft's, and he confirmed both on 2026-11-24: "Room under 1.2",
+and "Yes, solved". A solved task goes to Extra with that reason, as `plane_energy` and
+`boiler_drum` did, where J5 had kept it in the core pool.
 
-## What the sessions found that this draft does not settle
+## What the sessions found that this amendment does not settle
 
-- **A target that is a schedule.** Distillation's bottoms follow the metered feed, and
-  the shared code places one set point per zoned loop. What the rule means for a
-  scheduled target is open.
+- **A target that is a schedule: settled.** Distillation's bottoms follow the metered
+  feed, and the shared code placed one set point per zoned loop. The owner chose "Hook
+  for a scheduled target" on 2026-11-24: a candidate shifts the whole schedule (J1).
 - **Seeds the rule was not placed on.** The compressor's reference, placed at 0.09 on ten
   machines, surged once on an eleventh, held-out one. Where a plant draws a hidden
   number per episode, "none of the ladder's seeds" protects only those draws.

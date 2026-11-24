@@ -3,7 +3,7 @@
 Where each task stands under the [task charter](task-charter.md). This page changes as the
 work moves, while the charter holds the rules. Rule names (B1, J2, ...) are the charter's.
 
-## Status on 2026-11-23 (draft)
+## Status on 2026-11-23
 
 One review session per task ran on 2026-11-23, and the owner piloted their decisions.
 Scores are each session's own, out of 10 as a benchmark task, judged on realism and
@@ -30,10 +30,13 @@ measurement from a session, not a charter record. The sections below this one da
 | `plane_energy` | 3.5 | Extra | Its cost was a climb-rate limit missing from its reference. Goes to Extra as solved once the reference has its rates (#239). |
 
 Decided the same day, for every task: a reference rests at the lowest set point it never
-leaves its zone from ([amendment 7, draft](charter-amendment-7-draft.md)); a task with
+leaves its zone from ([Amendment 7](charter-amendment-7-draft.md), adopted on 2026-11-24); a task with
 little room is kept when the room is beyond seed noise and worth something at the
 plant's scale. `battery` and `unstable_cstr` moved to Extra on 2026-11-15, so they are not in
 this table, though the older one below still lists them.
+
+On 2026-11-24 the owner also decided: `boiler_drum` goes to Extra as solved, and the
+`cstr` production prototype replaces the tracking task. Neither is done in the code yet.
 
 Not done for any task: the charter record on the plant as it now stands, and for
 `plane`, the 3D hold and `wake_surf`, an oracle.
