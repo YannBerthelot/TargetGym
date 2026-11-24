@@ -282,3 +282,78 @@ def test_action_maps_to_the_heating_range(params):
     for raw, expected in ((-1.0, params.T_supply_min), (1.0, params.T_supply_max)):
         new_state, _ = compute_next_state(raw, state, params, jax.random.PRNGKey(0))
         assert float(new_state.T_supply) == pytest.approx(expected, abs=1e-3)
+
+
+# ── The step is exact on the linear network ─────────────────────────────────
+#
+# Contract (owner, 2026-11-24, "Exact step for linear parts"): the two slow
+# nodes are a linear network while the supply, the weather and the gains are
+# held and the slab's heat stays in one regime, so the plant's step lands on
+# that network's exact solution whatever its length. The oracle is SciPy's
+# LSODA on the plant's own field (``compute_velocity``) in float64, which
+# shares nothing with the plant's integrator.
+
+
+@pytest.mark.parametrize("hours", [0.25, 6.0])
+def test_a_step_lands_on_the_networks_exact_solution_whatever_its_length(hours):
+    import numpy as np
+    from scipy.integrate import solve_ivp
+
+    from target_gym.hvac.env import (
+        compute_velocity,
+        outdoor_mean_ahead,
+        slab_heat,
+        source_size,
+    )
+
+    try:
+        from jax import enable_x64
+    except ImportError:  # JAX 0.6
+        from jax.experimental import enable_x64
+
+    with enable_x64():
+        p = HVACParams(delta_t=3600.0 * hours, T_out_noise_std=0.0)
+        env = BuildingHVAC()
+        _, state = env.reset_env(jax.random.PRNGKey(0), p)
+        state = jax.tree_util.tree_map(
+            lambda leaf: (
+                leaf.astype(jnp.float64)
+                if jnp.issubdtype(leaf.dtype, jnp.floating)
+                else leaf
+            ),
+            state.replace(weather_dev=jnp.zeros(()), frost=jnp.zeros(())),
+        )
+        # Water at 24 C, a little above the slab: heat in proportion to the gap.
+        T_supply = 24.0
+        raw = (
+            2.0 * (T_supply - p.T_supply_min) / (p.T_supply_max - p.T_supply_min) - 1.0
+        )
+        new, _ = compute_next_state(
+            raw, state, p, jax.random.PRNGKey(1), env.integration_method
+        )
+
+        def rate(t, x):
+            return np.asarray(
+                compute_velocity(
+                    jnp.asarray(x),
+                    T_supply,
+                    state.time,
+                    0.0,
+                    p,
+                    outdoor_mean_ahead(state.T_out_level, 1, p),
+                )[0]
+            )
+
+        solved = solve_ivp(
+            rate,
+            (0.0, p.delta_t),
+            [float(state.T_mass), float(state.T_core)],
+            method="LSODA",
+            rtol=1e-12,
+            atol=1e-12,
+        ).y[:, -1]
+        # One regime throughout: the slab takes heat, below the source's size.
+        for core in (state.T_core, new.T_core):
+            assert 0.0 < float(slab_heat(T_supply, core, p)) < float(source_size(p))
+    # Kelvin, on values of about 20: LSODA's 1e-12 relative and float64 rounding.
+    np.testing.assert_allclose([new.T_mass, new.T_core], solved, rtol=0, atol=1e-9)

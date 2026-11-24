@@ -28,6 +28,14 @@ def log_scaled_reward(error, floor, envelope, xp=jnp):
     return xp.clip(1.0 - xp.log1p(error / floor) / xp.log1p(envelope / floor), 0.0, 1.0)
 
 
+def ou_decay(theta, dt, xp=jnp):
+    """What a deviation decaying at rate ``theta`` keeps over ``dt``:
+    ``exp(-theta dt)``, the solution of ``dx/dt = -theta x``. An Euler step's
+    ``1 - theta dt`` decays ``theta dt / 2`` faster than stated, changes with
+    the step, and turns negative past ``theta dt = 1``."""
+    return xp.exp(-theta * dt)
+
+
 def stationary_innovation(std, decay, xp=jnp):
     """The innovation's spread ``s`` for which ``x' = decay * x + s * xi``, with
     ``xi ~ N(0, 1)``, keeps the stationary standard deviation ``std``:

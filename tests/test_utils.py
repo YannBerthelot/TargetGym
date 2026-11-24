@@ -133,3 +133,31 @@ def test_stationary_innovation_keeps_the_process_at_its_stated_spread():
     assert 0.8**2 * 3.0**2 + s**2 == pytest.approx(3.0**2, rel=1e-6)
     # No decay left, no memory: every draw is a fresh one at the full spread.
     assert float(stationary_innovation(3.0, 0.0)) == pytest.approx(3.0)
+
+
+# -------------------------------
+# Test ou_decay
+# -------------------------------
+# Contract: what a deviation decaying at rate ``theta`` keeps over ``dt`` is
+# ``exp(-theta dt)``, the solution of ``dx/dt = -theta x``.
+def test_ou_decay_halves_a_deviation_over_its_half_life():
+    from target_gym.utils import ou_decay
+
+    # theta = 0.1 /s has a half-life of ln(2) / 0.1 s.
+    assert float(ou_decay(0.1, np.log(2.0) / 0.1)) == pytest.approx(0.5, rel=1e-6)
+
+
+def test_ou_decay_over_two_steps_is_the_decay_over_their_sum():
+    """What the Euler factor ``1 - theta dt`` lacks: (1 - 0.3)(1 - 0.5) is 0.35,
+    1 - 0.8 is 0.2."""
+    from target_gym.utils import ou_decay
+
+    both = float(ou_decay(0.5, 0.6)) * float(ou_decay(0.5, 1.0))
+    assert both == pytest.approx(float(ou_decay(0.5, 1.6)), rel=1e-6)
+
+
+def test_ou_decay_stays_positive_at_a_long_step():
+    """theta dt = 4: exp(-4) = 0.0183156, where the Euler factor is -3."""
+    from target_gym.utils import ou_decay
+
+    assert float(ou_decay(2.0, 2.0)) == pytest.approx(0.0183156, rel=1e-5)

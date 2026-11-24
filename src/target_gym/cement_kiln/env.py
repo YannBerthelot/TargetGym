@@ -60,6 +60,7 @@ from target_gym.integration import integrate_dynamics
 from target_gym.utils import (
     convert_raw_action_to_range,
     log_scaled_reward,
+    ou_decay,
     stationary_innovation,
 )
 
@@ -520,7 +521,7 @@ def compute_next_state(
     state: CementKilnState,
     params: CementKilnParams,
     key: jax.Array,
-    integration_method: str = "rk4_2",
+    integration_method: str = "rk4_1",
 ):
     """``action_raw`` is ``[fuel, kiln_speed]``, each in [-1, 1]."""
     p = params
@@ -537,7 +538,7 @@ def compute_next_state(
     # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     # The innovation that keeps the feed's spread at ``feed_noise_std``.
-    decay = 1.0 - FEED_OU_THETA * p.delta_t
+    decay = ou_decay(FEED_OU_THETA, p.delta_t)
     sigma = stationary_innovation(p.feed_noise_std, decay)
     raw_meal = (
         p.raw_meal_nominal

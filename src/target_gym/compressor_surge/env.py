@@ -57,7 +57,7 @@ from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
-from target_gym.integration import integrate_dynamics
+from target_gym.integration import STEPPERS, integrate_dynamics
 from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
 
 #: Header-pressure blocks per episode (30 s each).
@@ -555,9 +555,10 @@ def compute_velocity(
 
 def _substeps(integration_method: str) -> int:
     """N of ``"rk4_N"``: each substep is one rate-limit update and one RK4
-    step of ``delta_t / N``."""
+    step of ``delta_t / N``. A stepper registered by name
+    (``integration.STEPPERS``) may stand in for RK4."""
     method, _, n = integration_method.partition("_")
-    if method != "rk4" or not n.isdigit() or int(n) < 1:
+    if method not in ("rk4", *STEPPERS) or not n.isdigit() or int(n) < 1:
         raise ValueError(
             f"integration_method must be 'rk4_N' with N >= 1, got {integration_method!r}"
         )
@@ -648,6 +649,7 @@ def compute_next_state(
              raw 0 is 87.5 % speed and a half-open recycle.
     """
     n_sub = _substeps(integration_method)
+    family = integration_method.partition("_")[0]
     # Past its six demand blocks the schedule renews, so the demand keeps
     # moving; a window never gets there (its N is the schedule's length).
     run_out = N_DEMAND_BLOCKS * params.demand_block_steps
@@ -708,7 +710,7 @@ def compute_next_state(
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, tau_0 + j * h]),
             delta_t=h,
-            method="rk4_1",
+            method=family + "_1",
             compute_velocity=velocity,
         )
         phi = new[0] / (rho * params.A_c * params.U_r * new[2])

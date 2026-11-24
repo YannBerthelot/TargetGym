@@ -28,12 +28,15 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 Frost protection is not planned: the band keeps the room far above it.
 """
 
+import math
+
 import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.hvac.env import (
     WEATHER_OU_THETA,
+    drift_over,
     electricity_price,
     floor_surface_temperature,
     heat_pump_cop,
@@ -56,6 +59,7 @@ from target_gym.oracles.controller import (
     softplus_clip,
 )
 from target_gym.oracles.shooting import Hinge
+from target_gym.utils import ou_decay
 
 
 def heat(T_supply, T_core, p, width):
@@ -84,7 +88,8 @@ def velocity(position, action, time, weather_dev, width, p):
 
 def hvac_model(env, p) -> TaskModel:
     hours = p.delta_t / 3600.0
-    decay = 1.0 - WEATHER_OU_THETA * p.delta_t  # the deviation's mean per step
+    # The deviation's mean per step, a plain float whatever the run's precision.
+    decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
 
     def step(d, x, u, t):
         start, deviation, path = d["task"]
@@ -101,6 +106,7 @@ def hvac_model(env, p) -> TaskModel:
                 velocity, action=T_sup, time=start + t, weather_dev=dev,
                 width=width, p=p,
             ),
+            drift=drift_over,
         )  # fmt: skip
         now = start + t + 1
         phi_ia, phi_st, _ = split_gains(internal_gain(now, p), solar_gain(now, p), p)
