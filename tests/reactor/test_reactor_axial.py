@@ -169,11 +169,14 @@ def test_rod_worth_is_the_s_curve():
 
 
 XE_FULL = {"initial_xenon_power_range": (1.0, 1.0)}
+#: The sources here (Krsko's 1690 ppm, OAPS's start-of-cycle rates) describe a core
+#: at the start of its cycle; the task draws the cycle point since 2026-11-15.
+START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
 
 
 def _reset(load_flat=True, **changes):
     env = Reactor()
-    p = ReactorParams(demand_sigma=0.0, **changes)
+    p = ReactorParams(demand_sigma=0.0, **{**START_OF_CYCLE, **changes})
     _, s = env.reset_env(jax.random.PRNGKey(3), p)
     if load_flat:
         far = 1e7
@@ -182,7 +185,8 @@ def _reset(load_flat=True, **changes):
 
 
 def _run(env, p, s, action, steps):
-    action = jnp.asarray(action, jnp.float32)
+    """``action`` is ``[rod demand, boron flow]``; the turbine stays on its plan."""
+    action = jnp.asarray([*action, 1.0], jnp.float32)
 
     def step(s, _):
         _, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, action, p)
@@ -279,7 +283,8 @@ def test_the_reference_does_not_cycle_the_offset_in_the_half_power_hold(seed):
     from target_gym.reactor.experts import make_reactor_pid_controller
 
     env = Reactor()
-    p = ReactorParams(demand_sigma=0.0, sensor_noise_scale=0.0)
+    # The reference is the start-of-cycle plant's until it is rebuilt (PHYSICS.md 6).
+    p = ReactorParams(demand_sigma=0.0, sensor_noise_scale=0.0, **START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
 

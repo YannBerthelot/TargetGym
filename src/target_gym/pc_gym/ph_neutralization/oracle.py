@@ -232,10 +232,14 @@ def _hold_run(env):
     return jax.jit(run)
 
 
-def perfect_hold(env, params, seed: int) -> dict:
+def perfect_hold(env, params, reset_key, step_keys) -> dict:
     """The task's ceiling (owner, 2026-11-23): the discharge held exactly on the
-    permit's low edge, the cheap one, through the episode of ``seed`` on its own
-    keys (``benchmark.episode_keys``, as ``run_policy`` draws them).
+    permit's low edge, the cheap one, through one episode.
+
+    The episode is the one its keys name: ``reset_key`` and ``step_keys``, one per
+    step, which the caller draws as the scoring runner does (``reset_keys[0]`` and
+    ``step_keys[:, 0]`` of ``benchmark.episode_keys(PRNGKey(seed), 1, T)``). This
+    module draws nothing itself, so it imports no scoring code.
 
     At every step the base flow is the one whose mix with what enters stage 1 during
     that step (the influent's flow and acid strength, the buffer flow the step
@@ -248,12 +252,8 @@ def perfect_hold(env, params, seed: int) -> dict:
     reward's units per step (the ``reagent`` term; the hold is charged no other);
     and ``feasible``, whether stage 1's valve passes every flow.
     """
-    from target_gym.benchmark import episode_keys
-
-    T = int(params.max_steps_in_episode)
-    resets, steps = episode_keys(jax.random.PRNGKey(seed), 1, T)
-    _, state = env.reset_env(resets[0], params)
-    flow = np.asarray(_hold_run(env)(params, state, steps[:, 0]), float)
+    _, state = env.reset_env(reset_key, params)
+    flow = np.asarray(_hold_run(env)(params, state, step_keys), float)
     litres = float(params.reagent_price) * float(params.delta_t) / 1000.0
     return {
         "flow": flow,

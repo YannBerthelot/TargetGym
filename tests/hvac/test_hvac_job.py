@@ -3,8 +3,13 @@
 
 Contract:
 - Limits (rule 14): nothing trips. Below 4.4 C the plant's frost protection
-  takes the supply to its maximum until the room exceeds 7.2 C [1]; the supply
-  never exceeds the TABS family's 49 C [14].
+  runs the heat source flat out until the room exceeds 7.2 C [1]; the supply
+  never exceeds the TABS family's 49 C [14]. The slab takes no more heat than
+  the source gives, 38 W per m^2 of floor (Muenster's 530 kW for 14 000 m^2
+  [13]), 5.7 kW here: at that size the supply water is cooler than the valve
+  asks, 5700 W over the slab's 1500 W/K (120 m^2 of pipes over 0.08 m^2 K/W
+  [9]) above the core, and the heat pump's COP is the one at the water it makes
+  (owner, 2026-11-23).
 - Score (rule 15, Amendment 3), euros: the heat pump's electricity, slab heat
   over COP = 0.52 T_sup / (T_sup - T_brine) in kelvin with brine at 0 C, at a
   three-period tariff (valle 0.139 00-08 h, llano 0.184, punta 0.263 10-14 and
@@ -16,7 +21,10 @@ Contract:
   next 24 h's forecast mean outdoor temperature, and the tariff now with the
   hours to its next change.
 - Episode (rule 17): two weeks [11, p. 1], from established operation at the
-  band's heating edge, no setback [7, p. 7], [15].
+  band's heating edge, no setback [7, p. 7], [15]. Established operation meets
+  the band: held on the reset's supply through a night with no unforecast
+  weather, the room is at the 21 C edge when the office opens (owner,
+  2026-11-23), or above it where the building needs no heat.
 """
 
 import jax
@@ -47,12 +55,13 @@ def test_nothing_trips(env, T_air):
     assert not bool(tripped)
 
 
-def test_frost_protection_takes_the_supply_to_its_maximum(env):
+def test_frost_protection_runs_the_heat_source_flat_out(env):
+    # Until 2026-11-23 the source had no size and this read 49 C of supply.
     _, state = _reset(env)
     cold = state.replace(frost=jnp.asarray(1.0))
     off = jnp.array([-1.0])
     _, after, _, _, _ = env.step_env(jax.random.PRNGKey(0), cold, off, PARAMS)
-    assert float(after.T_supply) == pytest.approx(49.0)
+    assert float(after.Q_slab) == pytest.approx(CAPACITY_W, rel=1e-5)
 
 
 def test_frost_protection_starts_below_4_4_and_holds_until_7_2(env):
@@ -77,6 +86,59 @@ def test_supply_never_exceeds_the_tabs_maximum(env):
         jax.random.PRNGKey(0), state, jnp.array([1.0]), PARAMS
     )
     assert float(after.T_supply) <= 49.0
+
+
+#: The heat source on the 150 m^2 floor [13], and the slab's water coupling:
+#: 0.80 x 150 m^2 of pipes over R_t = 0.08 m^2 K/W [9, Table 2].
+CAPACITY_W = 38.0 * 150.0
+H_WATER = 0.80 * 150.0 / 0.08
+
+
+def test_the_heat_source_is_muensters_size_per_square_metre():
+    """530 kW for 14 000 m^2 is 37.9 W/m^2 [13]."""
+    assert PARAMS.source_capacity == pytest.approx(530e3 / 14_000.0, abs=0.5)
+
+
+@pytest.mark.parametrize(
+    "lift, heat",
+    [(-2.0, 0.0), (2.0, 3000.0), (3.8, 5700.0), (10.0, 5700.0), (26.0, 5700.0)],
+)
+def test_the_slab_takes_no_more_than_the_heat_source_gives(lift, heat):
+    """Water ``lift`` K over a 23 C core carries 1500 W/K into the slab, up to
+    the source's 5.7 kW; water under the core carries none."""
+    from target_gym.hvac.env import slab_heat
+
+    assert float(slab_heat(23.0 + lift, 23.0, PARAMS)) == pytest.approx(heat, abs=0.5)
+
+
+def test_at_its_capacity_the_supply_is_the_water_the_source_makes(env):
+    """Asked for 49 C, the source gives its 5.7 kW: the supply is 5700 / 1500 =
+    3.8 K over the core, and the electricity is that heat over the COP at that
+    water, 0.52 T / (T - 0 C) in kelvin, not at 49 C."""
+    from target_gym.hvac.env import electricity_kwh
+
+    _, state = _reset(env)
+    _, after, _, _, _ = env.step_env(
+        jax.random.PRNGKey(0), state, jnp.array([1.0]), PARAMS
+    )
+    made = float(after.T_core) + CAPACITY_W / H_WATER
+    assert float(after.Q_slab) == pytest.approx(CAPACITY_W, rel=1e-5)
+    assert float(after.T_supply) == pytest.approx(made, abs=1e-3)
+    cop = 0.52 * (made + 273.15) / made
+    assert float(electricity_kwh(after, PARAMS)) == pytest.approx(
+        CAPACITY_W / 1000.0 * HOURS / cop, rel=1e-4
+    )
+
+
+def test_under_its_capacity_the_supply_is_what_the_valve_asks(env):
+    """1 K over the core is 1.5 kW, under the source's size."""
+    _, state = _reset(env)
+    asked = float(state.T_core) + 1.0
+    span = PARAMS.T_supply_max - PARAMS.T_supply_min
+    raw = jnp.array([2.0 * (asked - PARAMS.T_supply_min) / span - 1.0])
+    _, after, _, _, _ = env.step_env(jax.random.PRNGKey(0), state, raw, PARAMS)
+    assert float(after.T_supply) == pytest.approx(asked, abs=1e-4)
+    assert float(after.Q_slab) < CAPACITY_W
 
 
 @pytest.mark.parametrize(
@@ -220,6 +282,39 @@ def test_episode_starts_established_at_the_bands_heating_edge(env, seed):
     assert abs(float(state.T_air) - 21.0) < 1.0
     assert float(state.T_air) < float(state.T_core) <= float(state.T_supply)
     assert float(state.frost) == 0.0
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [{}, {"T_out_mean": -5.0}, {"solar_peak": 350.0}, {"gain_occupied": 2.0}],
+    ids=["normal", "cold_snap", "sunny_spell", "low_gains"],
+)
+def test_held_on_its_supply_the_room_meets_the_band_when_the_office_opens(
+    env, scenario
+):
+    """Established operation meets the band (rule 17): on a night with no
+    unforecast weather, holding the reset's supply, the room at 08:00 is at the
+    21 C edge. Tolerance 0.1 K, one step of the BMS: the reset takes the night's
+    weather and gains at their mean, where the outdoor air falls and rises again
+    by a kelvin and the sun comes up in the last hour."""
+    params = PARAMS.replace(T_out_noise_std=0.0, **scenario)
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    hold = env.initial_action(state, params)
+    for k in range(32):  # 00:00 to 08:00 at 15 min steps
+        _, state, _, _, _ = env.step_env(jax.random.PRNGKey(k), state, hold, params)
+    assert float(state.T_air) == pytest.approx(21.0, abs=0.1)
+
+
+def test_near_the_heating_limit_the_room_opens_at_or_above_the_band(env):
+    """In the shoulder season (12 C mean) the free gains nearly hold the room,
+    so the reset's supply gives little or no heat: the room at 08:00 is at the
+    edge or above it, and far under the band's 26 C top."""
+    params = PARAMS.replace(T_out_noise_std=0.0, T_out_mean=12.0)
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    hold = env.initial_action(state, params)
+    for k in range(32):
+        _, state, _, _, _ = env.step_env(jax.random.PRNGKey(k), state, hold, params)
+    assert 21.0 - 0.1 <= float(state.T_air) < 24.0
 
 
 def test_the_episode_is_two_weeks(env):

@@ -1,7 +1,8 @@
 # Building heating with a TABS slab: model, sources, limits and deviations
 
 Version 6: the plant rebuilt as version 5 on 2026-11-08 under charter
-Amendments 1 to 3, with the stream of 2026-11-11 (section 5). The plant
+Amendments 1 to 3, with the stream of 2026-11-11 (section 5), and the heat
+source's size and the reset that meets the band of 2026-11-23. The plant
 record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source numbers
 [1] to [21] are REALITY.md's. Under Amendment 3 the task represents the
 family of slab-heated offices, not one building: numbers outside the record
@@ -27,20 +28,25 @@ then the room.
 
 ```
 dT_core/dt = (Q_slab + H_slab (T_air - T_core)) / C_slab
-Q_slab     = H_water max(T_supply - T_core, 0)        H_water = covered area / R_t
+Q_slab     = min(H_water max(T_supply - T_core, 0), Q_source)
+             H_water = covered area / R_t, Q_source = source_capacity A_floor
 H_slab     = A_floor / R_up + A_floor / R_down
 R_up       = d / (2 lambda) + R_flooring + 1 / h_floor   (floor face, carpet)
 R_down     = d / (2 lambda) + 1 / h_ceiling              (ceiling face)
-T_return   = T_supply - Q_slab / (m_dot c_w)
+T_return   = T_made - Q_slab / (m_dot c_w)
+T_made     = min(T_supply, T_core + Q_source / H_water)
 T_floor    = T_air + (T_core - T_air) (1 / h_floor) / R_up
 ```
 
 The core couples to the air node, and the air and surface nodes are solved in
 closed form each step. The zone is one storey of a stack of like storeys, so
 both faces of the slab heat it, as in [9]'s simulated room. The plant heats
-only: water below the core gives no heat, since it has no chiller.
+only: water below the core gives no heat, since it has no chiller. The slab
+takes no more than the heat source gives (section 4): at that size the water
+the plant makes, `T_made`, is cooler than the valve asks, and it is what the
+supply sensor reads and what the heat pump's COP is taken at.
 
-Measured on the plant: the slab's heat into the room after a 5 K supply step
+Measured on the plant: the slab's heat into the room after a 1 K supply step
 reaches 63.2 % of its change in 150 min (test 1); at design (-10 C, 21 C) the
 supply is 27.7 C and the floor surface 22.2 C (test 8).
 
@@ -59,6 +65,7 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `c_water` | 4186 | J/(kg K) | Water |
 | `T_supply_max` | 49 | C | The TABS family's documented maximum, Madrid's [14, Table 1]; Muenster runs 16 to 30 C [13]; screed floors are cut at 55 C [17] |
 | `T_supply_min` | 15 | C | Ours: the valve's lowest setting, which is off |
+| `source_capacity` | 38 | W/m^2 | [13]: Muenster's reversible heat pumps give 530 kW of heat for 14 000 m^2, 37.9 W/m^2. Here 5.7 kW, 1.2 times the design load of 4.9 kW (159.4 W/K over 31 K) |
 | `cop_carnot_fraction` | 0.52 | - | Ours, family range 0.50 to 0.57: brine heat pump datasheets give COP 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at B0/W55 [18]; the model gives 4.58 and 3.10 |
 | `T_brine` | 0 | C | Ours, family range -5 to 5 C: the EN 14511 rating point B0 [18] |
 | `price_valle`, `price_llano`, `price_punta` | 0.139, 0.184, 0.263 | EUR/kWh | [19]: one Spanish 2.0TD offer, valle 00 to 08 h, punta 10 to 14 and 18 to 22 h; Madrid charges its slabs on the night tariff [14] |
@@ -94,7 +101,8 @@ the true outdoor history, so it carries no noise worth modelling (0.023 K over
 | Limit | Kind | Model |
 |---|---|---|
 | Supply water 49 C [14] | Protected | The valve's range stops at the TABS family's maximum |
-| Frost, room below 4.4 C [1] | Protected | The plant takes the supply to 49 C until the room exceeds 7.2 C; the electricity is charged |
+| Heat source 38 W/m^2 [13] | Protected | The slab takes no more than the source gives, 5.7 kW; the water is then cooler than the valve asks, and the electricity is charged at that water's COP |
+| Frost, room below 4.4 C [1] | Protected | The plant asks for 49 C, which runs the source flat out, until the room exceeds 7.2 C; the electricity is charged |
 | Comfort band 21 to 26 C [9] | Zone | Each occupied kelvin-hour outside costs `comfort_price`, the work it loses [20, 21] |
 | Floor surface 29 C [5], [4] | Zone | Each occupied kelvin-hour above costs `comfort_price` |
 | ASHRAE 55 drift [4] | Not priced | No source prices it; test 11 checks the plant stays inside it |
@@ -121,9 +129,15 @@ rate, so its error is the weather's unforecast part. The tariff is a schedule
 known ahead (rule 16). The building's other mass is hidden.
 
 **Episode** (rule 17) and **scenarios** (rule 20): two weeks from established
-operation. The reset settles the building, slab included, at 21 C for the last
-day's mean weather and gains, with the supply that holds it there, as a
-heating curve runs it [7, p. 7]. No night setback: slab buildings hold a
+operation. The reset settles the building, slab included, for the last day's
+mean weather and gains, with the supply that holds it there, as a heating
+curve runs it [7, p. 7], at the level that meets the band: held on that
+supply through a night with no unforecast weather, the room is at the 21 C
+edge when the office opens (21.01 C in every scenario; the room at the
+midnight reset is 21.4 to 21.6 C). The level is found in closed form: the
+balances are linear, so two settled buildings give the one whose room opens
+at the edge, each taken through the night on its mean weather and gains by
+the exact solution of the two slow nodes (`env.drift_over`). No night setback: slab buildings hold a
 near-constant slab setpoint [7, p. 7], and [15] advises against setback for
 radiant floors. The suite (`scenarios.py`):
 
@@ -168,7 +182,9 @@ small and is not counted). The floor of the score, in closed form: a room held
 in the band costs only its electricity.
 
 **The published heating curve measured per scenario** (`experts.py`, seeds 100
-to 109, sensor noise on), euros per fortnight. It is the ladder's `published`
+to 109, sensor noise on; measured on 2026-11-08, before the source had its
+size and the reset met the band, and due again with the records), euros per
+fortnight. It is the ladder's `published`
 rung; the ladder keeps its cascade rung as the reference (charter J1), which
 costs less on every scenario and pays no lost work:
 
@@ -191,22 +207,24 @@ rerun:
 
 | Test | Source | Result |
 |---|---|---|
-| 1. Slab time constant 145 to 462 min | [10], [6] | Pass, 150 min |
-| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 225 min |
+| 1. Slab time constant 145 to 462 min, on a step the source can follow (+1 K) | [10], [6] | Pass, 150 min |
+| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 480 min: the source's size cuts the step |
 | 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.76 |
 | 4. Slab output falls when gains rise | [7], [9] | Pass |
-| 5. Setback recovery 1 h or more | [15] | **Fails**: 45 min; 8 h with the water off cools the room only to 20.2 C |
+| 5. Setback recovery 1 h or more | [15] | Pass, 16.5 h: 8 h with the water off cools the room to 20.2 C, and the source at 1.2 times the design load brings it back slowly |
 | 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 26.0 C |
 | 7. Heating limit 8 to 15 C | [11], [9] | Pass |
 | 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.2 C and 27.7 C |
 | 9. Morning overshoot after reduced mode | [12] | Pass |
-| 10. Design supply never recovers a setback | [15] | Pass, 20.49 C after 15 h (limit 20.5) |
-| 11. ASHRAE 55 drift under the curve | [4] | Pass: at most 0.25 K in 15 min and 0.41 K in 1 h |
+| 10. Design supply never recovers a setback | [15] | Pass, 20.44 C after 15 h (limit 20.5) |
+| 11. ASHRAE 55 drift under the curve | [4] | Pass: at most 0.24 K in 15 min and 0.43 K in 1 h |
 
-Test 5 stays as a finding. [15]'s recoveries are for baseboard homes; a slab
-building is not set back (REALITY.md sec. 2), and 8 h off cools this one only
-0.8 K, so the full-heat recovery is short. Effect on the score: none, since no
-scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
+Test 5 failed (45 min) while the source had no size: full heat was 39 kW into
+a zone whose design load is 4.9 kW. With Muenster's 38 W/m^2 [13] the plant
+recovers in 16.5 h, beyond [15]'s 1.0 to 6.9 h, which are for baseboard homes
+with boilers at twice the design load; [15] says of a source sized to the load
+that it "may never recover". The fix was a missing piece of the plant (charter
+B6), not a number moved until the test passed.
 
 ## 7. Deviations still in the model
 
@@ -221,14 +239,8 @@ scenario sets the building back. Test 10 passes by 0.01 K for the same reason.
   forecasts carry their own error, not modelled.
 - The 5R1C "medium" mass is kept beside the slab, which a TABS building would
   count in its class.
-- No heat-source capacity. The slab's heat is limited only by the 49 C supply,
-  which allows 39 kW into a zone whose design load is 4.9 kW. Muenster's heat
-  pumps give 530 kW for 14 000 m^2 [13], 38 W/m^2, which is 5.7 kW here.
-  Measured on seeds 100 to 109 (2026-11-23): the ladder's cascade peaks at 13
-  to 22 kW and runs above 5.7 kW for 30 h of a normal fortnight and 94 h of a
-  cold snap; the ceiling's plan peaks at 6 to 10 kW, above 5.7 kW for 107 h of
-  a cold snap. Nothing keeps the task from using it: the source's size is an
-  open plant decision.
+- One size for the heat source, whatever the water it makes; a heat pump's
+  capacity moves with its supply and brine temperatures, not modelled.
 - The COP below W35. The ceiling's plan heats with supply water at 24 to 31 C
   and the cascade mostly below 35 C, under the lowest datasheet point read
   (W35, [18]). Their COPs there, 5.3 to 6.5 over a fortnight, are the fixed

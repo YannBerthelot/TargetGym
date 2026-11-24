@@ -11,10 +11,11 @@ from target_gym.plane.scenarios import REGIME_H, stream
 from target_gym.scenarios import Scenario
 
 # Weights, each scenario's share of operating time (Amendment 3, J5). Turbulence
-# as plane/scenarios.py [BEA447 Figure 24]. Winds aloft: no source in REALITY.md
-# gives how often a wind is met, so the shares are ours, family range: a steady
-# 30 kt wind 0.1 to 0.3 of the time, 50 kt 0.05 to 0.2, the 67 kt design wind
-# 0.005 to 0.05 (the holding area is built to contain a rare wind).
+# as plane/scenarios.py [BEA447 Figure 24]. Winds aloft, on the hold only: no
+# source in REALITY.md gives how often a wind is met, so the shares are ours,
+# family range: a steady 30 kt wind 0.1 to 0.3 of the time, 50 kt 0.05 to 0.2,
+# the 67 kt design wind 0.005 to 0.05 (the holding area is built to contain a
+# rare wind).
 
 FT, KT = 0.3048, 1852.0 / 3600.0
 #: The light zone's 0.564 m/s (0.2 g peak to peak, derived for the aircraft at
@@ -56,7 +57,9 @@ def _hold_stream(zones=True):
     return stream(REGIME_H, sortie_h=HOLD_H, zones=zones)
 
 
-def _common(strong=True, fields=_heading_stream):
+def _air(fields, normal=0.35, calm=0.3):
+    """The still-air scenarios both tasks share, by ``normal`` and ``calm``'s
+    weights."""
     return (
         Scenario(
             "normal",
@@ -64,7 +67,7 @@ def _common(strong=True, fields=_heading_stream):
             source="BEA447 Figure 24: one light zone of 3 to 30 min",
             description="one light zone, still mean air",
             **fields(),
-            weight=0.35,
+            weight=normal,
         ),
         Scenario(
             "calm",
@@ -72,7 +75,7 @@ def _common(strong=True, fields=_heading_stream):
             source="RVSM A.4.1.4 (nonturbulent air)",
             description="still air",
             **fields(zones=False),
-            weight=0.3,
+            weight=calm,
         ),
         Scenario(
             "worst_zone",
@@ -82,6 +85,11 @@ def _common(strong=True, fields=_heading_stream):
             **fields(),
             weight=0.05,
         ),
+    )
+
+
+def _moderate_wind(fields):
+    return (
         Scenario(
             "moderate_wind",
             {"wind_x": MODERATE},
@@ -90,24 +98,16 @@ def _common(strong=True, fields=_heading_stream):
             **fields(),
             weight=0.2,
         ),
-    ) + (_strong() if strong else ())
-
-
-def _strong():
-    return (
-        Scenario(
-            "strong_wind",
-            {"wind_x": STRONG},
-            source="IFH ch. 10; ours, 50 kt, under the design wind at every level",
-            description="a steady 50 kt wind",
-            weight=0.1,
-            **_heading_stream(),
-        ),
     )
 
 
 def heading_suite():
-    return _common() + (
+    """No steady wind (owner, 2026-11-23): a vector is a heading flown at an
+    airspeed and a level [IFH ch. 7], which a uniform wind leaves as they
+    were, so the 30 and 50 kt scenarios this suite had cost what ``normal``
+    did, seed by seed (plane3d/PHYSICS.md). Their 0.3 of the weight went back
+    to ``normal`` and ``calm`` in those two's proportion, 0.16 and 0.14."""
+    return _air(_heading_stream, normal=0.51, calm=0.44) + (
         Scenario(
             "severe_zone",
             {"turbulence_sigma": SEVERE},
@@ -129,31 +129,35 @@ def heading_suite():
 
 def racetrack_suite():
     low = (3_000.0, 14_000.0 * FT)
-    return _common(strong=False, fields=_hold_stream) + (
-        Scenario(
-            "low_hold_wind",
-            {"wind_x": STRONG, "target_altitude_range": low},
-            source="IFH ch. 10 (1 min legs and 230 KIAS to 14 000 ft); ours, 50 kt",
-            description="a low hold, 1 min legs, in a 50 kt wind",
-            weight=0.07,
-            **_hold_stream(),
-        ),
-        Scenario(
-            "design_wind_low",
-            {"wind_x": 67.0 * KT, "target_altitude_range": low},
-            source="PANS-OPS design wind 2h + 47 kt at 10 000 ft (secondary, REALITY.md)",
-            description="a low hold, 1 min legs, in the wind its area is built for",
-            weight=0.02,
-            **_hold_stream(),
-        ),
-        Scenario(
-            "high_hold_wind",
-            {"wind_x": STRONG, "target_altitude_range": (14_500.0 * FT, 8_000.0)},
-            source="IFH ch. 10 (1.5 min legs and 265 KIAS above 14 000 ft); ours, 50 kt",
-            description="a high hold, 1.5 min legs, in a 50 kt wind",
-            weight=0.08,
-            **_hold_stream(),
-        ),
+    return (
+        _air(_hold_stream)
+        + _moderate_wind(_hold_stream)
+        + (
+            Scenario(
+                "low_hold_wind",
+                {"wind_x": STRONG, "target_altitude_range": low},
+                source="IFH ch. 10 (1 min legs and 230 KIAS to 14 000 ft); ours, 50 kt",
+                description="a low hold, 1 min legs, in a 50 kt wind",
+                weight=0.07,
+                **_hold_stream(),
+            ),
+            Scenario(
+                "design_wind_low",
+                {"wind_x": 67.0 * KT, "target_altitude_range": low},
+                source="PANS-OPS design wind 2h + 47 kt at 10 000 ft (secondary, REALITY.md)",
+                description="a low hold, 1 min legs, in the wind its area is built for",
+                weight=0.02,
+                **_hold_stream(),
+            ),
+            Scenario(
+                "high_hold_wind",
+                {"wind_x": STRONG, "target_altitude_range": (14_500.0 * FT, 8_000.0)},
+                source="IFH ch. 10 (1.5 min legs and 265 KIAS above 14 000 ft); ours, 50 kt",
+                description="a high hold, 1.5 min legs, in a 50 kt wind",
+                weight=0.08,
+                **_hold_stream(),
+            ),
+        )
     )
 
 

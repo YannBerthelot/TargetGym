@@ -178,6 +178,32 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   of the art hot 80 min to 2.5 h. Minimum load 25 to 40 %.
 - **Pump restart.** Feedwater pumps "may take more than 30 seconds to start,
   come up to speed and pressure" [S11].
+- **The standby pump's start, searched again on 2026-11-23.** [S11]'s passage
+  in full, read again from the patent's own pages: "The designed Normal Water
+  Level (NWL) for a boiler is intended to maintain a minimum water inventory
+  in the steam drum to allow a feedwater pump trip event, and subsequent
+  recovery, without a low-level trip event. Feedwater pumps in power plants
+  are large machines and may take more than 30 seconds to start, come up to
+  speed and pressure, and start delivering feedwater to the steam drum in the
+  boiler. If a running feedwater pump trips, the water inventory in the drum
+  is used to support continued operation of the boiler until the redundant
+  feedwater pump is able to supply the feedwater demand." The normal level
+  "is typically designated as high as possible (in the steam drum) to give
+  the required water inventory for the system to ride through a feedwater
+  pump trip". So the drum is sized for the standby's start: the delay is not
+  a number free of the drum. One figure for the pump itself, from a boiling
+  water reactor's motor-driven backup feedwater pump on a limited supply: "it
+  takes typically about 10 seconds for the backup feedwater pump and the
+  electric motor driving it to reach a minimum rotation speed from a halt
+  condition, and takes about 15 seconds to reach a rated rotation speed", and
+  "it takes a long time to reach a rated flow rate", so that "it is possible
+  that a water level of the reactor continues falling and the nuclear reactor
+  scrams" [S32, read twice: a search result's text and the patent's pages by
+  OCR]. A measured start time on a fossil or combined cycle unit, and an upper
+  end for the delay: not found (searched: runback test reports, operating
+  procedures, feed pump protection lists, POWER's article on automating HRSG
+  feedwater pumps, which gives no time, a plant operators' forum thread on a
+  feed pump runback, drum sizing notes, and seven patents' full text).
 - **Shrink versus swell.** The level drop on a load decrease "is typically much
   smaller" and "of shorter duration" than swell [S14]. Saturated water volume
   "can expand by as much as 30%" during start-up [S14].
@@ -349,6 +375,18 @@ Sources for this section:
 - https://www.control.lth.se/fileadmin/control/Education/DoctorateProgram/PhysicalModeling/Lectures/Astrom-Bell.pdf
   (Astrom and Bell, Automatica 36, 2000; HTTP 404). The 1998 report S1 was used.
 - https://core.ac.uk/download/83772844.pdf (HTTP 403).
+- https://patents.google.com/patent/US10338576B2/en (General Electric,
+  "Intelligent management system for balance of plant"). A search result and
+  a summarised fetch both give this sentence from its description, which was
+  never read on the page itself (the page is longer than the reader takes,
+  and the patent office's copy dropped on eight fetches): "Typically, about
+  90 seconds may be allocated on the power plant for the transfer from a
+  primary feedwater pump to a backup feedwater pump." If it reads so, it is
+  the upper end the standby delay lacks.
+- https://rdne.edpsciences.org/articles/rdne/full_html/2026/01/rdne20250019/rdne20250019.html
+  (a simulation of a main feedwater pump trip on an HPR1000 unit, with and
+  without the standby pump starting, compared with commissioning data at 70 %
+  load; HTTP 403 to an automated fetch). It may give a measured start time.
 - https://www.controleng.com/articles/optimizing-strategy-for-boiler-drum-level-control/ (HTTP 403).
 - https://forbesmarshall.com/Knowledge/Energy-Conservation-Tips/Steam-Generation/Tip-Safety-Avoiding-low-water-level-condition-in-the-boiler (certificate error).
 - https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/326_360/341_a/_267?down=1
@@ -458,6 +496,10 @@ Sources for this section:
 - [S31] ENTSOG, "WI and GCV values in European networks", INT1124-170918,
   18 September 2017 (hourly data, 2015 and 2016).
   https://www.entsog.eu/sites/default/files/entsog-migration/publications/Events/2017/INT1124-170918%20WI%20and%20GCV%20in%20European%20networks.rev%204.pdf
+- [S32] US 8467491 B2, "Feedwater controller, nuclear power plant and method
+  for controlling feedwater", Kabushiki Kaisha Toshiba (Background).
+  https://patents.google.com/patent/US8467491B2/en ; pages read from
+  https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/8467491
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

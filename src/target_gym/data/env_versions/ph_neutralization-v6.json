@@ -1,5 +1,5 @@
 {
-  "fingerprint": "ab0c588e9d721125",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.5 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-23T16:58:39+00:00"
+  "fingerprint": "33cb8f02942fb2a2",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.5 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Also carries PR 203's change, which moves no step, reward or observation of a shipped task: a reading's interval counts control steps, and utils.py lost two unused rollout helpers. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T17:40:35+00:00"
 }

@@ -21,7 +21,7 @@ from target_gym.identification import simc
 __all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 __all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
-__all__ += ["ZONE_GRID_STEPS", "first_without_exit", "zone_grid"]
+__all__ += ["ZONE_GRID_STEPS", "first_without_exit", "leaves_only_unheld", "zone_grid"]
 
 #: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
 #: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
@@ -94,16 +94,42 @@ def first_without_exit(grid, exits_at: Callable) -> tuple:
     """Charter J1 on a zone priced as a violation: the first setpoint of ``grid``,
     which runs from the cheap edge, at which the reference leaves the zone on none of
     its seeds, as ``best_rung`` keeps a rung that trips none. ``exits_at(setpoint)``
-    is the number of seeds that leave there; candidates past the kept one are not
-    run. Returns ``(setpoint, scan)``, ``scan`` the exits at each candidate run. When
-    every candidate leaves, the last one (the centre) is kept, and ``scan`` shows
-    its exits."""
+    gives the seeds that leave there, as sortable ids (a seed, or a scenario and a
+    seed); candidates past the kept one are not run.
+
+    Seeds that can be held decide (owner, 2026-11-23): a seed that leaves from every
+    candidate does not constrain the placement. The reference pays for its exits
+    there, and it is returned as unheld for the record to state. Knowing that takes
+    the whole grid, so the grid is run to its end whenever no candidate holds every
+    seed.
+
+    Returns ``(setpoint, scan, unheld)``: ``scan`` the seeds leaving at each
+    candidate run, ``unheld`` those no candidate holds. Two cases keep the last
+    candidate, the centre: no candidate holds every seed that some candidate holds
+    (``scan`` then shows who leaves at the centre), and no seed can be held from any
+    candidate, where the rule has nothing to decide with and ``unheld`` is every
+    seed."""
     scan = {}
     for point in grid:
-        scan[point] = int(exits_at(point))
-        if scan[point] == 0:
-            break
-    return float(point), scan
+        scan[point] = tuple(sorted(set(exits_at(point))))
+        if not scan[point]:
+            return float(point), scan, ()
+    leaving = [set(seeds) for seeds in scan.values()]
+    unheld = set.intersection(*leaving)
+    holdable = set.union(*leaving) - unheld
+    if holdable:
+        for point, seeds in scan.items():
+            if not holdable & set(seeds):
+                break
+    return float(point), scan, tuple(sorted(unheld))
+
+
+def leaves_only_unheld(setpoint, scan: dict, unheld) -> bool:
+    """Whether a rung placed by :func:`first_without_exit` leaves its zone on none of
+    the seeds it can hold: at its ``setpoint`` the seeds leaving are all ``unheld``.
+    False where the centre was kept though a seed some candidate holds still leaves
+    there. Takes what :func:`first_without_exit` returns."""
+    return not set(scan[setpoint]) - set(unheld)
 
 
 def pi_gains(k: float, tau, theta: float) -> tuple:
@@ -127,11 +153,18 @@ def most_sensitive(designs: list) -> dict:
     return min(designs, key=lambda d: abs(d["Kc"]))
 
 
-def best_rung(results: dict):
+def best_rung(results: dict, holds: dict | None = None):
     """The rung of lowest median cost that tripped no seed, None if all tripped.
-    ``results`` runs up the ladder, so a tie goes to the simpler rung."""
+    ``results`` runs up the ladder, so a tie goes to the simpler rung.
+
+    ``holds`` (charter J1 on zones priced as a violation, each rung placed on its
+    own) says which rungs leave their zones on none of the seeds they can hold
+    (:func:`leaves_only_unheld`); a rung it marks false is not a reference and is
+    passed over. A rung it does not name has no such zone."""
     best, cost = None, np.inf
     for name, row in results.items():
+        if holds is not None and not holds.get(name, True):
+            continue
         median = float(np.median(row["costs"]))
         if row["trips"] == 0 and median < cost:
             best, cost = name, median
