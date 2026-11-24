@@ -13,7 +13,7 @@ env, params = tg.make("plane_sine")
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((10,))` |
+| Observation space | `Box((12,))` |
 | Tracked variable(s) | altitude (m) |
 | Episode length | 480 steps of 1 s (8 min) |
 | Cite as | `plane_sine-v6` |
@@ -31,7 +31,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-10 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[1]` against `obs[6]`.
+12 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[1]` against `obs[6]`.
 
 | # | meaning |
 |---|---|
@@ -45,16 +45,20 @@ actuator range inside the environment.
 | 7 | throttle, 0 to 1 |
 | 8 | elevator deflection (rad) |
 | 9 | commanded airspeed (m/s) |
+| 10 | airspeed, true, against the wind and gust (m/s) |
+| 11 | normal load factor at the end of the step (g) |
 
 ## Rewards
 
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `running`, `level_off`, `economy`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -62,11 +66,11 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 22 fields.
+`reset` samples the initial condition and the target; state has 29 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips when its altitude leaves ``[min_alt, max_alt]`` or it leaves the envelope (``plane.dynamics.outside_envelope``). See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The aircraft trips only when it reaches the ground. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 480 steps.
 
@@ -105,11 +109,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `C_z0` | 0.9 | - |
 | `initial_fuel_quantity` | 19088 | kg |
 | `specific_fuel_consumption` | 0.0175 | kg/(kN.s) |
-| `cl_alpha` | 0.08786 | 1/deg |
+| `cl_alpha` | 0.08378 | 1/deg |
+| `sweep_half_chord` | 0.38186 | rad |
 | `cl0` | 0.2 | - |
 | `cd0` | 0.02 | - |
 | `k` | 0.045 | - |
-| `aoa_stall` | 15 | deg |
+| `aoa_stall` | 15.5 | deg |
 | `CL_max` | 1.5 | - |
 | `CL_min` | -1 | - |
 | `aoa_stall_width` | 3 | deg |
@@ -124,16 +129,26 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `surface_rate_limit` | 0.523599 | rad/s |
 | `load_factor_max` | 2.5 | g |
 | `load_factor_min` | -1 | g |
+| `ap_load_increment` | 0.2 | g |
 | `vmo_eas` | 180.056 | m/s |
 | `mmo` | 0.82 | - |
 | `buffet_mach` | 0.3 | - |
 | `buffet_slope` | 1.4 | - |
 | `k_drag` | 5 | - |
-| `I` | 9000000 | kg.m^2 |
-| `moment_arm_stabilizer` | 15 | m |
-| `moment_arm_wings` | 1.5 | m |
-| `stabilizer_surface` | 27 | m^2 |
-| `elevator_surface` | 10 | m^2 |
+| `pitch_gyration_radius` | 8.666 | m |
+| `moment_arm_wings` | 0.822 | m |
+| `moment_arm_stabilizer` | 13.36 | m |
+| `stabilizer_surface` | 31 | m^2 |
+| `tail_cl_alpha` | 0.07021 | 1/deg |
+| `tail_aspect_ratio` | 5 | - |
+| `tail_sweep_half_chord` | 0.411 | rad |
+| `tail_k` | 0.0796 | - |
+| `tail_CL_max` | 1 | - |
+| `tail_aoa_stall` | 15 | deg |
+| `tail_efficiency` | 0.9 | - |
+| `elevator_effectiveness` | 0.5 | - |
+| `downwash_ratio` | 1 | - |
+| `stabilizer_setting` | 0.02417 | rad |
 | `reward_version` | 2 | - |
 | `e_floor` | 1.26 | m |
 | `e_tol` | 0 | m |
@@ -145,7 +160,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `rho_floor_tracking` | 0.175934 | reward |
 | `rho_floor` | 0.175934 | reward |
 | `min_alt` | 0 | m |
-| `max_alt` | 12191.4 | m |
+| `max_alt` | 11917.7 | m |
 | `speed_weight` | 0 | - |
 | `target_cas` | 149.189 | m/s |
 | `target_mach` | 0.78 | - |
@@ -164,8 +179,20 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `initial_stick` | 0 | deg |
 | `wind_x` | 0 | m/s |
 | `wind_z` | 0 | m/s |
-| `turbulence_sigma` | 1.2 | m/s |
+| `turbulence_sigma` | 0.55 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
+| `gust_scale_length` | 533.4 | m |
+| `speed_band` | 5.14444 | m/s |
+| `mach_band` | 0.02 | - |
+| `cost_index` | 30 | kg/min |
+| `economy_weight` | 0 | - |
+| `economy_scale` | 1.242 | kg/s |
+| `clearance_period` | 300 | s |
+| `level_change_rate_min` | 2.54 | m/s |
+| `level_off_height` | 304.8 | m |
+| `level_off_rate_max` | 7.62 | m/s |
+| `level_off_rate_band` | 2.54 | m/s |
+| `clearance_level_share` | 0.6 | - |
 | `impulse_prob` | 0 | 1/step |
 | `wind_shear_x` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |

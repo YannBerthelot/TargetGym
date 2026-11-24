@@ -6,7 +6,31 @@ its cold feed, its temperature held by the initiator fed into it, at an
 operating point that is open-loop unstable. `REALITY.md` here is the record;
 its "Amendment 3" section lists the family's sources [L1] to [L4].
 
-**Status.** Back from Extra by the owner's decision (Amendment 3, 2026-11-08).
+## Status: Extra (charter rule 5), 2026-11-15
+
+The owner's decision: the task leaves the core pool for 0.8.0. It is out of the
+headline (J4) and the capability claims; its plant, expert, oracle and tests
+stay, and its step 5 records (docs/proposals/re-record-pass.md) stand as its
+Extra record. In code it is `EnvSpec.extra` on the registry entry, so
+`registry.benchmark_specs()` leaves it out, and its capability tags are empty
+(`suite.CAPABILITIES`), so it moves no spoke. The reasons:
+
+- **J2 passed.** No null beat the reference (the ladder's feedforward rung) on
+  any of the 30 hash seeds, the reference never tripped and the family sweep
+  held. Acceptance is not the issue.
+- **The room measures state knowledge, not control.** On 4 of the 5 scenarios
+  (normal, feed_temperature, initiator_efficiency, throughput_step) the oracle,
+  which reads the true state, tracks exactly: cost 2e-12 to 2e-10, every solve
+  converged, re-checked after the oracle's widths fix. The room there, about 180
+  overall, is the value of a perfect state reading. Only grade_change tests
+  control.
+- So a policy's score on this task would rank how well it estimates the hidden
+  state against a perfect reading, which the benchmark does not claim to test.
+
+The earlier status, kept for the record: back from Extra by the owner's
+decision (Amendment 3, 2026-11-08), as the LDPE family's member.
+
+**Status (2026-11-08).** Back from Extra by the owner's decision (Amendment 3, 2026-11-08).
 The earlier Extra said no production reactor runs at an unstable point; the
 LDPE family does: "the industrial reactor normally operates at an unstable
 steady state" [L1]. The task is rebuilt as that family's member, with
@@ -84,6 +108,22 @@ at fixed T), since decomposition grows stiff near the trip.
 [L1, p. 2], the initiator pump's own rate, and the setpoint. Conversion and the
 initiator in the reactor are hidden: no on-line measurement of them is in the
 sources.
+
+### Task: `unstable_cstr`
+
+Hold the temperature of an LDPE autoclave at its setpoint with the initiator
+feed, at an operating point that is unstable without control. The policy reads
+the temperature, its own initiator feed and the setpoint. Conversion and the
+initiator in the reactor are hidden. Each step is charged the squared
+temperature error, counted in units of 1 K. A reactor that reaches 573 K
+trips, which is charged as a restart; a reactor that cools down pays only the
+tracking cost.
+
+| obs | meaning |
+|---|---|
+| 0 | `T`, reactor temperature (K) |
+| 1 | initiator feed, percent of its 0 to 1e-3 kmol/m3 range |
+| 2 | reactor temperature setpoint (K) |
 
 ---
 

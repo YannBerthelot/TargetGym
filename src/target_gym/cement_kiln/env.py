@@ -57,7 +57,11 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import (
+    convert_raw_action_to_range,
+    log_scaled_reward,
+    stationary_innovation,
+)
 
 R_GAS = 8.314
 SIGMA = 5.67e-8
@@ -532,10 +536,12 @@ def compute_next_state(
     # ``state.time`` so a caller passing a constant key still gets a genuine
     # zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = p.feed_noise_std * jnp.sqrt(2.0 * FEED_OU_THETA * p.delta_t)
+    # The innovation that keeps the feed's spread at ``feed_noise_std``.
+    decay = 1.0 - FEED_OU_THETA * p.delta_t
+    sigma = stationary_innovation(p.feed_noise_std, decay)
     raw_meal = (
-        state.raw_meal
-        - FEED_OU_THETA * (state.raw_meal - p.raw_meal_nominal) * p.delta_t
+        p.raw_meal_nominal
+        + decay * (state.raw_meal - p.raw_meal_nominal)
         + sigma * noise
     )
     raw_meal = jnp.clip(raw_meal, 0.5 * p.raw_meal_nominal, 1.5 * p.raw_meal_nominal)

@@ -1,13 +1,16 @@
 import os
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from gymnax.environments import spaces
 
+import target_gym as tg
 from target_gym.pc_gym.four_tank.env_jax import FourTank
 from target_gym.plane.env import PlaneParams
 from target_gym.plane.env_jax import Airplane2D
+from target_gym.registry import REGISTRY
 from target_gym.wrapper import GymnasiumEnv
 
 max_steps_for_video = 100
@@ -119,3 +122,64 @@ def test_wrapper_accepts_the_scalar_action_bounds_gymnax_allows():
     space = GymnasiumEnv(ScalarBounds()).action_space
     np.testing.assert_array_equal(space.low, [-1.0, -1.0])
     np.testing.assert_array_equal(space.high, [1.0, 1.0])
+
+
+# Contract (``make_gymnasium``'s docstring: the task behind the classic stateful
+# API, stepped on the host): a library steps it one call at a time for as long as
+# it trains, so a step must cost a step. Once a step has run, another one builds
+# no new program: JAX keeps every program it builds, and a wrapper that built
+# one per step grew by 22 to 50 MB a step on the reactor until the process died
+# (2026-11-23). ``jax.log_compiles`` is JAX's own report of what it builds.
+_LOOPED = ("plane", "reactor", "cement_kiln")  # 1, 1 and 5 sub-step loops
+
+
+def _programs_built(run):
+    import logging
+
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("jax")
+    logger.addHandler(handler)
+    try:
+        with jax.log_compiles():
+            run()
+    finally:
+        logger.removeHandler(handler)
+    return [r.getMessage() for r in records]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(n, marks=[] if n in _LOOPED else [pytest.mark.medium])
+        for n in REGISTRY
+    ],
+)
+def test_a_gymnasium_step_builds_no_program_once_one_has_run(name):
+    env = tg.make_gymnasium(name)
+    action = np.zeros(env.action_space.shape, np.float32)
+    env.reset(seed=0)
+    for _ in range(2):
+        env.step(action)
+
+    def three_more():
+        for _ in range(3):
+            env.step(action)
+
+    assert _programs_built(three_more) == []
+
+
+@pytest.mark.medium
+def test_a_longer_video_builds_no_more_programs_than_a_short_one(tmp_path):
+    """Same contract for ``save_video``, which steps a whole episode on the host:
+    what it builds does not grow with the episode's length."""
+
+    def built(steps):
+        env, params = tg.make("reactor", max_steps_in_episode=steps)
+        policy = lambda obs: np.zeros(2, np.float32)  # noqa: E731
+        run = lambda: env.save_video(policy, 0, params, folder=tmp_path)  # noqa: E731
+        return len(_programs_built(run))
+
+    built(3)  # the renderer's and the step's own programs, built once
+    assert built(8) == built(4)
