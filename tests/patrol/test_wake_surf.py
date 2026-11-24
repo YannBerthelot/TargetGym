@@ -21,6 +21,8 @@ Contract, from the plant record and the owner's decisions of 2026-11-23:
   [REALITY.md: M1]), times the time in trail, and held over a 30-minute window.
   What it reads of its own place from the lead is not touched, and with no sensor
   noise the station is exact.
+  It is NASA's own arithmetic: a one-knot wind error is 10 ft at six seconds in
+  trail [REALITY.md: N1 V.B].
 - A wake crossing trips the plant [REALITY.md: N4 VI.D, N1 V.A]: the follower's
   centreline inboard of the near vortex, ``b0 / 2 = pi b / 8`` = 14.06 m from the
   wake's centreline, with the vortex within half a span of its height (ours): a
@@ -177,6 +179,23 @@ def test_a_predicted_station_leaves_the_followers_own_place_as_read():
     from_the_lead = float(right) + float(state.slot_right)
     assert obs[11] + obs[17] == pytest.approx(from_the_lead, abs=2.0)
     assert obs[24] == pytest.approx(np.hypot(obs[11], obs[12]), abs=1e-3)
+
+
+def test_a_one_knot_wind_error_is_ten_feet_at_six_seconds_in_trail():
+    """NASA's own figure for its Gulfstream pair: at a time in trail of nearly
+    six seconds, "even a one-knot error in the cross-track wind component
+    equates to a 10-ft position error" [REALITY.md: N1 V.B]. Flown here at 5.9 s
+    with the wind estimate off by exactly one knot: 10 ft, within the half
+    foot a figure printed to the foot allows."""
+    env, params = tg.make("wake_surf")
+    _, state = env.reset_env(jax.random.PRNGKey(3), params)
+    speed = float(jnp.hypot(state.lead.x_dot, state.lead.y_dot))
+    state = state.replace(slot_back=jnp.asarray(5.9 * speed, jnp.float32))
+    off = float(env.get_obs(state, params)[17] - state.slot_right)
+    draw = off / (5.9 * float(params.wind_estimate_sigma))
+    one_knot = params.replace(wind_estimate_sigma=KT / abs(draw))
+    off = float(env.get_obs(state, one_knot)[17] - state.slot_right)
+    assert abs(off) / 0.3048 == pytest.approx(10.0, abs=0.5)
 
 
 def test_the_true_observation_gives_the_true_station():
