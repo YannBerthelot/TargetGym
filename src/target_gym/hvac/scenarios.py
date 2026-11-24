@@ -1,9 +1,16 @@
 """The slab building's scenario suite (charter Amendment 3, rule 20).
 
-Two weeks each, from REALITY.md sec. 4 and 5: a normal heating fortnight, a
-cold snap, the shoulder season near the heating limit, a sunny spell, and low
-internal gains. The weather's draw and the day's gains still come from the
-seed and the ranges in ``env.HVACParams``.
+From REALITY.md sec. 4 and 5: a normal heating fortnight, a cold snap and the
+shoulder season near the heating limit. The weather's draw and the day's gains
+still come from the seed and the ranges in ``env.HVACParams``.
+
+The evaluation cut (owner, 2026-11-24): a scenario stays only if removing it would
+hide a named behaviour or change which controller looks better. Normal shows the
+night's charge of the slab, the cold snap the heat source at its size (it alone
+places the reference's set point), and the shoulder season the work near the
+heating limit. The low-gains weeks repeated normal's night charge and the sunny
+spell the shoulder's heating limit, so their weights (0.5 and 1.5 fortnights a
+season) fold into those two. Their overrides stay plant parameters any run may set.
 
 Each row holds ``target_gym.scenarios.Scenario``'s fields; the registry builds
 them, so this package imports nothing outside its fingerprint.
@@ -30,8 +37,9 @@ def hvac_scenarios() -> tuple:
             "the 24 h outdoor mean, gains absorbed by self-regulation [7, p. 7], "
             "[9, p. 7]",
             description="a heating fortnight, 5 C mean",
-            # fortnights of a 13-fortnight heating season. Ours, family range 4 to 8
-            weight=6.0,
+            # fortnights of a 13-fortnight heating season: 6, and the low-gains
+            # half fortnight folded in. Ours, family range 4 to 8
+            weight=6.5,
             dwell_h=_FORTNIGHT_H,
         ),
         dict(
@@ -51,29 +59,31 @@ def hvac_scenarios() -> tuple:
             source="REALITY.md sec. 2 and 5: heating limits of 8 to 15 C [11, p. 3], "
             "13.1 C [9, p. 5]; tune the curve again above 10 C [11, p. 1]",
             description="a mild fortnight, 12 C mean, around the heating limit",
-            # fortnights a season. Ours, family range 3 to 5: the months around the heating limit [11]
-            weight=4.0,
+            # fortnights a season: 4, and the sunny spell's 1.5 folded in. Ours,
+            # family range 3 to 5 before the fold: the months around the heating
+            # limit [11]
+            weight=5.5,
             dwell_h=_FORTNIGHT_H,
         ),
-        dict(
-            name="sunny_spell",
-            overrides={"solar_peak": 350.0},
-            source="REALITY.md sec. 5: sun and gains above design; shading left out "
-            "to produce intra-day swings [6, pp. 4-5]; buildings that perform well "
-            "shade [8, pp. 20-21]",
-            description="a clear fortnight: twice the season's mean sun on the glass",
-            # fortnights a season. Ours, family range 1 to 3
-            weight=1.5,
-            dwell_h=_FORTNIGHT_H,
-        ),
-        dict(
-            name="low_gains",
-            overrides={"gain_occupied": 2.0},
-            source="REALITY.md sec. 5: weekends and other days with fewer internal "
-            "gains are a bad day for TABS control [9, part 2]",
-            description="occupied hours with the unoccupied gains only",
-            # fortnights a season. Ours, family range 0.3 to 1: holidays and low-occupancy weeks [9]
-            weight=0.5,
-            dwell_h=_FORTNIGHT_H,
-        ),
+    )
+
+
+#: A day of 15-minute steps.
+_DAY = 96
+
+
+def hvac_evaluation() -> dict:
+    """What an evaluation reads (``target_gym.scenarios.Evaluation``; owner,
+    2026-11-24). Days 1 to 3 burn the slab in: the cost gap between the reference
+    and the ceiling is gone after day 3, where day 1 alone held 46 % of the
+    fortnight's (hvac review, 2026-11-24). Days 4 to 10 are scored, seven of the two
+    weeks a heating curve is judged over [11, p. 1]. Days 11 and 12 are the
+    ceiling's tail: charged in its plan, read by no line, so it cannot spend the
+    slab's charge on the last scored night (day 14 held 11 % of the gap). Lines run
+    on five seeds, and five more where the saving interval touches 0."""
+    return dict(
+        unscored_steps=3 * _DAY,
+        scored_steps=7 * _DAY,
+        seeds=tuple(range(100, 105)),
+        extra_seeds=tuple(range(105, 110)),
     )

@@ -14,7 +14,7 @@ Run a policy on every scenario of a task::
 
     from target_gym import scenarios
     runs = scenarios.run(spec, lambda params: policy, seeds=10)
-    per_seed = scenarios.costs(runs)   # {scenario: cost per step, per seed}
+    per_seed = scenarios.costs(runs, spec)   # {scenario: cost per step, per seed}
 
 ``target_gym.scoring.headline`` turns those costs, with the reference's and the
 ceiling's, into the task's headline.
@@ -27,7 +27,9 @@ from typing import Any, Mapping
 
 import numpy as np
 
-__all__ = ["NORMAL", "Scenario", "costs", "params_for", "run", "suite", "weights"]
+__all__ = ["NORMAL", "Evaluation", "Scenario", "costs", "evaluation", "line_seeds"]
+__all__ += ["params_for", "run", "saving_interval", "scored_cost", "scored_window"]
+__all__ += ["suite", "weights"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,6 +84,74 @@ def suite(spec) -> tuple[Scenario, ...]:
     return declared
 
 
+#: The seeds every line ran on before a task declared its own (the ladder's, J3).
+LADDER_SEEDS = tuple(range(100, 110))
+
+
+@dataclasses.dataclass(frozen=True)
+class Evaluation:
+    """What an evaluation reads of a task's episodes (owner, 2026-11-24, the
+    evaluation cut; long-strata note R2 and R6).
+
+    The first ``unscored_steps`` burn the plant in from its reset, and the steps
+    after the scored ones are the ceiling's tail, charged in its plan so it does not
+    spend at the end a stock the next days pay for: an evaluation reads the mean
+    cost per step over the ``scored_steps`` between (all the rest when None). Lines
+    run on ``seeds``, and on ``extra_seeds`` too in a scenario where the reference's
+    saving over the ceiling is unclear (``line_seeds``). A task declares one on its
+    registry entry, as a callable kept in its own package so its fingerprint covers
+    it; a task that declares none scores every step on the ladder's seeds."""
+
+    unscored_steps: int = 0
+    scored_steps: int | None = None
+    seeds: tuple[int, ...] = LADDER_SEEDS
+    extra_seeds: tuple[int, ...] = ()
+
+
+def evaluation(spec) -> Evaluation:
+    """``spec``'s declared evaluation, or the whole episode on the ladder's seeds."""
+    declared = getattr(spec, "evaluation", None)
+    return declared() if declared is not None else Evaluation()
+
+
+def scored_window(spec, n_steps: int) -> slice:
+    """The steps an evaluation reads of an ``n_steps`` episode of ``spec``."""
+    ev = evaluation(spec)
+    end = n_steps if ev.scored_steps is None else ev.unscored_steps + ev.scored_steps
+    if not 0 <= ev.unscored_steps < end <= n_steps:
+        raise ValueError(
+            f"{spec.name}: scored steps {ev.unscored_steps} to {end} do not fit an "
+            f"episode of {n_steps}"
+        )
+    return slice(ev.unscored_steps, end)
+
+
+def scored_cost(spec, cost) -> float:
+    """One episode's mean cost per step over ``spec``'s scored window."""
+    cost = np.asarray(cost, float)
+    return float(cost[scored_window(spec, len(cost))].mean())
+
+
+def saving_interval(savings) -> tuple[float, float]:
+    """The 95 % Student t interval of the mean of paired per-seed ``savings``."""
+    from scipy import stats
+
+    x = np.asarray(savings, float)
+    half = stats.t.ppf(0.975, len(x) - 1) * x.std(ddof=1) / np.sqrt(len(x))
+    return float(x.mean() - half), float(x.mean() + half)
+
+
+def line_seeds(spec, savings=None) -> tuple[int, ...]:
+    """The seeds a scenario's lines run on (the seed rule, owner, 2026-11-24):
+    ``spec``'s seeds, and its extra seeds too when ``savings``, the reference's cost
+    less the ceiling's on each of those seeds, has an interval that touches 0."""
+    ev = evaluation(spec)
+    if savings is None or not ev.extra_seeds:
+        return ev.seeds
+    lo, hi = saving_interval(savings)
+    return ev.seeds + ev.extra_seeds if lo <= 0.0 <= hi else ev.seeds
+
+
 def weights(spec) -> dict[str, float]:
     """Each scenario's share of operating time, summing to 1."""
     declared = suite(spec)
@@ -112,11 +182,17 @@ def run(spec, make_policy, seeds: int, **extra) -> dict[str, list]:
     return out
 
 
-def costs(runs: Mapping[str, list]) -> dict[str, np.ndarray]:
-    """Each scenario's cost per step, one value per seed, over the whole episode."""
+def costs(runs: Mapping[str, list], spec=None) -> dict[str, np.ndarray]:
+    """Each scenario's cost per step, one value per seed: over ``spec``'s scored
+    window (``scored_window``), or over the whole episode without ``spec``."""
     from target_gym import eval as E
 
+    if spec is None:
+        return {
+            name: np.array([E.gain([ep], 0)[0] for ep in episodes])
+            for name, episodes in runs.items()
+        }
     return {
-        name: np.array([E.gain([ep], 0)[0] for ep in episodes])
+        name: np.array([scored_cost(spec, ep.cost) for ep in episodes])
         for name, episodes in runs.items()
     }

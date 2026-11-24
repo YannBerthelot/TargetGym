@@ -168,6 +168,11 @@ class EnvSpec:
         Zero-argument callable returning the task's scenario suite
         (``target_gym.scenarios``), kept in the task's own package so the
         fingerprints cover it. ``None`` is one ``normal`` scenario.
+    evaluation:
+        Zero-argument callable returning what an evaluation reads of the
+        task's episodes (``scenarios.Evaluation``: the scored window and the
+        seed rule), kept in the task's own package like ``scenarios``.
+        ``None`` scores every step on the ladder's seeds.
     extra:
         The reason a task is in Extra (charter rule 5): kept in the
         repository and listed with this reason, never scored. ``None`` is a
@@ -213,6 +218,9 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
+    #: What an evaluation reads (``scenarios.Evaluation``): the scored window and
+    #: the seed rule. None scores every step on the ladder's seeds.
+    evaluation: Callable[[], Any] | None = None
     extra: str | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
@@ -439,6 +447,13 @@ def _hvac_scenarios():
     from target_gym.scenarios import Scenario
 
     return tuple(Scenario(**row) for row in hvac_scenarios())
+
+
+def _hvac_evaluation():
+    from target_gym.hvac.scenarios import hvac_evaluation
+    from target_gym.scenarios import Evaluation
+
+    return Evaluation(**hvac_evaluation())
 
 
 def _hvac():
@@ -1123,10 +1138,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         # priced as lost office work, a day-ahead forecast in the observation,
         # and a scenario suite.
         scenarios=_hvac_scenarios,
+        evaluation=_hvac_evaluation,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         # Re-stamped in place on 2026-11-23 (v6 is in no release): the heat
         # source's size, 38 W/m^2 [13], and a reset that meets the band when
-        # the office opens (hvac review; owner's decision).
+        # the office opens (hvac review; owner's decision). Re-stamped in place
+        # again on 2026-11-24 (the evaluation cut, owner's decision): twelve-day
+        # episodes scored on days 4 to 10, three scenarios with the low-gains
+        # and sunny weeks folded into normal and the shoulder season, lines on
+        # five seeds and five more where the saving is unclear.
         version=6,
     ),
     EnvSpec(

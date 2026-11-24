@@ -759,8 +759,9 @@ def _suite_episodes(name, row, policy, spec, seeds=None, extra=None):
 
 def zone_exits(name, row, policy, terms, spec=None, extra=None) -> tuple:
     """The ladder's seeds on which ``policy`` leaves a zone, each as ``(scenario,
-    seed)``, in order: a step charged one of the reward ``terms`` the score prices
-    the exit with, or a trip. ``extra`` joins the row's scored parameters."""
+    seed)``, in order: a step the task's evaluation scores (``scenarios.Evaluation``)
+    charged one of the reward ``terms`` the score prices the exit with, or a trip.
+    ``extra`` joins the row's scored parameters."""
     spec = spec or REGISTRY[name]
     left = []
     for scenario, episodes in _suite_episodes(name, row, policy, spec, None, extra):
@@ -768,7 +769,8 @@ def zone_exits(name, row, policy, terms, spec=None, extra=None) -> tuple:
             unknown = sorted(set(terms) - set(e.terms))
             if unknown:
                 raise KeyError(f"{name}: no reward term {unknown}")
-            charged = any(bool(np.any(e.terms[t] > 0.0)) for t in terms)
+            read = scenarios.scored_window(spec, len(e.cost))
+            charged = any(bool(np.any(e.terms[t][read] > 0.0)) for t in terms)
             if charged or bool(np.any(e.failed)):
                 left.append((scenario, seed))
     return tuple(sorted(left))
@@ -793,7 +795,8 @@ def _episodes(spec) -> int:
 
 
 def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
-    """``run_rung`` for any ``benchmark.Policy``. ``seeds`` replaces the ladder's,
+    """``run_rung`` for any ``benchmark.Policy``, each episode's cost read over the
+    task's scored window (``scenarios.scored_cost``). ``seeds`` replaces the ladder's,
     as one tuple or ``{scenario: seeds}``; with counts that differ by scenario,
     ``costs`` (per seed across scenarios) is None and ``trips`` the scenarios' sum."""
     spec = spec or REGISTRY[name]
@@ -801,7 +804,7 @@ def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     per = {}
     for scenario, episodes in _suite_episodes(name, row, policy, spec, seeds):
         per[scenario] = (
-            np.array([float(e.cost.mean()) for e in episodes]),
+            np.array([scenarios.scored_cost(spec, e.cost) for e in episodes]),
             np.array([bool(np.any(e.failed)) for e in episodes]),
         )
     if len({len(c) for c, _ in per.values()}) > 1:
@@ -813,7 +816,11 @@ def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
         "costs": costs,
         "trips": int(tripped.sum()),
         "scenarios": {
-            n: {"costs": [float(x) for x in c], "trips": int(t.sum())}
+            n: {
+                "costs": [float(x) for x in c],
+                "trips": int(t.sum()),
+                "tripped": [bool(x) for x in t],
+            }
             for n, (c, t) in per.items()
         },
     }
