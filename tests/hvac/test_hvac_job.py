@@ -27,6 +27,8 @@ Contract:
   2026-11-23), or above it where the building needs no heat.
 """
 
+import math
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -208,7 +210,9 @@ def test_the_observation_reads_the_forecast_and_the_tariff(env):
     from target_gym.hvac.env import WEATHER_OU_THETA, outdoor_temperature
 
     obs, state = _reset(env, 2)
-    decay = 1.0 - WEATHER_OU_THETA * PARAMS.delta_t
+    # The exact factor of a deviation decaying at the weather's rate (owner,
+    # 2026-11-24): exp(-theta k dt), not the Euler step's (1 - theta dt)^k.
+    decay = math.exp(-WEATHER_OU_THETA * PARAMS.delta_t)
     path = [
         float(outdoor_temperature(k, float(state.weather_dev) * decay**k, PARAMS))
         for k in range(1, 97)
