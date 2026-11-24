@@ -132,6 +132,18 @@ def test_the_floor_is_zero_when_the_consumers_take_more_than_the_line():
     assert balance_floor(np.full(20, 1.0), p, shift=0.0) == pytest.approx(0.0, abs=1e-9)
 
 
+@pytest.mark.parametrize("shift", [-0.05, 0.05])
+def test_with_the_consumers_shut_the_floor_scales_with_the_line_s_flow(shift):
+    """Consumers shut: all of the line's flow is recycled. Every machine's line
+    has the map's peak head (contract 1 of the hidden line), so at a given
+    pressure the speed is the same and the flow, hence the floor, scales as
+    Phi = 2W (1 + shift): the ratio to the map's machine is 1 + shift."""
+    _, p = _floor_inputs()
+    shut = np.zeros(20)
+    ratio = balance_floor(shut, p, shift=shift) / balance_floor(shut, p, shift=0.0)
+    assert ratio == pytest.approx(1.0 + shift, rel=1e-4)
+
+
 def test_a_machine_whose_line_sits_right_needs_more_recycle():
     """A line further right means more minimum flow at the same head, so more
     of it recycled at low demand: the floor rises with the shift."""
