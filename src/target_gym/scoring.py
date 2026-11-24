@@ -121,9 +121,10 @@ TRACKED_TERMS = {
     "plane3d_figure8": (_PATH,),
     "patrol": (_SLOT, _HEADING),
     "patrol_range_bearing": (_SLOT, _HEADING),
-    # The along-track tolerance alone, read on the pair's relative fix; the
-    # band across the wake is reported, not priced (patrol/PHYSICS.md).
-    "wake_surf": (("slot_precision_floor", "spacing_tolerance", 1),),
+    # The along-track tolerance, read on the pair's relative fix, and the
+    # height's RVSM band, on the altimeter; the band across the wake is
+    # reported, not priced (patrol/PHYSICS.md).
+    "wake_surf": (("slot_precision_floor", "spacing_tolerance", 1), _ALTITUDE),
     "formation": (
         _ALTITUDE,
         _HEADING,

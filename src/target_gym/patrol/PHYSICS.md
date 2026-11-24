@@ -325,15 +325,20 @@ passenger flights, and one ended a test point [REALITY.md, N4 III.D, VI.D; N1 V.
 the ride limit the sources name. The cabin vibration they measured sits at 16 to
 28 Hz and does not grow toward the core, so a plant stepped at 1 Hz does not carry it.
 
-**The score** (owner, 2026-11-23). `tracking` is the along-track error past +-250 ft,
-the tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], the squared
-excess in tolerance widths. It reads the two aircraft's relative position, good to
-3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past it,
-(3 / 76.2)^2 = 0.0016 a step, and the settle band 1. `economy` is the follower's fuel
-and time by the cost index (plane/PHYSICS.md). Nothing is priced across the wake: no
-source gives a station a tolerance there, and what stops the follower is the crossing.
-The 30 m across the wake (ours, a span, `e_floor_slot`) stays as a reported band, the
-share of time the follower's true distance to its station across the wake is inside it.
+**The score** (owner, 2026-11-23 and 24). `tracking` is the along-track error past
++-250 ft, the tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], and
+the height error past +-65 ft about the station's height, the RVSM tolerance about an
+assigned level [14 CFR 91 App. G] that `plane` and the 3D tasks also price, each the
+squared excess in tolerance widths. The first reads the two aircraft's relative position,
+good to 3 m (`slot_precision_floor`), the second the altimeter, good to 1 m
+(`precision_floor`), so the tracking ceiling is one resolution past each,
+(3 / 76.2)^2 + (1 / 19.812)^2 = 0.0041 a step, and the settle band 2. `economy` is the
+follower's fuel and time by the cost index (plane/PHYSICS.md). With the height unpriced,
+a glide over a window's last 100 s burned 4.7 % less fuel in it, about the wake's whole
+saving; priced, it costs about 44 a step. Nothing is priced sideways: no source gives a
+station a tolerance there, and what stops the follower is the crossing. The 30 m across
+the wake (ours, a span, `e_floor_slot`) stays as a reported band, the share of time the
+follower's true distance to its station across the wake is inside it.
 
 **The reference.** The formation hold's guidance cascade over the A320's own
 autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on
@@ -537,7 +542,7 @@ which is what the recorded baselines use.
 
 ## Reward (version 2)
 
-`compute_reward = -(tracking + failure)`: slot position plus heading alignment with the lead, see docs/reward-shaping.md. `PatrolParams` inherits the 3D aircraft's reward parameters (`e_floor_altitude`, `e_tol_altitude`, `e_floor_heading`, `e_tol_heading`, `e_floor_path`, `e_tol_path`, `tracking_exponent`, `failure_cost`, `rho_floor_tracking`, `rho_floor`, `floor_is_documented_minimum`); the heading term uses `e_floor_heading`, the others are unused here.
+`compute_reward = -(tracking + failure)`: slot position plus heading alignment with the lead, see docs/reward-shaping.md. `PatrolParams` inherits the 3D aircraft's reward parameters (`e_floor_altitude`, `e_tol_altitude`, `e_floor_heading`, `e_tol_heading`, `e_floor_path`, `e_tol_path`, `tracking_exponent`, `failure_cost`, `rho_floor_tracking`, `rho_floor`, `floor_is_documented_minimum`); the heading term uses `e_floor_heading`; `wake_surf`'s height term uses `e_floor_altitude` and `e_tol_altitude`, both 19.812 m (+-65 ft, RVSM); the others are unused here.
 
 | parameter | value | source |
 | --- | --- | --- |

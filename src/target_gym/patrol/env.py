@@ -528,6 +528,12 @@ class WakeSurfParams(PatrolParams):
     #: time on station, and the reward does not read it (owner, 2026-11-23).
     e_floor_slot: float = 30.0
     slot_tolerance: float = 30.0
+    #: The height about the station's, +-65 ft, the tolerance an aircraft
+    #: holds about an assigned level [14 CFR 91 App. G, RVSM], as the other
+    #: airliner tasks price it; read on the altimeter, ``precision_floor``
+    #: (owner, 2026-11-24). Without it a glide at a window's end bought fuel.
+    e_floor_altitude: float = 65.0 * 0.3048
+    e_tol_altitude: float = 65.0 * 0.3048
     #: The along-track tolerance, m: the +-250 ft the Gulfstream's pilot held
     #: by throttle, the wake changing slowly along it [REALITY.md, N1 IV].
     spacing_tolerance: float = 250.0 * 0.3048
@@ -754,18 +760,20 @@ def compute_reward_terms_patrol(
 def compute_reward_terms_wake_surf(
     state: PatrolState, params: PatrolParams, xp=jnp, tripped=None
 ):
-    """``wake_surf``'s cost terms, each >= 0: the along-track tolerance, and
-    what the follower's operator pays, fuel and time by the cost index per air
-    distance (``plane.env.economy_cost``). Inside the tolerance the economy is
-    all that counts, so the cost falls where the follower finds the lead's
-    upwash. Nothing is priced across the wake: no source gives a station a
-    tolerance there, and passing through the vortex is a trip."""
+    """``wake_surf``'s cost terms, each >= 0: the along-track tolerance, the
+    height band about the station's (RVSM), and what the follower's operator
+    pays, fuel and time by the cost index per air distance
+    (``plane.env.economy_cost``). Inside both the economy is all that counts,
+    so the cost falls where the follower finds the lead's upwash. Nothing is
+    priced sideways: no source gives a station a tolerance there, and passing
+    through the vortex is a trip."""
     p = params
-    back = slot_error_vector(state)[0]
+    back, _, up = slot_error_vector(state)
     spacing = R.tracking_cost(back, p.spacing_tolerance, p.spacing_tolerance, 2.0, xp)
+    height = R.tracking_cost(up, p.e_floor_altitude, p.e_tol_altitude, 2.0, xp)
     follower = state.follower
     terms = {
-        "tracking": spacing,
+        "tracking": spacing + height,
         "economy": economy_cost(
             follower.power,
             follower.z,

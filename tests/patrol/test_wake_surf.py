@@ -30,8 +30,10 @@ Contract, from the plant record and the owner's decisions of 2026-11-23:
   trip on it, and with the wake switched off (``wake_strength`` 0) there is no
   vortex to cross.
 - The score prices the along-track error past the +-250 ft the Gulfstream's
-  pilot was given [REALITY.md: N1 IV], the squared excess in tolerance widths,
-  and nothing across the wake: the 30 m there (ours, a span) is a reported band
+  pilot was given [REALITY.md: N1 IV] and the height error past +-65 ft about
+  the station's height, the RVSM tolerance about an assigned level [14 CFR 91
+  App. G] (owner, 2026-11-24), each the squared excess in tolerance widths, and
+  nothing sideways: the 30 m across the wake (ours, a span) is a reported band
   (owner, 2026-11-23; ``tests/test_scoring.py``).
 - The follower starts in established operation, within 10 m of its place in the
   wake (charter B5: no capture).
@@ -76,6 +78,7 @@ KT = 1852.0 / 3600.0
 SEEDS = (5, 6, 7)
 HELD_OUT = tuple(range(200, 205))
 SPACING_M = 250.0 * 0.3048
+RVSM_M = 65.0 * 0.3048
 
 
 def _reset(name="wake_surf", seed=5, **changes):
@@ -289,7 +292,10 @@ def test_the_station_saves_what_extended_formations_sustained(seed):
     "back, right, up, cost",
     [
         (0.0, 0.0, 0.0, 0.0),
-        (0.0, 0.0, 60.0, 0.0),
+        (0.0, 0.0, 15.0, 0.0),
+        (0.0, 0.0, -15.0, 0.0),
+        (0.0, 0.0, 2 * RVSM_M, 1.0),
+        (0.0, 0.0, -2 * RVSM_M, 1.0),
         (0.0, 60.0, 0.0, 0.0),
         (60.0, 0.0, 0.0, 0.0),
         (-60.0, 0.0, 0.0, 0.0),
@@ -297,7 +303,7 @@ def test_the_station_saves_what_extended_formations_sustained(seed):
         (-2 * SPACING_M, 0.0, 0.0, 1.0),
     ],
 )
-def test_the_score_prices_250_ft_along_the_track_and_nothing_across(
+def test_the_score_prices_250_ft_along_the_track_65_ft_in_height_and_nothing_aside(
     back, right, up, cost
 ):
     env, params, state = _reset()

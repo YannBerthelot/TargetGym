@@ -153,8 +153,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `heading_precision_floor` | 0.0087 | rad |
 | `position_precision_floor` | 3 | m |
 | `reward_version` | 2 | - |
-| `e_floor_altitude` | 1.44 | m |
-| `e_tol_altitude` | 0 | m |
+| `e_floor_altitude` | 19.812 | m |
+| `e_tol_altitude` | 19.812 | m |
 | `e_floor_heading` | 0.0087 | rad |
 | `e_floor_path` | 3 | m |
 | `tracking_exponent` | 2 | - |
