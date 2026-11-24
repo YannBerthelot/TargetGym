@@ -121,7 +121,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `precision_floor` | 0.01 | pH |
 | `pH_max` | 12 | pH |
 | `reagent_cost_weight` | 0 | - |
-| `setpoint_pH` | 7 | pH |
+| `setpoint_pH` | 6.5 | pH |
 | `reward_version` | 4 | - |
 | `reagent_price` | 1 | L/L |
 | `excursion_price` | 1.66667 | L/s |

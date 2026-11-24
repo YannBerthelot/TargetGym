@@ -7,6 +7,33 @@ boiler family, not one unit: its numbers come from P16-G16 where S1 gives
 them, and the rest are labelled "ours" with the family's range. Nothing here is compared with an earlier
 version of the task (rule 11).
 
+## Status: Extra, as solved (charter J5), 2026-11-24
+
+The owner's decision: boiler_drum leaves the core pool as a solved task. It is
+out of the headline (J4) and of the capability claims; its plant, expert,
+oracle, scenarios and tests stay. In code it is `EnvSpec.extra` on the registry
+entry, so `registry.benchmark_specs()` leaves it out, and its capability tags
+are empty (`suite.CAPABILITIES`), as every Extra task's are. The reasons, all
+measured in the review of 2026-11-23 (sections 5 and 7):
+
+- **The reference pays nothing on a normal day.** The ladder's cascade rung
+  costs zero on 64 of 64 `normal` and `low_load` seeds and never trips in any
+  scenario.
+- **The room is small in money.** 5.3 on `J`, beyond seed noise, and worth
+  GBP 90 to 170 a year on this unit, under 1 % of one trip's GBP 19,203.
+- **That room is not a control gain.** Five sixths of it is `id_fan_runback`,
+  where the cost is the plan's steam that capped firing cannot make, and the
+  ceiling's gain is the drum's water band spent as a heat store, half of it
+  with the fan trip known ahead.
+- **Two redesigns were measured and dropped.** A fuel and air loop gives a
+  room of 1.0004, which is the reference's margin for its analyser's noise.
+  The turbine valve as a third move has no trip to prevent within the delays
+  the sources give for a standby feed pump.
+
+What would bring it back: another member of the family where sources show the
+classical controller losing, such as a fast-varying solid fuel or a heat
+recovery boiler's low-pressure start-up swell. Neither has been searched.
+
 ## 1. The job
 
 REALITY.md sec. 6: keep the drum water between the low trip that starves the

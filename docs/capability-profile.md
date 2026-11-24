@@ -88,9 +88,9 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `cstr` | basic, nonlinearity | Arrhenius gain (68); nothing hidden (119). |
 | `unstable_cstr` | none | Extra since 2026-11-15 (owner's decision): its oracle tracks exactly on 4 of 5 scenarios, so its room measures a perfect state reading, not control, and it is in no aggregate. Its reason is in `pc_gym/unstable_cstr/PHYSICS.md`, Status. |
 | `ph_neutralization` | nonlinearity, disturbance | The gain varies 45 times across the range (94); the buffer flow is unmeasured (97). |
-| `four_tank` | coupling, inverse response | Non-minimum phase (51); negative relative gain, so the obvious pairing is unstable (52, 70). |
+| `four_tank` | none | Extra since 2026-11-08: a lab rig with no industrial job, so it is in no aggregate (an Extra task carries no tag, owner's decision of 2026-11-24). Its reason is in `pc_gym/four_tank/PHYSICS.md`, Status. |
 | `distillation` | coupling, delay and slow | Ill-conditioned, relative gain about 52 (4, 58); dominant time constant about 194 min (123). |
-| `boiler_drum` | inverse response, coupling, safety, instability | Swell and shrink (119 to 124); fuel and feedwater act on level and pressure; trips at both level limits (128); the level is an integrator, a marginal case of instability (125). |
+| `boiler_drum` | none | Extra since 2026-11-24 (owner's decision): solved as scored, its reference costs nothing on normal days, so it is in no aggregate. Its reason is in `boiler_drum/PHYSICS.md`, Status. |
 | `cement_kiln` | delay and slow, partial observability, nonlinearity | The suite's transport-delay problem (26); the axial profile is hidden (144); free lime is steeply temperature-sensitive. |
 | `glass_furnace` | delay and slow, partial observability | A pure transport delay on fuel (153) and glass time constants of about 30 h; melt and regenerators are hidden (23 to 28). |
 | `hvac` | delay and slow, economic, partial observability | A heavyweight building with hours of memory; comfort and gas priced in euros (216, 217); surface temperature and weather hidden (119). |
@@ -116,6 +116,8 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
   times cheaper than the expert upwards. `oracle_transient_ratio` gives it.
 - The fixed settle is 0 steps on `hvac`, 1 on `reactor` and 4 on `battery`, so
   their move cost covers a step or a few. Read `settling_ratio` there.
-- Multi-agent and instability each rest on one task, so a single task moves
-  those spokes.
+- Multi-agent rests on one task, so a single task moves that spoke.
+- Instability and inverse response are not on the radar. Only `boiler_drum`
+  and `four_tank` carried them, both are Extra, and an Extra task carries no
+  tag. Each comes back when a core task is shown to carry it.
 - Every task counts the same on a spoke, however long its episode.
