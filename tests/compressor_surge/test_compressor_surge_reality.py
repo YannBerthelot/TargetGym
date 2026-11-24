@@ -238,7 +238,11 @@ def test_the_header_setpoint_is_constant():
 #: The pressure transmitter's own sigma is 9.17 Pa (PHYSICS.md, Readings): the
 #: reset holds the setpoint to what the plant can read.
 AT_SETPOINT = 10.0  # Pa
-SCENARIOS = ("normal", "slow_approach", "fast_approach", "load_swings")
+SCENARIOS = (
+    "normal",
+    "slow_approach",
+    "fast_approach",
+)  # load_swings dropped, ruling E
 
 
 #: The map's 10 % line passes 11.711 kg/s at 24 kPa (hand-derived below).

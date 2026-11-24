@@ -44,7 +44,10 @@ from jax.tree_util import Partial as partial
 from target_gym.compressor_surge.env import (
     KPA,
     _substeps,
+    characteristic,
     compute_velocity,
+    consumer_flow,
+    demand_opening,
     live_target,
     recycle_flow,
     schedule_ramp,
@@ -254,6 +257,50 @@ def ceiling_margins(state, p):
         jnp.concatenate([zone, jnp.stack([surge, drive, valve])]),
         p.zone_price * p.delta_t,
     )
+
+
+#: The ceiling's starts (owner, picker 2026-11-24, ruling A): the reference's
+#: moves and the hold of its first move, each solved once. The ceiling is
+#: converged when the two agree and sit near ``balance_floor``
+#: (``pc_gym.foresight.ceiling_converged``).
+CEILING_STARTS = ("hold", "reference")
+
+
+def balance_floor(opening, p, shift=0.0) -> float:
+    """The quasi-steady recycle energy, in the cost's kJ per step, for the
+    demand trace ``opening`` on the machine ``shift``: the compressor on that
+    machine's own surge line, Phi = 2W (1 + shift), at the speed whose head
+    there is the header pressure, the consumers at that pressure, the recycle
+    the rest; the cheapest pressure in the zone, step by step. No plan beats it
+    by more than the plenum's storage across the zone (0.31 kg, about 0.06 kJ a
+    step over a window)."""
+    opening = np.asarray(opening, float)
+    rho, area, tip = float(suction_density(p)), float(p.A_c), float(p.U_r)
+    phi = 2.0 * float(p.W) * (1.0 + shift)
+    psi = float(characteristic(phi, p, np, shift=shift))
+    sp, band = float(p.header_setpoint), float(p.header_band)
+
+    def power(dp):
+        speed = np.sqrt(dp / (rho * tip**2 * psi))
+        taken = np.asarray(consumer_flow(dp, opening, p, np))
+        return np.maximum(rho * area * tip * speed * phi - taken, 0.0) * dp / rho / 1e3
+
+    grid = np.linspace(sp - band, sp + band, 25)
+    return float(np.min([power(d) for d in grid], axis=0).mean() * p.delta_t)
+
+
+def floor_opening(state, p, tripped=None):
+    """The consumers' opening the demand schedule sets after a step: what
+    ``balance_floor`` reads, the same whatever the plan."""
+    return demand_opening(
+        state.demand_levels, state.block_clock * p.delta_t, state.demand_dev, p,
+        ramp=schedule_ramp(state, p),
+    )  # fmt: skip
+
+
+def seed_floor(opening, p, state) -> float:
+    """``balance_floor`` on the seed's machine, read off its reset ``state``."""
+    return balance_floor(opening, p, shift=float(state.line_shift))
 
 
 def ceiling_start(env, p, state, moves):

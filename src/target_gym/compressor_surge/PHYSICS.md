@@ -29,6 +29,7 @@ the surge line, with as little recycle as possible and no counted surge.
 | `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
 | `reset_margin` | 0.10 | of surge flow at speed | ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1] (2026-11-23) |
 | `line_shift_max` | 0.05 | of the map's surge flow | ours, family: the machine's true surge line against the map, drawn uniformly either side at the reset; 2.6 to 7 % at low suction pressure [C14] (2026-11-23) |
+| `machine_stratum` | -1 | - | the evaluation's spread (owner, 2026-11-24): -1 draws over the whole range; the protocol sets seed mod 10, one machine per tenth over ten seeds |
 | flow and pressure reading lags | 0.15, 0.3 | s | read: flow dP transmitters at 100 to 150 ms, 200 ms at most; 300 to 400 ms acceptable on pressure [C10, pp. 29-30] (2026-11-23) |
 
 The hidden surge-line offset, the moving setpoint
@@ -111,9 +112,12 @@ rules out. Demand moves as the scenario says:
 | `normal` | 0.7 to 0.95, 5 s ramps | [C3, p. 2]: right of the control line, recycle shut or nearly |
 | `slow_approach` | 0.25 to 0.6, 15 s ramps | [C3, p. 2] |
 | `fast_approach` | 0.2 to 0.6, 1 s ramps | [C3, p. 2] |
-| `load_swings` | 0.35 to 0.95, 5 s ramps | [C3, pp. 2-4] |
 
-Sizes and rates are ours; the sources name the cases. An emergency shutdown
+Sizes and rates are ours; the sources name the cases. A fourth scenario,
+`load_swings` (0.35 to 0.95, 5 s ramps [C3, pp. 2-4]), was dropped in the
+evaluation cut (owner, 2026-11-24): it showed no behaviour of its own, since the
+reference priced it like 43 % slow approach and 57 % normal, and without it no
+line changed order. An emergency shutdown
 [C6] needs a driver model and has no scenario yet.
 
 ### Score (rule 15)
@@ -1099,7 +1103,7 @@ controller knows which way the error runs.
 
 ### Scenario weights (charter J4)
 
-`normal` 0.7, `slow_approach` 0.1, `fast_approach` 0.05, `load_swings` 0.15: shares of operating time for the headline. No source says how often each
+`normal` 0.7855, `slow_approach` 0.1645, `fast_approach` 0.05: shares of operating time for the headline. They were 0.7, 0.1 and 0.05 with `load_swings` at 0.15; the cut (2026-11-24) gave its weight 57 % to normal and 43 % to slow approach. No source says how often each
 window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.

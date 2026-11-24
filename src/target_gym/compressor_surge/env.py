@@ -176,6 +176,13 @@ class CompressorSurgeParams(EnvParams):
     #: from its map only between its true line and the map's control line
     #: (``on_the_map``), so it must stay under ``reset_margin``.
     line_shift_max: float = 0.05
+    #: Which tenth of that range the machine comes from: -1 draws it over the
+    #: whole range, as a user's or a training run's reset does; 0 to 9 draws it
+    #: inside tenth k, from -max up. The evaluation protocol sets it from the
+    #: seed (``CompressorSurge.params_for_seed``), so any ten consecutive seeds
+    #: hold one machine per tenth and every evaluation has machines on both
+    #: sides of the map (owner, picker 2026-11-24, ruling F).
+    machine_stratum: int = -1
     #: Version 2's reset point (rated speed, recycle 0.35), which the reset no
     #: longer reads: with it a normal day's demand started the plant below its
     #: header zone at top speed, a capture. Kept for section 2's check of the
@@ -252,6 +259,7 @@ PARAM_UNITS = {
     "demand_dev_reset_clip": "-",
     "reset_margin": "-",
     "line_shift_max": "-",
+    "machine_stratum": "-",
     "N_reset": "-",
     "x_reset": "-",
     "reset_newton_iters": "-",
