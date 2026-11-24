@@ -151,9 +151,12 @@ def lead_autopilot_step(params, memory, obs):
     """One step of the scripted lead's autopilot: ``(action, memory)`` from its
     3D heading observation. Its TECS is the 4.0.9 port it shipped with
     (``experts_tecs.tecs_step_409``): the lead is part of the plant, so the
-    experts' move to master's pitch loop (2026-11-12) does not reach it."""
+    experts' move to master's pitch loop (2026-11-12) does not reach it. It
+    engages in the level trim the lead spawns in (owner, 2026-11-24): before,
+    it started on the airliner's trim constants and sank 18 to 22 m in its
+    first 5 s."""
     return plane3d_heading_step(
-        lead_autopilot(params), memory, obs, tecs_fn=tecs_step_409
+        lead_autopilot(params), memory, obs, tecs_fn=tecs_step_409, engage=True
     )
 
 
