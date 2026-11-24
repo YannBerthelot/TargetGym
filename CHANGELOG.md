@@ -164,6 +164,13 @@ The next release is 0.8.0, because these changes break code written for
   `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
 - **`first_order` has left the capability radar.** It is a sanity fixture, and
   `CAPABILITIES["first_order"]` is now empty.
+- **`boiler_drum` is Extra, as solved, and the radar has ten axes.** Its
+  classical reference costs nothing on normal days, so it leaves
+  `registry.benchmark_specs()` and the headline; its plant, expert and oracle
+  stay (`boiler_drum/PHYSICS.md`, Status). An Extra task now carries no
+  capability tag: `CAPABILITIES` is empty for `boiler_drum` and `four_tank`
+  too, and `"instability"` and `"inverse_response"` are gone from
+  `suite.AXES` and `suite.LABELS` until a core task is shown to carry them.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of

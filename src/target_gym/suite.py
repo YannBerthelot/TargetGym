@@ -37,14 +37,15 @@ from target_gym import scoring
 __all__ = ["AXES", "CAPABILITIES", "LABELS", "plot_profile", "profile"]
 __all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
 
-#: The capabilities, in their order around the radar.
+#: The capabilities, in their order around the radar. An Extra task carries no
+#: tag (owner, 2026-11-24), so an axis is here only while a core task carries
+#: it: instability and inverse response, which only boiler_drum and four_tank
+#: carried, come back when a core task is shown to carry them.
 AXES = (
     "basic",
-    "instability",
     "nonlinearity",
     "delay",
     "coupling",
-    "inverse_response",
     "disturbance",
     "moving_target",
     "economic",
@@ -55,11 +56,9 @@ AXES = (
 
 LABELS = {
     "basic": "basic",
-    "instability": "instability",
     "nonlinearity": "nonlinearity",
     "delay": "delay and slow",
     "coupling": "coupling",
-    "inverse_response": "inverse response",
     "disturbance": "disturbance",
     "moving_target": "moving target",
     "economic": "economic",
@@ -78,9 +77,9 @@ CAPABILITIES = {
     # not control, so it moves no spoke (pc_gym/unstable_cstr/PHYSICS.md).
     "unstable_cstr": (),
     "ph_neutralization": ("nonlinearity", "disturbance"),
-    "four_tank": ("coupling", "inverse_response"),
+    "four_tank": (),  # Extra: a lab rig (pc_gym/four_tank/PHYSICS.md, Status)
     "distillation": ("coupling", "delay"),
-    "boiler_drum": ("inverse_response", "coupling", "safety", "instability"),
+    "boiler_drum": (),  # Extra, as solved (boiler_drum/PHYSICS.md, Status)
     "cement_kiln": ("delay", "partial_observability", "nonlinearity"),
     "glass_furnace": ("delay", "partial_observability"),
     "hvac": ("delay", "economic", "partial_observability"),

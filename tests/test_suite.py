@@ -10,6 +10,11 @@ Contract, from the user's decisions of 2026-10-27:
 - a capability is the mean of its tasks' defined radii;
 - the expert is the 0.5 ring; the oracle's polygon comes from the records;
 - the chart is two radars side by side, hold and reach.
+
+And from the decision of 2026-11-24: an Extra task carries no tag, so the
+radar has the ten axes a core task carries. Instability and inverse response,
+which only boiler_drum and four_tank carried, are off it until a core task is
+shown to carry them.
 """
 
 from __future__ import annotations
@@ -33,6 +38,22 @@ def test_every_task_is_tagged_with_known_capabilities():
     assert set(suite.CAPABILITIES) == set(REGISTRY)
     used = {tag for tags in suite.CAPABILITIES.values() for tag in tags}
     assert used == set(suite.AXES)
+
+
+def test_the_radar_has_the_ten_axes_a_core_task_carries():
+    assert set(suite.AXES) == {
+        "basic",
+        "nonlinearity",
+        "delay",
+        "coupling",
+        "disturbance",
+        "moving_target",
+        "economic",
+        "partial_observability",
+        "multi_agent",
+        "safety",
+    }
+    assert set(suite.LABELS) == set(suite.AXES)
 
 
 def test_the_docs_table_shows_the_tags_the_suite_uses():
