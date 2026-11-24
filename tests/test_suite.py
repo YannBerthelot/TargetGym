@@ -27,6 +27,7 @@ import matplotlib
 import pytest
 
 from target_gym import suite
+from target_gym.charter import FLAGSHIP
 from target_gym.registry import REGISTRY
 
 matplotlib.use("Agg")
@@ -186,19 +187,24 @@ def test_the_chart_is_a_hold_and_a_reach_radar_with_every_profile():
 
 @pytest.mark.large
 def test_the_expert_run_through_the_suite_sits_on_the_half_ring():
-    """The expert scored against itself on four_tank: parity on every number,
-    so radius 0.5 on both of the task's capabilities."""
+    """The expert scored against itself on a scored task: parity on every
+    number, so radius 0.5 on each of the task's capabilities. The task is
+    scored and tagged, since only a scored task moves a spoke (owner,
+    2026-11-24); it was four_tank, which is Extra and now carries no tag."""
     from target_gym.runners.runners import baseline_policy
+
+    task = "cstr"
+    assert task in FLAGSHIP and suite.CAPABILITIES[task]
 
     def make_policy(name):
         spec = REGISTRY[name]
         return baseline_policy(spec, "pid", spec.make_test_params())
 
-    out = suite.run_suite(make_policy, seeds=2, tasks=["four_tank"])
-    m = out["tasks"]["four_tank"]
+    out = suite.run_suite(make_policy, seeds=2, tasks=[task])
+    m = out["tasks"][task]
     assert m["ratio"] == pytest.approx(1.0)
     assert m["transient_ratio"] == pytest.approx(1.0)
-    for axis in suite.CAPABILITIES["four_tank"]:
+    for axis in suite.CAPABILITIES[task]:
         assert out["profile"]["hold"][axis] == pytest.approx(0.5)
 
 
