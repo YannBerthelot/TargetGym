@@ -64,6 +64,7 @@ class Task:
         self.L, self.name, self.record, self.S = L, name, record, S
         self.spec = REGISTRY[name]
         self.protocol = name in S.PROTOCOLS
+        self.mpc_pieces: list[str] = []
         self.weights = (
             S.weights(name) if self.protocol else scenarios.weights(self.spec)
         )
@@ -151,6 +152,15 @@ def _needs(reference_costs, ceiling_costs) -> bool:
     return needs_more(reference_costs, ceiling_costs)
 
 
+def line_from_pieces(pieces, weights: dict, seeds: dict) -> dict:
+    """A J3 line from ``reactor_ceiling.py`` pieces: every scenario on its seeds,
+    once, or no line (``SystemExit``); converged only if every seed's solves were."""
+    import reactor_ceiling
+
+    stored = reactor_ceiling.assemble(pieces, weights, seeds)
+    return charter.ceiling_line(stored, weights)
+
+
 def part_reference(t: Task) -> dict:
     from target_gym.benchmark import shipped_policy
 
@@ -188,6 +198,10 @@ def part_mpc(t: Task) -> dict:
     if why or t.spec.make_mpc is None:
         return {"line": NM, "why": why or "the task ships no oracle"}
     if t.protocol:
+        if t.mpc_pieces:
+            pieces = [json.loads(pathlib.Path(p).read_text()) for p in t.mpc_pieces]
+            seeds = {s: t.S.seeds(t.name) for s in t.weights}
+            return {"line": line_from_pieces(pieces, t.weights, seeds)}
         return {"line": t.line(t.suite("mpc"))}
     return {"line": t.line(t.L.run_suite(t.name, t.row, shipped_policy("mpc")))}
 
@@ -274,7 +288,7 @@ def summary(part: str, block: dict) -> dict:
     return {"J": ln["J"], "trips": ln["trips"]} if isinstance(ln, dict) else ln
 
 
-def record(name: str, parts, force: bool) -> list[str]:
+def record(name: str, parts, force: bool, mpc_pieces=()) -> list[str]:
     """Run ``parts`` on ``name``, skipping current ones unless ``force``; returns
     the record's schema errors."""
     now = charter.current(name)
@@ -283,6 +297,7 @@ def record(name: str, parts, force: bool) -> list[str]:
     if rec.get("version") != now["version"]:
         rec = {}
     t = Task(name, rec)
+    t.mpc_pieces = list(mpc_pieces)
     rec.update(task=name, version=now["version"], weights=t.weights)
     commit, dirty = git_commit()
     for part in [p for p in charter.PARTS if p in parts]:
@@ -316,6 +331,11 @@ def main(argv=None) -> int:
     ap.add_argument("--tasks", nargs="+", required=True)
     ap.add_argument("--parts", default=",".join(charter.PARTS))
     ap.add_argument("--force", action="store_true")
+    ap.add_argument(
+        "--mpc-pieces", nargs="*", default=[],
+        help="planner-line pieces from reactor_ceiling.py --kind mpc, merged "
+        "instead of running the line in one process",
+    )  # fmt: skip
     args = ap.parse_args(argv)
     parts = [p for p in args.parts.split(",") if p]
     unknown = sorted(set(parts) - set(charter.PARTS))
@@ -323,7 +343,7 @@ def main(argv=None) -> int:
         ap.error(f"unknown parts {unknown}; choose from {charter.PARTS}")
     bad = 0
     for name in args.tasks:
-        errors = record(name, parts, args.force)
+        errors = record(name, parts, args.force, args.mpc_pieces)
         for e in errors:
             print(f"{name}: schema: {e}", file=sys.stderr)
         bad += bool(errors)

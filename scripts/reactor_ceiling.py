@@ -10,6 +10,9 @@ pieces and merged:
     python scripts/reactor_ceiling.py --merge a.json b.json ... [--extended baseload]
 
 ``--extended`` names the scenarios the record's stop rule gave extra seeds to.
+``--kind mpc`` runs the record's planner line instead, the planner on the load's
+mean path, in the same pieces; they are merged by ``record_charter.py
+--mpc-pieces``.
 
 It is a candidate, the best plan known with the wobble foreseen: a plan bounds the
 best cost from above, and nothing here bounds it from below.
@@ -35,7 +38,23 @@ WHAT = (
 )
 
 
-def measure(scenario: str, seeds) -> dict:
+def planner(scenario: str, kind: str = "ceiling"):
+    """The day planner's params and seed for a run: the ceiling sees the run's
+    world (its seed), the planner line plans on the mean path (``plan_params``);
+    both plan to the run's end."""
+    from target_gym import scoring_runs as S
+    from target_gym.experts.mpc import plan_params
+    from target_gym.registry import REGISTRY
+
+    p = S.run_params(TASK, scenario)
+    if kind == "ceiling":
+        return p, 0
+    if kind == "mpc":
+        return plan_params(REGISTRY[TASK], p), None
+    raise ValueError(f"unknown planner kind {kind!r}")
+
+
+def measure(scenario: str, seeds, kind: str = "ceiling") -> dict:
     """One scenario's piece: each seed's mean cost a step, its trips, and whether
     every one of its solves converged (none failed, none stopped at its cap)."""
     from target_gym import scoring_runs as S
@@ -44,13 +63,14 @@ def measure(scenario: str, seeds) -> dict:
     from target_gym.registry import REGISTRY
 
     env = REGISTRY[TASK].make_env()
-    oracle = make_reactor_mpc(env, S.run_params(TASK, scenario), seed=0)
+    params, seed0 = planner(scenario, kind)
+    oracle = make_reactor_mpc(env, params, seed=seed0)
 
     def make(_task):
         oracle.reset()
         return lambda obs, state: oracle.step(obs, state.env)
 
-    policy = CallablePolicy(make, name="ceiling", oracle=True)
+    policy = CallablePolicy(make, name=kind, oracle=True)
     out = {"seeds": [], "costs": [], "trips": [], "converged": []}
     for seed in seeds:
         oracle.certificates.clear()
@@ -111,6 +131,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="write this piece here instead of the record")
     ap.add_argument("--merge", nargs="+", help="pieces to merge into the record")
     ap.add_argument("--extended", nargs="*", default=[], help="scenarios given more")
+    ap.add_argument("--kind", default="ceiling", choices=("ceiling", "mpc"))
     args = ap.parse_args(argv)
 
     from target_gym import charter
@@ -125,8 +146,10 @@ def main(argv=None) -> int:
         pieces = [json.loads(pathlib.Path(p).read_text()) for p in args.merge]
     else:
         names = [args.scenario] if args.scenario else list(weights)
-        pieces = [measure(s, args.seeds) for s in names]
-    if args.out:
+        pieces = [measure(s, args.seeds, args.kind) for s in names]
+    if args.out or args.kind == "mpc":
+        if not args.out:
+            raise SystemExit("a planner line is written as pieces (--out)")
         merged: dict = {}
         for piece in pieces:
             merged.update(piece)

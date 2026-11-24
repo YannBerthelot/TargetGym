@@ -86,3 +86,34 @@ def test_an_extended_scenario_without_its_extra_seeds_writes_no_ceiling():
     stored = ceiling.assemble(pieces, weights, seeds)
     assert len(stored["scenarios"]["baseload"]["ceiling_costs"]) == 20
     assert len(stored["scenarios"]["edf_daily"]["ceiling_costs"]) == 10
+
+
+# The planner line in pieces (review, 2026-11-24): the same 7-day runs as the
+# ceiling, the planner on the mean path (no outside world foreseen), merged into
+# the record's mpc part. By hand: costs 2 and 4 on baseload (weight 0.5) and 10 on
+# every other scenario (0.5 / 3 each) give J = 0.5 x 3 + 0.5 x 10 = 6.5.
+
+
+def test_the_planner_line_plans_on_the_mean_path_and_the_ceiling_sees_the_world():
+    mpc_params, mpc_seed = ceiling.planner("edf_daily", "mpc")
+    ceil_params, ceil_seed = ceiling.planner("edf_daily", "ceiling")
+    assert mpc_seed is None and ceil_seed == 0
+    assert float(mpc_params.demand_sigma) == 0.0  # the mean path: no wobble drawn
+    assert float(ceil_params.demand_sigma) > 0.0
+    assert int(mpc_params.max_steps_in_episode) == 7 * 2880
+    assert int(ceil_params.max_steps_in_episode) == 7 * 2880
+
+
+def test_the_planner_line_is_merged_from_its_pieces():
+    weights = {"baseload": 0.5} | {s: 0.5 / 3 for s in FOUR[1:]}
+    seeds = {s: [100, 101] for s in FOUR}
+    pieces = [_piece(s, [100, 101]) for s in FOUR[1:]]
+    for s in FOUR[1:]:
+        pieces[FOUR.index(s) - 1][s]["costs"] = [10.0, 10.0]
+    pieces.append({"baseload": {"seeds": [100, 101], "costs": [2.0, 4.0],
+                                "trips": [0, 0], "converged": [True, True]}})  # fmt: skip
+    line = record.line_from_pieces(pieces, weights, seeds)
+    assert line["J"] == pytest.approx(6.5)
+    assert line["converged"] is True
+    with pytest.raises(SystemExit):
+        record.line_from_pieces(pieces[1:], weights, seeds)
