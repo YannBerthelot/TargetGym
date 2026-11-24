@@ -61,6 +61,39 @@ initial error, an Ah-counting drift and a temperature shift of the OCV curve
 (ARX-LFP, MPS-ACCURE). The market checks the report (NESO-SOE p. 4, 6); the
 plant delivers from the true charge.
 
+### Task: `battery`
+
+Run a grid battery that sells a frequency service: keep its reported stored
+energy inside the window the market requires at the start of each 30 min
+period, at the least cost of energy. The only lever is the declared baseline
+power, and a change reaches the meter 60 to 90 min after it is made. The
+policy reads the BMS's reported state of charge, cell voltage and temperature,
+the meter, the required power, the three locked baselines, the period's energy
+requirements and the day-ahead prices; the true state of charge is hidden.
+Each step is charged, in GBP, the availability payment of a lost period, the
+energy the unit loses, and the energy's cost against the base price. Nothing
+trips.
+
+| obs | meaning |
+|---|---|
+| 0 | state of charge as the BMS reports it |
+| 1 | cell terminal voltage (V) |
+| 2 | cell temperature (degC) |
+| 3 | power delivered at the meter (MW), positive when discharging |
+| 4 | power required now: baseline plus contracted response (MW) |
+| 5 | contracted response now, as a fraction of the contracted power |
+| 6 | baseline of the current period (MW) |
+| 7 | baseline of the next period (MW) |
+| 8 | baseline of the period after next (MW) |
+| 9 | this period's export energy requirement (MWh) |
+| 10 | this period's import energy requirement (MWh) |
+| 11 | seconds to the next period |
+| 12 | 1 once this period is lost, else 0 |
+| 13 | day-ahead price of the current period (GBP/MWh) |
+| 14 | day-ahead price of the next period (GBP/MWh) |
+| 15 | day-ahead price of the period after next (GBP/MWh) |
+| 16 | day-ahead price of the third period ahead (GBP/MWh) |
+
 ## 2. Model
 
 A Megapack 2 XL in its 2-hour configuration, of EVE LF280K LFP cells. Stored

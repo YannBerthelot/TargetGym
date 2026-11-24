@@ -267,11 +267,13 @@ fail_under = 89
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# A plain `pytest` runs the small tier on every core: unmarked tests, in one
-# process each, within 60 s. `pytest -m medium`, `-m large` or `-m records` runs
-# another tier (a later -m replaces this one), and `-n0` runs serially, which
-# --pdb needs. docs/testing.md has the tiers and what goes where.
-addopts = "-n auto --dist worksteal --strict-markers -m 'not medium and not large and not records' --durations=15"
+# A plain `pytest` runs the small tier in one process: unmarked tests. Each
+# worker is a JAX process of several GB, and `-n auto` on a 14-core laptop took
+# 123 GB and rebooted it (2026-11-12), so workers are asked for: `-n 2` on a
+# laptop (`make test`), `-n auto` on CI. `pytest -m medium`, `-m large` or
+# `-m records` runs another tier (a later -m replaces this one).
+# docs/testing.md has the tiers and what goes where.
+addopts = "--dist worksteal --strict-markers -m 'not medium and not large and not records' --durations=15"
 markers = [
     "medium: another process, media files, or a compile that needs gigabytes; CI runs these after the small tier",
     "large: closed-loop or multi-seed behaviour that only shows at the scored length; runs on merges to main",

@@ -76,6 +76,11 @@ def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
     decision, 2026-11-15)."""
     from target_gym.registry import REGISTRY
 
+    if not rows_dir.is_dir():
+        raise FileNotFoundError(
+            f"{rows_dir} is absent: the charter's ladder rows ship in the "
+            "repository's scripts/, so this needs a source checkout"
+        )
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
     extra = {name for name, spec in REGISTRY.items() if spec.extra}
     return sorted((rows - set(FIXTURES) - extra) | set(EXPERT_REFERENCE))

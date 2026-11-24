@@ -827,6 +827,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # (task constants, patrol/oracle.py). The expert's gains are in its
         # experts.py, as the 3D aircraft's are.
         oracle_reads=("experts/pid.py",),
+        # The follower's own gust; the lead's sits in ``gust_history``.
+        disturbance_fields=("gust_own",),
         noise_fields=("turbulence_sigma",),
         # The 3D aircraft it flies; the PID its oracle's twin law flies (physics
         # here, so declared for the version stamp too); the autopilot and TECS
@@ -878,6 +880,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "table. It never reads the observation, so its per-step costs "
             "equal patrol's seed for seed."
         ),
+        # The follower's own gust; the lead's sits in ``gust_history``.
+        disturbance_fields=("gust_own",),
         noise_fields=("turbulence_sigma",),
         # As patrol's.
         fingerprint_sources=(
@@ -1370,6 +1374,8 @@ _SPECS: tuple[EnvSpec, ...] = (
             "not the station's economy, and the shared solver is not wired to "
             "this task (owner, 2026-11-10)."
         ),
+        # The follower's own gust; the lead's sits in ``gust_history``.
+        disturbance_fields=("gust_own",),
         noise_fields=("turbulence_sigma",),
         fingerprint_sources=(
             "plane/dynamics.py",

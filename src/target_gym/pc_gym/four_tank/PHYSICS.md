@@ -98,6 +98,24 @@ The four levels and the two setpoints: `[h1, h2, h3, h4, target_h1,
 target_h2]`. The Lund interface shows all four levels [S2, Fig. 11]; the KTH
 rig wires only the lower two and reads the upper ones by eye [S4, pp. 6, 12].
 
+### Task: `four_tank`
+
+Hold the levels of the two lower tanks of a four-tank rig at their setpoints
+with two pump voltages. Each pump fills the far upper tank more than its own
+lower one, so a level first moves the wrong way. The policy reads all four
+levels and both setpoints. Each step is charged the sum of the two squared
+level errors, counted in units of 1 mm. Nothing trips: an empty tank stops
+draining and a full one overflows.
+
+| obs | meaning |
+|---|---|
+| 0 | `h1`, level of lower tank 1 (m), controlled |
+| 1 | `h2`, level of lower tank 2 (m), controlled |
+| 2 | `h3`, level of upper tank 3 (m) |
+| 3 | `h4`, level of upper tank 4 (m) |
+| 4 | setpoint for `h1` (m) |
+| 5 | setpoint for `h2` (m) |
+
 ---
 
 ## 5. Episode (rule 17)

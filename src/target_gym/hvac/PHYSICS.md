@@ -19,6 +19,33 @@ Named property (rule 18): **slow concrete-slab heating**. Heat reaches the
 room only through a concrete core with hours of time constant, and the slab
 self-regulates: its output falls as the room warms [7, p. 7], [9, p. 7].
 
+### Task: `hvac`
+
+Heat an office through a concrete slab by choosing the supply water
+temperature, so the room stays in its 21 to 26 C comfort band during occupied
+hours at the least electricity cost. The slab takes hours to respond, so the
+policy has to act ahead: it reads the room, slab and water temperatures, the
+outdoor temperature with its last-24 h mean and next-24 h forecast, the clock,
+and the tariff with the hours to its next change. Each step is charged, in
+euros, the heat pump's electricity at the tariff, and each occupied
+kelvin-hour of room outside the band or of floor above its limit. Nothing
+trips.
+
+| obs | meaning |
+|---|---|
+| 0 | room air temperature (C) |
+| 1 | outdoor air temperature (C) |
+| 2 | mean outdoor temperature over the last 24 h (C) |
+| 3 | slab core temperature (C) |
+| 4 | return water temperature (C) |
+| 5 | supply water temperature (C) |
+| 6 | sine of the hour of day |
+| 7 | cosine of the hour of day |
+| 8 | centre of the comfort band (C) |
+| 9 | forecast mean outdoor temperature over the next 24 h (C) |
+| 10 | electricity price now (EUR/kWh) |
+| 11 | hours until the tariff next changes |
+
 ## 2. Model
 
 The zone is the ISO 13790 5R1C network (air, surface star node and mass node,

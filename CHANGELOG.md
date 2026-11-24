@@ -440,6 +440,11 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `tg.make_stream(name)`: the task as a continuing plant, the form an
+  average-reward algorithm trains on. It never ends, its scenarios take turns
+  by their weights, and the reset key fixes its world.
+  `tg.make_gymnasium(name, stream=True)` gives it behind the Gymnasium API.
+  See [Continuing tasks](docs/continuing-tasks.md).
 - **Sensor noise core.** A task declares `readings` of two kinds:
   `FieldReading`, on a measured copy of the state before `get_obs`, and
   `ChannelReading`, on its output. Each has a sigma, optional rounding and an
@@ -482,6 +487,12 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- `make_gymnasium` environments and `save_video` compile the task's step once.
+  They called it as plain Python, where a task's sub-step loops are compiled
+  again on every step and JAX keeps each program: 14 of the 25 tasks grew
+  with every step, the reactor by 22 to 50 MB, until the process ran out of
+  memory. `env.step` was never affected. Values agree with the uncompiled
+  step to float32 rounding.
 - **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
   job** (battery, boiler_drum, compressor_surge, distillation, hvac,
   ph_neutralization, wind_turbine). It now returns their cost ratio, and the
@@ -496,6 +507,20 @@ The next release is 0.8.0, because these changes break code written for
   environment now reports the step's terms in `info["reward_terms"]`, on the
   state the reward was computed on, and `run_policy` reads them. Rewards,
   observations and states are unchanged.
+- **The aircraft's air above the tropopause was not the standard atmosphere.**
+  Density kept the troposphere's lapse above 11 000 m (2.9 % high at 12 000 m,
+  0.8 % at FL370), and the airspeed schedule held the tropopause's pressure
+  above it (17 % high at 12 000 m, 4.5 % at FL370), so a Mach 0.8 cruise at
+  12 000 m read 136 m/s of CAS where the tables give 126. One
+  `plane.dynamics.standard_atmosphere` now serves density, speed of sound, the
+  schedule, the CAS reading and the engine's lag. Below 11 000 m density moves
+  by a part in 100 000, from the pressure exponent's last figure.
+- **Four disturbances were wider than their stated spread.** hvac's weather,
+  the pH buffer flow, the kiln's raw-meal feed and the reactor's load wobble
+  took an Euler step whose stationary deviation is `1 / sqrt(1 - theta dt / 2)`
+  times the parameter: 0.5 %, 0.25 %, 0.6 % and 0.4 % too wide. The innovation is
+  now `std * sqrt(1 - decay ** 2)` (`utils.stationary_innovation`), and the
+  decay per step, which the oracles and hvac's forecast model, is unchanged.
 - **A reading's `interval` was counted in sub-steps on a plant whose step holds
   several** (the reactor, 6): its noise would have been held 6 times too long.
   No shipped reading was affected; the interval now counts control steps.

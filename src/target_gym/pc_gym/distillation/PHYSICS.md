@@ -142,6 +142,26 @@ no source and are gone. The task never trips.
 the specs, and the feed flow from its meter (FC 1 [D4, p. 5]). The feed
 composition and the interior profile are hidden: no feed analyser was found.
 
+### Task: `distillation`
+
+Keep both products of a 40-tray binary column on spec with the reflux and the
+boilup, using as little boilup as possible. The policy reads the two product
+analysers, one tray temperature, its own two flows, the specs and the feed
+flow. The feed composition and the column's interior profile are hidden. Each
+step is charged, in kmol of boilup, the boilup itself, any product outside its
+spec, and the light component leaving in the bottoms. Nothing trips.
+
+| obs | meaning |
+|---|---|
+| 0 | `yD`, light-component fraction in the distillate |
+| 1 | `xB`, light-component fraction in the bottoms |
+| 2 | reflux `L`, as a fraction (0 to 1) of its range |
+| 3 | boilup `V`, as a fraction (0 to 1) of its range |
+| 4 | distillate spec for `yD` |
+| 5 | bottoms spec for `xB` |
+| 6 | stage-15 tray temperature (K) |
+| 7 | feed flow `F` (kmol/min) |
+
 ---
 
 ## 6. Episode (rule 17)

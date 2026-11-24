@@ -30,10 +30,17 @@ charter Amendment 3, the job score), run by
 
 Its horizon is the protocol's on the two-stage plant
 (``data/oracle_horizons/ph_neutralization.json``).
+
+The task's ceiling is not a solve (owner, 2026-11-23): it is ``perfect_hold``, the
+discharge held exactly on the permit's low edge against the episode's own influent
+and buffer, in closed form.
 """
+
+import functools
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.tree_util import Partial as partial
 
 from target_gym import reward as R
@@ -188,3 +195,70 @@ def ceiling_margins(state, p):
     pH = planner_pH(state.Wa, state.Wb, p)
     m = jnp.stack([pH - p.permit_low, p.permit_high - pH]) / PH_UNIT - 0.1
     return m, p.excursion_price * p.delta_t
+
+
+# ---------------------------------------------------------------------------
+# The ceiling: the perfect hold on the permit's low edge
+# ---------------------------------------------------------------------------
+
+
+def hold_flow(pH, q1, q2, acid, params):
+    """The base flow (mL/s) whose steady mix with ``q1`` of influent at ``acid`` times
+    its nominal strength and ``q2`` of buffer sits at ``pH``: the env's closed-form
+    inverse titration curve (``steady_base_flow``) at that influent flow."""
+    return steady_base_flow(pH, q2, params.replace(q1=q1), Wa1=params.Wa1 * acid)
+
+
+@functools.lru_cache(maxsize=None)
+def _hold_run(env):
+    """The jitted episode that reads what enters the plant at each step."""
+
+    def run(params, state, keys):
+        centre = 0.5 * (params.permit_low + params.permit_high)
+
+        def step(state, key):
+            # The influent as this step reads it. The buffer flow is drawn inside the
+            # step, from its last value and the key alone, so no dose moves it: the
+            # plant is held near the permit's centre meanwhile, where nothing trips.
+            q1, acid = influent_flow(state, params), acid_scale(state, params)
+            q3 = hold_flow(centre, q1, state.q2, acid, params)
+            raw = 2.0 * (q3 - params.q3_min) / (params.q3_max - params.q3_min) - 1.0
+            action = jnp.stack([jnp.clip(raw, -1.0, 1.0), -1.0])
+            _, after, _, _, _ = env.step_env(key, state, action, params)
+            return after, hold_flow(params.permit_low, q1, after.q2, acid, params)
+
+        return jax.lax.scan(step, state, keys)[1]
+
+    return jax.jit(run)
+
+
+def perfect_hold(env, params, reset_key, step_keys) -> dict:
+    """The task's ceiling (owner, 2026-11-23): the discharge held exactly on the
+    permit's low edge, the cheap one, through one episode.
+
+    The episode is the one its keys name: ``reset_key`` and ``step_keys``, one per
+    step, which the caller draws as the scoring runner does (``reset_keys[0]`` and
+    ``step_keys[:, 0]`` of ``benchmark.episode_keys(PRNGKey(seed), 1, T)``). This
+    module draws nothing itself, so it imports no scoring code.
+
+    At every step the base flow is the one whose mix with what enters stage 1 during
+    that step (the influent's flow and acid strength, the buffer flow the step
+    draws) sits on the edge. Mixing is linear in the invariants and so is the charge
+    balance at a fixed pH, so tanks that start on the edge stay on it under these
+    flows (tested on the plant). Nothing is planned: a window's start or end gains
+    the hold nothing, and no base held in the tanks at the reset is spent.
+
+    Returns ``flow``, the base flow per step (mL/s); ``cost``, its mean in the
+    reward's units per step (the ``reagent`` term; the hold is charged no other);
+    and ``feasible``, whether stage 1's valve passes every flow.
+    """
+    _, state = env.reset_env(reset_key, params)
+    flow = np.asarray(_hold_run(env)(params, state, step_keys), float)
+    litres = float(params.reagent_price) * float(params.delta_t) / 1000.0
+    return {
+        "flow": flow,
+        "cost": float(flow.mean()) * litres,
+        "feasible": bool(
+            np.all((flow >= float(params.q3_min)) & (flow <= float(params.q3_max)))
+        ),
+    }

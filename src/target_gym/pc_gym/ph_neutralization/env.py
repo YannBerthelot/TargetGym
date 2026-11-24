@@ -54,7 +54,11 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import (
+    convert_raw_action_to_range,
+    log_scaled_reward,
+    stationary_innovation,
+)
 
 # Bisection steps for the pH root-find. The bracket is [0, 14], so 20 halvings
 # resolve to ~1.3e-5 pH units -- three orders of magnitude finer than a pH
@@ -157,11 +161,17 @@ class PHParams(EnvParams):
 
     # ---- Episode (charter rules 17 and 20) ----
     # Established operation: both tanks on the steady state at the operator's
-    # set point, pH 7, the centre of the permit range. The set point is the
-    # operator's choice [P3, p. 4] and is not scored. 2 h at 5 s: longer than
-    # the 60 min excursion the permit counts [P8], with room for the upsets.
-    # Ours. The scenario suite (scenarios.py) sets which upsets run.
-    setpoint_pH: float = 7.0
+    # set point. The set point is the operator's choice [P3, p. 4] and is not
+    # scored; reagent is saved by holding it nearer the permit's low limit while
+    # the discharge stays comfortably above it [P3, pp. 4-5]. Ours: 6.5, where
+    # the reference's rule places it, the lowest tenth of a pH above the permit's
+    # low edge at which the reference leaves the permit on none of its seeds
+    # (charter J1, owner, 2026-11-23; scripts/ladder_rows/ph_neutralization.py,
+    # PHYSICS.md section 10). An agent and the reference start the same episodes.
+    # 2 h at 5 s: longer than the 60 min excursion the permit counts [P8], with
+    # room for the upsets. Ours. The scenario suite (scenarios.py) sets which
+    # upsets run.
+    setpoint_pH: float = 6.5
     delta_t: float = 5.0
     max_steps_in_episode: int = 1440
 
@@ -417,12 +427,10 @@ def compute_next_state(
     # OU buffer-flow disturbance, keyed on ``state.time`` so a constant key
     # still gives a genuine zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
-    sigma = p.q2_noise_std * jnp.sqrt(2.0 * BUFFER_OU_THETA * p.delta_t)
-    q2 = (
-        state.q2
-        + BUFFER_OU_THETA * (p.q2_nominal - state.q2) * p.delta_t
-        + sigma * noise
-    )
+    # The innovation that keeps the flow's spread at ``q2_noise_std``.
+    decay = 1.0 - BUFFER_OU_THETA * p.delta_t
+    sigma = stationary_innovation(p.q2_noise_std, decay)
+    q2 = p.q2_nominal + decay * (state.q2 - p.q2_nominal) + sigma * noise
     q2 = jnp.clip(q2, p.q2_min, p.q2_max)
 
     q1 = influent_flow(state, p)

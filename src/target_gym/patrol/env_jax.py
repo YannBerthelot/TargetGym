@@ -425,6 +425,10 @@ class PlanePatrolRangeBearing(_PlanePatrolBase):
         obs = super().get_obs(state, params)
         return obs.at[19].set(obs[10])
 
+    # ``true_obs`` reads the plant here. With no instrument in the way the two
+    # are one value already.
+    get_obs.__wrapped__ = PlanePatrol.get_obs.__wrapped__
+
 
 class WakeSurf(PlanePatrol):
     """``wake_surf``: wake-energy retrieval. An A320 follower holds a station
