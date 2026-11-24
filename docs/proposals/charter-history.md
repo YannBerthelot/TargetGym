@@ -59,6 +59,27 @@ carries no rule of its own.
   and the score disagree (J1). Draft and reasons: `charter-amendment-5-draft.md` on
   branch `claude/reactor-axial-dd4617`.
 
+- **Amendment 6, the actuator's window (2026-11-23).** The wind turbine's receding
+  oracle rode its overspeed level on a forecast of decaying turbulence and tripped on 35
+  of 60 MPC-line seeds. The owner chose "Actuator window, about 2 s": a limit's back-off
+  covers a 2-sigma disturbance for the time the correcting actuator's rate limit needs to
+  take it back (J3; oracle smoothing protocol, Amendment 6, K11a). The formula gave 1.5 s,
+  and the owner kept it. It is general: wind is the first task it applies to.
+
+- **Amendment 7, where a reference rests, and tasks with little room (2026-11-24).** One
+  review session per task looked for where its room came from, and five found most of it
+  in where the reference rests: pH's set point 2 sigma above the permit's edge made all
+  of its room of 14 but 1.13 to 1.16. The owner chose "Lowest with no exit", then "Seeds
+  that can be held decide", "Each rung on its own" and "Hook for a scheduled target",
+  and kept 2 sigma for zones priced as give-away (J1). On small room he said: "almost
+  saturated tasks (little room, but it DOES exist beyond noise) can be a specific type of
+  task", and that glass_furnace stays, as "the motivating example for this whole
+  library". So a task with room under 1.2 states what the room is worth per plant and
+  year (J3), an interval of room that includes 1 means solved, and a solved task goes to
+  Extra with that reason where J5 had kept it in the core pool, as plane_energy and
+  boiler_drum did (the claim, J5). Draft and cases:
+  [charter-amendment-7-draft.md](charter-amendment-7-draft.md).
+
 **Old numbers.** Design step 0 became B2; step 1, B1; step 2, B4; step 3, B3 and B6;
 step 4, B1 and D2.
 

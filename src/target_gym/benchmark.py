@@ -600,20 +600,37 @@ def shipped_policy(kind: str = "pid", test_params: bool = True) -> CallablePolic
     ``"mpc"``, ``runners.baseline_policy``) as a :class:`Policy`; a task
     without one, or not registered here, is :class:`Unsupported`. The MPC
     plans on the task's parameters, so ``test_params`` must match the run's
-    (:func:`run_policy_on_benchmark`: the registered task by default)."""
+    (:func:`run_policy_on_benchmark`: the registered task by default).
+
+    ``bind(env, params, seeds)`` sets the run's own params, as
+    ``reference_ladder.run_suite`` binds each scenario's: the oracle is the
+    problem definition, so it then plans on the scenario's values, those the
+    state does not carry included (owner, 2026-11-23). The expert reads only
+    its observations, so binding leaves it as it is."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
+
+    bound = {}
 
     def make(task: TaskInfo):
         spec = REGISTRY.get(task.name)
         if spec is None:  # not one of this library's tasks: nothing is shipped for it
             return None
-        params = (
-            spec.make_test_params() if test_params else spec.make_env().default_params
-        )
+        if "params" in bound:
+            params = bound["params"]
+        elif test_params:
+            params = spec.make_test_params()
+        else:
+            params = spec.make_env().default_params
         return baseline_policy(spec, kind, params)
 
-    return CallablePolicy(make, name=kind, oracle=(kind == "mpc"))
+    def bind(env, params, seeds):
+        del env, seeds
+        bound["params"] = params
+
+    policy = CallablePolicy(make, name=kind, oracle=(kind == "mpc"))
+    policy.bind = bind
+    return policy
 
 
 __all__ = [

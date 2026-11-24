@@ -86,7 +86,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 |---|---|---|
 | `first_order` | none | A sanity fixture with no disturbance, nothing hidden and nothing stochastic (73, 90), so it is in no aggregate. |
 | `cstr` | basic, nonlinearity | Arrhenius gain (68); nothing hidden (119). |
-| `unstable_cstr` | instability, disturbance, safety | Held on its open-loop unstable middle steady state (5); the feed temperature drifts unmeasured (290); trips at 365 K, within 5 to 20 steps at full heating (279, 338). |
+| `unstable_cstr` | none | Extra since 2026-11-15 (owner's decision): its oracle tracks exactly on 4 of 5 scenarios, so its room measures a perfect state reading, not control, and it is in no aggregate. Its reason is in `pc_gym/unstable_cstr/PHYSICS.md`, Status. |
 | `ph_neutralization` | nonlinearity, disturbance | The gain varies 45 times across the range (94); the buffer flow is unmeasured (97). |
 | `four_tank` | coupling, inverse response | Non-minimum phase (51); negative relative gain, so the obvious pairing is unstable (52, 70). |
 | `distillation` | coupling, delay and slow | Ill-conditioned, relative gain about 52 (4, 58); dominant time constant about 194 min (123). |
@@ -97,7 +97,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `reactor` | delay and slow, partial observability, economic, moving target | Xenon is a multi-hour memory; most of the state is hidden (148); priced at the spot price (217); follows a drifting demand. |
 | `compressor_surge` | safety, nonlinearity, disturbance | Trips below the surge line (9); the Moore-Greitzer cubic characteristic; the consumers' demand ramps. |
 | `wind_turbine` | disturbance, economic, safety | The rotor-effective wind is hidden in turbulence (87); an imbalance price (198); trips on over- and under-speed (107). |
-| `battery` | economic, moving target, safety | A priced running cost (92); a dispatch setpoint every 5 minutes; trips outside 5 to 95% charge (93). |
+| `battery` | none | Extra since 2026-11-15 (owner's decision): it failed acceptance (J2), so it is in no aggregate. Its reason is in `energy/battery/PHYSICS.md`, Status. |
 | `plane` | disturbance | The gusts are hidden, which is the point (180). |
 | `plane_energy` | moving target, coupling | A ladder of altitudes with airspeed scored too, which removes the spare degree of freedom (193, 194). |
 | `plane_sine` | moving target | A sinusoid, as a frequency probe (193). |
@@ -116,6 +116,6 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
   times cheaper than the expert upwards. `oracle_transient_ratio` gives it.
 - The fixed settle is 0 steps on `hvac`, 1 on `reactor` and 4 on `battery`, so
   their move cost covers a step or a few. Read `settling_ratio` there.
-- Multi-agent rests on one task and instability on two, so a single task moves
+- Multi-agent and instability each rest on one task, so a single task moves
   those spokes.
 - Every task counts the same on a spoke, however long its episode.

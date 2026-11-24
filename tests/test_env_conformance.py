@@ -439,6 +439,38 @@ def test_disturbance_magnitude_is_independent_of_key_splitting(spec):
     )
 
 
+def test_a_task_that_declares_no_disturbance_does_not_read_its_step_keys(spec):
+    """``disturbance_fields`` (registry.EnvSpec) is what puts a task under the
+    two disturbance checks here, so a task that leaves it empty promises that
+    its plant draws nothing as it runs. Two runs from one reset on different
+    step keys then walk the same states, up to the first trip: a restart is a
+    fresh draw of the plant and may differ. patrol, patrol_range_bearing and
+    wake_surf drew gusts and declared none until 2026-11-23, which skipped
+    both checks for them."""
+    if spec.disturbance_fields:
+        pytest.skip(f"{spec.name} declares its disturbance: checked above")
+    env, params = spec.make_env(), spec.make_test_params()
+    _, start = env.reset_env(jax.random.PRNGKey(0), params)
+    action = _zero_action(env, params)
+
+    @jax.jit
+    def run(seed):
+        def body(state, key):
+            _, state, _, _, info = env.step_env(key, state, action, params)
+            leaves = jax.tree_util.tree_leaves(state)
+            return state, (leaves, info.get("tripped", jnp.bool_(False)))
+
+        keys = jax.random.split(jax.random.PRNGKey(seed), 40)
+        return jax.lax.scan(body, start, keys)[1]
+
+    (one, tripped_one), (two, tripped_two) = run(1), run(2)
+    tripped = np.asarray(tripped_one) | np.asarray(tripped_two)
+    before = int(np.argmax(tripped)) if tripped.any() else len(tripped)
+    assert before > 0, "tripped on the first step: nothing to compare"
+    for a, b in zip(one, two):
+        np.testing.assert_array_equal(np.asarray(a)[:before], np.asarray(b)[:before])
+
+
 def test_distinct_keys_give_distinct_stochastic_trajectories(spec):
     """Where an env is stochastic, the key must actually influence the outcome."""
     if not spec.disturbance_fields:
@@ -581,6 +613,19 @@ def test_env_is_vmappable_over_seeds(spec):
     assert np.all(np.isfinite(np.asarray(rewards)))
     assert jnp.asarray(terminated).shape == (n,)
 
+    # Each row is that seed's own episode: the batch gives what one seed at a
+    # time gives. Tolerances as in the jit test above, for the same reordering.
+    one = jax.jit(lambda k, s, a: env.step_env(k, s, a, params))
+    for i in range(n):
+        state_i = jax.tree_util.tree_map(lambda leaf: leaf[i], states)
+        obs_i, _, reward_i, terminated_i, _ = one(keys[i], state_i, action[i])
+        scale = float(jnp.max(jnp.abs(obs_i)))
+        np.testing.assert_allclose(
+            obs2[i], obs_i, atol=1e-4 + 1e-6 * scale, err_msg=f"seed row {i}"
+        )
+        assert float(rewards[i]) == pytest.approx(float(reward_i), rel=1e-4, abs=1e-4)
+        assert bool(terminated[i]) == bool(terminated_i)
+
 
 def test_env_runs_under_lax_scan(spec):
     """The env must compose with ``lax.scan``, which is how rollouts are done."""
@@ -595,9 +640,20 @@ def test_env_runs_under_lax_scan(spec):
         _, s2, r, _, _ = env.step_env(sub, s, action, params)
         return (s2, k), r
 
-    (_, _), rewards = jax.lax.scan(body, (state, key), None, length=10)
+    (last, _), rewards = jax.lax.scan(body, (state, key), None, length=10)
     assert rewards.shape == (10,)
     assert np.all(np.isfinite(np.asarray(rewards)))
+
+    # The scanned rollout is the rollout: ten steps taken one call at a time,
+    # on the same keys, cost the same. The jit tolerance per step, times ten
+    # for the steps the reordering can compound over.
+    one = jax.jit(lambda k, s: env.step_env(k, s, action, params))
+    s, k = state, key
+    for i in range(10):
+        k, sub = jax.random.split(k)
+        _, s, r, _, _ = one(sub, s)
+        assert float(rewards[i]) == pytest.approx(float(r), rel=1e-3, abs=1e-3), i
+    assert int(last.time) == int(s.time)
 
 
 # ---------------------------------------------------------------------------
@@ -944,7 +1000,7 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
     ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now, gust_t0, _ = task"),
-    ("compressor_surge/oracle.py", "_, demand, clock, drift, shift = task"),
+    ("compressor_surge/oracle.py", "_, demand, clock, drift, ramp, shift = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }
 

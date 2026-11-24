@@ -34,15 +34,16 @@ pytest -m learning
 ```
 
 ```bash
-pytest                   # small, on every core
+pytest                   # small, in one process
+pytest -n 2              # small, on two workers (each is a JAX process of several GB)
 pytest -m medium -n 2    # medium; two workers keep two big compiles in memory
 pytest -m large          # large
 pytest -m records        # records
 pytest -m ""             # everything
 ```
 
-A later `-m` replaces the default one, and `-n0` runs serially, which `--pdb`
-needs.
+A later `-m` replaces the default one. Keep `-n auto` for CI or a machine with
+the memory: on a 14-core laptop it took 123 GB.
 
 Every run ends with its 15 slowest tests, so a test that outgrows its size
 shows up there before it shows up in the budget.
