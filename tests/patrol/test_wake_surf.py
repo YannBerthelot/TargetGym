@@ -179,6 +179,19 @@ def test_a_predicted_station_leaves_the_followers_own_place_as_read():
     assert obs[24] == pytest.approx(np.hypot(obs[11], obs[12]), abs=1e-3)
 
 
+def test_the_true_observation_gives_the_true_station():
+    """``true_obs`` is the plant now, what a claim about the plant is read on
+    (the share of time on station): the station where it is, and the same
+    whatever the instruments."""
+    from target_gym.base import true_obs
+
+    env, params, state = _scored()
+    obs = np.asarray(true_obs(env, state, params))
+    assert obs[17] == pytest.approx(float(state.slot_right), abs=1e-4)
+    loud = params.replace(sensor_noise_scale=100.0)
+    np.testing.assert_array_equal(true_obs(env, state, loud), obs)
+
+
 def test_with_no_sensor_noise_the_station_is_exact():
     env, params, state = _reset()
     obs = np.asarray(env.get_obs(state, params))

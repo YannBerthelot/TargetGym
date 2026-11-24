@@ -312,8 +312,8 @@ the wake from the lead's reported track, its own wind estimate and the time in t
 [REALITY.md, N1 III.B]; nothing measures it. The model draws the estimate's error across
 the track once per 30-minute window, 1 m/s (ours; an aircraft's own wind is good to
 0.5 m/s at best and 2 to 3 m/s typically as a vector [M1]), and the station the
-observation gives is off by that error times the time in trail, 5 to 8 m at one
-standard deviation. The follower's own place from the lead is read as before, and its
+observation gives is off by that error times the time in trail the pair is assigned
+(its distance at the lead's scheduled speed), 5 to 8 m at one standard deviation. The follower's own place from the lead is read as before, and its
 aileron reads the wake's rolling moment. With `sensor_noise_scale` 0 the station is
 exact. How fast the error moves is not in the sources, so it is held.
 
@@ -333,7 +333,7 @@ excess in tolerance widths. It reads the two aircraft's relative position, good 
 and time by the cost index (plane/PHYSICS.md). Nothing is priced across the wake: no
 source gives a station a tolerance there, and what stops the follower is the crossing.
 The 30 m across the wake (ours, a span, `e_floor_slot`) stays as a reported band, the
-share of time the tracked distance to the station as given is inside it.
+share of time the follower's true distance to its station across the wake is inside it.
 
 **The reference.** The formation hold's guidance cascade over the A320's own
 autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on

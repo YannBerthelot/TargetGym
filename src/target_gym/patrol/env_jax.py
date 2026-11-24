@@ -458,7 +458,11 @@ class WakeSurf(PlanePatrol):
     def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
         params = self.default_params if params is None else params
         obs = super().get_obs(state, params)
-        in_trail = state.slot_back / jnp.hypot(state.lead.x_dot, state.lead.y_dot)
+        # The time in trail the pair is assigned: its distance at the lead's
+        # scheduled speed. A reading adds the episode's draw alone, so it may
+        # not follow the plant's own state (the lead's speed in its gusts).
+        scheduled = lead_cruise_speed(state.lead.target_altitude, params)
+        in_trail = state.slot_back / scheduled
         error = (obs[17] - state.slot_right) * params.wind_estimate_sigma * in_trail
         # The follower's place from the lead is read as it is, so its offset
         # from a station moved by ``error`` moves the other way.
@@ -466,6 +470,10 @@ class WakeSurf(PlanePatrol):
         across = jnp.sqrt(right**2 + obs[12] ** 2 + 1e-8)
         obs = obs.at[17].set(state.slot_right + error).at[11].set(right)
         return obs.at[24].set(across)
+
+    # Written over the measured observation, so ``true_obs`` is told where the
+    # plant's own is: the patrol's, on this task's ``_observe``.
+    get_obs.__wrapped__ = PlanePatrol.get_obs.__wrapped__
 
     def station_height(self, drawn, lead, slot_back, params):
         """On the vortex plane: below the lead by its wake's sink."""
