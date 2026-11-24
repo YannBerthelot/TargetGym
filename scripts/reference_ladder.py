@@ -147,7 +147,10 @@ class Row:
     ``balance`` is rung 2's bias, None without one. ``why`` gives the reason for each
     rung left out, and ``points`` for a task with one operating point. ``rest_at``
     gives the rest at a point's parameters where ``rest`` can't read it. ``build``
-    fills ``placed``: each zone loop's measured deviation and setpoint."""
+    fills ``placed``: each zone loop's measured deviation and setpoint.
+    ``bumpless`` starts every rung from ``rest`` at the reset
+    (``ladder_controller``'s ``start``), for a task whose reset stands on a steady
+    state its balances can't compute, because something they need is hidden."""
 
     steps: int
     rest: object
@@ -165,6 +168,7 @@ class Row:
     published: object = None
     why: dict = dataclasses.field(default_factory=dict)
     placed: dict = dataclasses.field(default_factory=dict)
+    bumpless: bool = False
 
 
 def corners(**ranges) -> tuple:
@@ -384,7 +388,8 @@ def build(name: str, row: Row, spec=None) -> dict:
     target = stacked(targets)
 
     def make(rung, bias):
-        return ladder_controller(rung, read, target, bias, dt)
+        start = row.rest if row.bumpless else None
+        return ladder_controller(rung, read, target, bias, dt, start)
 
     loops = tuple(pis)
     rungs["pi"] = make(Rung("pi", loops, mix), flat)

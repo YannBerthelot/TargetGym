@@ -45,8 +45,9 @@ def row() -> Row:
         return steady_state(o[3], T_f, p)[1]
 
     dt = float(p.delta_t)
-    # The reactor: a cooling step settles 95 % in 0.99 residence times open loop
-    # (PHYSICS.md, T8), 33 min of the 34 min residence; the window is twice that.
+    # The reactor: a cooling step first reaches 95 % of its final value in 0.99
+    # residence times open loop, 33 min of the 34 min residence; the window is
+    # twice that. The response then overshoots and settles in 3.72 (PHYSICS.md, T8).
     residence = float(p.V) / float(p.q)
     window = math.ceil(2 * 0.99 * residence / dt)
     # The jacket: its time constant M_j / (F_w + UA / cp_w) is 2.2 min at the design
@@ -73,9 +74,12 @@ def row() -> Row:
     # section 10), at every corner of the ranges the loop visits: the setpoint and
     # its 2 K step [S1, Fig. 2], the feed temperature's range [S1, Tables 3, 4],
     # the catalyst at full and 40 % lost activity [S1, Fig. 3], and the feed's
-    # reactant at nominal and 10 % up. The reset puts each on its own steady state.
-    # A corner whose steady water lies past the valve's range has no rest to test
-    # at: the reactant's 10 % rise at full activity needs more than 136 g/s.
+    # reactant at nominal and at the feed build-up's rise. The reset puts each on
+    # its own steady state. A corner whose steady water lies past the valve's range
+    # has no rest to test at: the rise on the warmest feed at full activity.
+    (build_up,) = [s for s in spec.scenarios() if s.name == "feed_buildup"]
+    feed_rise = float(build_up.overrides["feed_rise"])
+
     def fits(q) -> bool:
         T_f = float(q["feed_T_range"][0])
         F_w = float(steady_state(q["T_setpoint"], T_f, p.replace(**q))[2])
@@ -91,7 +95,7 @@ def row() -> Row:
         for dT in (0.0, 2.0)
         for T_feed in (float(p.feed_T_range[0]), float(p.feed_T_range[1]))
         for activity in (1.0, 1.0 - 0.4)
-        for feed in (1.0, 1.0 + 0.1)
+        for feed in (1.0, 1.0 + feed_rise)
     )
     points = tuple(q for q in corners if fits(q))
     return Row(
@@ -101,6 +105,11 @@ def row() -> Row:
         points=points,
         balance=balance,
         cascades=(jacket,),
+        # The reset stands on the steady state of the day's feed temperature, which
+        # is hidden, so the balances above are off by up to 0.9 K of feed. Every
+        # rung takes over from the valve as the reset left it (charter B5: a
+        # scenario starts in established operation).
+        bumpless=True,
         why={
             "decoupler": "one loop",
             "override": "the interlock reads the loop's own temperature and the "

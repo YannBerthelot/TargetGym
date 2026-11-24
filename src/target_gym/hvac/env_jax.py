@@ -15,15 +15,18 @@ from target_gym.base import (
 from target_gym.expert_access import RegistryExperts
 from target_gym.hvac.env import (
     DAY_STEPS,
+    WEATHER_OU_THETA,
     HVACParams,
     HVACState,
     check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_reward_terms,
+    drift_over,
     floor_surface_temperature,
     get_obs,
     internal_gain,
+    node_rates,
     outdoor_temperature,
     return_temperature,
     slab_heat,
@@ -138,16 +141,61 @@ class BuildingHVAC(
             params = self.default_params
 
         # Established operation (rule 17): the building has run on its slab
-        # for days, settled at the band's heating edge [9, p. 5] for the last
-        # day's mean weather and gains, as a heating curve holds it [7, p. 7].
+        # for days, settled for the last day's mean weather and gains as a
+        # heating curve holds it [7, p. 7], at the level that meets the band:
+        # held on its supply, the room is at the heating edge [9, p. 5] when
+        # the office opens (owner, 2026-11-23).
         weather_dev = params.T_out_noise_std * jax.random.normal(key)
         past = jnp.arange(-DAY_STEPS + 1, 1)
         history = outdoor_temperature(past, weather_dev, params)
         day_int = jnp.mean(internal_gain(past, params))
         day_sol = jnp.mean(solar_gain(past, params))
-        T_mass, T_core, _, T_supply = steady_state(
-            params, jnp.mean(history), params.band_low, day_int, day_sol
+
+        # The night ahead, as its forecast gives it: the daily cycle and the
+        # deviation decaying at the weather's rate (``env.outdoor_forecast``).
+        ahead = jnp.arange(DAY_STEPS)
+        opens = params.occupied_start_h * 3600.0 / params.delta_t
+        dev = weather_dev * (1.0 - WEATHER_OU_THETA * params.delta_t) ** ahead
+        night = (ahead < opens) / opens
+        out_night = jnp.sum(night * outdoor_temperature(ahead, dev, params))
+        int_night = jnp.sum(night * internal_gain(ahead, params))
+        sol_night = jnp.sum(night * solar_gain(ahead, params))
+        dev_open = weather_dev * (1.0 - WEATHER_OU_THETA * params.delta_t) ** opens
+        ia_open, st_open, _ = split_gains(
+            internal_gain(opens, params), solar_gain(opens, params), params
         )
+
+        def settled(T_set):
+            """The building settled at a daily mean room of ``T_set``, and its
+            room when the office opens, after the slab and the mass have gone
+            through the night on its mean weather and gains."""
+            T_mass, T_core, _, T_supply = steady_state(
+                params, jnp.mean(history), T_set, day_int, day_sol
+            )
+
+            def rate(x):
+                return node_rates(
+                    x[0], x[1], T_supply, out_night, int_night, sol_night, params
+                )
+
+            now = jnp.stack([T_mass, T_core])
+            fall = drift_over(rate(now), jax.jacfwd(rate)(now), opens * params.delta_t)
+            room, _ = solve_air_and_surface(
+                T_mass + fall[0],
+                T_core + fall[1],
+                outdoor_temperature(opens, dev_open, params),
+                st_open,
+                ia_open,
+                params,
+            )
+            return jnp.stack([T_mass, T_core, T_supply]), room
+
+        # The balances are linear, so two settled buildings give the one whose
+        # room opens at the edge.
+        low, room_low = settled(params.band_low)
+        high, room_high = settled(params.band_low + 1.0)
+        share = (params.band_low - room_low) / (room_high - room_low)
+        T_mass, T_core, T_supply = low + share * (high - low)
         T_out = history[-1]
         phi_ia, phi_st, _ = split_gains(
             internal_gain(0, params), solar_gain(0, params), params

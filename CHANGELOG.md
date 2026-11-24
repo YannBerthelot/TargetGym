@@ -42,6 +42,77 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`glass_furnace` charges the defects its tank blocks give off, reads them, and
+  has a new oracle without a seed.** `glass_furnace-v6` is unreleased and was
+  re-stamped in place. Upgrade notes:
+  - The plant carries the temperature of the blocks its glass touches. A block at or
+    above 1450 C gives off defects when its temperature rises, and fining still
+    running past the last port is reboil (REALITY.md section 10; the two rates and
+    the 1450 C are ours). On a step that keeps both marks, the reward's lost-glass
+    term charges the plates those defects reject. `PhysicalParams` gains
+    `block_lag`, `block_release_T`, `block_release` and `reboil_plate`, and the
+    plant's fields `block` and `defects`.
+  - The observation has 13 channels, not 12: the last is the defects per plate read
+    at the cold end, 0.3 h late.
+  - The oracle without a seed, which `make_oracle("glass_furnace")` and the runners
+    build, plans every 4 h and prices the chance of a lost step in place of a limit
+    on the fining share; the one it replaces lost a tenth of its steps on this
+    plant. `GlassOracle` takes `spread` and `paths` and no longer `replan_hours`,
+    and `oracle.solve` takes `fining_spread`. With a seed the oracle is unchanged.
+  - Every recorded row of the task predates this plant, except its ceiling
+    (`data/oracle_ceilings/glass_furnace.json`: reference 49.23, ceiling 46.96).
+- **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
+  the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
+  release shipped, keeps its number). Upgrade notes:
+  - The action is `[rod demand, boron flow, turbine loading rate]`: a policy with
+    two outputs must be rebuilt. With the third action at +1 the turbine follows
+    the dispatch's plan, as it always did before. The plan the turbine does not
+    take is charged as lost output at $80/MWh.
+  - The observation has 16 channels: the core's cycle point (13), the plan's load
+    now (14) and the offset's penalty time in hours (15) joined.
+  - The core sits at a point drawn evenly over the first 90 % of its cycle, with
+    that point's boron (1690 ppm at the start, 0 at the end), moderator
+    coefficient and boron worth. `ReactorParams(cycle_range=(0.0, 0.0))` is the
+    start-of-cycle core of before. `renewal_days` is gone: a stream's core burns
+    through the range and refuels at its end (`refuels`).
+  - The turbine takes no more load than its valves pass wide open on the steam
+    it has: 105 % of rated flow at rated steam, less on colder steam
+    (`valve_margin`, `steam_slope`, `env.turbine_capacity`). On Tavg's program it
+    never binds; with Tavg 3.5 K under it at full load the turbine falls under its
+    plan, and what it does not take is lost output.
+  - The turbine does not load while Tavg is 10 F (5.556 K) or more under its
+    program at the turbine's load, and loads again once Tavg is back
+    (`loading_stop`, the units' interlock C-16). It holds the load and unloads
+    nothing. What it does is Vogtle's safety report's; the setpoint is a training
+    card's, flagged in `REALITY.md`.
+  - The steam generators' safety valves relieve the steam over 1176 psig
+    (570.0 K; `relief_temperature`, `relief_accumulation`, `env.steam_relief`).
+    On Tavg's program they never lift. They bound how hot the primary can sit
+    at part load: 7.7 K over its program at half load, past which added
+    reactivity raises the power and blows steam.
+  - The offset's band is 5 % of rated delta I at every power (it was 5 % of
+    offset, so half as wide at half power). Penalty time counts in full at 50 %
+    of rated power and above, by half from 15 % to 50 % and not below; at 90 %
+    and above the flux difference must be back in its band within 30 min; from
+    50 % to 90 % it must stay inside the acceptable operation limits (NUREG-1431,
+    Bases B 3.2.3A).
+  - The expert is rebuilt for it: the same procedure, run from the curve book at
+    the day's cycle point, with the turbine loaded at the rate the boron line
+    carries. `ReferenceParams` lost `t_Kc`, `t_Ti`, `ff` and `dead_band` and
+    gained `theta`, `backoff` and `longest`; the helpers `curve_book`,
+    `ppm_per_load`, `tavg_per_ppm`, `tavg_spread`, `carried_rate` and
+    `turbine_demand` are new. `make_reactor_pid_controller(plant=..., wd_Kc=...,
+    wd_Ti=..., theta=...)` builds the expert on a family member's own curve book
+    and bump-test numbers; with no argument it is the shipped expert. Its boron
+    dead time `theta` is 600 s, the recipe's reading on this plant (it carried the
+    previous plant's 615 s).
+  - The oracle is rebuilt too: `make_oracle("reactor")` now plans the whole day
+    ahead on a 5 min knot model, with the turbine's load as one of its moves, and
+    solves again every half hour (`reactor/oracle.py`, `reactor/oracle_model.py`).
+    It replaces the five-minute plan of the rods and the boron, which kept the
+    turbine on its plan. Its first step of an episode solves for a minute or
+    two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
+    gone with the model it described.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
@@ -411,6 +482,27 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
+  job** (battery, boiler_drum, compressor_surge, distillation, hvac,
+  ph_neutralization, wind_turbine). It now returns their cost ratio, and the
+  numbers read against a tracking hold (`score`, `headroom`, `room_left`, the
+  holds, the settling ratio, `s_max`) are NaN there. `headroom` is NaN, not 0,
+  for an unknown ceiling.
+- **A seed where neither side cost anything counted against the policy.** The
+  ratio floored only the policy's cost, so 0 over 0 read as 0; both are floored
+  and it reads as 1.
+- **On a step that tripped, an episode's reward terms were the restarted
+  plant's**, with no failure charge, while its cost held the trip. Every
+  environment now reports the step's terms in `info["reward_terms"]`, on the
+  state the reward was computed on, and `run_policy` reads them. Rewards,
+  observations and states are unchanged.
+- **A reading's `interval` was counted in sub-steps on a plant whose step holds
+  several** (the reactor, 6): its noise would have been held 6 times too long.
+  No shipped reading was affected; the interval now counts control steps.
+- **`plane3d_heading` gave the same heading at every clearance to a caller that
+  kept one key** (the video writer, the planners' models). Each clearance is now
+  drawn from the key and the step. Scored runs draw other headings from the same
+  range; the version stays v9, which no release has shipped.
 - **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
   runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
   `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
@@ -428,6 +520,14 @@ The next release is 0.8.0, because these changes break code written for
 - **`env.state_space()` works on every task.** It raised an `AttributeError` on
   the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
   formation.
+
+### Removed
+
+- **`target_gym.interpolator`, `target_gym.runners.utils`, and
+  `target_gym.utils.run_n_steps` and `compute_episode_returns_vectorized`.**
+  Nothing in the package called them, and they passed one key to the reset and
+  to every step, so a plant's noise was a single repeated draw. Use
+  `target_gym.benchmark.run_policy` or `target_gym.eval.run_episode`.
 
 ## [0.7.0] - 2026-11-02
 

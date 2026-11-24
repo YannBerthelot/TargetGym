@@ -155,11 +155,24 @@ class Memory(NamedTuple):
     inner_integral: object
     reset: object
     started: object
+    #: A start hold's trims (``ladder_controller``'s ``start``): what the bias and
+    #: each cascade's rest were off by at the reset. Zero without one.
+    trim: object = ()
+    inner_trim: object = ()
 
 
-def ladder_controller(rung: Rung, read, target, bias, dt: float) -> Controller:
+def ladder_controller(
+    rung: Rung, read, target, bias, dt: float, start=None
+) -> Controller:
     """``rung`` as a pure controller. ``read`` and ``target`` give the loops' CVs and
-    setpoints, ``bias`` the raw action the loops act around, each ``f(obs, xp)``."""
+    setpoints, ``bias`` the raw action the loops act around, each ``f(obs, xp)``.
+
+    ``start(obs, xp)`` is the raw action the actuators hold at the reset. With it
+    the controller takes over as a loop switched to automatic on a running plant
+    does, bumplessly: on its first step it re-bases ``bias`` on that action and each
+    cascade's rest on its reading, and keeps those two trims for the episode. The
+    loops still act on their errors from the first step. Without it nothing changes.
+    """
     kc, ti, alpha = (np.array([getattr(p, f) for p in rung.loops]) for f in _PI)
     inner = [c.pi for c in rung.cascades]
     kc_i, ti_i, alpha_i = (np.array([getattr(p, f) for p in inner]) for f in _PI)
@@ -172,17 +185,25 @@ def ladder_controller(rung: Rung, read, target, bias, dt: float) -> Controller:
         integral = m.integral + e * dt
         out = [v for v in kc * (e + integral / ti)]
 
-        y_i, i_i = [], []
+        y_i, i_i, trims = [], [], []
         for n, c in enumerate(rung.cascades):
             raw = c.read(obs, xp)
             f = xp.where(first, m.inner_y[n] + alpha_i[n] * (raw - m.inner_y[n]), raw)
-            e_i = c.rest(obs, xp) + out[c.pi.loop] - f
+            rest = c.rest(obs, xp)
+            if start is not None:
+                trims.append(xp.where(first, m.inner_trim[n], raw - rest))
+                rest = rest + trims[n]
+            e_i = rest + out[c.pi.loop] - f
             i_n = m.inner_integral[n] + e_i * dt
             out[c.pi.loop] = kc_i[n] * (e_i + i_n / ti_i[n])
             y_i.append(f)
             i_i.append(i_n)
 
-        asked = bias(obs, xp) + xp.asarray(rung.mix) @ xp.stack(out)
+        base, trim = bias(obs, xp), m.trim
+        if start is not None:
+            trim = xp.where(first, m.trim, start(obs, xp) - base)
+            base = base + trim
+        asked = base + xp.asarray(rung.mix) @ xp.stack(out)
         u = [v for v in xp.clip(asked, -1.0, 1.0)]
         resets = []
         for n, o in enumerate(rung.overrides):
@@ -211,6 +232,8 @@ def ladder_controller(rung: Rung, read, target, bias, dt: float) -> Controller:
             _stack(kept_i, xp),
             _stack(resets, xp),
             xp.ones_like(m.started),
+            trim,
+            _stack(trims, xp) if start is not None else m.inner_trim,
         )
 
     n, c, o = len(rung.loops), len(inner), len(rung.overrides)
@@ -221,6 +244,8 @@ def ladder_controller(rung: Rung, read, target, bias, dt: float) -> Controller:
         np.zeros(c),
         np.zeros(o),
         np.zeros(()),
+        np.zeros(rung.mix.shape[0]),
+        np.zeros(c),
     )
     return Controller(None, zero, step)
 

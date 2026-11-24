@@ -86,7 +86,7 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 |---|---|---|
 | `first_order` | none | A sanity fixture with no disturbance, nothing hidden and nothing stochastic (73, 90), so it is in no aggregate. |
 | `cstr` | basic, nonlinearity | Arrhenius gain (68); nothing hidden (119). |
-| `unstable_cstr` | instability, disturbance, safety | Held on its open-loop unstable middle steady state (5); the feed temperature drifts unmeasured (290); trips at 365 K, within 5 to 20 steps at full heating (279, 338). |
+| `unstable_cstr` | none | Extra since 2026-11-15 (owner's decision): its oracle tracks exactly on 4 of 5 scenarios, so its room measures a perfect state reading, not control, and it is in no aggregate. Its reason is in `pc_gym/unstable_cstr/PHYSICS.md`, Status. |
 | `ph_neutralization` | nonlinearity, disturbance | The gain varies 45 times across the range (94); the buffer flow is unmeasured (97). |
 | `four_tank` | coupling, inverse response | Non-minimum phase (51); negative relative gain, so the obvious pairing is unstable (52, 70). |
 | `distillation` | coupling, delay and slow | Ill-conditioned, relative gain about 52 (4, 58); dominant time constant about 194 min (123). |
@@ -116,6 +116,6 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
   times cheaper than the expert upwards. `oracle_transient_ratio` gives it.
 - The fixed settle is 0 steps on `hvac`, 1 on `reactor` and 4 on `battery`, so
   their move cost covers a step or a few. Read `settling_ratio` there.
-- Multi-agent rests on one task and instability on two, so a single task moves
+- Multi-agent and instability each rest on one task, so a single task moves
   those spokes.
 - Every task counts the same on a spoke, however long its episode.

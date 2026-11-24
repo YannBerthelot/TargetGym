@@ -530,10 +530,19 @@ def _mpc(factory_name: str, module: str) -> Callable[[Any, Any], Any]:
     # changing one re-records only the oracle rows of that package's tasks.
     # experts/mpc.py holds the shared machinery and is in every task's
     # oracle fingerprint.
-    def make(env, params, **kwargs):
+    def make(env, params, disturbances=None, **kwargs):
+        """``params`` are the planner's (``plan_params``: process noise zeroed).
+        ``disturbances``, the run's own params, reach a factory that reads the
+        disturbances' statistics (one declaring that argument), and no other."""
+        import inspect
         from importlib import import_module
 
-        return getattr(import_module(module), factory_name)(env, params, **kwargs)
+        factory = getattr(import_module(module), factory_name)
+        if disturbances is not None and "disturbances" in (
+            inspect.signature(factory).parameters
+        ):
+            kwargs["disturbances"] = disturbances
+        return factory(env, params, **kwargs)
 
     return make
 
@@ -698,6 +707,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v7: Amendment 3 (plane3d/PHYSICS.md): the protected 30 deg bank,
         # vectors every 150 s, and a scenario suite.
         # v9: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Still v9, unreleased (owner, 2026-11-23): the heading band travels
+        # at a 25 deg turn's rate, and the suite has no steady wind.
         version=9,
     ),
     EnvSpec(
@@ -741,7 +752,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=None,
         baselines_note=(
             "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 "
-            "score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the "
+            "score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the "
             "earlier cost, so the room is not measured (charter rule 9)."
         ),
         disturbance_fields=("gust_x", "gust_y", "gust_z"),
@@ -769,6 +780,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # v8: the altitude band is the ACS holding tolerance, +-100 ft, at the
         # hold's FL100 to FL260, below RVSM airspace (plane3d/PHYSICS.md).
         # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Still v10, unreleased (owner, 2026-11-23): the hold costs its fuel,
+        # is assigned green dot and prices only the maximum holding airspeed
+        # (plane3d/hold.py).
         version=10,
     ),
     EnvSpec(
@@ -987,6 +1001,10 @@ _SPECS: tuple[EnvSpec, ...] = (
         # diversion basin pumped back, influent flow swings, scenarios.
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        # Rebuilt on the shared solver (#199), so its oracle reads the solver's
+        # modules and its horizon and widths files; declaring them puts them in
+        # the oracle's fingerprint alone, as for every task on the solver.
+        oracle_data=_shared_oracle("ph_neutralization"),
         scenarios=_scenarios(
             "ph_neutralization_scenarios",
             module="target_gym.pc_gym.ph_neutralization.scenarios",
@@ -1067,9 +1085,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_reactor_pid_controller", module="target_gym.reactor.experts"
         ),
+        # The oracle plans the whole day on a knot model with the turbine as a
+        # move (reactor/oracle.py), on the shared solver. It reads no data file:
+        # the horizon summary stays as the record of the rods' loop on Tavg, and
+        # naming it keeps the solver's modules in the oracle's fingerprint. The
+        # smoothing widths left with the five-minute oracle it replaced.
         make_mpc=_mpc("make_reactor_mpc", module="target_gym.reactor.oracle"),
         tuned_gains_key="reactor",
-        oracle_data=_shared_oracle("reactor"),
+        oracle_data=("data/oracle_horizons/reactor.json",),
         # v10: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=10,
         noise_fields=("demand_sigma",),
@@ -1097,6 +1120,9 @@ _SPECS: tuple[EnvSpec, ...] = (
         # and a scenario suite.
         scenarios=_hvac_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
+        # Re-stamped in place on 2026-11-23 (v6 is in no release): the heat
+        # source's size, 38 W/m^2 [13], and a reset that meets the band when
+        # the office opens (hvac review; owner's decision).
         version=6,
     ),
     EnvSpec(
@@ -1233,6 +1259,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         # (size and period ours), so the normal day moves the unstable point.
         # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=7,
+        extra=(
+            "measures state knowledge, not control (2026-11-15, owner's "
+            "decision): J2 passed, but on 4 of its 5 scenarios the true-state "
+            "oracle tracks exactly (cost 2e-12 to 2e-10, every solve converged), "
+            "so its room of about 180 is the value of a perfect state reading; "
+            "only grade_change tests control (pc_gym/unstable_cstr/PHYSICS.md, "
+            "Status)"
+        ),
         tuned_gains_key="unstable_cstr",
         oracle_data=_shared_oracle("unstable_cstr"),
         scenarios=_scenarios(

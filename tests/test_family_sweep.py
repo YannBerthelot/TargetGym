@@ -3,6 +3,11 @@
 Contract: every ``ours`` number with a range is drawn inside it; numbers the table
 names as coupled move together, each group on one shared coordinate, the ``lo`` end
 of one with the ``lo`` end of the others.
+
+The reactor has its own runner, and its first check is that a plant at rest needs
+nothing for a day: lined out at full load with nothing moving, its rods parked, no
+boron and the turbine on its plan, it trips nothing and costs under a dollar
+(medium tier: a day of the plant).
 """
 
 import importlib
@@ -133,3 +138,12 @@ def test_every_charter_task_has_a_sweep_table_on_its_own_params(task):
         assert hasattr(default, name), f"{task}: {name} is not a parameter"
     for name, r in table["ranges"].items():
         assert r["lo"] != r["hi"] and r["why"], f"{task}: {name}"
+
+
+@pytest.mark.medium
+def test_a_reactor_at_rest_needs_nothing_for_a_day():
+    from target_gym.reactor import Reactor, ReactorParams
+
+    cost, trips = sweep.at_rest_cost(Reactor(), ReactorParams())
+    assert trips == 0
+    assert cost < 1.0

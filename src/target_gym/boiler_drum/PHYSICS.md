@@ -72,7 +72,7 @@ S1's own fits around 10 MPa, which the scan does not print legibly.
 | `runback_load` | 0.50 | of nominal | Ours, family range 0.40 to 0.60: "below the three-mill minimum" [S10], minimum load 25 to 40 % [S17]; inside the 37 to 56 % one plant's ID fan and feed pump derates ran to (REALITY.md [ST1]) |
 | `runback_rate_range` | 12 to 25 | %/min | Ours, family range from [S10]: a runback from 75 % load "in just over two minutes" |
 | `feed_trip_capacity` | 0.5 | of nominal steam | Ours, family range 0.5 to 0.6: the second of two 50 or 60 % pumps |
-| `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds" |
+| `standby_delay_range` | 30 to 60 | s | Ours, from [S11]: "more than 30 seconds". A motor-driven backup pump reaches rated speed in about 15 s [S32]; no upper end was found (REALITY.md sec. 4) |
 | `event_hold` | 9990 | s (stream, upsets) | 2.775 h, the median of six ID fan and feed pump forced derates at one plant, 0.35 to 67 h (REALITY.md [ST1]): how long a runback holds the unit back before it ramps up at its plan's rate; a window never sets it, so its runback holds to the end |
 | `window_ramp` | on | - | The window's one planned ramp; a stream turns it off and plans each load change as an event |
 | `steam_rate` | 3.5 | kg/kWh | Ours, family range 2.18 to 4.51 kg/kWh (ideal-cycle examples, [S23]) |
@@ -129,6 +129,15 @@ between the trips, -330 to +254 mm, is a trip limit with no price inside it, so
 the reference holds normal water level (0, inside the window's centre, 38 mm on
 the high side) and has no cheap edge to back off from. Steam pressure is a
 setpoint whose error is priced, not a zone.
+
+**Where the pressure price is.** The score has one running term, `imbalance`,
+and it is the pressure price. The turbine valve passes `q_demand p / p_nominal`
+(section 2), so the steam off the plan is `q_demand (p / p_nominal - 1)`: a
+pressure error and nothing else, as long as the valve passes the plan (it does
+except while the turbine reloads after a trip). One bar of error at nominal
+load is 1.098 kg/s off the plan, GBP 86.5 an hour past the meter's dead band.
+The dead band forgives 0.043 bar at nominal load, 0.107 bar at 40 % and
+0.171 bar at 25 %. The level has no price between the trips.
 
 ## 5. Observation, episode and score
 
@@ -205,30 +214,61 @@ beyond the steam meter's resolution, as generation at `steam_rate`, at the
 imbalance price; in boiler-following a pressure error is generation off
 schedule [S10]. A trip charges GBP 19,203. Level precision inside the trips
 earns nothing. The floor of the score, in closed form: steam within the
-meter's resolution of the plan costs zero, so the floor is 0; rule 9's room
-needs an oracle, not run yet ("not measured").
+meter's resolution of the plan costs zero, so the floor is 0. The measured
+ceiling and the room are under "Why the room is small" below.
 
-**The reference measured per scenario** (shipped three-element expert, seeds
-100 to 109, sensor noise on; `scripts` not changed): no trip in any scenario.
+**The shipped expert measured per scenario** (the three-element expert of
+`experts.py`, which is not the charter's reference; seeds 100 to 109, sensor
+noise on, measured again on 2026-11-23 through `benchmark.run_policy`): no
+trip in any scenario.
 
 | Scenario | Cost, GBP per hour (10 seeds) | Level, min and max |
 |---|---|---|
-| `normal` | 0.0 to 0.5 on nine seeds, 7.5 on one | -76 to +95 mm |
-| `industrial_swing` | 0.1 to 1.3, 13.0 on one | -80 to +156 mm |
-| `low_load` | 11.8 to 14.1, 0.2 on one | -104 to +205 mm |
-| `id_fan_runback` | 34 to 95 | -76 to +108 mm |
-| `feed_pump_trip` | 2.3 to 4.1 | -209 to +237 mm |
+| `normal` | 0.0 to 0.7 on eight seeds, 10.6 and 12.7 on two | -85 to +122 mm |
+| `industrial_swing` | 0.0 to 2.2 on eight seeds, 15.4 and 15.7 on two | -71 to +168 mm |
+| `low_load` | 12.0 to 16.7 | -141 to +207 mm |
+| `id_fan_runback` | 39 to 108 | -83 to +110 mm |
+| `feed_pump_trip` | 16.9 to 19.2 | -225 to +214 mm |
 
-The feed pump trip is where shrink and swell reach the trips: the level falls
-to 63 % of the low margin and, when the standby pump delivers, rises to 93 % of
-the high one (S10's unit fell to 84 % of its low margin). Rule 23: the
-reference costs more than zero on 49 of 50 seeds.
+The shipped expert costs more than zero on 48 of 50 seeds. Below about half
+load it does not hold: its level gain, 600 kg/s per m, was tuned at nominal
+load, where the feed's inverse response lasts 18.5 s, and the ladder's bump
+tests find 95 s at 25 % load. On `low_load` seed 101 (drawn on the seed's own
+key, not the record's) a 4 % load change starts a cycle of about 250 s, the
+level between -70 and +195 mm and the feed between 0 and 100 kg/s, to the end
+of the hour. `low_load`, and the hold at 50 % after each upset, cost it GBP 12
+to 19 an hour for that reason.
+
+The charter's reference is the ladder's cascade rung, with a level gain of
+58 kg/s per m. On 64 seeds per scenario it costs nothing on `normal` and
+`low_load`, GBP 0.025 an hour on `industrial_swing`, 55.9 on `id_fan_runback`
+and 0.57 on `feed_pump_trip`, and never trips. The feed pump trip is where it
+comes nearest a trip: the level falls to 84 % of the low margin at worst
+(-276 mm), which is S10's unit's own figure (6.5 in against 7.7 in), and stays
+under +62 mm.
 
 **Why the room is small (charter J5).** The ceiling (data/oracle_ceilings,
-seeds 100 to 109) costs zero on four of the five scenarios. The reference
-costs zero on `normal` and `low_load`. So room on `J` (5.3) rests on
-`id_fan_runback`, which is 0.04 % of the year. Two costs this family has and
-a level and firing controller sets were looked for, and neither is priced:
+seeds 100 to 109) costs zero on four of the five scenarios. The charter's
+reference, the ladder's cascade rung, costs zero on every `normal` and
+`low_load` seed. So room on `J` (5.3) rests on `id_fan_runback`:
+
+| Scenario | Reference, GBP per hour | Ceiling, GBP per hour | Paired gap, 95 % interval |
+|---|---|---|---|
+| `normal` | 0 | 0 | 0 |
+| `industrial_swing` | 0.015 | 0 | 0.015 (0.00 to 0.03) |
+| `low_load` | 0 | 0 | 0 |
+| `id_fan_runback` | 65.4 | 13.2 | 52.2 (45.2 to 58.4) |
+| `feed_pump_trip` | 0.66 | 0 | 0.66 (0.50 to 0.83) |
+
+The gap is beyond seed noise where it exists (the ceiling is cheaper on ten
+seeds of ten in both upsets; bootstrap over the paired seeds, review of
+2026-11-23). It is small in money. The record of 2026-11-08 weighs the runback
+3 h and the pump trip 2 h a year, the weights of that day: `J` is GBP 209 a
+year for the reference and GBP 40 for the ceiling. With `scenarios.py`'s 1.4
+and 2.8 h the same costs give GBP 105 and GBP 18 a year, room 5.7. Either
+way the whole room is worth GBP 90 to 170 a year on this unit, under 1 % of
+one trip's GBP 19,203. Two costs this family has and a level and firing
+controller sets were looked for, and neither is priced:
 
 - Wear per load follow. [S24] (Table 1-1, 2011 $) prices a "significant" load
   follow, a swing of more than 15 to 20 % of capacity, at a median $1.92 per
@@ -244,6 +284,32 @@ a level and firing controller sets were looked for, and neither is priced:
   allowed rate of change of the drum's saturation temperature. The standard's
   formula could not be fetched (it is sold, and the worked examples found
   were not reachable), so no limit is added.
+
+A third cost was found on 2026-11-23, and it lies outside this plant: fuel
+through excess air. [S3] holds that a boiler model for control testing "must
+contain at the very least" the excess oxygen subsystem beside pressure and
+level, and [S25]'s table puts a point of flue gas oxygen at 0.2 to 0.4 points
+of combustion efficiency on natural gas (85.4 against 85.2 % at 2 and 3 %
+oxygen with a 200 F stack rise, 80.8 against 80.4 % at 400 F). The model has
+no air side: firing is heat, and in the long run the fuel is the steam's
+enthalpy rise whatever the controller does. So this cost cannot be priced
+here without adding that side of the plant (REALITY.md section 5).
+
+That side was prototyped the same day, unregistered, on the reference's
+firing traces: [S25]'s oxygen and efficiency tables, [S3]'s 6.492 s oxygen
+lag, an air flow moving 1 % of span a second, an analyser reaching 90 % in 5 s
+with 0.05 % oxygen of scatter, and the lowest oxygen held under automatic
+control on natural gas, 1.8 % dry (REALITY.md section 5 for each). A reference
+by the charter's recipe (the metered fuel sets the air, a PI by SIMC trims it
+on the oxygen reading, the setpoint two standard deviations above the edge)
+burns 0.037 % more fuel than a controller holding the edge: 0.36 GWh of 976 a
+year, room 1.0004. That room is the reference's margin for its analyser's
+noise: 0.004 % with a noise-free analyser, 0.09 % with 0.125 % of scatter. The
+loop holds true oxygen to 0.015 %, and pipeline gas quality (ours: 0 to 2 %
+of spread over 15 minutes to a day, or a 6 % front in 15 minutes) changes
+nothing. Only a fuel moving by several percent within minutes does (5 % in 5
+minutes: 0.14 %), and no source for such a member's variation was looked for.
+The fuel loop was therefore not added.
 
 Nothing unsourced is added. The boiler's room stays as measured: this family
 is close to solved by a three-element controller on its normal days, and its
@@ -306,12 +372,72 @@ low trip than [S14] reports.
   the plan's (ours).
 - The feedwater flow loop is perfect: the action is flow, as a cascade's
   setpoint, with no pump or valve characteristic (cold review 7).
+- The firing reading (channel 3) is the heat after the 20 s lag, which this
+  file attributes to burners, furnace gas and tube walls, and it carries no
+  reading noise. The reference's cascade closes that lag in about a second
+  (bump test: gain 50, lag 20 s, dead time 1 s; Kc 0.2, Ti 8 s). A plant reads
+  fuel flow, ahead of the furnace and the walls. Effect: with that loop the
+  reference costs nothing on any `normal` or `low_load` seed (64 of 64 each);
+  without it, on the ladder's feedforward rung, it costs GBP 0.47 an hour on
+  `normal`, 1.75 on `industrial_swing` and 0.07 on `low_load`, about
+  GBP 4,300 a year (review of 2026-11-23).
 - The level reading is white noise with no delay; S3 fits coloured noise from
   surface boiling and carries a delay whose units it does not state (cold
   review 6).
-- Runbacks and feed pump trips are scenarios, one per window; their real
-  frequency is not found, and the headline weighs each scenario equally
-  (rule 21).
+- Runbacks and feed pump trips are scenarios, one per window. Their frequency
+  comes from one plant-year of four units (REALITY.md [ST1]), a thin base, and
+  the headline weighs each scenario by its hours a year (section 5).
+- A runback keeps the unit boiler-following on a plan. [S10] has it otherwise:
+  "If you are in coordinated mode, the boiler should go to manual control and
+  turbine-following mode for the steam turbine", and of the ID fan runback,
+  "notice how the turbine pushes the throttle pressure back to the setpoint".
+  Here the fans cap firing while the valve runs down an open plan, so the
+  pressure sags (3.6 to 13.4 bar on 64 seeds) and the score charges it as steam
+  off the plan. Effect: `id_fan_runback` carries five sixths of the room on
+  `J` in money (above), for a pressure error that the real unit's turbine
+  removes. With the plan's valve running back at 40 to 60, 100 to 120 and
+  300 %/min in place of 12 to 25, the reference's cost on that scenario falls
+  from GBP 58 an hour to 23, 13 and 7 (128 seeds; review of 2026-11-23). The
+  cost is not a control error: it is the plan's steam that the capped firing
+  cannot make, 2.1 t a window on average, GBP 48 of the reference's 56, and
+  the two move together seed by seed (correlation 0.999 on 64 seeds).
+- The turbine valve is the plan's, not the agent's, where REALITY.md's job
+  sentence gives the operator "the boiler and turbine masters" (section 6).
+  The standby pump's 30 to 60 s is ours above [S11]'s "more than 30 seconds".
+  In that range the reference never trips (128 seeds); with 60 to 90, 90 to
+  120 and 120 to 180 s it trips on 1, 23 and 35 seeds of 128, the level
+  already at the trip when the pump delivers. No seed trips at any of those
+  delays once the plan runs back at 40 %/min or faster. Effect: the upsets
+  carry no trip risk as scored, and the move that would remove one, shedding
+  load faster at the price of steam off the plan, is not the agent's.
+  Giving the agent that move was looked at on 2026-11-23 and dropped. The
+  sources put the standby's start at about 15 s to rated speed [S32] and at
+  "more than 30 seconds" to deliver [S11], and [S11] has the drum's normal
+  level set so that the unit rides through it; no source read gives a longer
+  delay (one, not read on its page, has about 90 s allowed for the transfer,
+  REALITY.md "For the owner to open by hand"). With the delay drawn in 15 to
+  90 s the reference trips on no seed of 128. The move, emulated by the
+  plan's rate with the steam it sheds charged at the imbalance price, costs
+  GBP 33 an upset and is cheaper on no seed (paired gap -32.5, 95 % interval
+  -35.0 to -30.1). Only with the delay in 60 to 90 s does it win, on the one
+  seed of 128 that trips.
+- The level has no price between the trips and the oracle reads it true, so
+  the cheapest plan spends the drum's water: the ceiling's plan on
+  `id_fan_runback` stays 0.5 mm inside a trip level, its back-off (the
+  record's planned limit excess), where every other scenario's
+  stays 176 mm or more away. Without foresight the same move is worth part of
+  that room: the reference with its level setpoint moved to -250 mm while the
+  fans cap firing costs 22 % less on that scenario (GBP 43.7 against 55.9 an
+  hour, 64 seeds), its lowest level 51 mm from the low trip. REALITY.md found
+  no alarm distance to price (section 3). The reason it pays: water already
+  in the drum takes 1.41 MJ/kg to evaporate, feedwater 1.71. The band between
+  the trips holds 9.6 t of water, so spending it in place of feedwater while
+  firing is capped makes 1.7 t more steam, GBP 39 of the ceiling's gain of 52
+  an hour, if the drum is filled to the high trip before the fan trips and
+  emptied to the low one after. Half of that needs the fan trip known ahead.
+- A trip's lump holds the lost generation only. [S24] Table 1-1 adds the wear
+  of the hot start, a median $36 per MW of capacity for gas-fired steam units
+  and $94 for small subcritical coal (2011 $), which the lump leaves out.
 - Pressure is held at one setpoint; sliding pressure [S2] is not modelled.
 - A restart is instant at a new load; a real one runs through single-element
   start-up with the level lowered for swell [S5, S19].
@@ -332,8 +458,13 @@ low trip than [S14] reports.
 ## 9. What the oracle needs
 
 - `oracle.py` is ported to v5 (plan, upset caps, GBP cost with the meter's dead
-  band smoothed, a resting target for feedwater, G12) and builds; it has not
-  run. It knows the upset ahead, as a ceiling may.
+  band smoothed, a resting target for feedwater, G12). It has run: the ceiling
+  record of 2026-11-08 (`data/oracle_ceilings/boiler_drum.json`) and the
+  baseline of 2026-11-15. It knows the upset ahead, as a ceiling may. So does
+  the receding slot: its horizon is 1926 steps (`data/oracle_horizons`), longer
+  than the 1800-step window, and it plans on the same state, upset included.
+  On the two upset scenarios it is therefore a second ceiling, not the
+  charter's J3 line that knows the schedules but no future disturbance.
 - Its horizon must cover a runback and the standby pump's delay (about 3 to 5
   min, 90 to 150 steps), and the trip's 10 s delay is not planned (the limit is
   held on every step, stricter than the plant).

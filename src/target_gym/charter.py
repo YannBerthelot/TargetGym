@@ -57,18 +57,28 @@ ANCHOR_SEEDS = tuple(range(200, 210))
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
 EXPERT_REFERENCE = ("reactor",)
-#: Tasks whose oracle may not be run, with the reason J3 prints. None since the pH
-#: oracle was rebuilt on the shared solver (#199).
-MPC_NOT_MEASURED: dict[str, str] = {}
+#: Tasks whose oracle may not be run, with the reason J3 prints. pH's oracle was
+#: rebuilt for the job score on the shared solver (#199), so it is measured.
+MPC_NOT_MEASURED: dict[str, str] = {
+    "distillation": (
+        "the oracle is being rebuilt in its own PR (owner, 2026-11-13); its "
+        "MPC line is recorded when that lands"
+    ),
+}
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
 
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
-    """Every task with a ladder row, less the fixtures, plus the expert-reference
-    tasks."""
+    """Every task with a ladder row, less the fixtures and the Extra tasks, plus
+    the expert-reference tasks. An Extra task (``EnvSpec.extra``) is never
+    scored, so its record is kept but no longer held current (owner's
+    decision, 2026-11-15)."""
+    from target_gym.registry import REGISTRY
+
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
-    return sorted((rows - set(FIXTURES)) | set(EXPERT_REFERENCE))
+    extra = {name for name, spec in REGISTRY.items() if spec.extra}
+    return sorted((rows - set(FIXTURES) - extra) | set(EXPERT_REFERENCE))
 
 
 # --- J2 ---------------------------------------------------------------------
@@ -179,6 +189,41 @@ def j3(record: dict) -> dict:
         "reference": record.get("reference", {}).get("line", NOT_MEASURED),
         "mpc": record.get("mpc", {}).get("line", NOT_MEASURED),
         "ceiling": record.get("ceiling", {}).get("line", NOT_MEASURED),
+    }
+
+
+#: Room where the ceiling's cost is within its measurement noise of 0 (charter, Words).
+UNBOUNDED = "unbounded"
+
+
+def room(reference, ceiling, weights: dict, noise: dict | None = None):
+    """Room (charter, Words and J3): the reference's cost over the ceiling's, per
+    scenario and on ``J``, from two J3 lines, or ``NOT_MEASURED`` without both.
+
+    ``noise`` is each scenario's ceiling measurement noise in cost per step, such
+    as what its solver's starts end apart; a scenario it leaves out has none.
+    Where the ceiling is within it of 0 the room is ``UNBOUNDED``, and on ``J``
+    against the weighted noise. Each scenario also carries its ``gap``, ``w_s``
+    times the reference's mean less the ceiling's; they sum to ``J``'s. A scenario
+    whose cost no controller can avoid shows as a large cost on both lines and a
+    small gap, which a ratio of the two ``J`` alone would hide.
+    """
+    if NOT_MEASURED in (reference, ceiling):
+        return NOT_MEASURED
+    noise = noise or {}
+
+    def ratio(cost, floor, within):
+        return UNBOUNDED if floor <= within else cost / floor
+
+    per = {}
+    for s, w in weights.items():
+        r, c = (ln["scenarios"][s]["mean"] for ln in (reference, ceiling))
+        per[s] = {"room": ratio(r, c, noise.get(s, 0.0)), "gap": w * (r - c)}
+    within = sum(w * noise.get(s, 0.0) for s, w in weights.items())
+    return {
+        "scenarios": per,
+        "J": ratio(reference["J"], ceiling["J"], within),
+        "gap": reference["J"] - ceiling["J"],
     }
 
 

@@ -18,8 +18,8 @@ env's actions, as the wind turbine's does: its oracle's actions are not its move
 it) and keeps those moves as a candidate, so the ceiling costs no more than the oracle's
 run by construction. ``+expert`` (owner, 2026-11-14, amending G8: a ceiling may start
 from the expert's run, an oracle still never does) does the same with the shipped
-expert's run on an expert-reference task (the reactor): a second solve from its moves,
-and its moves kept as a candidate, with ``expert_fallback`` and ``improved_on_expert``
+expert's run, on the reactor and on the process tasks (compressor_surge, owner,
+2026-11-15): a further solve from its moves, and its moves kept as a candidate, with ``expert_fallback`` and ``improved_on_expert``
 recorded like the oracle's.
 Without it the start is cold, as the first ceilings were. The choice is written into
 each solve's row and the file (``start_option``), with per seed ``oracle_fallback``
@@ -139,9 +139,10 @@ def oracle_run(task, scenario, seed) -> dict:
     from target_gym.benchmark import shipped_policy
 
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
+    oracle = shipped_policy("mpc")
+    oracle.bind(env, params, [seed])  # the scenario's own problem, as run_suite's
     rollout = run_policy(
-        shipped_policy("mpc"), env, params, task_info(task, env, params, 1),
-        seeds=[seed],
+        oracle, env, params, task_info(task, env, params, 1), seeds=[seed]
     )  # fmt: skip
     (ep,) = episodes_of(rollout)
     return {
@@ -152,12 +153,13 @@ def oracle_run(task, scenario, seed) -> dict:
 
 
 def expert_run(task, scenario, seed) -> dict:
-    """The shipped expert's realised moves on ``seed`` (the reference of the
-    expert-reference tasks, ``charter.EXPERT_REFERENCE``), its cost and trips."""
+    """The shipped expert's realised moves on ``seed``, its cost and trips: the
+    reference of the expert-reference tasks (``charter.EXPERT_REFERENCE``), and a
+    start any ceiling may take (G8 as amended, 2026-11-14)."""
     from target_gym.benchmark import shipped_policy
 
-    if task not in charter.EXPERT_REFERENCE:
-        raise SystemExit(f"{task}: --start expert is for expert-reference tasks")
+    if task not in charter.EXPERT_REFERENCE and task not in PROCESS:
+        raise SystemExit(f"{task}: --start expert is for the reactor and process tasks")
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
     rollout = run_policy(
         shipped_policy("pid"), env, params, task_info(task, env, params, 1),
@@ -171,7 +173,7 @@ def expert_run(task, scenario, seed) -> dict:
     }
 
 
-def solve_process(task, scenario, seed, warm=None):
+def solve_process(task, scenario, seed, warm=None, expert=None):
     from target_gym.pc_gym import foresight as F
 
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
@@ -184,6 +186,8 @@ def solve_process(task, scenario, seed, warm=None):
     starts = {"hold": np.tile(moves[:1], (T, 1)), "reference": moves}
     if warm is not None:
         starts["mpc"] = warm
+    if expert is not None:
+        starts["expert"] = expert
     restarts = 0
     if task == "compressor_surge":
         starts["mid"] = 0.5 * (starts["hold"] + starts["reference"])
@@ -424,7 +428,9 @@ def solve(task, scenario, seed, out_dir, start="cold"):
     expert = expert_run(task, scenario, seed) if "expert" in opts else None
     warm = None if mpc is None else mpc["moves"]
     if task in PROCESS:
-        res = solve_process(task, scenario, seed, warm)
+        res = solve_process(
+            task, scenario, seed, warm, None if expert is None else expert["moves"]
+        )
     elif task in SHOOTING:
         res = solve_shooting(task, scenario, seed, warm)
         if task in K11_RETRY and (scenario in K11_RETRY[task] or res["trips"]):

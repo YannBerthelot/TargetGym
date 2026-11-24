@@ -673,3 +673,82 @@ With upsets and noise on, the oracle against its expert, seeds 0 to 4:
 
 No trips on either side. All 657 solves converge (KKT at most 1e-8), and none
 fail or hit the cap.
+
+## Amendment 5, 2026-11-15: the plant's precision
+
+Decided by the owner for `boiler_drum`. The boiler's planner smooths nothing and its
+plant draws nothing after the reset, so K11 backed off neither trip level. On an
+induced-draft fan runback the plan rode the low trip at exactly -0.330 m, with
+converged solves (KKT about 1e-9, model replay gap about 1e-10). The float32 plant
+the score runs ended up to 6.7e-7 m past the float64 plan, the env's inclusive trip
+timer ran, and 6 of 10 runback seeds tripped. The plan also rode the high trip.
+
+**K11p.** At a trip level the plan can ride, K11 adds a third term: the plant's
+precision, equal to the ceiling's back-off at that limit (`ceiling_backoffs`).
+For the boiler that is one sigma of the level's reading, 0.5 mm, on both trip
+levels, and nothing on the floor of the steam under the water, which the env clips.
+It is one rule for the ceiling and the receding slot, for the same reason, and not
+a gap measured by watching the trip. Tasks in `PRECISION`
+(`scripts/measure_oracle_widths.py`) record it as `limit_precision`, summed into
+`limit_backoffs`.
+
+## Amendment 6, 2026-11-23: the actuator's window
+
+Written on the wind turbine as it stands (wind_turbine-v6, stamp f5a12e6ff030327b, before the
+rebuild the owner chose the same day in the wind review, draft PR #224), where
+over-production is free and the plan therefore rides the overspeed level. Its numbers
+must be re-derived on the rebuilt plant (rotor-averaged wind, the published S1
+controller, power held at rating) when it lands; the rule K11a stands.
+
+Decided by the owner for `wind_turbine`: "Actuator window, about 2 s". The receding
+oracle tripped the overspeed level on 35 of 60 MPC-line seeds. Its plan forecasts the
+turbulence decaying to the mean wind, as the receding slot must (only the ceiling knows
+the wind ahead). Over-production is free and pitch travel wears the pitch system, so
+the plan holds the pitch and lets the rotor run up in a gust. On normal seed 101 it held
+the pitch at 25.3 deg for 187 steps and came within 4e-5 rad/s of the level, with every
+solve converged and no replay trip. T_c is one step, so K11h's window over T_c is one
+innovation, K11's own 0.0073 rad/s.
+
+**K11a.** Where the actuator left to correct has no dead time but a rate limit, K11h's
+window is the time that rate limit needs to take back a 2-sigma disturbance. For the
+pitch against a wind gust: dbeta = 2 sigma(v) (dtau/dv) / |dtau/dbeta|, the pitch change
+that cancels the gust's aerodynamic torque at the operating point the reset establishes
+(rated speed and its pitch), and the window is dbeta / pitch_rate_max, the worst over
+the task's registered mean winds (13 to 25 m/s, every 1 m/s), in whole steps. With
+sigma = Iref (0.75 V + 5.6) [S13] and Iref 0.14, the window is 0.78 to 1.28 s, longest
+at 13 m/s (dbeta 10.2 deg at 8 deg/s); at gusty_class_a's Iref 0.16 the longest is
+1.46 s. Both give 6 steps of 0.25 s, so the window is 6 steps (1.5 s), fixed before any
+run (`HOLD_WINDOW`).
+
+The term is then K11h's: the worst over j = 1 to 6 and the mean winds of the range the
+oracle's run draws from (its ends and every 1 m/s between) of 2 s_j |d omega_j / d v|,
+a wind deviation the plan does not forecast held from the solve, with the move held,
+from the reset's operating point; s_j = sigma sqrt(1 - a^2j), a = exp(-dt / T),
+T = Kaimal L_u / V. It replaces K11's one-step noise term; K11's smoothing gap stays.
+Sigma and T come from the run's own params, so a scenario's turbulence moves the term,
+and the window does not.
+
+**Its limit.** The formula linearises the pitch's authority at the operating point. At
+the fine stop (rated wind, 11.4 m/s) that authority is 15 times smaller than at 13 m/s
+and grows as the pitch leaves the stop, so the linear formula overstates the window
+there: 7.6 s at 11.4 m/s, 2.6 s at 11.7, 2.0 s at 12. The window is therefore taken
+over the registered range, where the pitch regulates. near_rated's mean winds (11.4 to
+14 m/s) partly fall below that range, and the amendment does not cover them by the
+formula: it gives them the same 6 steps (the owner, the same day). The gate checks it.
+A trip on any scenario stops the re-run, and a per-scenario window (the formula's, or
+over the pitch's regulating winds only) goes back to the owner.
+
+**What the owner was shown and what the rule gave.** The owner chose from a window of
+about 2 s, shown as 0.128 rad/s at j = 8 (a deviation decaying with the turbulence,
+three mean winds). The formula gave 1.5 s, which the owner kept. Taken as the rule
+states it (the deviation held, every 1 m/s from 13 to 25), the term at 6 steps is
+0.109 rad/s on the registered turbulence and 0.125 on gusty_class_a's, against 0.093
+and 0.106 in the estimate sent before the formula was fixed. Per scenario: normal,
+extreme_gust, near_cut_out and curtailment 0.109, gusty_class_a 0.125, near_rated
+0.051. The headroom from rated speed to the level is 0.254 rad/s.
+
+**The planner's turbulence.** `plan_params` zeroes the turbulence (a noise field), so
+the planner's own params cannot size the term, and they sized the extreme gust at 0
+where the state carries no size (a window). Each oracle construction now passes the
+run's own params as `disturbances` to a factory that declares them
+(`registry._mpc`), and the wind oracle sizes both from them. No other oracle reads them.

@@ -74,7 +74,9 @@ LABELS = {
 CAPABILITIES = {
     "first_order": (),  # a sanity fixture: it runs, and moves no spoke
     "cstr": ("basic", "nonlinearity"),
-    "unstable_cstr": ("instability", "disturbance", "safety"),
+    # Extra (owner, 2026-11-15): its room measures a perfect state reading,
+    # not control, so it moves no spoke (pc_gym/unstable_cstr/PHYSICS.md).
+    "unstable_cstr": (),
     "ph_neutralization": ("nonlinearity", "disturbance"),
     "four_tank": ("coupling", "inverse_response"),
     "distillation": ("coupling", "delay"),

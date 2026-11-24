@@ -16,7 +16,10 @@ section 5.4, and decision S10), run by
   ``data/oracle_widths/compressor_surge.json``); the valve behind its
   positioner's dead time, as the env passes it (``history``): the state
   carries the commands still in the positioner; the consumers' deviation on
-  its noise-free mean path, a^t times its measured value;
+  its noise-free mean path, a^t times its measured value; their schedule at
+  the ramp the episode's own schedule carries (``schedule_ramp``: 1, 5 or
+  15 s by scenario), as the env reads it, not the params' (owner, 2026-11-23:
+  the problem the oracle solves is the episode's);
 - objective (version 3, charter Amendment 3): the recycle energy in kJ, and
   the header zone as a smooth hinge, the zone price per second past the band
   (T2);
@@ -35,6 +38,7 @@ import math
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.tree_util import Partial as partial
 
 from target_gym.compressor_surge.env import (
@@ -43,6 +47,7 @@ from target_gym.compressor_surge.env import (
     compute_velocity,
     live_target,
     recycle_flow,
+    schedule_ramp,
     scheduled_setpoint,
     suction_density,
 )
@@ -105,25 +110,26 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     phi_min, the substep Phis, the rate limits' arguments)``. ``widths`` are
     the drive's and the valve's (0.0 is the exact clip), and ``deltas[i, j]``
     is added to site i's output at substep j (K5's probe)."""
-    _, demand, clock, drift, time = task
+    _, demand, clock, drift, ramp = task
     n, K = _substeps(env.integration_method), history(p)
     h, rho = p.delta_t / n, suction_density(p)
     N_cmd, x_cmd = commands(p, u)
     dev = drift * jnp.exp(-p.demand_theta * p.delta_t) ** t
     deltas = jnp.zeros((2, n)) if deltas is None else deltas
-    # The positioner's queue, as the env's: each command with the time it was
-    # issued, the step's start, so at the same float operations.
+    # The positioner's queue, as the env's: the command at position i was
+    # issued i steps before this one, and passes over a substep that starts
+    # ``valve_lag`` or more after it, counted in whole substeps.
     cmds = jnp.concatenate([jnp.reshape(x_cmd, (1,)), x[5 : 5 + K]])
-    issued = (time + t - jnp.arange(K + 1)) * p.delta_t
-    t0 = (time + t) * p.delta_t
+    age = jnp.arange(K + 1) * n
+    lag = p.valve_lag / h - 0.5
 
-    def delayed(tau):
-        ready = issued <= tau - p.valve_lag
+    def delayed(j):
+        ready = age + j >= lag
         return cmds[jnp.where(jnp.any(ready), jnp.argmax(ready), K)]
 
     def substep(carry, j):
         m_c, dp, N, N_ramp, xv = carry
-        args = jnp.stack([N_cmd - N_ramp, delayed(t0 + (j + 1) * h) - xv])
+        args = jnp.stack([N_cmd - N_ramp, delayed(j) - xv])
         r_N, lo_x, hi_x = (
             p.drive_rate * h,
             p.valve_close_rate * h,
@@ -133,7 +139,7 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
         xv = xv + softplus_clip(args[1], -lo_x, hi_x, widths[1]) + deltas[1, j]
         velocity = partial(
             compute_velocity, action=None, N_ramp=N_ramp, x=xv, dev=dev,
-            demand_levels=demand, params=p,
+            demand_levels=demand, params=p, ramp=ramp,
         )  # fmt: skip
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, (clock + t) * p.delta_t + j * h]),
@@ -155,7 +161,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, *_ = d["task"]
+        setpoints, _, clock, _, _ = d["task"]
         target = scheduled_setpoint(setpoints, 0.0, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
@@ -177,7 +183,8 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
             [jnp.stack([s.m_c, s.dp, s.N, s.N_ramp, s.x]), s.valve_cmds[:K]]
         ),
         data=lambda s: (
-            s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev, s.time,
+            s.setpoint_levels, s.demand_levels, s.block_clock, s.demand_dev,
+            schedule_ramp(s, p),
         ),
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
@@ -200,18 +207,64 @@ def make_compressor_surge_mpc(env, params) -> Oracle:
 #: the recycle energy; ``zone``, ``surge`` and the trip are the margins.
 CEILING_TERMS = ("energy",)
 
-#: The ceiling's margins' units: 0.1 kPa of header pressure, 0.01 of Phi.
+#: The rows of ``ceiling_margins``, in order.
+CEILING_ROWS = ("zone_low", "zone_high", "surge", "drive_reach", "valve_reach")
+#: The ceiling's margins' units: 0.1 kPa of header pressure, 0.01 of Phi, and
+#: one step's travel of an actuator (a reach).
 ZONE_UNIT, PHI_UNIT = 0.1 * KPA, 0.01
+#: What a reach row allows past the reach, in reaches: float32 rounding in
+#: where an actuator stops is about 1e-4 of one.
+REACH_SLACK = 0.01
 
 
 def ceiling_margins(state, p):
-    """The ceiling's margins (``pc_gym.foresight``): the header inside its zone,
-    where ``zone`` charges nothing (``|target - dp| <= header_band``), in tenths
-    of a kPa, backed off a tenth of one; and the flow forward on every substep,
-    where no surge is counted (a surge is a reversal), as the step's soft
-    minimum of Phi, which is below every substep's, in hundredths, backed off
-    one. The price is a step outside the zone."""
+    """The ceiling's margins (``pc_gym.foresight``), rows ``CEILING_ROWS``, and
+    their price, a step outside the zone.
+
+    - The header inside its zone, where ``zone`` charges nothing
+      (``|target - dp| <= header_band``), in tenths of a kPa, backed off a
+      tenth of one.
+    - The plant on or right of the surge line, Phi = 2W, as the step's soft
+      minimum of Phi, which is below every substep's, in hundredths. A surge
+      is a flow reversal, far left of the line; but left of the line the model
+      has no rotating stall (PHYSICS.md, D1), so a plan there costs less than
+      a machine would. The oracle's limit is the same line.
+    - Each command inside its actuator's reach (the oracle's T1r, as a
+      margin), in reaches. Past the reach the drive or the valve runs at full
+      rate through the step, as at it, so the plan's cost does not see the
+      command and its gradient is zero: the solver stalled there. The drive's
+      command is read against where the drive stands after the step; the
+      valve's, behind its dead time, against the command before it.
+    """
     e = live_target(state, p) - state.dp
     zone = jnp.stack([p.header_band - e, p.header_band + e]) / ZONE_UNIT - 0.1
-    surge = state.phi_min / PHI_UNIT - 1.0
-    return jnp.concatenate([zone, surge[None]]), p.zone_price * p.delta_t
+    surge = (state.phi_min - 2.0 * p.W) / PHI_UNIT
+    N_cmd, _ = commands(p, state.actuator_held)
+    drive = REACH_SLACK - jnp.abs(N_cmd - state.N_ramp) / (p.drive_rate * p.delta_t)
+    move = state.valve_cmds[0] - state.valve_cmds[1]
+    valve = (
+        REACH_SLACK
+        - jnp.maximum(move / (p.valve_open_rate * p.delta_t) - 1.0, 0.0)
+        - jnp.maximum(-move / (p.valve_close_rate * p.delta_t) - 1.0, 0.0)
+    )
+    return (
+        jnp.concatenate([zone, jnp.stack([surge, drive, valve])]),
+        p.zone_price * p.delta_t,
+    )
+
+
+def ceiling_start(env, p, state, moves):
+    """``moves`` ``(T, 2)``, raw, each clipped into the reach of the one
+    before it, the first into the reach of where the actuators stand in
+    ``state``: a start for the ceiling's solve. The plant runs it as it runs
+    ``moves``, and every one of its commands has a gradient."""
+    hold = float(p.delta_t)
+    drive = 2.0 * float(p.drive_rate) * hold / float(p.N_max - p.N_min)
+    up = np.array([drive, 2.0 * float(p.valve_open_rate) * hold])
+    down = np.array([drive, 2.0 * float(p.valve_close_rate) * hold])
+    last = np.asarray(env.initial_action(state, p), float)
+    out = np.empty(np.shape(moves), float)
+    for t, move in enumerate(np.clip(np.asarray(moves, float), -1.0, 1.0)):
+        last = np.clip(move, last - down, last + up)
+        out[t] = last
+    return out
