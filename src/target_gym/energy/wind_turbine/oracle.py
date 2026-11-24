@@ -40,7 +40,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   free and pays for power above the set point at ten times the energy price, a
   surrogate (the env charges nothing there: it never delivers it), so a plan
   stays where the model and the env agree. Ten times is ours: an exact penalty
-  only has to exceed what shedding power can buy;
+  only has to exceed what shedding power can buy. The solver's
+  model reads the tables smoothed, so a plan resting on the set point there
+  ends a little over it on the exact ones: a ceiling's plan is trimmed to the
+  cap on the exact tables before the env runs it (``trim_plan``);
 - dropped guards (T4): the speed and wind floors, and the pitch and torque
   clips after the step, since a ramp toward an in-range command stays in range.
 
@@ -224,6 +227,55 @@ def wind_step(env, p, x, v, t, task, widths):
         ),
     )  # fmt: skip
     return x1, v_wind, rating
+
+
+#: The share of the set point a trimmed plan keeps under it (``trim_plan``). Off
+#: the cap the float32 plant follows a float64 plan: over an episode's 2400
+#: steps no step clipped and the speeds ended 1.2e-5 of rated apart (normal
+#: seed 102, 2026-11-24).
+TRIM_MARGIN = 1.0e-5
+
+
+def trim_plan(env, p, task, x0, moves):
+    """A ceiling plan's ``moves`` (steps, 2) from the state ``x0`` on the data
+    ``task``, with the torque trimmed to what the converter delivers on the
+    plant's exact tables (owner, 2026-11-24).
+
+    The solver's model reads Cp and Ct smoothed (K2), so a plan that rests on
+    the set point there ends over it on the exact tables: by 0.8 to 11 kW of
+    5 MW on the plans measured, and by 0 W in its own model, so the price on
+    the model's excess does not see it. The env runs a plan open loop, each
+    move from the torque the plant is at (``wind_model``'s action): where the
+    plant ends a step over the set point the converter clips its torque, the
+    moves that follow start from the clipped torque, and the rotor is braked
+    less than planned from then on. Plans 3.8 to 5.5 kW over tripped the plant
+    on every re-solve of normal seed 102, and one 11 kW over on near_rated seed
+    101 (2026-11-24).
+
+    So the plan is run here on the exact tables (width 0), toward the pitch and
+    torque it asks for after every step. Where a step would end over the set
+    point less ``TRIM_MARGIN`` of it, the torque ends on what delivers exactly
+    that at the speed the step ends on (three passes: the speed moves 4e-8 with
+    a 0.2 % trim). The pitch is never touched, the torque is only ever lowered
+    (so the plan's reach rows still hold), and a plan under the cap comes back
+    as it was."""
+    x0 = jnp.asarray(x0)
+    moves = jnp.asarray(moves, x0.dtype)
+    reach_, exact = jnp.asarray(travel(p), x0.dtype), jnp.zeros(3, x0.dtype)
+    asked = x0[1:3] + jnp.cumsum(moves * reach_, axis=0)
+
+    def step(x, inp):
+        target, t = inp
+        u = jnp.clip((target - x[1:3]) / reach_, -1.0, 1.0)
+        for _ in range(3):
+            x1, _, rating = wind_step(env, p, x, u, t, task, exact)
+            power = electrical_power(x1[0], x1[2], p)
+            cap = (1.0 - TRIM_MARGIN) * rating
+            held = jnp.clip((x1[2] * cap / power - x[2]) / reach_[1], -1.0, 1.0)
+            u = u.at[1].set(jnp.where(power > cap, held, u[1]))
+        return wind_step(env, p, x, u, t, task, exact)[0], u
+
+    return jax.lax.scan(step, x0, (asked, jnp.arange(moves.shape[0])))[1]
 
 
 def filter_lags(state):

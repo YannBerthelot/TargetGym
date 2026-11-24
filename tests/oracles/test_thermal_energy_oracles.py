@@ -174,6 +174,115 @@ def test_wind_plan_pays_for_power_the_converter_will_not_deliver():
     assert paid == pytest.approx(10.0 * 60.0 * mwh, rel=1e-9)
 
 
+def _wind_plant_run(env, p, state, keys, moves):
+    """The float32 plant's own run of ``moves`` as the recorder replays a plan:
+    each move from the pitch and torque the plant is at (``wind_model``'s
+    action). (Torque, power, set point) after every step."""
+    from target_gym.energy.wind_turbine.oracle import wind_model
+
+    act = wind_model(env, p, rest=False).action
+    s, out = state, []
+    for t, u in enumerate(np.asarray(moves, np.float32)):
+        _, s, _, _, _ = env.step_env(keys[t], s, act(s, jnp.asarray(u)), p)
+        out.append([float(s.torque), float(s.power), float(s.target_power)])
+    return np.array(out).T
+
+
+def test_wind_trimmed_plan_runs_on_the_plant_without_the_converter_clipping():
+    """The env runs a ceiling's plan open loop, each move from the torque the
+    plant is at. Where the plant ends a step over the set point the converter
+    clips its torque, the moves that follow start from the clipped torque, and
+    the rotor is braked less than planned from then on. The solver's model
+    reads Cp and Ct smoothed (K2), so a plan resting on the set point there
+    ends 0.8 to 11 kW of 5 MW over it on the plant's exact tables (the plans
+    measured, 2026-11-24): those 3.8 kW and more over tripped the plant (normal
+    seed 102 on every re-solve, near_rated seed 101).
+
+    The owner chose (2026-11-24): the plan's torque is trimmed on the exact
+    tables to the set point less 0.001 % of it (``trim_plan``). Off the cap the
+    float32 plant follows a float64 plan (measured on that seed over 2400
+    steps: no step clipped, speed 1.2e-5 of rated apart).
+
+    Forty steps from the reset, which sits on the set point, inside S1's torque
+    limit as a solver's plan is (47.4 kN m, 4.3 kN m over the reset's). The plan
+    raises the torque 375 N m a step for ten steps (0.1 of the 3.75 kN m reach,
+    S1's 15 kN m/s over 0.25 s) to 3.75 kN m over, holds it, dips 4.5 kN m in
+    four steps, comes back and holds, with the pitch moving a little both ways.
+    On over half the steps it asks for more than the converter delivers (the
+    rotor slows under the load, so the cap's torque rises toward the plan's).
+
+    - Untrimmed, the plant clips: its torque ends over 1 kN m under the plan's.
+    - Trimmed, the pitch moves are the plan's, and the plant ends every step on
+      the torque the trimmed plan says, within 0.5 N m (float32 against
+      float64: 43 kN m at 6e-8 a step, forty steps): the converter clipped
+      nothing.
+    - Where the plan asked for more than the cap, the plant delivers within
+      0.002 % of the set point: the trim takes off no more than it has to."""
+    from target_gym.energy.wind_turbine.oracle import (
+        ceiling_data,
+        trim_plan,
+        wind_model,
+    )
+
+    spec = REGISTRY["wind_turbine"]
+    env, p = spec.make_env(), spec.make_test_params()
+    moves = np.array(
+        [[0.05, 0.1]] * 10
+        + [[-0.05, 0.0]] * 10
+        + [[0.0, -0.3]] * 4
+        + [[0.0, 0.3]] * 4
+        + [[0.02, 0.0]] * 12
+    )
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    keys = steps[:, 0]
+    st = env.reset_env(resets[0], p)[1]
+    data = ceiling_data(env, p, st, keys)
+    with enable_x64():
+        p64 = float64(p)
+        x0 = wind_model(env, p64, rest=False).state_x(float64(st))
+        trimmed = np.asarray(trim_plan(env, p64, float64(data), x0, jnp.asarray(moves)))
+    reach = 15000.0 * 0.25  # N m of torque a step at S1's rate limit
+    asked = float(st.torque) + np.cumsum(moves[:, 1]) * reach
+    planned = float(st.torque) + np.cumsum(trimmed[:, 1]) * reach
+
+    clipped, _, _ = _wind_plant_run(env, p, st, keys, moves)
+    assert np.max(asked - clipped) > 1000.0
+
+    torque, power, set_point = _wind_plant_run(env, p, st, keys, trimmed)
+    np.testing.assert_allclose(trimmed[:, 0], moves[:, 0], atol=1e-12)
+    np.testing.assert_allclose(torque, planned, atol=0.5)
+    more = asked - planned > 1.0
+    assert more.sum() > 20
+    assert np.all(power[more] >= set_point[more] * (1.0 - 2.0e-5))
+
+
+def test_wind_trim_leaves_a_plan_under_the_cap_as_it_is():
+    """A plan that never asks for more than the set point is not the trim's
+    business: from the reset with the torque 20 % under the set point's, forty
+    small moves stay under it, and come back unchanged."""
+    from target_gym.energy.wind_turbine.oracle import (
+        ceiling_data,
+        trim_plan,
+        wind_model,
+    )
+
+    spec = REGISTRY["wind_turbine"]
+    env, p = spec.make_env(), spec.make_test_params()
+    moves = np.random.default_rng(0).uniform(-1.0, 1.0, (40, 2)) * [1.0, 0.2]
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    keys = steps[:, 0]
+    st = env.reset_env(resets[0], p)[1]
+    st = st.replace(torque=0.8 * st.torque)
+    data = ceiling_data(env, p, st, keys)
+    _, power, set_point = _wind_plant_run(env, p, st, keys, moves)
+    assert np.all(power < 0.95 * set_point)
+    with enable_x64():
+        p64 = float64(p)
+        x0 = wind_model(env, p64, rest=False).state_x(float64(st))
+        trimmed = np.asarray(trim_plan(env, p64, float64(data), x0, jnp.asarray(moves)))
+    np.testing.assert_allclose(trimmed, moves, atol=1e-9)
+
+
 def test_wind_plan_on_its_own_rainflow_rows_costs_what_the_env_charges():
     """The outer loop's contract (Loew and Bottasso 2022, online rainflow): with
     the tower's rows frozen at the plan's own turning points, the planned
