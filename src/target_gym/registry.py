@@ -893,12 +893,16 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_cstr,
         params_cls=_LazyParams("target_gym.pc_gym.cstr.env", "CSTRParams"),
-        make_pid=_pid(
-            "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
+        make_pid=None,
+        make_mpc=None,
+        baselines_note=(
+            "Version 8 (the reactor run for what it makes, owner's decision of "
+            "2026-11-24) is registered plant first. Its reference is the ladder's "
+            "valve position rung (scripts/ladder_rows/cstr.py). The shipped expert "
+            "returns when its gains are recorded on this plant, and the oracle "
+            "when its planner model is written for two moves and the production "
+            "score; the ceiling is pc_gym.foresight's (cstr/oracle.py)."
         ),
-        make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
-        tuned_gains_key="cstr",
-        oracle_data=_shared_oracle("cstr"),
         # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
         # jacket in code, cooling water as the move, a high-temperature
         # interlock, temperature as the job, scenarios.
@@ -907,7 +911,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 40 % as a 90 min decay, not a step [S1, p. 6]; the feed follows the
         # room through the day across S1's 23.1 to 24.9 C [S1, Tables 3, 4].
         # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
-        version=7,
+        # v8 (owner, 2026-11-24): run for what it makes. The feed is a second
+        # move [S1, Table 1; S13], the score is lost nameplate production with
+        # product off-spec outside 1 K of the setpoint, windows start with the
+        # water valve at 95 % [S13], and a setpoint move is a one-hour ramp.
+        version=8,
         scenarios=_scenarios(
             "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
         ),

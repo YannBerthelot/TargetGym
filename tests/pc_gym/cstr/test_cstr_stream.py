@@ -4,7 +4,8 @@ Contract:
 - an event carries its own size: started in one scenario, it runs to its return
   through a switch to another, and lasts ``event_hold`` minutes from its onset;
 - the setpoint move, the catalyst loss and the feed rise return; the cooling loss
-  still lasts ``cooling_loss`` minutes;
+  still lasts ``cooling_loss`` minutes; a setpoint move ramps over
+  ``setpoint_ramp`` minutes both ways (version 8);
 - the feed's daily cycle repeats exactly, however long the plant has run;
 - a stream starts with no event of the window: only the stream starts events.
 
@@ -29,7 +30,7 @@ def _stream_and_params(name):
 
 
 def test_a_setpoint_move_runs_through_a_switch_and_returns_after_its_hold():
-    stream, moved = _stream_and_params("setpoint_step")
+    stream, moved = _stream_and_params("setpoint_move")
     _, normal = _stream_and_params("normal")
     env, step = stream.env, jax.jit(stream.env.step_env)
     _, s = env.reset_env(jax.random.PRNGKey(0), normal)
@@ -37,14 +38,18 @@ def test_a_setpoint_move_runs_through_a_switch_and_returns_after_its_hold():
     hold = int(round(moved.event_hold / moved.delta_t))  # steps
     action = env.initial_action(s, normal)
     seen = []
-    for k in range(hold + 20):
+    for k in range(hold + 260):
         # Every step after the onset runs on the normal scenario's params.
         obs, s, *_ = step(jax.random.PRNGKey(k), s, action, normal)
-        seen.append(float(obs[3]))
+        seen.append(float(obs[4]))
     seen = np.array(seen)
-    # Active over [onset, onset + hold): observed raised from the first step on.
-    np.testing.assert_allclose(seen[: hold - 1], normal.T_setpoint + 2.0, atol=1e-4)
-    np.testing.assert_allclose(seen[hold:], normal.T_setpoint, atol=1e-4)
+    ramp = int(round(moved.setpoint_ramp / moved.delta_t))  # steps
+    # Up over the ramp from the onset, held to the return, then down over the ramp.
+    np.testing.assert_allclose(seen[ramp // 2 - 1], normal.T_setpoint + 1.0, atol=0.01)
+    np.testing.assert_allclose(
+        seen[ramp : hold - 1], normal.T_setpoint + 2.0, atol=1e-3
+    )
+    np.testing.assert_allclose(seen[hold + ramp :], normal.T_setpoint, atol=1e-3)
 
 
 def test_the_feed_s_day_repeats_exactly_however_long_the_plant_has_run():
@@ -61,7 +66,7 @@ def test_the_feed_s_day_repeats_exactly_however_long_the_plant_has_run():
 
 def test_a_stream_starts_without_the_window_s_event():
     stream = make_stream("cstr")
-    moved = next(s for s in stream.scenarios if s.name == "setpoint_step")
+    moved = next(s for s in stream.scenarios if s.name == "setpoint_move")
     quiet = StreamEnv(
         stream.env,
         stream.default_params,
@@ -71,8 +76,8 @@ def test_a_stream_starts_without_the_window_s_event():
     n = int(params.max_steps_in_episode)
 
     def body(state, k):
-        obs, state, *_ = quiet.step(k, state, jnp.zeros(1), params)
-        return state, obs[3]
+        obs, state, *_ = quiet.step(k, state, jnp.zeros(2), params)
+        return state, obs[4]
 
     _, state = quiet.reset(jax.random.PRNGKey(5), params)
     setpoints = jax.lax.scan(

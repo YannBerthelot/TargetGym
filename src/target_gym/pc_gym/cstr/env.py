@@ -1,24 +1,26 @@
 """
-Jacketed exothermic CSTR, a PARSEX-like member of its family (charter
-Amendment 3).
+Jacketed exothermic CSTR run for what it makes, a PARSEX-like member of its
+family (charter Amendment 3; version 8 by the owner's decision of 2026-11-24).
 
 See ``PHYSICS.md`` in this directory for the sources, the limits and the
 score, and ``REALITY.md`` for the plant record they come from.
 
-The job [S5; S6]: hold the reactor temperature at its setpoint by moving the
-cooling water, while keeping heat removal ahead of heat release so the reactor
-never runs away; a high-temperature interlock cuts the feed [S3].
+The job [S13; S5; S6]: make product. Hold the reactor inside its temperature
+band by the cooling water, and carry as much feed as the cooling allows, cutting
+it when the cooling saturates [S13], so the reactor never runs away; a
+high-temperature interlock cuts the feed [S3].
 
 Model (all per minute, mol and K)::
 
-    dC_A/dt = (C_Af - C_A) / tau - k(T) C_A,         k = k0 exp(-E/R / T)
-    dT/dt   = (T_f - T) / tau + (-dH) k C_A / (rho cp)
+    dC_A/dt = (C_Af - C_A) q / V - k(T) C_A,         k = k0 exp(-E/R / T)
+    dT/dt   = (T_f - T) q / V + (-dH) k C_A / (rho cp)
               - UA (T - T_j) / (rho cp V)
     dT_j/dt = [F_w cp_w (T_w,in - T_j) + UA (T - T_j)] / (M_j cp_w)
 
 the PARSEX pilot's first-order reaction and recirculation cooler [S1], with
-the cooler lumped as a jacket of its own holdup, and fresh cooling-water flow
-F_w the operator's move [S1, p. 4]. UA is derived from S1's design point.
+the cooler lumped as a jacket of its own holdup. The operator moves the fresh
+cooling water F_w [S1, p. 4] and the feed q [S1, Table 1; S13]. UA is derived
+from S1's design point.
 """
 
 from typing import Tuple
@@ -31,7 +33,7 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, log_scaled_reward
+from target_gym.utils import log_scaled_reward
 
 #: Water's density (g/L) and heat capacity (J/(g K)), textbook.
 RHO_WATER = 1000.0
@@ -45,7 +47,11 @@ class CSTRParams(EnvParams):
     EA_over_R: float = 10700.0  # K [S1]
     deltaHr: float = -2.0e5  # J/mol [S1: -200 kJ/mol]
     Caf: float = 1.5  # mol/L [S1: 1.5 kmol/m3]
-    q: float = 5.4  # L/min [S1: 90 g/s of feed]
+    q: float = 5.4  # L/min, the design feed [S1: 90 g/s]
+    #: The feed, the second handle. The top is S1's 110 g/s [S1, Table 1]. The
+    #: floor is ours: S1's range starts at 0 and no turndown was found.
+    q_min: float = 2.4  # L/min, 40 g/s
+    q_max: float = 6.6  # L/min, 110 g/s
     V: float = 183.6  # L, derived: q x 34 min [S1, p. 5]
     rho: float = RHO_WATER  # g/L, the aqueous feed as water
     C: float = CP_WATER  # J/(g K)
@@ -79,6 +85,17 @@ class CSTRParams(EnvParams):
     # ---- Setpoint and interlock ----
     #: The normal day's reactor temperature, 58 C [S1, Tables 3, 4].
     T_setpoint: float = 331.15  # K
+    #: Product made more than this from the setpoint is off-spec. Ours: no
+    #: tolerance was found (REALITY.md, third search); flat inside, by the
+    #: owner's decision of 2026-11-24.
+    T_band: float = 1.0  # K
+    #: Minutes a setpoint move takes. Derived: S1's closed loop took about an
+    #: hour to carry its 2 C move to its peak [S1, Fig. 2], and a band that
+    #: jumped 2 K at once could not be kept by anything.
+    setpoint_ramp: float = 60.0  # min
+    #: The water valve at the reset, of its span: where [S13]'s example holds
+    #: it, short of its limit [S13, pp. 436, 438].
+    valve_rest: float = 0.95
     #: The interlock cuts the feed on high temperature [S3, PDF p. 38]. Ours,
     #: no PARSEX figure: 75 C, 17 K above the setpoint, short of the 81 C an
     #: adiabatic rise from the feed reaches, so a runaway trips it.
@@ -105,19 +122,18 @@ class CSTRParams(EnvParams):
     #: stream sets it (scenarios.py); in a window the event holds to the end.
     event_hold: float = 1.0e9  # min
 
-    # ---- Score (charter rule 15) ----
-    # The job is holding the temperature [S5; S6], so the score tracks it:
-    # quadratic on the thermometry's resolution (ours: 0.1 K, a reactor
-    # probe's), plus the interlock trip, priced as the lost production of a
-    # restart (ours: 4 h of feed, seven residence times; no restart time found).
+    # ---- Score (charter B5) ----
+    # The job is product [S13]: the score is the production lost against the
+    # nameplate (the top feed fully converted), in fractions of it per step.
+    # Product made outside the band counts for nothing, and a trip loses the
+    # production of a restart (ours: 4 h, seven residence times; no restart
+    # time found). One unit throughout, so no price is needed.
     reward_version: int = 3
+    #: The thermometry's resolution (ours: 0.1 K, a reactor probe's): what the
+    #: band's edge is read to.
     e_floor: float = 0.1  # K
-    e_tol: float = 0.0
-    tracking_exponent: float = 2.0
-    # Above the worst untripped step: a reactor cooled to its feed, 35 K off.
-    failure_cost: float = 2.0 * (35.0 / 0.1) ** 2
+    failure_cost: float = 1.0  # a step of nameplate production
     restart_steps: int = 960
-    rho_floor_tracking: float = 0.0
     rho_floor: float = 0.0
     floor_is_documented_minimum: bool = True
     #: Version 1 only.
@@ -131,6 +147,8 @@ PARAM_UNITS = {
     "deltaHr": "J/mol",
     "Caf": "mol/L",
     "q": "L/min",
+    "q_min": "L/min",
+    "q_max": "L/min",
     "V": "L",
     "rho": "g/L",
     "C": "J/(g*K)",
@@ -142,6 +160,9 @@ PARAM_UNITS = {
     "feed_T_range": "K",
     "feed_T_period": "min",
     "T_setpoint": "K",
+    "T_band": "K",
+    "setpoint_ramp": "min",
+    "valve_rest": "fraction of span",
     "T_trip": "K",
     "delta_t": "min",
     "time_unit_seconds": "s",
@@ -154,11 +175,8 @@ PARAM_UNITS = {
     "event_hold": "min",
     "reward_version": "-",
     "e_floor": "K",
-    "e_tol": "K",
-    "tracking_exponent": "-",
     "failure_cost": "reward",
     "restart_steps": "steps",
-    "rho_floor_tracking": "reward",
     "rho_floor": "reward",
     "precision_floor": "K",
 }
@@ -171,6 +189,7 @@ class CSTRState(EnvState):
     target_T: float  # K, the setpoint
 
     F_w: float  # g/min, the cooling water as it ran last step
+    q: float = struct.field(default=5.4, kw_only=True)  # L/min, the feed as it ran
     T_j: float = struct.field(default=320.15, kw_only=True)  # K, jacket
     #: The feed's temperature now (K), HIDDEN, and its daily cycle's phase
     #: at the episode's start (rad).
@@ -186,7 +205,7 @@ class CSTRState(EnvState):
         default_factory=lambda: jnp.zeros(5), kw_only=True
     )
 
-    actuator_held: jax.Array = actuator_field(1)
+    actuator_held: jax.Array = actuator_field(2)
 
 
 def rate(T, C_a, params: CSTRParams, k0=None):
@@ -196,20 +215,21 @@ def rate(T, C_a, params: CSTRParams, k0=None):
 
 
 def compute_velocity(position, action, params: CSTRParams, extra=None):
-    """d/dt of ``[C_A, T, T_j]``; ``action`` is the water flow F_w (g/min),
-    ``extra`` the feed's ``(T_f, C_Af, k0)`` now (the params' by default)."""
+    """d/dt of ``[C_A, T, T_j]``; ``action`` is ``(F_w, q)``, the water (g/min)
+    and the feed (L/min), ``extra`` the feed's ``(T_f, C_Af, k0)`` now (the
+    params' by default)."""
     p = params
     T_f, Caf, k0 = (p.feed_T_range[0], p.Caf, p.k0) if extra is None else extra
     C_a, T, T_j = position[0], position[1], position[2]
+    F_w, q = action[0], action[1]
     r = rate(T, C_a, p, k0)
-    tau = p.V / p.q
-    dC = (Caf - C_a) / tau - r
+    dC = (Caf - C_a) * q / p.V - r
     dT = (
-        (T_f - T) / tau
+        (T_f - T) * q / p.V
         + (-p.deltaHr) * r / (p.rho * p.C)
         - p.UA * (T - T_j) / (p.rho * p.C * p.V)
     )
-    dTj = (action * CP_WATER * (p.Tw_in - T_j) + p.UA * (T - T_j)) / (p.M_j * CP_WATER)
+    dTj = (F_w * CP_WATER * (p.Tw_in - T_j) + p.UA * (T - T_j)) / (p.M_j * CP_WATER)
     return jnp.array([dC, dT, dTj]), None
 
 
@@ -240,11 +260,20 @@ def day_minute(state: CSTRState, params: CSTRParams):
     return (state.time % per_day.astype(jnp.int32)) * p.delta_t + p.delta_t
 
 
+def target_at(state: CSTRState, params: CSTRParams, minute):
+    """The setpoint at ``minute``: a move ramps over ``setpoint_ramp`` minutes
+    from its event, and back the same way from its return."""
+    ramp = jnp.maximum(params.setpoint_ramp, 1e-9)
+    up = jnp.clip((minute - state.event_at) / ramp, 0.0, 1.0)
+    down = jnp.clip((minute - state.event_until) / ramp, 0.0, 1.0)
+    return params.T_setpoint + state.event_size[0] * (up - down)
+
+
 def events(state: CSTRState, params: CSTRParams, minute):
     """The event at ``minute``: ``(setpoint, Caf, k0, cooling up)``, with the size
     it started with, active from ``event_at`` until ``event_until``."""
     p = params
-    step, drop, decay, rise, loss = (state.event_size[i] for i in range(5))
+    _, drop, decay, rise, loss = (state.event_size[i] for i in range(5))
     after = minute >= state.event_at
     on = jnp.logical_and(after, minute < state.event_until)
     lost = jnp.logical_and(after, minute < state.event_at + loss)
@@ -255,7 +284,7 @@ def events(state: CSTRState, params: CSTRParams, minute):
         jnp.where(after, 1.0, 0.0),
     )
     return (
-        p.T_setpoint + jnp.where(on, step, 0.0),
+        target_at(state, p, minute),
         p.Caf * (1.0 + jnp.where(on, rise, 0.0)),
         p.k0 * (1.0 - drop * jnp.where(on, decayed, 0.0)),
         jnp.logical_not(lost),
@@ -264,34 +293,40 @@ def events(state: CSTRState, params: CSTRParams, minute):
 
 @partial(jax.jit, static_argnames=["integration_method"])
 def compute_next_state(
-    F_w_raw: float,
+    raw,
     state: CSTRState,
     params: CSTRParams,
     integration_method: str = "rk4_1",
 ):
-    """``F_w_raw`` in [-1, 1] maps to the cooling water in [Fw_min, Fw_max];
-    during a cooling loss no water flows, whatever the command [S2; S3]."""
+    """``raw`` in [-1, 1] twice: the cooling water in [Fw_min, Fw_max] and the
+    feed in [q_min, q_max]. During a cooling loss no water flows, whatever the
+    command [S2; S3]."""
     p = params
     minute = state.time * p.delta_t
-    F_w = convert_raw_action_to_range(F_w_raw, min_action=p.Fw_min, max_action=p.Fw_max)
-    target, Caf, k0, cooling = events(state, p, minute)
+    u = jnp.clip(jnp.reshape(raw, (2,)), -1.0, 1.0)
+    F_w = p.Fw_min + 0.5 * (u[0] + 1.0) * (p.Fw_max - p.Fw_min)
+    q = p.q_min + 0.5 * (u[1] + 1.0) * (p.q_max - p.q_min)
+    _, Caf, k0, cooling = events(state, p, minute)
     F_w = jnp.where(cooling, F_w, 0.0)
     (C_a, T, T_j), metrics = integrate_dynamics(
         positions=jnp.array([state.C_a, state.T, state.T_j]),
         delta_t=p.delta_t,
         compute_velocity=partial(
-            compute_velocity, action=F_w, params=p, extra=(state.T_feed, Caf, k0)
+            compute_velocity,
+            action=jnp.stack([F_w, q]),
+            params=p,
+            extra=(state.T_feed, Caf, k0),
         ),
         method=integration_method,
     )
-    target_next, *_ = events(state, p, minute + p.delta_t)
     return (
         state.replace(
             C_a=C_a,
             T=T,
             T_j=T_j,
             F_w=F_w,
-            target_T=target_next,
+            q=q,
+            target_T=target_at(state, p, minute + p.delta_t),
             T_feed=feed_temperature(state.feed_phase, p, day_minute(state, p)),
             time=state.time + 1,
         ),
@@ -299,33 +334,51 @@ def compute_next_state(
     )
 
 
-def steady_state(T, T_f, params: CSTRParams):
-    """The steady state that holds the reactor at ``T`` with feed at ``T_f``:
-    ``(C_A, T_j, F_w)``, closed form from the three balances."""
+def steady_state(T, T_f, params: CSTRParams, q=None):
+    """The steady state that holds the reactor at ``T`` with feed at ``T_f``
+    and ``q`` L/min of it (the design feed by default): ``(C_A, T_j, F_w)``,
+    closed form from the three balances."""
     p = params
-    tau = p.V / p.q
+    q = p.q if q is None else q
     k = p.k0 * jnp.exp(-p.EA_over_R / T)
-    C_a = p.Caf / (1.0 + k * tau)
+    C_a = p.Caf / (1.0 + k * p.V / q)
     # Heat the jacket must take, J/min.
-    duty = p.q * p.rho * p.C * (T_f - T) + (-p.deltaHr) * k * C_a * p.V
+    duty = q * p.rho * p.C * (T_f - T) + (-p.deltaHr) * k * C_a * p.V
     T_j = T - duty / p.UA
     F_w = duty / (CP_WATER * (T_j - p.Tw_in))
     return C_a, T_j, F_w
 
 
+def feed_at_rest(T, T_f, F_w, params: CSTRParams):
+    """The feed (L/min) whose steady state holds the reactor at ``T`` with the
+    water at ``F_w``. The jacket's balance gives its temperature and duty; the
+    reactor's is a quadratic in the feed, whose smaller root is the operating
+    one."""
+    p = params
+    T_j = (F_w * CP_WATER * p.Tw_in + p.UA * T) / (F_w * CP_WATER + p.UA)
+    duty = p.UA * (T - T_j)
+    k = p.k0 * jnp.exp(-p.EA_over_R / T)
+    a, c = p.rho * p.C * (T - T_f), k * p.V
+    h = (-p.deltaHr) * k * p.V * p.Caf - a * c - duty
+    return (h - jnp.sqrt(h * h - 4.0 * a * duty * c)) / (2.0 * a)
+
+
 # Deliberately not jitted (see the other process tasks).
 def get_obs(state: CSTRState, params: CSTRParams):
-    """``[T, T_j, F_w_pct, T_setpoint]``: the reactor's temperature probe, the
-    jacket outlet temperature [S6; S8, Fig. 6], the water flow, logged on
-    PARSEX [S1, Fig. 2], and the setpoint. No composition: an online analyser
-    on such a reactor was not found, and Bayer sampled once a day [S3].
+    """``[T, T_j, F_w_pct, q_pct, T_setpoint]``: the reactor's temperature
+    probe, the jacket outlet temperature [S6; S8, Fig. 6], the water and feed
+    flows, logged on PARSEX [S1, Fig. 2; Table 1], and the setpoint. No
+    composition: an online analyser on such a reactor was not found, and Bayer
+    sampled once a day [S3].
 
     This reads whatever ``state`` it is given. The instruments are not here:
     ``CSTR.get_obs`` hands it the measured copy of the state (``CSTR.readings``),
     with the thermowell's lag on ``T`` and the outlet's 2 min dead time on
     ``T_j``, so the agent never reads the state's ``T_j`` directly."""
-    pct = 100.0 * (state.F_w - params.Fw_min) / (params.Fw_max - params.Fw_min)
-    return jnp.array([state.T, state.T_j, pct, state.target_T])
+    p = params
+    water = 100.0 * (state.F_w - p.Fw_min) / (p.Fw_max - p.Fw_min)
+    feed = 100.0 * (state.q - p.q_min) / (p.q_max - p.q_min)
+    return jnp.array([state.T, state.T_j, water, feed, state.target_T])
 
 
 def check_is_terminal(state: CSTRState, params: CSTRParams, xp=jnp):
@@ -335,25 +388,30 @@ def check_is_terminal(state: CSTRState, params: CSTRParams, xp=jnp):
     return terminated, truncated
 
 
+def made(state: CSTRState, params: CSTRParams):
+    """Product made now, mol/min: the feed times what it has converted."""
+    _, Caf, _, _ = events(state, params, state.time * params.delta_t)
+    return state.q * (Caf - state.C_a)
+
+
 def compute_reward_terms(state: CSTRState, params: CSTRParams, xp=jnp, tripped=None):
-    """The reward's additive cost terms, each >= 0 (``target_gym.reward``):
-    the temperature held at its setpoint [S5; S6], and the interlock trip.
+    """The reward's additive cost terms, each >= 0 (``target_gym.reward``), in
+    fractions of the nameplate's production per step: what was not made, what
+    was made outside the band [S13; owner, 2026-11-24], and the interlock trip.
 
     ``tripped`` overrides the trip check on ``state``, for a measured copy,
     whose noise must not fire or hide a trip (``base.measured_reward``).
     """
+    p = params
     if tripped is None:
-        tripped, _ = check_is_terminal(state, params, xp)
+        tripped, _ = check_is_terminal(state, p, xp)
+    product = made(state, p) / (p.q_max * p.Caf)
+    on_spec = xp.abs(state.T - state.target_T) <= p.T_band
     terms = {
-        "tracking": R.tracking_cost(
-            state.target_T - state.T,
-            params.e_floor,
-            params.e_tol,
-            params.tracking_exponent,
-            xp,
-        ),
+        "lost_production": 1.0 - product,
+        "off_spec": xp.where(on_spec, 0.0, product),
     }
-    return R.with_trip(terms, tripped, R.trip_cost(params), xp)
+    return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
 def compute_reward_v1(state: CSTRState, params: CSTRParams, xp=jnp):
