@@ -109,9 +109,9 @@ from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import baseline_policy, rollout
 
-spec = REGISTRY["cstr"]
+spec = REGISTRY["four_tank"]
 params = spec.make_test_params()
-recorded = load_recorded_baselines()["cstr"]
+recorded = load_recorded_baselines()["four_tank"]
 seeds = range(recorded["seeds"])
 
 
@@ -250,9 +250,9 @@ from target_gym.benchmark import episode_keys
 from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 
-spec = REGISTRY["cstr"]
+spec = REGISTRY["four_tank"]
 env, params = spec.make_env(), spec.make_test_params()
-expert = tg.make_expert("cstr")
+expert = tg.make_expert("four_tank")
 
 
 def episode_return(key):
@@ -274,7 +274,7 @@ def episode_return(key):
 keys = jax.numpy.stack([jax.random.PRNGKey(s) for s in range(10)])
 returns = jax.jit(jax.vmap(episode_return))(keys)   # ten episodes at once
 
-recorded = load_recorded_baselines()["cstr"]["pid_returns"]
+recorded = load_recorded_baselines()["four_tank"]["pid_returns"]
 assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 ```
 

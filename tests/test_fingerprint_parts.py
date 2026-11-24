@@ -190,14 +190,15 @@ def test_migration_moves_each_row_to_both_fingerprints_and_keeps_the_rest(
         "mpc_returns": [2.0],
         "cpu": "x",
     }
-    records.write("baseline_returns", "cstr", old)
-    records.write("protocol_results", "cstr", {"fingerprint": "f1", "pid": {}})
+    # hvac since cstr-v8, which ships no oracle to fingerprint (owner, 2026-11-24).
+    records.write("baseline_returns", "hvac", old)
+    records.write("protocol_results", "hvac", {"fingerprint": "f1", "pid": {}})
     assert _load().main(["migrate"]) == 0
-    spec = REGISTRY["cstr"]
+    spec = REGISTRY["hvac"]
     want = {
         "expert_fingerprint": provenance.expert_fingerprint(spec),
         "oracle_fingerprint": provenance.oracle_fingerprint(spec),
     }
     rest = {k: v for k, v in old.items() if k != "fingerprint"}
-    assert records.load_row("baseline_returns", "cstr") == {**rest, **want}
-    assert records.load_row("protocol_results", "cstr") == {"pid": {}, **want}
+    assert records.load_row("baseline_returns", "hvac") == {**rest, **want}
+    assert records.load_row("protocol_results", "hvac") == {"pid": {}, **want}
