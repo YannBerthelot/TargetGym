@@ -6,6 +6,10 @@ rate every minute. Two wingmen hold their slots in a V behind it, one on each
 side. All three share one cost, so the lead flying its route well is worth as
 much as the wingmen keeping station.
 
+It is an Extra task (owner's decision, 2026-11-24): it stays registered and usable,
+but one policy flying several aircraft is outside the benchmark's one plant, one
+agent, so it is never scored (`formation/PHYSICS.md`, Status).
+
 It is the patrol with the scripted lead replaced by a learner. If you want a
 single follower behind a lead you do not control, use
 [`patrol`](environments/patrol.md) instead.

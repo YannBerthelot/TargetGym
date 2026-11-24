@@ -183,6 +183,14 @@ The next release is 0.8.0, because these changes break code written for
   capability tag: `CAPABILITIES` is empty for `boiler_drum` and `four_tank`
   too, and `"instability"` and `"inverse_response"` are gone from
   `suite.AXES` and `suite.LABELS` until a core task is shown to carry them.
+- **Five aircraft tasks are Extra, and the radar has nine axes.** By the owner's
+  decisions on the aircraft five-task review (2026-11-24): `patrol` and
+  `patrol_range_bearing` as solved, `formation` as several agents (outside the
+  charter's one plant, one agent), `plane3d_circle` and `plane3d_figure8` as
+  solved with no airliner duty. They leave `registry.benchmark_specs()` and the
+  headline, carry no capability tag, and stay registered and usable (each
+  package's `PHYSICS.md`, Status). `"multi_agent"`, which only `formation`
+  carried, is gone from `suite.AXES` and `suite.LABELS`.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
