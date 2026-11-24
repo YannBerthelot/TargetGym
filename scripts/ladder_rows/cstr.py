@@ -34,9 +34,23 @@ def row() -> Row:
     # is twice that. The response then overshoots and settles later (PHYSICS.md, T8).
     residence = float(p.V) / float(p.q)
     window = math.ceil(2 * 0.99 * residence / dt)
-    # The temperature on the water, at its setpoint (obs 4). Where it rests against
-    # the band's top is a placement, not a row's number (charter J1, zones).
-    T = Cv("T on water", 0, lambda o, xp: o[0], lambda o, xp: o[4], "T", 0.1, window)
+    # The temperature on the water, read as its gap to the setpoint (obs 0 less obs
+    # 4), so the band the product is on spec in is a fixed zone while the setpoint
+    # moves. Where it rests in the band is a placement (charter J1, zones): the
+    # score charges ``off_spec`` for leaving it, and a hotter reactor converts more,
+    # so the cheap edge is the top.
+    band = float(p.T_band)
+    T = Cv(
+        "T on water",
+        0,
+        lambda o, xp: o[0] - o[4],
+        lambda o, xp: xp.zeros((), xp.float32),
+        "T",
+        0.1,
+        window,
+        zone=(-band, band, "high"),
+        exit_terms=("off_spec",),
+    )
     # The water valve by the feed, held where [S13]'s example holds it, 95 % of its
     # span (0.9 raw) [S13, p. 438, Fig. 7]. It answers the feed through the closed
     # temperature loop over about an hour, so its test runs three hours.

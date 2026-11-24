@@ -102,18 +102,21 @@ circulation flow [S3, Fig. 11] are not modelled (D2).
 
 ### Task: `cstr`
 
-Hold the temperature of a jacketed exothermic reactor at its setpoint with the
-cooling water flow. The policy reads the reactor and jacket temperatures, its
-own water flow and the setpoint, and never the composition. Each step is
-charged the squared temperature error, counted in units of 0.1 K. A reactor
-that reaches 75 C trips its interlock, which is charged as a restart.
+Run a jacketed exothermic reactor for what it makes, with two moves: the
+cooling water and the feed. Each step is charged the production lost against
+the reactor's nameplate, and all of it while the temperature is more than 1 K
+from its setpoint, where the product is off spec. The policy reads the reactor
+and jacket temperatures, its two flows and the setpoint, and never the
+composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of
+lost production.
 
 | obs | meaning |
 |---|---|
 | 0 | `T`, reactor temperature (K) |
-| 1 | `T_j`, jacket temperature (K) |
+| 1 | `T_j`, jacket temperature (K), 2 min late |
 | 2 | cooling water flow, percent of its 40 to 136 g/s range |
-| 3 | reactor temperature setpoint (K) |
+| 3 | feed flow, percent of its 40 to 110 g/s range |
+| 4 | reactor temperature setpoint (K) |
 
 ---
 
@@ -130,15 +133,6 @@ the water that takes. `scenarios.py`:
 | `setpoint_move` | setpoint +2 K, as a ramp over an hour, the band with it | [S1, Fig. 2]; the ramp derived |
 | `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
 | `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
-| `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
-
-Each event comes once, at a minute drawn in 30 to 150.
-
----|---|---|
-| `normal` | the feed drifts with the room, 23 to 25 C over a day | [S1, Tables 3, 4] |
-| `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
-| `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
-| `feed_buildup` | feed reactant +3 %, to the top of the valve's range (derived) | [S3, PDF pp. 36-37, 46] |
 | `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
 
 Each event comes once, at a minute drawn in 30 to 150.
