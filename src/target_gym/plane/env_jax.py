@@ -374,16 +374,6 @@ class Airplane2D(
         )
         return canonical_dtypes(self.reset_env(key, here)[1])
 
-    def get_obs(self, state: PlaneState, params: PlaneParams = None):
-        """The readings (``_read``), with the commanded airspeed exact: it is
-        ATC's assignment at the aircraft's height, a setpoint, not a reading,
-        so it is worked out on the true state rather than the altitude read
-        (PHYSICS.md, readings)."""
-        params = self.default_params if params is None else params
-        obs = self._read(state, params)
-        command = target_airspeed(state, params)
-        return obs.at[self.obs_index["target_speed"]].set(command)
-
     @measured_obs
     def _read(self, state: PlaneState, params: PlaneParams = None):
         """
@@ -398,6 +388,20 @@ class Airplane2D(
             wx, wz = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
             obs = jnp.concatenate([obs, jnp.array([wx, wz])])
         return obs
+
+    def get_obs(self, state: PlaneState, params: PlaneParams = None):
+        """The readings (``_read``), with the commanded airspeed exact: it is
+        ATC's assignment at the aircraft's height, a setpoint, not a reading,
+        so it is worked out on the true state rather than the altitude read
+        (PHYSICS.md, readings)."""
+        params = self.default_params if params is None else params
+        obs = self._read(state, params)
+        command = target_airspeed(state, params)
+        return obs.at[self.obs_index["target_speed"]].set(command)
+
+    # ``true_obs`` reads the plant here. With no instrument in the way the
+    # observation's commanded airspeed is that exact one already.
+    get_obs.__wrapped__ = _read.__wrapped__
 
     def render(self, screen, state: PlaneState, params: PlaneParams, frames, clock):
         """

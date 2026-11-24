@@ -126,10 +126,11 @@ size, build the controllers with the size:
 
 ```python
 from target_gym import Formation
+from target_gym.api import Expert
 from target_gym.formation.experts import make_formation_pid_controller
 from target_gym.formation.oracle import make_formation_mpc
 
 env = Formation(num_wingmen=4)
-pid = make_formation_pid_controller(num_wingmen=4).host()
+pid = Expert(make_formation_pid_controller(num_wingmen=4))  # reset() and step()
 oracle = make_formation_mpc(env, env.default_params)
 ```

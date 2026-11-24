@@ -53,10 +53,12 @@ actuator range inside the environment.
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `economy`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -204,6 +206,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `holding_leg_high` | 90 | s |
 | `holding_cap_low` | 118.322 | m/s |
 | `holding_cap_high` | 136.328 | m/s |
+| `wind_tau` | 2010 | s |
 | `slot_tolerance` | 30 | m |
 | `heading_tolerance` | 0.5236 | rad |
 | `min_separation` | 40 | m |

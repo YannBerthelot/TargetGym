@@ -72,6 +72,9 @@ ISA_TABLE = [
     (0.0, 1.22500, 340.294),
     (5_000.0, 0.73643, 320.545),
     (11_000.0, 0.36392, 295.070),
+    # Above the tropopause: 216.65 K, pressure falling as exp(-dz / 6 341.6 m).
+    # FL370, the plane's top cruise level, is 11 278 m.
+    (12_000.0, 0.31083, 295.070),
 ]
 
 
@@ -1035,3 +1038,23 @@ def test_the_lever_at_its_stop_settles_at_idle_not_at_zero():
 
 def test_the_top_of_the_lever_is_full_power():
     assert _engine_after(1.0, 40, 0.05) == pytest.approx(1.0, abs=2e-3)
+
+
+# --- The standard atmosphere above the tropopause -----------------------------
+# U.S. Standard Atmosphere 1976: 19 330 Pa at 12 000 m, 22 632 Pa at 11 000 m.
+
+
+def test_calibrated_airspeed_reads_the_pressure_above_the_tropopause():
+    """Mach 0.8 at 12 000 m: a = sqrt(1.4 * 287.05 * 216.65) = 295.07 m/s, so
+    TAS = 236.06 m/s. Impact pressure = 19 330 * (1.128 ** 3.5 - 1) = 10 136 Pa,
+    and CAS = 340.29 * sqrt(5 * ((10 136 / 101 325 + 1) ** (2 / 7) - 1)) =
+    126.4 m/s. With the tropopause's pressure held above it (22 632 Pa) the
+    same arithmetic gives 136.4 m/s."""
+    from target_gym.plane.dynamics import calibrated_airspeed, scheduled_airspeed
+
+    # rtol: four-figure table pressure through a square root.
+    assert float(calibrated_airspeed(12000.0, 236.06)) == pytest.approx(126.4, rel=1e-3)
+    # The schedule is its inverse: that CAS, with no Mach cap, is that TAS.
+    assert float(scheduled_airspeed(12000.0, 126.4, 2.0)) == pytest.approx(
+        236.06, rel=1e-3
+    )

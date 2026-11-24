@@ -65,4 +65,4 @@ jobs:
     - run: uv pip list
     # The small tier, as on every pull request. The records tier is left out:
     # it checks committed rows against this tree's code, not the dependencies.
-    - run: uv run --no-sync pytest -q -m "not medium and not large and not records"
+    - run: uv run --no-sync pytest -q -n auto -m "not medium and not large and not records"

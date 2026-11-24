@@ -51,7 +51,7 @@ for t in range(200):
         break
 ```
 
-[Browse the twenty-four environments →](environments.md){ .md-button .md-button--primary }
+[Browse the 25 environments →](environments.md){ .md-button .md-button--primary }
 [Getting started →](getting-started.md){ .md-button }
 
 ---
@@ -70,9 +70,10 @@ these are the failure modes that come with it:
 | **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
 | **A trip the reward does not track** | A compressor trips when its flow margin to surge runs out. No reward term reads that margin, and the recycle valve that protects it has no tracked output of its own |
 
-Every environment ships a tuned PID and an MPC (on `patrol_range_bearing` the MPC
-reads the true state, a full-state bound), so a learned policy has something real
-to beat. And **where a baseline is weak, the docs say how weak**.
+Every environment ships a tuned PID, and 20 of the 25 ship an MPC (on
+`patrol_range_bearing` it reads the true state, a full-state bound), so a learned
+policy has something real to beat. The five without one, `plane`, `plane_energy`,
+`plane3d_heading`, `plane3d_racetrack` and `wake_surf`, say why on their pages. And **where a baseline is weak, the docs say how weak**.
 
 ## Documentation
 
