@@ -337,16 +337,20 @@ def test_the_lead_flies_clear_of_its_own_wake():
 def test_the_wake_comes_from_the_lift_of_each_step():
     """A reset aircraft carries much less than its weight until it pitches up, so the
     wake it sheds then is weaker than its weight's. Ten spans out it is ``L / (2 pi
-    rho V y^2)`` on the lift it made that step."""
+    rho V y^2)`` on the lift it made that step.
+
+    Read one metre behind the lead: exactly abeam, rounding decides whether the
+    point counts as ahead of it, where there is no wake (owner, 2026-11-23)."""
     env, params, _, state = _slot("patrol", 30.0)
     lift = float(step_lead(state, params)[2])
     assert lift < 0.8 * float(state.lead.m * params.gravity)
     _, new, _, _, _ = env.step_env(KEY, state, jnp.zeros(3), params)
     y = 10.0 * params.wingspan
+    back_x, back_y = jnp.cos(new.lead.psi), jnp.sin(new.lead.psi)
     gusts, _ = wake_air(
         new.wake_history,
-        jnp.atleast_1d(new.lead.x + y * jnp.sin(new.lead.psi)),
-        jnp.atleast_1d(new.lead.y - y * jnp.cos(new.lead.psi)),
+        jnp.atleast_1d(new.lead.x + y * jnp.sin(new.lead.psi) - back_x),
+        jnp.atleast_1d(new.lead.y - y * jnp.cos(new.lead.psi) - back_y),
         jnp.atleast_1d(new.lead.z),
         jnp.zeros(1),
         params,

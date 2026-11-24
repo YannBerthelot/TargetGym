@@ -66,7 +66,7 @@ density path. Harmless at 0.01 %, but the two should be unified.
 | aspect ratio AR | 9.48 | – | `span²/S = 34.1²/122.6` | ✅ |
 | `initial_mass` m | 73 500 | kg | Typical A320 takeoff mass; MTOW 78 000, OEW ≈ 42 600 | ✅ |
 | `initial_fuel_quantity` | 19 088 | kg | A *component* of `initial_mass`, not additional | ✅ |
-| `thrust_output_at_sea_level` | 240 000 | N | 2 × CFM56-5B ≈ 2 × 120 kN static SL | ✅ |
+| `thrust_output_at_sea_level` | 197 840 | N | 2 × V2527E-A5 at their maximum continuous 9 892 daN, the A320-233's engines [EASA.A.064, EASA IM.E.069] (Amendment 5) | ✅ |
 | `I` | 9.0 × 10⁶ | kg·m² | TUNED — not sourced. Order-of-magnitude plausible for a 37 m fuselage. | ⚠️ |
 | `moment_arm_stabilizer` | 15.0 | m | TUNED — plausible tail arm for A320 geometry | ⚠️ |
 | `moment_arm_wings` | 1.5 | m | TUNED — wing AC to CG offset | ⚠️ |
@@ -153,7 +153,8 @@ inside its reference band.
 
 | Quantity | Model | Reference | |
 |---|---|---|---|
-| L/D max = `1/(2√(cd0·k))` | 16.67 | A320 ≈ 17 | ✅ |
+| L/D max = `1/(2√(cd0·k))`, the wing's, at any Mach below the drag rise | 16.67 | A320 ≈ 17 | ✅ |
+| L/D max of the trimmed airframe (Amendment 5) | 17.5 | A320 ≈ 17 | ✅ |
 | CL at L/D max = `√(cd0/k)` | 0.667 | — | ✅ |
 | Cruise CL, FL350 M0.78 | 0.579 | Jet cruise typically 0.4–0.6 | ✅ |
 | Cruise trim AoA | 1.85° | A320 ≈ 1.5–3° | ✅ |
@@ -693,7 +694,7 @@ FL370 by the model's own line).
 | engine lag | 1.7 s sqrt(theta) / delta | derived: corrected time |
 | `ap_load_increment` | 0.2 g | ours, family range 0.1 to 0.2 g [KFC 500, TM 1-1510-225-10] |
 | cost index | 30 kg/min | ours, family range 6 to 40 (secondary) |
-| `economy_scale` | 1.242 kg/s | derived: the model's reference cruise |
+| `economy_scale` | 1.231 kg/s | derived: the model's reference cruise (Amendment 5) |
 | `turbulence_sigma` | 0.684 m/s | derived, above |
 | severe zone | 5.12 m/s, share 1e-4 | cited: MIL-F-8785C Figure 7; the share ours |
 | heavy corner | FL340 to 350 | derived: 1.3 g to the buffet line |
@@ -719,6 +720,97 @@ family's installed maximum climb, 5 630 to 6 420 lb a engine as a brochure is in
 (secondary; its table is paywalled), so the heavy member's residual climb at the
 lower end would be near the AIM's 500 fpm, which `plane_energy`'s Extra verdict
 (EXTRA.md) does not yet account for.
+
+## Amendment 5: the A320-233's envelope (2026-11-23)
+
+The owner's decisions of 2026-11-23, after the review of `plane` and `plane_energy`:
+the plant is checked against Airbus's published envelope [SF21 p. 6; REALITY.md, "The
+cruise envelope"], and five things change. `tests/plane/test_plane_chart.py` holds the
+chart's curves as read from its vector paths.
+
+**Induced drag on the lift the wing makes.** `aero_coefficients` computed `CD = cd0 +
+k CL^2` on the lift before the Mach corrections, then multiplied the lift by the
+compressibility growth (1.31 at M 0.77). The induced term was therefore 1 / growth^2 of
+its value, 58 % at M 0.77. It is now computed on the lift after the corrections. The
+drag rise (`M_crit`, `k_drag`), the stall and the post-stall blend are unchanged.
+
+**The tail has no zero-lift drag of its own.** `cd0` is the whole airframe's: the
+figures of merit above read it so. `tail_section` carried it a second time on the
+tail's area, 23 % more of it. With the understated induced drag the two errors nearly
+cancelled in cruise, which is why neither showed in the fuel flow. The tail's induced
+drag stays.
+
+**The plant is the chart's aircraft, at the thrust it may hold.**
+`thrust_output_at_sea_level` is 197 840 N: two V2527E-A5, the A320-233's engines
+[EASA.A.064], at their maximum continuous rating, 9 892 daN [EASA IM.E.069]. The
+take-off rating, 11 031 daN, "shall not be used continuously more than 5 minutes" (its
+note 1), and no task takes off. 240 000 N stood for two CFM56-5B4 at take-off, the
+A320-214's [EASA E.003]. The thrust lapse, density ratio over `1 + 0.5 M^2`, is
+unchanged (ours).
+
+**Fuel per unit of thrust follows a published law.** `fuel_flow`: thrust times
+`fuel_speed_slope V + fuel_static sqrt(T / T0)`, with 3.38e-8 kg/(N m) and 1.04e-5
+kg/(N s), Mattingly's law for high-bypass turbofans in the SI form of Roux and Scholz
+[HAMMAMI eq. 2.1 and 2.2]. It gives 17.0 mg/(N s) at the reference cruise and replaces
+the constant 17.5.
+
+**`economy_scale`** follows the reference cruise: 1.242 to 1.231 kg/s.
+
+| At 70 t, ISA | Chart [SF21] | Plant before | Plant now |
+|---|---|---|---|
+| Residual climb at M 0.765, 37 093 ft | 300 ft/min | 1 025 | 270 |
+| 300 ft/min ceiling, M 0.739 to 0.813 | the curve | above 41 000 ft | within 492 ft |
+| Green dot, 23 000 to 35 400 ft | M 0.521 to 0.709 | 0.02 to 0.04 under | within 0.010 |
+| Max-range Mach, 25 500 to 32 600 ft | M 0.660 to 0.741 | 0.02 to 0.05 over | within 0.014 |
+| Best lift over drag of the trimmed airframe | 16.67 by the polar | 18.5 in cruise | 17.5 |
+
+The reference cruise (FL330, M 0.78, 73.5 t) keeps its drag and fuel, 42.4 to 42.9 kN
+and 2 674 to 2 633 kg/h, at a lift over drag of 16.8; its residual climb falls from
+1 218 to 497 ft/min and its throttle rises from 0.69 to 0.85. The 300 ft/min ceiling
+at M 0.78 is 40 300 ft at 60 t, 36 400 at 70 t, 35 200 at 73.5 t and 33 600 at 78 t.
+
+**The scored levels stay under the recommended maximum altitude**, "REC MAX = Min
+[Service ceiling; Aerodynamic ceiling; Max certified ceiling]" [SF21 p. 5], which the
+plant's 300 ft/min ceiling sets at these masses: `plane` cruises from FL290 to FL350
+(it went to FL370), `heavy_high` flies 78 t at FL320 to 330 (it flew FL340 to 350, the
+1.3 g buffet limit alone), and the stream's `ceiling_levels` are FL350 at 73.5 t and
+FL330 at 78 t.
+
+**Mountain waves** (`wave_wind`, `tests/plane/test_plane_waves.py`). The cruise threats
+Airbus names [SF21 p. 13] enter `plane` as two scenarios, 1 % of cruise time each (the
+owner's figure, 2026-11-23: no source gives how often an airliner in cruise meets one;
+taken from the normal window, 0.40 to 0.38).
+
+| Scenario | What the air does | Size | Length |
+|---|---|---|---|
+| `wave_downdraft` | sinks, a half-sine (shape ours) | peak 3.0 to 4.5 m/s: ICAO's severe mountain wave [SIGMET] to the top of the Sierra Wave Project's weak class [WILDMANN] | 25 km of track [BRAMBERGER Figure 2] |
+| `wave_headwind_loss` | the along-track wind turns to a tailwind on a half-cosine (shape ours) and stays | 10 to 20 m/s: about 20 in the recorded case [BRAMBERGER Figure 2], the lower half ours | 25 km of track |
+
+The aircraft meets the wave between 300 and 1 500 s (ours: the wave and what follows it
+inside the window). The wave is the outside world's, kept through a trip's restart and
+a new sortie, hidden as a gust is, and read at once by the air data. In a stream it is
+the task's own event, two an hour in a wave regime (ours: the window's one in 30 min).
+The temperature rise of the recorded case, about 8 K, is not modelled: the atmosphere
+takes no offset yet.
+
+The reference in them, 12 paired seeds: 1 818 in the downdraft and 1 828 in the head
+wind loss against 1 808 in calm air, no trip, the altitude band never left, the speed
+band left on 0 and 6 seeds of 12. The thrust margin holds the waves at most levels;
+only near FL350 does the reference give up speed.
+
+**Known deviations of this amendment** (owner, 2026-11-23).
+- The chart's top speed in level flight at max climb thrust, where the residual climb
+  is zero, is 700 to 1 700 ft under the plant's from M 0.77 to 0.82. Effect: at the top
+  of the speed band near its ceiling the plant keeps about 150 ft/min more than the
+  aircraft has.
+- Above 33 000 ft the plant's max-range Mach is 0.024 to 0.045 over the chart's ECON
+  curve at cost index 0 (0.775 to 0.80 against 0.751 to 0.760). Effect: at the cost
+  index of 30 the cheapest Mach sits at the top of the +-0.02 band at mid and heavy
+  weights, worth 0.9 % at FL330 and 73.5 t against the assigned M 0.78.
+- Both ask for drag that grows with lift near M 0.75 to 0.80, which the polar does
+  not have: its drag rise depends on Mach alone and starts at 0.80.
+- Below green dot the 300 ft/min ceiling is too generous: the parabolic polar has no
+  high-lift drag. "The crew should not fly below GD" [SF21 p. 4].
 
 ## 5. Known deviations
 
@@ -812,9 +904,9 @@ correctness, and fails in exactly the same way as a wrong formula.
 
 **✅ D4 — RESOLVED: mass now follows the tanks.** Fuel burn is charged against
 the thrust actually produced, `ṁ = c_T · T`, so the aircraft lightens as it
-flies and `state.m` tracks `state.fuel` exactly. `specific_fuel_consumption` is
-thrust-specific — 17.5 g per kilonewton-second, i.e. 1.75 × 10⁻⁵ kg/(N·s), the
-right order for a high-bypass turbofan.
+flies and `state.m` tracks `state.fuel` exactly. Since Amendment 5 `c_T` follows a
+published law in speed and temperature (`fuel_flow`): 17.0 mg/(N s) at the
+reference cruise, where a constant 17.5 stood before.
 
 The figure is anchored rather than asserted. In level cruise thrust equals drag,
 and drag is weight over the lift-to-drag ratio, so the fuel flow follows from
@@ -841,9 +933,9 @@ sites (2D, 3D and patrol) now say so.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 27 |
-| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 27 |
-| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 27 |
+| `plane` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 31 |
+| `plane_energy` | 1800 | 1 | 30 min | 2 in [-1, 1] | 12 | 31 |
+| `plane_sine` | 480 | 1 | 8 min | 2 in [-1, 1] | 12 | 31 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

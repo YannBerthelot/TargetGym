@@ -927,12 +927,20 @@ def test_cruise_fuel_flow_matches_an_a320(params):
 
     In level cruise thrust equals drag, and drag is the weight divided by the
     lift-to-drag ratio. That fixes the fuel flow from quantities validated
-    elsewhere in this file, so the check tests ``specific_fuel_consumption``
-    against the real aircraft rather than against itself.
+    elsewhere in this file, so the check tests the fuel law (``fuel_flow``)
+    against the real aircraft rather than against itself. The law needs a
+    speed and a height: the reference cruise's, M 0.78 at FL330.
     """
+    from target_gym.plane.dynamics import (
+        compute_speed_of_sound_from_altitude,
+        fuel_flow,
+    )
+
     l_over_d = 1.0 / (2.0 * np.sqrt(params.cd0 * params.k))
     thrust_cruise = params.initial_mass * params.gravity / l_over_d
-    kg_per_hour = params.specific_fuel_consumption * 1e-3 * thrust_cruise * 3600.0
+    z = 33_000.0 * 0.3048
+    speed = 0.78 * float(compute_speed_of_sound_from_altitude(z))
+    kg_per_hour = float(fuel_flow(thrust_cruise, speed, z, params)) * 3600.0
 
     assert (
         2000.0 < kg_per_hour < 3200.0

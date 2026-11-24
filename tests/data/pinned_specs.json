@@ -28,11 +28,11 @@
       "rho_floor": 0.0,
       "target_altitude_range": [
         8839.2,
-        11277.6
+        10668.0
       ],
       "initial_altitude_range": [
         8839.2,
-        11277.6
+        10668.0
       ],
       "turbulence_sigma": 0.684,
       "speed_band_cost": true,

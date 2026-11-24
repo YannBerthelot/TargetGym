@@ -15,10 +15,13 @@ from target_gym.scenarios import Scenario
 # recorded zone and a zone over the whole window are rare (ours, 0.05 each,
 # family range 0.01 to 0.1: Figure 24 shows most zones at 0.2 g or below). The
 # mass and level corners (ours, 0.075 each, family range 0.05 to 0.2). The
-# heavy corner stops at FL350: past it 78 t keeps under 1.3 g to the buffet
-# line, the margin the recommended maximum altitude holds (pprune, secondary).
+# heavy corner stops at FL330: past it 78 t keeps under 300 ft/min at full
+# thrust, the service ceiling that sets the recommended maximum altitude
+# [SF21 p. 5 and 6]; the 1.3 g buffet margin would allow FL350.
 # Severe turbulence (ours, 1e-4: between MIL-F-8785C's 1e-5 exceedance of the
-# severe intensity and its 1e-3 of the moderate one).
+# severe intensity and its 1e-3 of the moderate one). The two mountain waves
+# (owner, 2026-11-23: 0.01 each, no source gives how often an airliner in cruise
+# meets one), taken from the normal window's share.
 
 FT = 0.3048
 #: The light zone's sigma, 0.2 g peak to peak a minute at FL330 (derived,
@@ -51,6 +54,18 @@ REGIME_H = 2.0
 #: The window's own zone never starts in a stream: only the stream starts zones.
 _NO_WINDOW_ZONE = {"zone_onset_range": (1.0e9, 1.0e9)}
 NOMINAL_MASS = 73_500.0
+#: A mountain wave's downdraft, m/s: from ICAO's severe mountain wave, "3 m/s
+#: (600 ft/min) or more" [SIGMET], to the top of the Sierra Wave Project's weak
+#: class, 4.5 m/s [WILDMANN].
+WAVE_DOWNDRAFT = (3.0, 4.5)
+#: The head wind a wave takes, m/s: about 20 over about 25 km in the recorded
+#: case at cruise level [BRAMBERGER Figure 2]; the lower half ours.
+WAVE_HEADWIND_LOSS = (10.0, 20.0)
+#: Waves an hour in a wave regime of the stream: the window's one in 30 min
+#: (ours, as the clearances of ``plane_energy``).
+WAVES_PER_H = 2.0
+#: The window's own wave never starts in a stream: only the stream starts waves.
+_NO_WINDOW_WAVE = {"wave_onset_range": (1.0e9, 1.0e9)}
 
 
 def stream(dwell_h, sortie_h=A320_SORTIE_H, zones=True, task_per_h=0.0, **overrides):
@@ -86,7 +101,7 @@ def suite():
             {},
             source="BEA447 Figure 24: cruise on autopilot, one zone of 3 to 30 min",
             description="one light zone, 0.2 g peak to peak, anywhere in 30 min",
-            weight=0.4,
+            weight=0.38,
             **stream(REGIME_H),
         ),
         Scenario(
@@ -117,11 +132,11 @@ def suite():
             "heavy_high",
             {
                 "initial_mass": 78_000.0,
-                "target_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
-                "initial_altitude_range": (34_000.0 * FT, 35_000.0 * FT),
+                "target_altitude_range": (32_000.0 * FT, 33_000.0 * FT),
+                "initial_altitude_range": (32_000.0 * FT, 33_000.0 * FT),
             },
-            source="TCDS (MTOW 78 t); recommended maximum altitude, 0.3 g to buffet",
-            description="78 t at FL340 to 350, the highest it keeps 1.3 g to buffet",
+            source="TCDS (MTOW 78 t); SF21 p. 5 (REC MAX, the 300 ft/min service ceiling)",
+            description="78 t at FL320 to 330, the highest it keeps 300 ft/min of climb",
             weight=0.075,
             **_mass_stratum(78_000.0),
         ),
@@ -144,6 +159,22 @@ def suite():
             description="60 t at FL290 to 310, the lightest wing loading, most gust response",
             weight=0.075,
             **_mass_stratum(60_000.0),
+        ),
+        Scenario(
+            "wave_downdraft",
+            {"wave_draft_range": WAVE_DOWNDRAFT},
+            source="SF21 p. 13 (orographic downdraft over 500 ft/min); ICAO SIGMET guide (severe at 3 m/s)",
+            description="a mountain wave's downdraft, 3.0 to 4.5 m/s over 25 km of track",
+            weight=0.01,
+            **stream(REGIME_H, task_per_h=WAVES_PER_H, **_NO_WINDOW_WAVE),
+        ),
+        Scenario(
+            "wave_headwind_loss",
+            {"wave_shear_range": WAVE_HEADWIND_LOSS},
+            source="Bramberger et al. 2018, Figure 2 (20 m/s of head wind lost over 25 km at FL410)",
+            description="a mountain wave takes 10 to 20 m/s of head wind over 25 km of track",
+            weight=0.01,
+            **stream(REGIME_H, task_per_h=WAVES_PER_H, **_NO_WINDOW_WAVE),
         ),
     )
 

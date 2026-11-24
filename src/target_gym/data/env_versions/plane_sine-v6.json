@@ -1,5 +1,5 @@
 {
-  "fingerprint": "35aa79352dde4c9d",
-  "note": "A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-14T14:45:07+00:00"
+  "fingerprint": "bae09a37cbe891b4",
+  "note": "Behaviour-preserving, re-stamped in place (2026-11-24, PR 239): fuel_flow in plane/dynamics.py keeps an aircraft whose fuel-law numbers are zero on its constant fuel figure. No task on this branch carries the law's numbers at zero, so no step, reward or observation changes. Earlier note: Behaviour changed on a version no release shipped, so re-stamped in place (owner's rule of 2026-11-14; owner's decisions of 2026-11-23, review of the 2D airliner, PR 239): the shared aircraft aerodynamics compute induced drag on the lift the wing makes, and the tail has no zero-lift drag of its own (plane/dynamics.py), which moves the drag of every aircraft task. plane, plane_energy and plane_sine also take the A320-233's engines at their maximum continuous rating (197 840 N) and a published fuel law; plane cruises FL290 to FL350 and gains two mountain-wave scenarios. Every aircraft record is stale until the re-record pass. Earlier note: A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
+  "stamped": "2026-11-24T00:00:49+00:00"
 }

@@ -66,6 +66,11 @@ class Plane3DGuidanceParams:
     needs and the angle of attack kept inside ``alpha_max``. ``v_min_eas`` is the slowest equivalent
     airspeed the autopilot flies (ArduPilot's ``ARSPD_FBW_MIN``): 1.3 times
     the model's clean 1 g stall, 80 m/s at 73.5 t, CL_max 1.5 and 122.6 m^2.
+    On a hold the autopilot knows the maximum holding airspeed for its level
+    (``holding_cap_low`` to ``holding_split_altitude``, ``holding_cap_high``
+    above, the task's [AIM538]) and never targets a speed closer to it than
+    ``cap_margin``: where the assigned speed rests on that priced limit, the
+    reference holds under it (``_AMENDED``).
     """
 
     max_bank_rad: float = _BANK_45
@@ -81,6 +86,10 @@ class Plane3DGuidanceParams:
     cruise_mach: float = 0.78
     target_speed: float = 230.0  # the formation lead's, until PR 7b
     v_min_eas: float = 104.0
+    holding_split_altitude: float = 14_000.0 * 0.3048
+    holding_cap_low: float = 230.0 * 1852.0 / 3600.0
+    holding_cap_high: float = 265.0 * 1852.0 / 3600.0
+    cap_margin: float = 0.0
     gravity: float = 9.81
     dt: float = 1.0
     tecs: TECSParams = AIRLINER
@@ -255,8 +264,15 @@ def plane3d_racetrack_step(params, state, obs, xp=jnp):
     """L1 on the holding pattern, whose guidance the observation gives."""
     cross, tangent, curvature = obs[..., 18], obs[..., 19], obs[..., 20]
     accel = l1_lateral_accel(params, cross, tangent, curvature, obs, xp)
-    # The assigned holding speed the observation gives (Amendment 2).
+    # The assigned holding speed the observation gives (Amendment 2), or
+    # ``cap_margin`` under the maximum holding airspeed where that is less.
     target, airspeed, power = obs[..., 22], obs[..., 23], obs[..., 15]
+    low = obs[..., 10] <= params.holding_split_altitude
+    cap = xp.where(low, params.holding_cap_low, params.holding_cap_high)
+    under = scheduled_airspeed(
+        obs[..., 2], cap - params.cap_margin, params.cruise_mach, xp
+    )
+    target = xp.minimum(target, under)
     return _fly(
         params,
         state,
@@ -344,7 +360,7 @@ def make_plane3d_circle_pid_controller() -> Controller:
 
 def make_plane3d_racetrack_pid_controller() -> Controller:
     """The holding pattern's expert: L1 guidance over the autopilot's loops."""
-    return Controller(_AMENDED, Plane3DGuidanceState(), plane3d_racetrack_step)
+    return Controller(_HOLD, Plane3DGuidanceState(), plane3d_racetrack_step)
 
 
 def make_plane3d_figure8_pid_controller() -> Controller:
@@ -364,6 +380,13 @@ _PATH = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96
 # clean 1 g stall, 80 m/s EAS: "20% higher than level flight stall speed"
 # (ARSPD_FBW_MIN [P409]).
 _AMENDED = Plane3DGuidanceParams(max_bank_rad=float(np.deg2rad(30.0)), v_min_eas=96.0)
+# The hold's reference rests on a priced limit where green dot is at or over
+# the maximum holding airspeed (73 t and above on a low hold). By the rule for
+# that case (owner, 2026-11-23, "lowest with no exit"): on a 1 kt grid, the
+# smallest margin at which it passes the limit on none of the nominal seeds
+# 100 to 109 in the normal day, 5 kt (``scripts/plane3d_review.py backoff``:
+# at 4 kt one seed passes by 0.06 kt).
+_HOLD = _AMENDED.replace(cap_margin=5.0 * 1852.0 / 3600.0)
 # The figure-8 flies the shared TECS tune (owner, 2026-11-12, as the aircraft
 # spec's section 3 has it): its own faster, better damped TECS (time constant
 # 1.5 s, pitch damping 2.0, chosen on the 4.0.9 loop) oscillated +-25 m about

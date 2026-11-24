@@ -30,6 +30,7 @@ from target_gym.plane.dynamics import (
     compute_velocity_from_horizontal_and_vertical_speed,
     economy_cost,
     engine_response_rate,
+    fuel_flow,
     in_zone,
     protected_pitch_demand,
     scheduled_airspeed,
@@ -91,6 +92,14 @@ class PlaneState(EnvState):
     #: end through a scenario switch (docs/proposals/long-strata.md, S1). A window
     #: reads ``turbulence_sigma``.
     zone_sigma: float = 0.0
+    #: The window's mountain wave (REALITY.md, what threatens the speed in
+    #: cruise): when the aircraft enters and leaves it, s, the peak of its
+    #: downdraft and the tailwind it leaves the aircraft with, m/s. Zero sizes
+    #: are no wave. The outside world's, as the turbulence zone is.
+    wave_start: float = 0.0
+    wave_end: float = 0.0
+    wave_draft: float = 0.0
+    wave_shear: float = 0.0
     #: ``plane_energy``'s clearances in a stream, each carrying its own size: the
     #: assigned speed's offset (m/s), and the latest level clearance's step and
     #: size (m), which the capture allowance runs from (S1b).
@@ -120,14 +129,25 @@ class PlaneState(EnvState):
 class PlaneParams(EnvParams):
     gravity: float = 9.81
     initial_mass: float = 73_500.0
-    thrust_output_at_sea_level: float = 240_000.0
+    #: Full thrust, sea level static: two IAE V2527E-A5, the A320-233's engines
+    #: [EASA.A.064], at their maximum continuous rating, 9 892 daN each [EASA
+    #: IM.E.069]. The take-off rating, 11 031 daN, "shall not be used
+    #: continuously more than 5 minutes" (its note 1), and no task takes off.
+    #: The aircraft of the published envelope the plant is checked against
+    #: [SF21 p. 6].
+    thrust_output_at_sea_level: float = 197_840.0
     air_density_at_sea_level: float = 1.225
     frontal_surface: float = 12.6
     wings_surface: float = 122.6
     C_x0: float = 0.095
     C_z0: float = 0.9
     initial_fuel_quantity: float = 23860 / 1.25
-    specific_fuel_consumption: float = 17.5 / 1000
+    #: Fuel per unit of thrust, kg/(N s): ``fuel_speed_slope`` times the true
+    #: airspeed (m/s) plus ``fuel_static`` times sqrt(T / T0), Mattingly's law
+    #: for high-bypass turbofans as Roux and Scholz adjusted it [HAMMAMI
+    #: eq. 2.2] (``plane.dynamics.fuel_flow``). 17.0 mg/(N s) at FL330, M 0.78.
+    fuel_static: float = 1.04e-5
+    fuel_speed_slope: float = 3.38e-8
 
     # The swept wing's lift-curve slope at Mach 0, derived (PHYSICS.md 4):
     # DATCOM's 2 pi A / (2 + sqrt(A^2 (1 + tan^2 L) + 4)) with A = 34.1^2/122.6
@@ -388,6 +408,22 @@ class PlaneParams(EnvParams):
     zone_onset_range: Tuple[float, float] = (0.0, 1800.0)
     #: How long it lasts, s: 3 to 30 min [BEA447 Figure 24].
     zone_duration_range: Tuple[float, float] = (180.0, 1800.0)
+    # ---- Mountain waves (Amendment 5; REALITY.md, the cruise envelope) ----
+    #: The peak of the wave's downdraft, m/s, drawn at reset: 0 is no downdraft.
+    #: ``wave_downdraft`` draws 3.0, where ICAO has a severe mountain wave
+    #: [SIGMET], to 4.5, the top of the Sierra Wave Project's weak class
+    #: [WILDMANN]; "more than 500 ft/min", 2.5 m/s, in [SF21 p. 13].
+    wave_draft_range: Tuple[float, float] = (0.0, 0.0)
+    #: The tailwind the wave leaves the aircraft with, m/s, drawn at reset: 0 is
+    #: none. ``wave_headwind_loss`` draws 10 to 20: about 20 in the one recorded
+    #: case at cruise level [BRAMBERGER Figure 2], the lower half ours.
+    wave_shear_range: Tuple[float, float] = (0.0, 0.0)
+    #: When the aircraft meets the wave, s (ours: so the wave and what follows
+    #: it lie inside the 30 min window).
+    wave_onset_range: Tuple[float, float] = (300.0, 1500.0)
+    #: The track the wave's change takes, m: about 25 km in the recorded case
+    #: [BRAMBERGER Figure 2], flown at the assigned speed.
+    wave_length: float = 25_000.0
     # ---- The job's bands (Amendment 2, rule 15) ----
     #: Score the speed as the band below rather than as ``c_hold``'s excess.
     #: ``plane`` sets it, with ``e_tol = e_floor = 65 ft`` [RVSM A.4.1.4].
@@ -406,8 +442,8 @@ class PlaneParams(EnvParams):
     #: band width past a band does.
     economy_weight: float = 0.0
     #: The reference cruise's operating cost, kg/s: fuel at FL330, M 0.78,
-    #: 73.5 t (0.742 kg/s in the model) plus the cost index's 0.5.
-    economy_scale: float = 1.242
+    #: 73.5 t (0.731 kg/s in the model) plus the cost index's 0.5.
+    economy_scale: float = 1.231
     # ---- Clearances (``target_pattern = 5``, ``plane_energy``) ----
     #: One clearance per tread, s (ours: a 2 000 ft change at the 500 fpm
     #: minimum takes 240 s, plus a minute held at the new level).
@@ -436,11 +472,12 @@ class PlaneParams(EnvParams):
     #: 78 t (MTOW [TCDS]).
     sortie_mass_range: Tuple[float, float] = (60_000.0, 78_000.0)
     #: The highest level a sortie's mass allows, m, linear in the mass between
-    #: two scored corners and flat outside them: FL370 at 73.5 t (``plane``'s
-    #: top level) and FL350 at 78 t (``heavy_high``: the highest it keeps 1.3 g
-    #: to buffet). A heavy aircraft still flies high, on thin margins (S1b).
+    #: two scored corners and flat outside them: FL350 at 73.5 t (``plane``'s
+    #: top level) and FL330 at 78 t (``heavy_high``), the recommended maximum
+    #: altitude of each, where the plant keeps 300 ft/min at full thrust [SF21
+    #: p. 5]. A heavy aircraft still flies high, on a thin margin (S1b).
     ceiling_masses: Tuple[float, float] = (73_500.0, 78_000.0)
-    ceiling_levels: Tuple[float, float] = (37_000.0 * 0.3048, 35_000.0 * 0.3048)
+    ceiling_levels: Tuple[float, float] = (35_000.0 * 0.3048, 33_000.0 * 0.3048)
     #: A clearance event's chance of being a level change rather than a speed
     #: change: three of ``plane_energy``'s five clearances move the level; its
     #: stream sets the share ATC's recorded instructions give (plane/scenarios.py).
@@ -472,7 +509,8 @@ PARAM_UNITS = {
     "C_x0": "-",
     "C_z0": "-",
     "initial_fuel_quantity": "kg",
-    "specific_fuel_consumption": "kg/(kN.s)",
+    "fuel_static": "kg/(N.s)",
+    "fuel_speed_slope": "kg/(N.m)",
     "cl_alpha": "1/deg",
     "cl0": "-",
     "cd0": "-",
@@ -551,6 +589,10 @@ PARAM_UNITS = {
     "gust_scale_length": "m",
     "zone_onset_range": "s",
     "zone_duration_range": "s",
+    "wave_draft_range": "m/s",
+    "wave_shear_range": "m/s",
+    "wave_onset_range": "s",
+    "wave_length": "m",
     "speed_band_cost": "-",
     "speed_band": "m/s",
     "cost_index": "kg/min",
@@ -742,11 +784,34 @@ def compute_reward_terms(state: PlaneState, params: PlaneParams, xp=jnp, tripped
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
 
+def wave_wind(state, time, params, xp=jnp):
+    """The mountain wave's wind on the aircraft at step ``time``: ``(along-track,
+    vertical)``, m/s. Between ``wave_start`` and ``wave_end`` the air sinks as a
+    half-sine of peak ``wave_draft``, and the along-track wind turns to a
+    tailwind of ``wave_shear`` on a half-cosine and keeps it (the shapes ours:
+    smooth, one sign). Zero sizes give no wave."""
+    span = xp.maximum(state.wave_end - state.wave_start, 1e-6)
+    seconds = xp.asarray(time, jnp.float32) * params.delta_t
+    phase = xp.clip((seconds - state.wave_start) / span, 0.0, 1.0)
+    # Exactly still air outside the wave: sin(pi) is not 0 in float32.
+    sink = xp.where((phase > 0.0) & (phase < 1.0), xp.sin(xp.pi * phase), 0.0)
+    turned = xp.where(phase < 1.0, 0.5 * (1.0 - xp.cos(xp.pi * phase)), 1.0)
+    return state.wave_shear * turned, -state.wave_draft * sink
+
+
+def wind_on(state, params, xp=jnp):
+    """The wind ``state``'s aircraft is in: the steady wind and its shear, the
+    gust and the mountain wave."""
+    wave_x, wave_z = wave_wind(state, state.time, params, xp)
+    return total_wind_2d(state.z, state.gust_x + wave_x, state.gust_z + wave_z, params)
+
+
 def airspeed(state, params, xp=jnp):
-    """True airspeed, against the wind the aircraft is in, gust included: what
-    the air data computer reads [BEA447, ADR], which sees a horizontal gust at
-    once (COLD_REVIEW A6). Its lag is not found (REALITY.md), so none."""
-    wind_x, wind_z = total_wind_2d(state.z, state.gust_x, state.gust_z, params)
+    """True airspeed, against the wind the aircraft is in, gust and wave
+    included: what the air data computer reads [BEA447, ADR], which sees a
+    horizontal gust at once (COLD_REVIEW A6). Its lag is not found
+    (REALITY.md), so none."""
+    wind_x, wind_z = wind_on(state, params, xp)
     return xp.sqrt((state.x_dot - wind_x) ** 2 + (state.z_dot - wind_z) ** 2)
 
 
@@ -954,7 +1019,11 @@ def compute_next_state(
     applied = jnp.where(
         params.wind_lookahead, jnp.array([state.gust_x, state.gust_z]), gust
     )
-    total_wind_x, total_wind_z = total_wind_2d(state.z, applied[0], applied[1], params)
+    # The wave's wind at the step's end, as the gust's (``wave_wind``).
+    wave_x, wave_z = wave_wind(state, state.time + 1, params)
+    total_wind_x, total_wind_z = total_wind_2d(
+        state.z, applied[0] + wave_x, applied[1] + wave_z, params
+    )
     # All-up mass for this step. ``initial_fuel_quantity`` is a component of
     # ``initial_mass``, not an addition, so burning fuel subtracts from it.
     mass_now = params.initial_mass - (params.initial_fuel_quantity - state.fuel)
@@ -1028,12 +1097,10 @@ def compute_next_state(
             compute_acceleration=accelerate,
             method=integration_method,
         )
-        # Fuel burned over the sub-step. ``specific_fuel_consumption`` is
-        # thrust specific: kg per kilonewton-second, so 17.5/1000 is 1.75e-5
-        # kg/(N s), the right order for a modern high-bypass turbofan. Burn is
-        # charged against the thrust actually produced, which already carries
-        # the altitude lapse and the Mach terms.
-        burned = burned + params.specific_fuel_consumption * 1e-3 * thrust * dt
+        # Fuel burned over the sub-step, at the thrust actually produced, which
+        # already carries the altitude lapse and the Mach terms, and at the
+        # fuel per thrust of this speed and height (``fuel_flow``).
+        burned = burned + fuel_flow(thrust, air_speed, z, params) * dt
         # Trips read the worst load inside the step, not the one it ends on.
         load = metrics[1][-1] / (mass_now * params.gravity)
         peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)
@@ -1088,6 +1155,10 @@ def compute_next_state(
         zone_start=state.zone_start,
         zone_end=state.zone_end,
         zone_sigma=state.zone_sigma,
+        wave_start=state.wave_start,
+        wave_end=state.wave_end,
+        wave_draft=state.wave_draft,
+        wave_shear=state.wave_shear,
         cleared_speed=state.cleared_speed,
         level_change_at=state.level_change_at,
         level_change_size=state.level_change_size,

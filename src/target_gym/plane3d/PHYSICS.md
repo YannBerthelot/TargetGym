@@ -991,8 +991,8 @@ their numbers and are stamped again in place (`plane3d_racetrack-v10`,
 
 | Number | Value | Status |
 |---|---|---|
-| `GREEN_DOT_CAS` | 219.5 kt at 73.5 t, as the square root of the mass | derived: the plant's level-flight thrust is least at 218.1 to 222.2 kt between 3 000 and 8 000 m at 73.5 t, 196.8 to 199.9 at 60 t, 224.7 to 229.3 at 78 t (`scripts/plane3d_review.py polar`); cited as the holding speed [SF24] |
-| maximum holding airspeed | 230 KIAS to 14 000 ft, 265 above | cited [AIM538, IFH ch. 10]; never reached by green dot between 60 and 78 t |
+| `GREEN_DOT_CAS` | 231.5 kt at 73.5 t, as the square root of the mass (219.5 kt before the A320-233 plant) | derived: the plant's level-flight thrust is least at 229.5 to 234.0 kt between 3 000 and 8 000 m at 73.5 t, 207.1 to 210.5 at 60 t, 236.5 to 241.4 at 78 t (`scripts/plane3d_review.py polar`); cited as the holding speed [SF24] |
+| maximum holding airspeed | 230 KIAS to 14 000 ft, 265 above | cited [AIM538, IFH ch. 10]; green dot reaches the 230 from about 73 t, never the 265 |
 | price past the cap | (excess / 10 kt)^2 a second | ours, as every band's price; the width is AIM 4-4-12's |
 | `economy_scale`, `cost_index` | 1 kg/s, 0 | the unit is the kilogram; no cost of time [NATS-HOLDS: the hold's length is ATC's] |
 
@@ -1005,7 +1005,8 @@ their numbers and are stamped again in place (`plane3d_racetrack-v10`,
   `calm` in proportion (0.51 and 0.44).
 - It stays listed as solved (charter J5), outside the flagship.
 
-**What the reference does on it**, whole-window cost on seeds 0 to 4:
+**What the reference did on it before the A320-233 plant** (the next section has
+today's), whole-window cost on seeds 0 to 4:
 
 | Scenario | `plane3d_heading` (bands; `economy`) | `plane3d_racetrack` (bands; fuel, kg) |
 |---|---|---|
@@ -1045,7 +1046,7 @@ still carries the earlier holding speed (`assigned_speed_mode` 1 in
 `assigned_cas_3d`), unused by the racetrack: `env.py` is in the patrol family's
 fingerprints, so it was left for the tidy-up.
 
-**What rests on the plant's thrust margin (2026-11-23).** The 2D aircraft's review
+**What rested on the plant's thrust margin (2026-11-23, since withdrawn).** The 2D aircraft's review
 found the shared plant's thrust margin about 3.3 times Airbus's published one, with a
 scale of 0.795 on maximum thrust proposed to the owner (plane/PHYSICS.md once
 decided). Rerun with that scale (`--set thrust_output_at_sea_level=190800`), nothing
@@ -1059,3 +1060,85 @@ matters. A fix that moved the drag rise or the polar instead, to land Airbus's
 max-range Mach, would move the least-thrust speed and every fuel figure:
 `GREEN_DOT_CAS` is then derived again, and
 `test_the_assigned_speed_is_the_plants_least_fuel_speed` fails until it is.
+
+## On the A320-233 plant (2026-11-23)
+
+The shared plant was landed on Airbus's published envelope the same day
+(plane/PHYSICS.md): induced drag computed on the lift after the Mach corrections,
+no zero-lift drag of the tail's own, and the engines at their maximum continuous
+rating. What it changes here, measured on the plant as merged with that work:
+
+**The 3D aircraft takes the two shared numbers**, `thrust_output_at_sea_level`
+197 840 N and `economy_scale` 1.231 kg/s, so it stays the 2D aircraft
+(`test_the_3d_airframe_is_the_2d_one`). The patrol family and `wake_surf` inherit
+them.
+
+**Green dot is 231.5 kt at 73.5 t** (`GREEN_DOT_CAS`), from 219.5: the plant's
+least level-flight fuel flow is now 2 602 kg/h there, at L/D 17.5, and 2 124 and
+2 761 kg/h at 60 and 78 t. The square root of the mass still holds within 0.3 kt.
+
+**The maximum holding airspeed now binds.** From about 73 t green dot is at or over
+230 KIAS, so on a low hold the aircraft is assigned the maximum (the rule was
+already "green dot, or the maximum where that is less"); at 73.5 t that is 1.5 kt
+under its green dot, at 78 t 8.5 kt. Above 14 000 ft the 265 KIAS is never reached.
+
+**The reference holds 5 kt under a maximum it rests on** (`cap_margin`,
+`plane3d/experts.py`). A reference resting on a priced limit follows the owner's
+rule of 2026-11-23, "lowest with no exit": on a 1 kt grid, the smallest margin at
+which it passes the limit on none of the nominal seeds, 100 to 109, in the normal
+day (`scripts/plane3d_review.py backoff`):
+
+| Margin, kt | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| seeds passing 230 KIAS, of 10 | 10 | 9 | 8 | 5 | 1 | 0 |
+| furthest past it, kt | +4.03 | +3.09 | +2.05 | +1.09 | +0.06 | -0.15 |
+
+On its assigned speed alone it paid 2.6 to 3.9 a window on the low wind holds. The
+task's assigned speed is unchanged by this: it is the reference's own set point.
+
+**What the reference does on it**, whole-window cost on seeds 0 to 4:
+
+| Scenario | `plane3d_heading` (bands; `economy`) | `plane3d_racetrack` (bands; fuel, kg) |
+|---|---|---|
+| normal | 0; 637 to 644 | 0; 911 to 920 |
+| calm | 0; 638 to 644 | 0; 912 to 921 |
+| worst zone | 0 to 0.40; 633 to 645 | 0; 908 to 924 |
+| zone over the window | 0; 636 to 645 | |
+| severe zone (share 1e-4) | 371 to 3 269 | |
+| 30 kt wind | | 0; 897 to 905 |
+| low hold, 50 kt | | 0; 890 to 899 |
+| low hold, 67 kt | | 0 to 0.15; 888 to 894 |
+| high hold, 50 kt | | 0; 893 to 903 |
+
+Weighted, the racetrack's reference costs 910.4 a window, 0.759 kg a second, all
+fuel, and nothing past the maximum; the heading task's 640.7. On the heading task
+8 kt fast now costs 0.44 % less and 10 kt slow 0.81 % more (8 paired seeds): still
+a small lever, less flat than it was.
+
+**A floor on the racetrack's room**, the reference's speed moved under its assigned
+one (10 paired seeds, the task's own cost):
+
+| Move | Calm | 30 kt wind | High hold, 50 kt |
+|---|---|---|---|
+| 5 kt slower | -0.49 % (se 0.08) | -0.45 % (se 0.09) | -0.55 % (se 0.02) |
+| 10 kt slower | -0.93 % (se 0.08) | -0.75 % (se 0.09) | -0.96 % (se 0.05) |
+| 10 kt slower, turns 300 m wider | -1.26 % | -0.75 % | -1.08 % |
+| 15 to 20 kt slower | -1.22 to -1.25 % (se 0.10) | | -1.20 % (se 0.09) |
+| 30 kt slower | -0.60 % | | -0.45 % |
+
+The gain is bounded: it peaks 15 to 20 kt under green dot at about 1.2 % and falls
+again, and 40 kt under the reference loses the pattern. It exists because the
+pattern is a fixed track: flown slower its turns need less bank, and the hold turns
+60 % of the time at 0.80 kg/s against 0.72 level. So the floor is now about 1.2 %,
+most of it a speed. **Open, for the owner:** whether a reference that holds at
+green dot, as the aircraft does [SF24], should keep leaving that speed to the
+agent, or the pattern should be flown at the bank its speed needs. No source read
+here says how far under green dot a clean A320 may hold.
+
+**Known deviations.** The 3D aircraft still burns at a constant specific
+consumption; the 2D one now follows a fuel law that rises with speed
+(`plane.dynamics.fuel_flow`). Taking it needs the law's two numbers in
+`PlaneParams3D`, which the Hornet inherits and has no numbers of its own for. With
+it the 2D session finds the least-fuel speed near 212.5 kt at 73.5 t, 19 kt under
+green dot, which would widen the gap above. Baselines of every aircraft task are
+out of date until the next re-record.

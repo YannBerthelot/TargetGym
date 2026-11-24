@@ -19,6 +19,14 @@ Contract, from src/target_gym/plane3d/REALITY.md:
   aircraft's protection.
 - Pattern. An RNAV hold sized for the speed held, turns at 25 deg at the
   greatest ground speed [AIM538; plane3d/PHYSICS.md, Amendment 4].
+- Reference. Where green dot is at or over the maximum holding airspeed the
+  reference rests on a priced limit, and holds under it by the rule for that
+  case (owner, 2026-11-23, "lowest with no exit"): on a 1 kt grid, the
+  smallest margin at which it passes the limit on none of the nominal seeds,
+  100 to 109, in the normal day.
+
+On the A320-233 plant of 2026-11-23 (plane/PHYSICS.md) green dot is near
+231 kt at 73.5 t, so the 230 KIAS limit binds on a low hold from about 73 t.
 
 Hand-derived numbers: on a low hold 240 KIAS is 10 kt past the 230 cap, one
 width, (10 / 10)^2 = 1.0 per second; 250 KIAS is two widths, 4.0. A jet's best
@@ -81,8 +89,12 @@ def _level_thrust(cas, z, mass):
 # -- The assigned speed ------------------------------------------------------------
 
 
-@pytest.mark.parametrize("level", (3700.0, 6500.0))
-@pytest.mark.parametrize("mass", MASSES)
+@pytest.mark.parametrize(
+    "mass, level",
+    # Where green dot is under the maximum holding airspeed: every mass under
+    # the 265 KIAS limit, and the light aircraft under the 230 KIAS one.
+    ((60_000.0, 3700.0), (60_000.0, 6500.0), (73_500.0, 6500.0), (78_000.0, 6500.0)),
+)
 def test_the_assigned_speed_is_the_plants_least_fuel_speed(mass, level):
     """Green dot minimises drag, hence fuel, in the hold [SF24]: level flight
     10 kt faster or 10 kt slower than the assigned speed needs more thrust."""
@@ -93,12 +105,28 @@ def test_the_assigned_speed_is_the_plants_least_fuel_speed(mass, level):
     assert at < float(_level_thrust(cas - 10.0 * KT, level, mass))
 
 
+@pytest.mark.parametrize("mass", (73_500.0, 78_000.0))
+def test_a_heavy_aircraft_on_a_low_hold_is_assigned_the_maximum(mass):
+    """From about 73 t the least-drag speed is at or over 230 KIAS, the maximum
+    holding airspeed to 14 000 ft [AIM538]: the aircraft is assigned the
+    maximum, the allowed speed nearest its green dot, so 10 kt slower needs
+    more thrust; at 78 t, 10 kt faster would need less."""
+    env, params, _, state = _hold(3700.0, mass)
+    cas = float(env.assigned_cas(state, params))
+    assert cas == pytest.approx(230.0 * KT)
+    at = float(_level_thrust(cas, 3700.0, mass))
+    assert at < float(_level_thrust(cas - 10.0 * KT, 3700.0, mass))
+    if mass == 78_000.0:
+        assert float(_level_thrust(cas + 10.0 * KT, 3700.0, mass)) < at
+
+
 def test_the_assigned_speed_follows_the_aircraft_weight():
     """Green dot is computed from the aircraft's weight [SF24]; at a fixed lift
-    coefficient the speed goes as its square root."""
+    coefficient the speed goes as its square root. Read on a high hold, whose
+    265 KIAS limit no A320's green dot reaches."""
     speeds = []
     for mass in MASSES:
-        env, params, _, state = _hold(LOW, mass)
+        env, params, _, state = _hold(HIGH, mass)
         speeds.append(float(env.assigned_cas(state, params)))
     assert speeds[0] < speeds[1] < speeds[2]
     assert speeds[2] / speeds[0] == pytest.approx(np.sqrt(78.0 / 60.0), rel=0.02)
@@ -187,3 +215,46 @@ def test_the_holds_cost_is_the_fuel_it_burns():
         0.0, abs=1e-6
     )
     assert float(-reward.sum()) == pytest.approx(burned, rel=0.01)
+
+
+# -- The reference at the limit ----------------------------------------------------
+
+
+@pytest.mark.medium
+def test_the_reference_holds_under_the_limit_by_the_no_exit_rule():
+    """73.5 t on low holds, the normal day, the nominal seeds 100 to 109: the
+    reference never passes 230 KIAS, and with its margin one knot of the grid
+    smaller it does on at least one seed. That is the rule: the smallest margin
+    with no exit."""
+    from target_gym import scenarios
+    from target_gym.plane3d import env as E
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY[RACETRACK]
+    env, ctrl = spec.make_env(), spec.make_pid_controller(None)
+    (normal,) = [s for s in scenarios.suite(spec) if s.name == "normal"]
+    params = scenarios.params_for(
+        spec, normal, target_altitude_range=(3_000.0, 14_000.0 * FT)
+    )
+
+    def furthest_past_the_limit(seed, margin):
+        key = jax.random.PRNGKey(seed)
+        obs, state = env.reset_env(key, params)
+        gains = ctrl.params.replace(cap_margin=margin)
+
+        def body(carry, k):
+            obs, state, memory = carry
+            action, memory = ctrl.step(gains, memory, obs, jnp)
+            obs, state, *_ = env.step_env(k, state, action, params)
+            cas = D.calibrated_airspeed(state.z, E.airspeed_3d(state, params))
+            return (obs, state, memory), cas - 230.0 * KT
+
+        memory = jax.tree.map(jnp.asarray, ctrl.init_state)
+        keys = jax.random.split(key, int(params.max_steps_in_episode))
+        return jax.lax.scan(body, (obs, state, memory), keys)[1].max()
+
+    run = jax.jit(jax.vmap(furthest_past_the_limit, in_axes=(0, None)))
+    seeds = jnp.arange(100, 110)
+    shipped = float(ctrl.params.cap_margin)
+    assert float(run(seeds, shipped).max()) <= 0.0
+    assert float(run(seeds, shipped - 1.0 * KT).max()) > 0.0
