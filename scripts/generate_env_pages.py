@@ -333,15 +333,20 @@ _LINES = (
 )
 
 
-def _charter_section(name: str) -> str:
-    """A scored task's four lines (charter J3) and its room, from its record."""
-    record = charter.load(name) or {}
+def charter_section(record: dict) -> str:
+    """A scored task's four lines (charter J3) and its room, from its record.
+    A line the record lacks reads "not measured", with the record's reason
+    under the table: the MPC line may be missing in this release (owner,
+    2026-11-24), and the records tests hold the other three."""
     lines = charter.j3(record)
     rows = ["| Line | What it is | Cost per step | Trips |", "|---|---|---|---|"]
+    reasons = []
     for key, label, what in _LINES:
         ln = lines[key]
         if ln == charter.NOT_MEASURED:
             rows.append(f"| {label} | {what} | not measured | |")
+            why = record.get(key, {}).get("why")
+            reasons += [f"The {label} line is not measured: {why}."] if why else []
             continue
         named = f" (`{ln['name']}`)" if key == "best_null" else ""
         loose = " (not converged)" if ln.get("converged") is False else ""
@@ -367,7 +372,7 @@ def _charter_section(name: str) -> str:
             "",
             *rows,
             "",
-            said,
+            " ".join([*reasons, said]),
         ]
     )
 
@@ -629,7 +634,12 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         f"**Truncation.** After {episode} steps.",
         "",
         *(
-            ["## Reference and ceiling", "", _charter_section(name), ""]
+            [
+                "## Reference and ceiling",
+                "",
+                charter_section(charter.load(name) or {}),
+                "",
+            ]
             if scored
             else []
         ),

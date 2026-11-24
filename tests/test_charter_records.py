@@ -25,6 +25,31 @@ def test_each_charter_task_has_a_current_valid_record(task):
     assert charter.stale_parts(record, charter.current(task)) == []
 
 
+@pytest.mark.records
+@pytest.mark.parametrize("task", charter.FLAGSHIP)
+def test_a_scored_task_has_its_lines_measured_and_is_accepted(task):
+    """The bar a task passes to be scored (owner, 2026-11-24): its best null
+    policy, its reference and its ceiling are measured, so its room is, and it
+    passed acceptance (J2) with the sweep (B7) run. The MPC line alone may read
+    "not measured" in 0.8.0 (owner, the same day): cstr ships no planner and
+    pH's oracle is not rebuilt, and both get the line in a later update."""
+    record = charter.load(task)
+    assert record is not None, f"{task}: no record in {charter.DATA}"
+    lines = charter.j3(record)
+    unmeasured = [
+        k
+        for k in ("best_null", "reference", "ceiling")
+        if lines[k] == charter.NOT_MEASURED
+    ]
+    assert not unmeasured, f"{task}: not measured: {unmeasured}"
+    room = charter.room(lines["reference"], lines["ceiling"], record["weights"])
+    assert room != charter.NOT_MEASURED
+    j2 = record.get("j2")
+    assert j2 is not None, f"{task}: acceptance (J2) has not run"
+    assert j2["sweep"] != charter.NOT_MEASURED, f"{task}: the sweep has not run"
+    assert j2["accepted"] is True, f"{task}: {j2['reasons']}"
+
+
 #: The J3 lines' seeds (reference_ladder.SEEDS): the MPC line's costs per scenario are
 #: in this order; a ceiling file lists its own seeds among them.
 LINE_SEEDS = tuple(range(100, 110))

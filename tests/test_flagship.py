@@ -171,6 +171,37 @@ def test_a_scored_page_shows_the_four_charter_lines(name):
     assert lines[1:] == ["Best null policy", "Reference", "MPC", "Ceiling"]
 
 
+def test_a_scored_page_says_not_measured_for_an_mpc_line_its_record_lacks(monkeypatch):
+    """The owner, 2026-11-24: a scored task's MPC line may read "not measured"
+    in this release. The page then says so with the record's reason, and still
+    gives the other three lines and the room: the reference costs 2 per step
+    and the ceiling 1, so the room is 2."""
+    weights = {"normal": 1.0}
+
+    def line(cost):
+        return charter.line({"normal": {"costs": [cost, cost], "trips": 0}}, weights)
+
+    record = {
+        "weights": weights,
+        "nulls": {"lines": {"hold": line(8.0)}},
+        "reference": {"line": line(2.0)},
+        "mpc": {"line": charter.NOT_MEASURED, "why": "the task ships no oracle"},
+        "ceiling": {"line": line(1.0)},
+    }
+    # The page generator imports the reference generator beside it.
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    section = _script("generate_env_pages").charter_section(record)
+    rows = {row["Line"]: row["Cost per step"] for row in _table(section)}
+    assert rows == {
+        "Best null policy": "8",
+        "Reference": "2",
+        "MPC": "not measured",
+        "Ceiling": "1",
+    }
+    assert "the task ships no oracle" in section
+    assert "is 2." in section
+
+
 def _table(text: str) -> list[dict]:
     """Every row of every Markdown table in ``text``, keyed by its header."""
     rows, header = [], None
@@ -292,12 +323,16 @@ RECORD_FILES = (
     "tests/experts/test_mpc_baselines.py",
     "tests/test_reward_contract.py",
 )
-#: The checks that a task's record is present and describes this tree.
+#: The checks every scored task has a case in: its charter record is present,
+#: current and measured, and its protocol row describes this tree.
 HELD_CURRENT = {
     "test_each_charter_task_has_a_current_valid_record",
-    "test_recorded_baseline_still_describes_this_tree",
+    "test_a_scored_task_has_its_lines_measured_and_is_accepted",
     "test_recorded_protocol_row_still_describes_this_tree",
 }
+#: A baseline row compares the PID with the MPC, so it exists only where both
+#: ship. A scored task may ship no MPC in this release (owner, 2026-11-24).
+WITH_MPC = {name for name in FIVE if registry.get(name).has_mpc}
 
 
 @pytest.mark.medium
@@ -320,6 +355,7 @@ def test_the_records_job_covers_the_five_and_only_them():
         assert tasks <= FIVE, test
         if test in HELD_CURRENT:
             assert tasks == FIVE, test
+    assert cases["test_recorded_baseline_still_describes_this_tree"] == WITH_MPC
 
 
 def test_the_stale_list_names_scored_tasks_only(capsys):
@@ -337,6 +373,8 @@ def test_the_charter_stale_report_covers_the_flagship_by_default():
     assert tuple(default) == charter.FLAGSHIP
 
 
-@pytest.mark.parametrize("recorder", ["record_baselines", "evaluate_baselines"])
-def test_a_recorder_run_without_names_records_the_five(recorder):
-    assert set(_script(recorder).default_envs()) == FIVE
+def test_a_recorder_run_without_names_records_the_scored_tasks():
+    """The protocol scores every scored task's PID; the baseline returns
+    compare the PID with the MPC, so they cover the scored tasks with both."""
+    assert set(_script("evaluate_baselines").default_envs()) == FIVE
+    assert set(_script("record_baselines").default_envs()) == WITH_MPC
