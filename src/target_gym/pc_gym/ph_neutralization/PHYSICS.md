@@ -255,6 +255,30 @@ policies only. Effect on the score: none for a controller that holds the permit;
 the task measures the reagent saved on the permit's edge, not the defence of a
 limit. A source for larger upsets would make the limits part of the job.
 
+**Sensitivity** (owner, 2026-11-24; `scripts/ph_sensitivity.py`). None of the 29
+`ours` numbers has a documented family range, so the charter's sweep (B7) runs the
+shipped member alone. In its place, a sensitivity with stated spans, not sourced
+ones: each group scaled by 0.5 and 1.5, the ladder climbed afresh on each, the nulls
+on the ladder's seeds, the room against the ceiling on scoring seeds 200 to 209.
+
+| Member | Kept set point | Room (95 %) | Best null's wins of 10 |
+|---|---|---|---|
+| shipped | 6.5 | 1.167 (1.154 to 1.180) | 1 |
+| buffer x0.5 | 6.5 | 1.073 (1.068 to 1.078) | 1 |
+| buffer x1.5 | 6.5 | 1.302 (1.273 to 1.331) | 1 |
+| residence x0.5 | 6.6 | 1.183 (1.171 to 1.195) | 0 |
+| residence x1.5 | 6.4 | 1.143 (1.130 to 1.157) | 1 |
+| upsets x0.5 | 6.4 | 1.134 (1.123 to 1.144) | 0 |
+| upsets x1.5 | 6.6 | 1.199 (1.183 to 1.214) | 1 |
+
+Every member keeps the feedforward rung and a room whose interval is above 1, and no
+null beats the reference on more than one seed. The reference trips on no seed of
+any member. On `buffer x1.5` (every scenario with a buffer) and on `upsets x1.5`
+(the bad day) the hold asks stage 1's valve for more than its 22 mL/s on some step;
+the ceiling stays a lower bound there, reached only with the trim's help, so those
+two rooms are upper estimates. The room comes from the buffer: it
+is the bicarbonate a hold on the edge uses that a reference held higher pays for.
+
 ---
 
 ## 10. What the reference ladder row needs
