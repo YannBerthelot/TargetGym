@@ -318,8 +318,9 @@ aileron reads the wake's rolling moment. With `sensor_noise_scale` 0 the station
 exact. How fast the error moves is not in the sources, so it is held.
 
 **The crossing** (`crossing_trips`). The follower's centreline inboard of the near
-vortex, `b0 / 2` = 14.1 m from the wake's centreline, is a wake crossing and trips the
-plant: NASA's Gulfstream flights had ten, rated uncomfortable and to be avoided on
+vortex, `b0 / 2` = 14.1 m from the wake's centreline, with the vortex within half a
+span of its own height (ours: further up or down it flies over or under the wake), is
+a wake crossing and trips the plant: NASA's Gulfstream flights had ten, rated uncomfortable and to be avoided on
 passenger flights, and one ended a test point [REALITY.md, N4 III.D, VI.D; N1 V.A]. It is
 the ride limit the sources name. The cabin vibration they measured sits at 16 to
 28 Hz and does not grow toward the core, so a plant stepped at 1 Hz does not carry it.

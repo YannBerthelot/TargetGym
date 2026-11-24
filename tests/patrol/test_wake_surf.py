@@ -23,8 +23,10 @@ Contract, from the plant record and the owner's decisions of 2026-11-23:
   noise the station is exact.
 - A wake crossing trips the plant [REALITY.md: N4 VI.D, N1 V.A]: the follower's
   centreline inboard of the near vortex, ``b0 / 2 = pi b / 8`` = 14.06 m from the
-  wake's centreline. The patrol does not trip on it, and with the wake switched
-  off (``wake_strength`` 0) there is no vortex to cross.
+  wake's centreline, with the vortex within half a span of its height (ours): a
+  follower further above or below flies over or under it. The patrol does not
+  trip on it, and with the wake switched off (``wake_strength`` 0) there is no
+  vortex to cross.
 - The score prices the along-track error past the +-250 ft the Gulfstream's
   pilot was given [REALITY.md: N1 IV], the squared excess in tolerance widths,
   and nothing across the wake: the 30 m there (ours, a span) is a reported band
@@ -211,6 +213,21 @@ def test_a_wake_crossing_trips_the_wake_surfer_only(name, trips, from_the_centre
     state = _at_station(state, right=side * inboard)
     tripped, _ = check_is_terminal_patrol(state, params)
     assert bool(tripped) is (trips and from_the_centreline < 14.06)
+
+
+@pytest.mark.parametrize(
+    "above, trips", [(10.0, True), (-10.0, True), (25.0, False), (-25.0, False)]
+)
+def test_a_crossing_needs_the_vortex_within_the_wings_reach_in_height(above, trips):
+    """12 m from the wake's centreline is inboard of the near vortex, but the
+    follower passes through it only with the vortex within half a span of its
+    own height, 17.9 m (ours): above or below that it flies over or under it."""
+    _, params, state = _reset()
+    inboard = 12.0 - abs(float(state.slot_right))
+    side = float(jnp.sign(state.slot_right))
+    state = _at_station(state, right=side * inboard, up=above)
+    tripped, _ = check_is_terminal_patrol(state, params)
+    assert bool(tripped) is trips
 
 
 def test_with_the_wake_switched_off_there_is_no_vortex_to_cross():

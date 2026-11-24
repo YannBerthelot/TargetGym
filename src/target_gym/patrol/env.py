@@ -660,15 +660,20 @@ def station_distance(state: PatrolState):
 
 
 def wake_offset(state: PatrolState, params):
-    """How far the follower's centreline lies outboard of the wake's own, on
-    the slot's side, in metres, as ``wake_air`` places the wake: where the
-    lead was a time in trail ago, drift included. Negative past the centreline."""
+    """Where the follower's centreline is in the wake's own frame, as
+    ``wake_air`` places the wake (where the lead was a time in trail ago,
+    drifted and sunk): ``(outboard, above)`` in metres, outboard of the wake's
+    centreline on the slot's side, negative past it, and above its vortex plane."""
     speed = air_speed(state.lead, state.gust_history[0], params)
     delay = slot_delay(jnp.atleast_1d(state.slot_back), speed, params)
-    px, py, _, rx, ry, _, _ = jnp.moveaxis(at_delay(state.wake_history, delay), -1, 0)
+    px, py, pz, rx, ry, _, gamma = jnp.moveaxis(
+        at_delay(state.wake_history, delay), -1, 0
+    )
     follower = state.follower
     across = (follower.x - px) * rx + (follower.y - py) * ry
-    return (jnp.sign(state.slot_right) * across)[0]
+    b0 = jnp.pi / 4.0 * params.wingspan
+    sink = gamma / (2.0 * jnp.pi * b0) * delay * params.delta_t
+    return (jnp.sign(state.slot_right) * across)[0], (follower.z - pz + sink)[0]
 
 
 def separation(state: PatrolState):
@@ -689,7 +694,8 @@ def check_is_terminal_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
     (altitude, bank, load factor, EAS, Mach), the two collide, or the follower
     falls out of formation past ``max_slot_error``. With ``crossing_trips``,
     also if the follower passes through the lead's near vortex: its centreline
-    inboard of it, ``b0 / 2`` from the wake's own, while there is a wake.
+    inboard of it, ``b0 / 2`` from the wake's own, within half a span of the
+    vortex plane, while there is a wake.
     """
     follower_crash, _ = check_is_terminal_3d(state.follower, params, xp)
     lead_crash, _ = check_is_terminal_3d(state.lead, params, xp)
@@ -697,8 +703,12 @@ def check_is_terminal_patrol(state: PatrolState, params: PatrolParams, xp=jnp):
     lost = slot_error(state) >= params.max_slot_error
     upset = (params.upset_bank > 0.0) & (xp.abs(state.follower.phi) > params.upset_bank)
     # No wake, no vortex to cross: ``wake_strength`` 0 is the plant without it.
-    inboard = wake_offset(state, params) < jnp.pi / 8.0 * params.wingspan
-    crossed = params.crossing_trips & (params.wake_strength > 0.0) & inboard
+    # Through it: inboard of the vortex, with the vortex inside the wing's
+    # reach in height, half a span (ours). Further up or down it flies past.
+    outboard, above = wake_offset(state, params)
+    inboard = outboard < jnp.pi / 8.0 * params.wingspan
+    through = inboard & (jnp.abs(above) < params.wingspan / 2.0)
+    crossed = params.crossing_trips & (params.wake_strength > 0.0) & through
     terminated = follower_crash | lead_crash | collision | lost | upset | crossed
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated

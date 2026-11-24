@@ -1,5 +1,5 @@
 {
-  "fingerprint": "5a741cf72ea3e542",
-  "note": "Behaviour changed on a version no release shipped, so re-stamped in place (owner's rule of 2026-11-14). Owner's decisions of 2026-11-23: the next-version design replaces the task. The wake drifts with the air the lead left it in, the station given is a prediction off by the wind estimate's error (held over a window), a wake crossing trips, the pair flies 1.2 to 1.8 km in trail at 1.38 spans, and the 30 m across the wake is reported, not priced. Before that, same day (#217): station on the vortex plane, along-track tolerance, spawn noise 2 m. Its records are stale until the re-record pass.",
-  "stamped": "2026-11-23T18:46:03+00:00"
+  "fingerprint": "deaf21806489c62f",
+  "note": "Behaviour changed on a version no release shipped, so re-stamped in place (owner's rule of 2026-11-14). Owner's decisions of 2026-11-23: the next-version design replaces the task. The wake drifts with the air the lead left it in, the station given is a prediction off by the wind estimate's error (held over a window), a wake crossing trips (inboard of the near vortex and within half a span of its plane), the pair flies 1.2 to 1.8 km in trail at 1.38 spans, and the 30 m across the wake is reported, not priced. Before that, same day (#217): station on the vortex plane, along-track tolerance, spawn noise 2 m. Its records are stale until the re-record pass.",
+  "stamped": "2026-11-24T00:09:52+00:00"
 }
