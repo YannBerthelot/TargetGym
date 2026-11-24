@@ -360,7 +360,10 @@ def feed_at_rest(T, T_f, F_w, params: CSTRParams):
     k = p.k0 * jnp.exp(-p.EA_over_R / T)
     a, c = p.rho * p.C * (T - T_f), k * p.V
     h = (-p.deltaHr) * k * p.V * p.Caf - a * c - duty
-    return (h - jnp.sqrt(h * h - 4.0 * a * duty * c)) / (2.0 * a)
+    # The smaller root as 2 duty c / (h + sqrt(...)), not (h - sqrt(...)) / 2a:
+    # the difference of two numbers near 1e6 loses float32 digits, enough for a
+    # reset run eagerly and one run compiled to part by 6e-6 of the feed.
+    return 2.0 * duty * c / (h + jnp.sqrt(h * h - 4.0 * a * duty * c))
 
 
 # Deliberately not jitted (see the other process tasks).
