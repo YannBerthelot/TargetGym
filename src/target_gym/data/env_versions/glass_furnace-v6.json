@@ -1,5 +1,5 @@
 {
-  "fingerprint": "c7865f435fde4af4",
-  "note": "Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-14T16:16:30+00:00"
+  "fingerprint": "737349c4b437eb09",
+  "note": "Unreleased version, re-stamped in place (owner, 2026-11-14 rule; go of 2026-11-15): the plant carries the defects its tank blocks give off when their temperature rises and reboil past the last port (REALITY.md section 10), the reward charges the plates they reject, and the observation gains the defects per plate read at the cold end (13 channels). Every earlier field is bit-identical over a two-day run; the reward moves wherever defects leave. Stamped again on 2026-11-24 on merging int/amendment3, whose shared code had moved under it without changing this task's step, reward or observation (a reading's interval counts control steps; utils.py lost two unused rollout helpers; the aircraft's atmosphere and other tasks' disturbance innovations).",
+  "stamped": "2026-11-24T01:54:43+00:00"
 }

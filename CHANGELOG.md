@@ -42,6 +42,25 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`glass_furnace` charges the defects its tank blocks give off, reads them, and
+  has a new oracle without a seed.** `glass_furnace-v6` is unreleased and was
+  re-stamped in place. Upgrade notes:
+  - The plant carries the temperature of the blocks its glass touches. A block at or
+    above 1450 C gives off defects when its temperature rises, and fining still
+    running past the last port is reboil (REALITY.md section 10; the two rates and
+    the 1450 C are ours). On a step that keeps both marks, the reward's lost-glass
+    term charges the plates those defects reject. `PhysicalParams` gains
+    `block_lag`, `block_release_T`, `block_release` and `reboil_plate`, and the
+    plant's fields `block` and `defects`.
+  - The observation has 13 channels, not 12: the last is the defects per plate read
+    at the cold end, 0.3 h late.
+  - The oracle without a seed, which `make_oracle("glass_furnace")` and the runners
+    build, plans every 4 h and prices the chance of a lost step in place of a limit
+    on the fining share; the one it replaces lost a tenth of its steps on this
+    plant. `GlassOracle` takes `spread` and `paths` and no longer `replan_hours`,
+    and `oracle.solve` takes `fining_spread`. With a seed the oracle is unchanged.
+  - Every recorded row of the task predates this plant, except its ceiling
+    (`data/oracle_ceilings/glass_furnace.json`: reference 49.23, ceiling 46.96).
 - **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
   the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
   release shipped, keeps its number). Upgrade notes:
