@@ -11,7 +11,8 @@
 > Hornet's. Both aircraft spawn in level trim; the air keeps 20 s. `wake_surf`
 > is this module with A320s 3 km apart: its plant record is REALITY.md, and its
 > task section below replaces plane3d/PHYSICS.md's "Wake surfing" where they differ
-> (the station, the box and the reference changed on 2026-11-23).
+> (the station, the box, the reference, the drifting wake and the predicted
+> station all date from 2026-11-23).
 >
 > The lead turns at up to 0.0303 rad/s, the parade turn's 30 deg of bank [CNATRA] at
 > 25 000 ft. The expert is NASA AFF's direct hold (figure 3 of the TM): on each axis a
@@ -222,6 +223,8 @@ Flight parameters are inherited from `PlaneParams3D`; see the
 | `wake_strength` | 1 | Scales the lead's wake; 0 turns it off |
 | `wake_core_ratio` | 0.0582 | Burnham core radius over the span |
 | `wake_decay_rate` | 0.2 | The wake's decay per `t0` |
+| `wake_drift` | 0 | 1 carries the wake with the gust the lead left it in (`wake_surf`) |
+| `crossing_trips` | off | A wake crossing trips the plant (`wake_surf`) |
 | `follower_spawn_noise` | 40 m | Isotropic spawn offset, so the episode starts solvable but untrimmed |
 | `delta_t` | 1.0 s | Step size |
 
@@ -276,60 +279,85 @@ is charged too, and coming too close to the lead trips the plant.
 
 ### Task: `wake_surf`
 
-Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where
-the lead's upwash lifts it, and pay for fuel and time as an operator does. The
-station sits 1.2 to 1.3 spans from the lead's centreline, where the
-extended-formation trials flew, and on the vortex plane, below the lead by the
-pair's sink. Inside a 30 m box across the wake and 250 ft along it only the economy
-counts, so the cost falls where the follower finds the upwash. The upwash grows
-toward the vortex core, 0.8 to 0.9 span inboard, where a vortex can roll the
-follower past 60 deg, an upset (REALITY.md).
+Surf a lead airliner's wake: hold an A320 at a station 1.2 to 1.8 km behind another,
+where the lead's upwash lifts it, and pay for fuel and time as an operator does. The
+wake drifts with the air the lead left it in, and the station the follower is given
+is only a prediction, off by its wind estimate's error. Within 250 ft of its distance
+in trail only the economy counts, so the cost falls where the follower finds the
+upwash. The upwash grows toward the near vortex, a span inboard, and passing through
+it trips the plant, as does a bank past 60 deg (REALITY.md).
 
-**The station** (owner, 2026-11-23). Until then it sat 0.87 span out, the tip overlap
-of NASA's close-formation F/A-18s, at a height drawn apart from its distance, up to
-7 m off the vortex plane. No extended-formation trial held a point that close: the
-Gulfstream and the C-17 flew 0.94 to 1.8 spans out [REALITY.md, N1, N2]. At 0.87
-span the model saves 16.5 % of fuel flow (14.9 to 18.4 over ten seeds), above the 7
-to 10 % those trials report; at 1.2 to 1.3 spans it saves about 5 %, and from 1.0
-to 1.7 spans 9 to 2 %, in line with the Gulfstream's map. Its height is
-`-wake_sink`, `Gamma / (2 pi b0)` times the time in trail, 19 to 26 m; the lead's
-weight sets it, so a stream's sortie has its own. The follower starts within 2 m of
-it (ours, the reference's hold), established as the charter asks.
+**The station** (owner, 2026-11-23). In trail, 1.2 to 1.8 km: the trials' 4,000 ft at
+the near end, and at the far one the 50 spans NASA calls the larger end of the usable
+range, which is 5 to 8 s and inside its 0.5 to 2 nm [REALITY.md, N1 III.D, N3 I]. Across,
+1.38 spans from the wake's centreline, inside the 0.94 to 1.8 spans the Gulfstream and
+the C-17 flew [N1, N2]. That figure is the charter's zone rule on the reference: 1.15
+spans, the closest station it holds inside the protected bank with the wake known and
+still, moved out by two standard deviations of the wake's own drift, 4.1 m. In height,
+on the vortex plane: `-wake_sink`, `Gamma / (2 pi b0)` times the time in trail, 8 to
+12 m; the lead's weight sets it, so a stream's sortie has its own. The follower starts
+within 2 m of its true place in the wake (ours, the reference's hold), established as
+the charter asks. Until 2026-11-23 the station sat 2.8 to 3.7 km back, first at 0.87
+span, the tip overlap of close-formation F/A-18s, then at 1.2 to 1.3 spans.
 
-**The score.** `tracking` is the box, on the distance across the wake (sideways and
-in height, the tracked observation), plus the along-track error past +-250 ft, the
-tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], each the
-squared excess in its own width. Both read the two aircraft's relative position, good
-to 3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past each,
-(3 / 30)^2 + (3 / 76.2)^2 = 0.0116 a step, and the settle band 2. `economy` is the
-follower's fuel and time by the cost index (plane/PHYSICS.md).
+**The wake drifts** (`wake_drift`). Each wake sample moves with the gust the lead met
+where it left it, so by that gust times its age. It is Taylor's frozen field, which
+the plant already uses to hand the lead's gust to its follower a time in trail later,
+and it adds no number: in this task's light turbulence the wake at the follower
+wanders 4.1 m RMS across the track and as much in height (8.4 m at the 2.8 to 3.7 km
+flown before). The patrol leaves it off: its wake is under two seconds old.
+
+**The station is a prediction** (`wind_estimate_sigma`). The follower's avionics place
+the wake from the lead's reported track, its own wind estimate and the time in trail
+[REALITY.md, N1 III.B]; nothing measures it. The model draws the estimate's error across
+the track once per 30-minute window, 1 m/s (ours; an aircraft's own wind is good to
+0.5 m/s at best and 2 to 3 m/s typically as a vector [M1]), and the station the
+observation gives is off by that error times the time in trail the pair is assigned
+(its distance at the lead's scheduled speed), 5 to 8 m at one standard deviation. The follower's own place from the lead is read as before, and its
+aileron reads the wake's rolling moment. With `sensor_noise_scale` 0 the station is
+exact. How fast the error moves is not in the sources, so it is held.
+
+**The crossing** (`crossing_trips`). The follower's centreline inboard of the near
+vortex, `b0 / 2` = 14.1 m from the wake's centreline, with the vortex within half a
+span of its own height (ours: further up or down it flies over or under the wake), is
+a wake crossing and trips the plant: NASA's Gulfstream flights had ten, rated uncomfortable and to be avoided on
+passenger flights, and one ended a test point [REALITY.md, N4 III.D, VI.D; N1 V.A]. It is
+the ride limit the sources name. The cabin vibration they measured sits at 16 to
+28 Hz and does not grow toward the core, so a plant stepped at 1 Hz does not carry it.
+
+**The score** (owner, 2026-11-23). `tracking` is the along-track error past +-250 ft,
+the tolerance the Gulfstream's pilot held by throttle [REALITY.md, N1 IV], the squared
+excess in tolerance widths. It reads the two aircraft's relative position, good to
+3 m (`slot_precision_floor`), so the tracking ceiling is one resolution past it,
+(3 / 76.2)^2 = 0.0016 a step, and the settle band 1. `economy` is the follower's fuel
+and time by the cost index (plane/PHYSICS.md). Nothing is priced across the wake: no
+source gives a station a tolerance there, and what stops the follower is the crossing.
+The 30 m across the wake (ours, a span, `e_floor_slot`) stays as a reported band, the
+share of time the follower's true distance to its station across the wake is inside it.
 
 **The reference.** The formation hold's guidance cascade over the A320's own
 autopilot as the 3D tasks fly it: one TECS tune, height on pitch and speed on
-thrust. Its spacing loop is slow, 100 s, with no integral, since the tolerance along
-the track is wide and the trials left the throttle alone a minute at a time. On
-training seeds 100 to 109 (`scripts/wake_surf_review.py`) it holds 1.5 m across and
-in height with a bank under 8 deg, and saves 4.9 to 5.7 % of fuel against the same
-seeds with the wake off. It cannot hold 0.87 span: there it swings 41 m across and
-banks to 59 deg, as NASA's Gulfstream autopilot lost its tracking where the trim
-disturbance steepens near the core [REALITY.md, N1 V.A]. The reference shipped until
-2026-11-23, a TECS retuned on the 3D distance to the station, swung 62 m RMS in
-height with the wake on or off and met no upwash.
+thrust, with a spacing loop of 100 s and no integral, since the tolerance along the
+track is wide and the trials left the throttle alone a minute at a time. It does not
+trust the predicted station. As NASA's crews stepped inward until the roll trim
+passed a set level [REALITY.md, N1 III.D], it moves its station outboard while its
+filtered aileron holds more than the level the task's station gives, 1.35 deg, and
+inboard while less (`wake_surf_hold_step`); it engages where it starts. A plain hold
+on the predicted station crossed the wake on 1 to 3 of 20 held-out seeds in the
+prototype; this one on none, at wind errors of 0.5, 1 and 2 m/s, where it stayed
+1.34 to 1.42 spans from the wake.
 
-**Known deviations from the record.** The wake is exactly where the model puts it
-and stays on the lead's ground track; in flight it drifts with the wind and is
-predicted, never measured. No ride limit is modelled; cabin vibration set the
-Gulfstream's. The station is 78 to 103 spans in trail against the trials' 20 to 50.
-The box across the wake is ours. No oracle ships: against the wake's best steady
-point, held perfectly, the reference's cost is 1.06 to 1.08 (a static bound, not a
-measured room).
+**Known deviations from the record.** The wind estimate's error is held over a
+window, where the sources show it moving without giving a rate (owner, 2026-11-23:
+held). The cabin's vibration in the wake is not modelled. No oracle ships:
+it waits for the corrected A320, as do the savings, which are shares of its drag.
 
 | obs | meaning |
 |---|---|
 | 0-9 | the follower's own state, as in `plane3d_heading` |
-| 10-12 | offset from the station in the lead's frame: back, right, up (m) |
+| 10-12 | offset from the station as given, in the lead's frame: back, right, up (m) |
 | 13-15 | velocity relative to the lead in the lead's frame: forward, right, up (m/s) |
-| 16-18 | the station in the lead's frame: back, right, up (m) |
+| 16-18 | the station as given, in the lead's frame: back, right (the predicted one), up (m) |
 | 19 | the lead's heading relative to the follower's (rad) |
 | 20 | the lead's speed (m/s) |
 | 21 | throttle, 0 to 1 |
@@ -513,8 +541,8 @@ which is what the recorded baselines use.
 
 | parameter | value | source |
 | --- | --- | --- |
-| `e_floor_slot` | 3 m; 30 m on `wake_surf`, its station box (ours, a span) | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
-| `e_tol_slot` | 0; 30 m on `wake_surf` | **provisional** on the patrol: the formation's station-keeping radius is a procedural number to be supplied. On `wake_surf` the station box, inside which only the economy counts (plane3d/PHYSICS.md, wake surfing) |
+| `e_floor_slot` | 3 m; 30 m on `wake_surf`, a reported band its reward does not read (ours, a span) | relative position from differenced GPS fixes (`slot_precision_floor`), an instrument resolution: the oracle holds 0.10 m (lowest per-seed hold in the test turbulence, `scripts/measure_hold.py`; the expert 3.4 to 5.2 m RMS on held-out seeds), so the instrument sets the scale. Until version 3 it was 18.6 m, an earlier planner's hold; the oracle audit (2026-10) found the current oracle holding 0.41 m under it |
+| `e_tol_slot` | 0 | **provisional** on the patrol: the formation's station-keeping radius is a procedural number to be supplied. |
 | `e_floor_heading` | 0.0087 rad | inherited 0.5 deg AHRS resolution; the oracle holds alignment below it (1.6e-3 rad, lowest per-seed hold in the test turbulence), so the instrument sets the scale |
 | `failure_cost` | 2 x ((1500 / 3)^2 + (pi / 0.0087)^2) = 7.6e5 per step | losing the formation, a collision or a crash: twice the slot-loss bound plus the heading term; overrides the inherited aircraft value |
 | `restart_steps` | 3600 (1 h) | restart time priced into a trip, `restart_steps x failure_cost` (a crash, collision or lost formation loses the sortie: an hour of flight, provisional); where a plant engineer would get it: the plant's restart procedure |

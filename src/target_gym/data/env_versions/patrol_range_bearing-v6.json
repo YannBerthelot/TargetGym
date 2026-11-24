@@ -1,5 +1,5 @@
 {
-  "fingerprint": "4309b5448b126037",
-  "note": "Behaviour-preserving (2026-11-23): patrol/env.py and patrol/env_jax.py gained wake_surf's station hook (this task's returns the drawn height), wake_sink and station_distance. 150 expert-flown steps on 3 seeds hash the same on the trees before and after. Stamped again on the merge with the review fixes of PR 203, which change no step, reward or observation here: A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes.",
-  "stamped": "2026-11-23T16:21:09+00:00"
+  "fingerprint": "ab31af1499e4573e",
+  "note": "Behaviour-preserving (2026-11-24): patrol/env.py gained wake_surf's drifting wake and crossing trip, both off by default (wake_drift 0, crossing_trips off), and wake_surf's reward lost its box. 150 expert-flown steps on 3 seeds give the same observations, rewards, trips and final state on int/amendment3 (09da697) and on this tree (321 arrays).",
+  "stamped": "2026-11-24T00:19:24+00:00"
 }

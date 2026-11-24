@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/wake_surf/pid_output.gif" width="480px"/></p>
 
-Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The station sits 1.2 to 1.3 spans from the lead's centreline, where the extended-formation trials flew, and on the vortex plane, below the lead by the pair's sink. Inside a 30 m box across the wake and 250 ft along it only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the vortex core, 0.8 to 0.9 span inboard, where a vortex can roll the follower past 60 deg, an upset (REALITY.md).
+Surf a lead airliner's wake: hold an A320 at a station 1.2 to 1.8 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The wake drifts with the air the lead left it in, and the station the follower is given is only a prediction, off by its wind estimate's error. Within 250 ft of its distance in trail only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the near vortex, a span inboard, and passing through it trips the plant, as does a bank past 60 deg (REALITY.md).
 
 ```python
 import target_gym as tg
@@ -37,9 +37,9 @@ actuator range inside the environment.
 | # | meaning |
 |---|---|
 | 0-9 | the follower's own state, as in `plane3d_heading` |
-| 10-12 | offset from the station in the lead's frame: back, right, up (m) |
+| 10-12 | offset from the station as given, in the lead's frame: back, right, up (m) |
 | 13-15 | velocity relative to the lead in the lead's frame: forward, right, up (m/s) |
-| 16-18 | the station in the lead's frame: back, right, up (m) |
+| 16-18 | the station as given, in the lead's frame: back, right (the predicted one), up (m) |
 | 19 | the lead's heading relative to the follower's (rad) |
 | 20 | the lead's speed (m/s) |
 | 21 | throttle, 0 to 1 |
@@ -210,12 +210,14 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `max_slot_error` | 1500 | m |
 | `slot_precision_floor` | 3 | m |
 | `e_floor_slot` | 30 | m |
-| `e_tol_slot` | 30 | m |
+| `e_tol_slot` | 0 | m |
 | `lead_leg_seconds` | 300 | s |
 | `wake_strength` | 1 | - |
 | `wake_core_ratio` | 0.0582 | - |
 | `wake_decay_rate` | 0.2 | - |
+| `wake_drift` | 1 | - |
 | `follower_spawn_noise` | 2 | m |
 | `upset_bank` | 1.0472 | rad |
 | `spacing_tolerance` | 76.2 | m |
+| `wind_estimate_sigma` | 1 | m/s |
 

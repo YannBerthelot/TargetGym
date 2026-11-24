@@ -255,14 +255,16 @@ def test_the_settle_band_is_the_rewards_tracking_cost_at_the_floor(name, monkeyp
     assert tracking == pytest.approx(scoring.settle_band(name, params), rel=1e-5)
 
 
-def test_the_wake_surfers_two_tracking_terms_read_one_relative_fix():
-    """Hand-worked, independent of ``scoring``: the box across the wake (30 m)
-    and the along-track tolerance (250 ft, 76.2 m) both read the relative
-    position of the two aircraft, good to 3 m (patrol/PHYSICS.md). One
-    resolution past each: (3 / 30)^2 + (3 / 76.2)^2 = 0.01 + 0.00155. One floor
-    past each: 1 + 1."""
-    assert scoring.ceiling("wake_surf") == pytest.approx(0.01155, rel=1e-3)
-    assert scoring.settle_band("wake_surf") == pytest.approx(2.0)
+def test_the_wake_surfer_is_scored_along_the_track_and_reported_across_the_wake():
+    """Hand-worked, independent of ``scoring``: the score prices the along-track
+    tolerance alone (250 ft, 76.2 m), read on the two aircraft's relative
+    position, good to 3 m (patrol/PHYSICS.md). One resolution past it is
+    (3 / 76.2)^2 = 0.00155, one floor past it 1. The 30 m across the wake is a
+    reported band, ours, which the reward does not read (owner, 2026-11-23)."""
+    assert scoring.ceiling("wake_surf") == pytest.approx(0.00155, rel=1e-3)
+    assert scoring.settle_band("wake_surf") == pytest.approx(1.0)
+    np.testing.assert_allclose(scoring.spec_band("wake_surf"), [30.0])
+    assert scoring.SPEC_BAND["wake_surf"][1].startswith("ours")
 
 
 @pytest.mark.parametrize(
