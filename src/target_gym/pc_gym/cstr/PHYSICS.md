@@ -292,7 +292,8 @@ rows of the three gains files moved):
    The project's own function until the ladder's shared placement is merged.
 4. Where no set point keeps the band, the valve position loop's closed-loop
    time doubles (60, then 120 dead times) and step 3 runs again; the last rung
-   ships with the seeds it lost if none does (C9). Ours, added 2026-11-24 when
+   ships with the seeds it lost if none does (C9). The project's own rule, a
+   fixed step at every level (accepted by the owner, 2026-11-24), added when
    the half-noise level failed step 3. The loop's dead time is read off the
    noise band, 1.9 min at half the noise against 2.6 at the scored level, so 30
    of them made a 56 min loop that swung with the temperature loop: the best

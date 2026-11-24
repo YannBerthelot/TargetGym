@@ -231,7 +231,9 @@ CSTR_VALVES = (0.99, 0.98, 0.95, 0.9)
 #: so a quieter plant reads a shorter one and gets a faster loop, which at half
 #: the noise swings with the temperature loop (measured 2026-11-24). The recipe
 #: slows it rung by rung until a set point keeps the band, as a loop that swings
-#: with the one it watches is slowed (ours); the last rung ships if none does (C9).
+#: with the one it watches is slowed; the last rung ships with the seeds it lost if
+#: none does (C9). The project's own rule, a fixed step at every level (owner,
+#: 2026-11-24).
 CSTR_SLOWER = (1.0, 2.0, 4.0)
 
 
