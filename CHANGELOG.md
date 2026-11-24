@@ -102,6 +102,10 @@ The next release is 0.8.0, because these changes break code written for
     rods parked, and keeps the cheaper of the two. From its first guess alone it
     ended, on baseload days whose xenon dips, on a plan $13 dearer in its own
     model, and lost those days to the expert.
+  - A reset holds the reactor's own starting move (`Reactor.initial_action`: rods
+    parked, no boron flow, the turbine on its plan). The action held after a reset
+    was the middle of the box, so the charter's "hold reset" null drove the rods
+    to half their stroke. No step, reward or observation changes.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
