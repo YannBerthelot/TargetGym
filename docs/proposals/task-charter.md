@@ -239,7 +239,10 @@ reference, an MPC with the true model and the schedules operators know but no fu
 disturbances, and the ceiling. The reference is the headline's anchor (J4); the other
 three are context, never anchors. Room is published per scenario and on `J`, from an
 oracle run on the tagged plant and shown converged. A task whose oracle can't be run says
-"not measured". Room is reported, never gated, and nothing here estimates what an agent
+"not measured". The MPC line backs its limits off by the oracle smoothing protocol's
+K11: where its plan, blind to the disturbance ahead, would ride a trip level the
+correcting actuator can't defend in time, by the disturbance that builds over that
+actuator's window (K11h, K11a; Amendment 6). Room is reported, never gated, and nothing here estimates what an agent
 could reach.
 
 **J4. The headline.** A task's scenarios are strata, each run on fixed scoring seeds,

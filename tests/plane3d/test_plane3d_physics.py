@@ -295,7 +295,8 @@ def test_the_3d_airframe_is_the_2d_one():
 # one's law (``plane.dynamics.fuel_flow``, Mattingly's for high-bypass turbofans
 # as Roux and Scholz adjusted it [HAMMAMI eq. 2.2]): fuel per newton of thrust is
 # ``fuel_speed_slope V + fuel_static sqrt(T / T0)``. The Hornet, on the same 3D
-# plant, keeps its constant dry figure, 0.81 lb/(lbf h) [F404].
+# plant, keeps its constant dry figure, 0.81 lb/(lbf h) [F404]: its parameters
+# carry the law's two numbers at zero, which ``fuel_flow`` reads as no law.
 #
 # Hand-derived: at 5 000 m the standard air is 288.15 - 0.0065 x 5 000 = 255.65 K,
 # sqrt(255.65 / 288.15) = 0.94192. At 150 m/s the A320 burns 3.38e-8 x 150 +
@@ -309,9 +310,8 @@ def test_the_3d_airframe_is_the_2d_one():
 def test_the_3d_a320_burns_by_the_2d_aircrafts_fuel_law(speed, kg_per_s):
     from target_gym.plane.dynamics import fuel_flow
     from target_gym.plane.env import PlaneParams
-    from target_gym.plane3d.env import fuel_flow_3d
 
-    burned = float(fuel_flow_3d(40_000.0, speed, 5_000.0, PlaneParams3D()))
+    burned = float(fuel_flow(40_000.0, speed, 5_000.0, PlaneParams3D()))
     assert burned == pytest.approx(kg_per_s, rel=1e-3)
     two = float(fuel_flow(40_000.0, speed, 5_000.0, PlaneParams()))
     assert burned == pytest.approx(two, rel=1e-6)
@@ -320,18 +320,18 @@ def test_the_3d_a320_burns_by_the_2d_aircrafts_fuel_law(speed, kg_per_s):
 @pytest.mark.parametrize("speed, z", ((150.0, 5_000.0), (250.0, 9_000.0)))
 def test_the_hornet_keeps_its_constant_fuel_figure(speed, z):
     from target_gym.patrol.env import PatrolParams
-    from target_gym.plane3d.env import fuel_flow_3d
+    from target_gym.plane.dynamics import fuel_flow
 
-    burned = float(fuel_flow_3d(40_000.0, speed, z, PatrolParams()))
+    burned = float(fuel_flow(40_000.0, speed, z, PatrolParams()))
     assert burned == pytest.approx(0.91773, rel=1e-3)
 
 
 def test_wake_surfs_a320_burns_by_the_law_too():
     """``wake_surf`` flies an A320 on the patrol's plant: the same aircraft."""
     from target_gym.patrol.env import WakeSurfParams
-    from target_gym.plane3d.env import fuel_flow_3d
+    from target_gym.plane.dynamics import fuel_flow
 
-    burned = float(fuel_flow_3d(40_000.0, 150.0, 5_000.0, WakeSurfParams()))
+    burned = float(fuel_flow(40_000.0, 150.0, 5_000.0, WakeSurfParams()))
     assert burned == pytest.approx(0.59464, rel=1e-3)
 
 

@@ -1,5 +1,8 @@
 # Unstable CSTR
 
+!!! note "Extra since 2026-11-15"
+    This task is kept in the repository but is not part of the benchmark: on 4 of its 5 scenarios the oracle, which reads the true state, tracks exactly, so its room measures a perfect state reading rather than control. It is out of the headline and the capability claims. The reasons are in its [physics contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md), Status.
+
 <p align="center"><img src="../../videos/unstable_cstr/pid_output.gif" width="480px"/></p>
 
 Hold the concentration of A in a jacketed exothermic reactor on its open-loop unstable middle steady state, commanding the coolant through a lagging jacket while the feed temperature drifts unmeasured. Left alone the reactor runs away within tens of seconds, and the target steps five times per episode, so every move crosses the unstable region under control. A trip costs an hour of restart.

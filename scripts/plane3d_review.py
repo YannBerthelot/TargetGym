@@ -203,7 +203,7 @@ def polar(args):
             rho=D.compute_air_density_from_altitude(z),
             M=tas / D.compute_speed_of_sound_from_altitude(z),
         )
-        return E.fuel_flow_3d(thrust, tas, z, p) * 3600.0, thrust
+        return D.fuel_flow(thrust, tas, z, p) * 3600.0, thrust
 
     def least(cas, values):
         i = int(np.clip(values.argmin(), 4, len(cas) - 5))

@@ -142,7 +142,7 @@ class PlaneParams3D(EnvParams):
     C_z0: float = 0.9
     initial_fuel_quantity: float = 23860 / 1.25
     #: The constant figure, kg/(kN s), of an aircraft with no fuel law of its
-    #: own (the Hornet, ``fuel_static`` 0): ``fuel_flow_3d``.
+    #: own (the Hornet, ``fuel_static`` 0): ``plane.dynamics.fuel_flow``.
     specific_fuel_consumption: float = 17.5 / 1000
     #: The A320's fuel law, as the 2D aircraft's (plane/env.py; owner,
     #: 2026-11-24): fuel per newton of thrust, kg/(N s), is ``fuel_speed_slope``
@@ -564,17 +564,6 @@ def check_is_terminal_3d(state: PlaneState3D, params: PlaneParams3D, xp=jnp):
     )
     truncated = state.time >= params.max_steps_in_episode
     return terminated, truncated
-
-
-def fuel_flow_3d(thrust, air_speed, z, params, xp=jnp):
-    """The fuel the engines burn, kg/s, making ``thrust`` (N) at true airspeed
-    ``air_speed`` (m/s) and height ``z`` (m). The A320 burns by its fuel law
-    (``plane.dynamics.fuel_flow``), as the 2D aircraft does; an aircraft with no
-    law of its own, ``fuel_static`` 0 (the Hornet), keeps its constant
-    ``specific_fuel_consumption``, kg/(kN s)."""
-    law = fuel_flow(thrust, air_speed, z, params, xp)
-    constant = params.specific_fuel_consumption * 1e-3 * thrust
-    return xp.where(params.fuel_static > 0.0, law, constant)
 
 
 def airspeed_3d(state, params, xp=jnp):
@@ -1327,7 +1316,7 @@ def compute_next_state_3d(
             method=integration_method,
         )
         # Fuel burned over the sub-step, charged against the thrust produced.
-        burned = burned + fuel_flow_3d(thrust, air_speed, z, params) * dt
+        burned = burned + fuel_flow(thrust, air_speed, z, params) * dt
         # Trips read the worst load inside the step, not the one it ends on.
         load = metrics[1][-1] / (mass_now * params.gravity)
         peak = jnp.where(jnp.abs(load - 1.0) > jnp.abs(peak - 1.0), load, peak)

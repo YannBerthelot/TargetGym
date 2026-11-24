@@ -272,7 +272,7 @@ class PatrolParams(PlaneParams3D):
     thrust_output_at_sea_level: float = hornet.THRUST_SEA_LEVEL
     specific_fuel_consumption: float = hornet.SFC
     #: The Hornet has no fuel law of its own and keeps its constant dry
-    #: figure (owner, 2026-11-24; ``plane3d.env.fuel_flow_3d``).
+    #: figure (owner, 2026-11-24; ``plane.dynamics.fuel_flow``).
     fuel_static: float = 0.0
     fuel_speed_slope: float = 0.0
     power_response_rate: float = hornet.POWER_RESPONSE_RATE

@@ -1156,10 +1156,11 @@ aircraft's fuel law, the Hornet does not. Tests:
 
 **The law.** Fuel per newton of thrust is `fuel_speed_slope` times the true airspeed
 plus `fuel_static` times sqrt(T / T0), 3.38e-8 kg/(N m) and 1.04e-5 kg/(N s), as the
-2D aircraft's (`plane.dynamics.fuel_flow`, plane/PHYSICS.md). `fuel_flow_3d` burns by
-it where `fuel_static` is above 0 and by the constant `specific_fuel_consumption`
-where it is 0: the Hornet (`patrol`, `patrol_range_bearing`, `formation`) sets both
-numbers to 0 and keeps 22.9 mg/(N s); `wake_surf`, an A320, takes the law.
+2D aircraft's (`plane.dynamics.fuel_flow`, plane/PHYSICS.md), and the 3D plant burns
+by that one function. An aircraft whose parameters carry the two numbers at 0 keeps
+its constant `specific_fuel_consumption`: the Hornet (`patrol`,
+`patrol_range_bearing`, `formation`) sets both to 0 and keeps 22.9 mg/(N s);
+`wake_surf`, an A320, takes the law.
 
 **Green dot is no longer the least-fuel speed.** Green dot is the best lift-to-drag
 speed [SF24], the least thrust; with a consumption that rises with speed the least
