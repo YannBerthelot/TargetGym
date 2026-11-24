@@ -258,9 +258,45 @@ v5 and are stale.
 
 ## 9. Expert
 
-None ships with version 8 yet (registry, `baselines_note`). The reference is the
-ladder's (section 10); a shipped expert returns when its gains are recorded on
-this plant.
+Valve position control [S13, section 2.3]: the reference ladder's rung of that
+name, written out with its gains as leaves (`experts.py`; a test holds the two
+laws equal move for move). A PI holds the reactor's temperature by the cooling
+water, and a slow PI holds the water valve at a set point by the feed, never
+past the throughput asked for. Both take the valves over where the reset left
+them.
+
+Its recipe is `tune_cstr` in `scripts/tune_process_experts.py`, run on version 8
+at the three noise levels on 2026-11-24 (owner's word of that day; only cstr's
+rows of the three gains files moved):
+
+1. The temperature loop. In manual with both valves held, the water at 80 % of
+   its span so a bump has room and the feed's temperature at the middle of its
+   day, a water bump read for 110 min [S1, Fig. 2], then the noise protocol's
+   SIMC (N5 to N7).
+2. The valve position loop. The same plant with that loop closed, a feed bump
+   read on the water valve for three hours, and SIMC at 30 dead times, which
+   its source asks for at least [S13].
+3. The two set points, on the scored plant's normal day. On a grid fixed before
+   any run (the valve at 99, 98, 95 and 90 %; the temperature in tenths of a
+   kelvin under the band's top, down to its centre), the cheapest at which no
+   deciding training seed leaves the band or trips (owner's rule, 2026-11-23).
+   The project's own function until the ladder's shared placement is merged.
+4. Where no set point keeps the band, the valve position loop's closed-loop
+   time doubles (60, then 120 dead times) and step 3 runs again; the last rung
+   ships with the seeds it lost if none does (C9). Ours, added 2026-11-24 when
+   the half-noise level failed step 3. The loop's dead time is read off the
+   noise band, 1.9 min at half the noise against 2.6 at the scored level, so 30
+   of them made a 56 min loop that swung with the temperature loop: the best
+   set point still lost the band on 4 of 10 seeds.
+
+| noise | Kp (raw/K) | Ti (min) | Tf (min) | Kv | Tiv (min) | valve loop's time | under the top | valve |
+|---|---|---|---|---|---|---|---|---|
+| 0.5 | 0.164 | 17.7 | 0.04 | 0.375 | 36.7 | 60 dead times, 112 min | 0.9 K | 99 % |
+| 1 | 0.107 | 15.6 | 0.18 | 0.623 | 45.4 | 30 dead times, 79 min | 0.9 K | 95 % |
+| 2 | 0.097 | 14.8 | 0.69 | 0.494 | 46.7 | 30 dead times, 101 min | 1.0 K | 98 % |
+
+No seed was left out at any level. The expert is not the charter's reference,
+which is the ladder's rung on its own tests (section 10).
 
 ## 10. What the reference ladder row needs
 
@@ -275,8 +311,11 @@ set point, the last because a feed cut first heats the reactor.
 
 ## 11. Oracle needs
 
-No oracle on the shared solver ships with version 8 yet: the planner model of
-versions 5 to 7 moved one valve to track a setpoint. The foresight ceiling's
+No oracle on the shared solver ships with version 8: the planner model of
+versions 5 to 7 moved one valve to track a setpoint, and the owner decided on
+2026-11-24 that 0.8.0 does not need one for two moves and the production score
+(the charter's MPC line reads "not measured" until a later update; room and
+saving do not use it). The foresight ceiling's
 pieces are in `oracle.py`: the smooth term (the production lost) and, as
 margins, the band's two edges and the interlock, priced at a step's product.
 

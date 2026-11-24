@@ -43,12 +43,13 @@ def _moved(spec, change) -> set[str]:
     "name,rel,parts",
     [
         ("cstr", "pc_gym/cstr/oracle.py", {"oracle"}),
-        # cstr's oracle is on the shared solver, plane3d_circle's is not. The
+        # hvac's oracle is on the shared solver, plane3d_circle's is not. The
         # pH task's joined it in #199 and declares the solver since 2026-11-15.
-        ("cstr", "experts/mpc.py", set()),
+        # (hvac since cstr-v8, which ships no planner: owner, 2026-11-24.)
+        ("hvac", "experts/mpc.py", set()),
         ("plane3d_circle", "experts/mpc.py", {"oracle"}),
         ("ph_neutralization", "experts/mpc.py", set()),
-        ("cstr", "oracles/shooting.py", {"oracle"}),
+        ("hvac", "oracles/shooting.py", {"oracle"}),
         ("plane3d_circle", "oracles/shooting.py", set()),
         ("ph_neutralization", "oracles/shooting.py", {"oracle"}),
         ("cstr", "pc_gym/cstr/experts.py", {"expert"}),
@@ -104,7 +105,7 @@ def test_a_retune_stales_only_the_parts_that_read_the_key(
 
 
 @pytest.mark.parametrize(
-    "rel", ["oracle_horizons/cstr.json", "oracle_widths/cstr.json"]
+    "rel", ["oracle_horizons/hvac.json", "oracle_widths/hvac.json"]
 )
 def test_an_oracles_data_stales_its_part_by_value_only(monkeypatch, rel):
     """A new value in the horizon or widths file moves the oracle part; a
@@ -120,7 +121,7 @@ def test_an_oracles_data_stales_its_part_by_value_only(monkeypatch, rel):
             lambda path, *a, **k: text if path == target else read(path, *a, **k),
         )
 
-    spec = REGISTRY["cstr"]
+    spec = REGISTRY["hvac"]
     assert _moved(spec, lambda: write({"generated": "later", "cpu": "other"})) == set()
     assert _moved(spec, lambda: write({"P": 1, "sites": {"new": 1}})) == {"oracle"}
 

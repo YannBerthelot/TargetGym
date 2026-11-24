@@ -47,6 +47,7 @@ def make_siso_pid_loss_fn(
     n_targets: int = 16,
     n_steps: int | None = None,
     seed: int = 0,
+    to_action=None,
 ):
     """
     Build a JAX-differentiable ITAE loss for a SISO PID.
@@ -66,6 +67,8 @@ def make_siso_pid_loss_fn(
         n_targets      : Number of setpoints to vmap over.
         n_steps        : Rollout length (defaults to ``params.max_steps_in_episode``).
         seed           : PRNG seed for ``env.reset_env``.
+        to_action      : ``(u, env_state) -> action`` on a plant with more
+                         moves than the loop's one; the PID's move by default.
 
     Returns:
         ``loss_fn(Kp, Ki, Kd) -> scalar`` — fully JIT/grad-able.
@@ -96,9 +99,10 @@ def make_siso_pid_loss_fn(
                 env_state, pid_state = carry
                 obs = env.get_obs(env_state, params)
                 action, new_pid_state = pid_step(pid_params, pid_state, obs)
-                _, new_env_state, _, _, _ = env.step_env(
-                    key, env_state, action[0], params
+                move = (
+                    action[0] if to_action is None else to_action(action[0], env_state)
                 )
+                _, new_env_state, _, _, _ = env.step_env(key, env_state, move, params)
                 error = obs[setpoint_index] - obs[state_index]
                 return (new_env_state, new_pid_state), jnp.abs(error)
 
@@ -352,7 +356,7 @@ def tune_cstr_pid(
         env,
         params,
         state_index=0,  # T, the reactor temperature (version 5)
-        setpoint_index=3,  # its setpoint
+        setpoint_index=4,  # its setpoint (version 8)
         reset_fn=lambda key, p, target: env.reset_env(key, p)[1].replace(
             target_T=target
         ),
@@ -360,6 +364,10 @@ def tune_cstr_pid(
         target_range=(params.T_setpoint - 2.0, params.T_setpoint + 2.0),
         n_targets=16,
         n_steps=int(params.max_steps_in_episode),
+        # Version 8 has a second move, the feed: held where the reset left it.
+        to_action=lambda u, s: jnp.stack(
+            [u, 2.0 * (s.q - params.q_min) / (params.q_max - params.q_min) - 1.0]
+        ),
     )
     if verbose:
         print("Tuning CSTR PID...")

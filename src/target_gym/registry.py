@@ -893,16 +893,18 @@ _SPECS: tuple[EnvSpec, ...] = (
         group="process",
         env_factory=_cstr,
         params_cls=_LazyParams("target_gym.pc_gym.cstr.env", "CSTRParams"),
-        make_pid=None,
+        make_pid=_pid(
+            "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
+        ),
         make_mpc=None,
         baselines_note=(
             "Version 8 (the reactor run for what it makes, owner's decision of "
-            "2026-11-24) is registered plant first. Its reference is the ladder's "
-            "valve position rung (scripts/ladder_rows/cstr.py). The shipped expert "
-            "returns when its gains are recorded on this plant, and the oracle "
-            "when its planner model is written for two moves and the production "
-            "score; the ceiling is pc_gym.foresight's (cstr/oracle.py)."
+            "2026-11-24) ships no oracle: its planner model is not written for "
+            "two moves and the production score, and the owner decided the same "
+            "day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's "
+            "(cstr/oracle.py)."
         ),
+        tuned_gains_key="cstr",
         # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
         # jacket in code, cooling water as the move, a high-temperature
         # interlock, temperature as the job, scenarios.

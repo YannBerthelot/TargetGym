@@ -41,28 +41,26 @@ from target_gym.oracles.controller import enable_x64, float64
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
-FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+# cstr left this group with its planner (version 8, owner, 2026-11-24).
+FOUR = ("first_order", "four_tank", "unstable_cstr", "compressor_surge")
 PH = ("ph_neutralization",)
 #: Exactness is the rewrites', so what a planner leaves out of its plan by
 #: design is held still here: a disturbance it holds over the plan (the
-#: autoclave's feed wander; the CSTR's daily feed cycle, collapsed onto its
-#: middle; the compressor consumers' noise, whose mean path it plans on; the pH
+#: autoclave's feed wander; the compressor consumers' noise, whose mean path it
+#: plans on; the pH
 #: influent's upsets and swings, held at the solve's strength and flow), and
 #: a score term it does not price (the turbine tower's fatigue, which reads
 #: the history's turning points; the compressor's header zone, an indicator
 #: the plan prices as a smooth hinge).
 QUIET = {
     "unstable_cstr": {"feed_T_wander": 0.0},
-    "cstr": {"feed_T_range": (297.15, 297.15)},
     "wind_turbine": {"tower_share": 0.0},
     "compressor_surge": {"demand_sigma": 0.0, "zone_price": 0.0},
     "ph_neutralization": {"window_upsets": 0.0},
 }
 #: An event already in force at the solve, as the state carries it (certainty
-#: equivalence): the CSTR's catalyst loss and feed build-up, and four_tank's
-#: extra outlet in tank 4, each opened before the reset.
+#: equivalence): four_tank's extra outlet in tank 4, opened before the reset.
 IN_FORCE = {
-    "cstr": ({"k0_drop": 0.4, "feed_rise": 0.1}, {"event_at": -1.0}),
     "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
 }
 C2 = (
@@ -76,7 +74,7 @@ C2 = (
 # oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
 # plant on the old cost.
 AIRCRAFT = ("plane_sine",)
-ON_SOLVER = FIVE + PH + C2 + AIRCRAFT
+ON_SOLVER = FOUR + PH + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -472,7 +470,7 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
 
 @pytest.mark.parametrize(
     "name, budget",
-    [(name, 0.25) for name in FIVE + AIRCRAFT]
+    [(name, 0.25) for name in FOUR + AIRCRAFT]
     + [(name, 0.25) for name in ("boiler_drum", "cement_kiln")]
     + [
         # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
@@ -498,7 +496,7 @@ def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget
 # state. The running cost counts, because it prices a level. Wind's does not:
 # it prices the pitch command's gap, which a steady state closes.
 PRICED = {
-    "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
+    "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
     "boiler_drum": 1,  # steam off the plan; the level is limited, not priced

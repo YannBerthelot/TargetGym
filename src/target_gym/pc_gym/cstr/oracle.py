@@ -2,9 +2,9 @@
 
 Kept apart from the expert (``experts.py``) so that each has a fingerprint of
 its own (``provenance.oracle_fingerprint``). Version 8 ships no oracle on the
-shared solver yet: the planner model of versions 5 to 7 moved one valve to
-track a setpoint, and one for two moves and the production score is not
-written (registry, ``baselines_note``).
+shared solver: the planner model of versions 5 to 7 moved one valve to track a
+setpoint, one for two moves and the production score is not written, and
+0.8.0 does not need it (owner, 2026-11-24; registry, ``baselines_note``).
 """
 
 import jax.numpy as jnp
