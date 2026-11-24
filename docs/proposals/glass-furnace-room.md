@@ -702,6 +702,464 @@ the ceiling's five scenarios and seeds, mean cost per step over the five seeds:
   about 70 core-hours for 25 episodes.
 - The registry's note on the task and the changelog do not mention the planner yet.
 
+## As a nearly saturated task (2026-11-23)
+
+The owner ruled on 2026-11-23 that the glass furnace stays in the benchmark: it is the
+library's motivating example, a task with little room can be a kind of its own if the
+room is beyond noise, and room that is missing is to be read as model that is missing.
+This section answers the four questions put to this session. It made no new run: it
+reads REALITY.md, the results above and four sources looked up that day ([N1] to [N4]).
+
+### 1. Where real furnaces lose money and energy that the model does not carry
+
+In the order of what the sources say each is worth:
+
+| Loss | What the sources give | In the model | What it takes from physics | Not found |
+|---|---|---|---|---|
+| The operators' margin | Setpoints set by hand, with a safety factor [S4; TR13]. Under supervisory control the saving is the lower setpoint, 2 to 4 % of fuel [S2; S3] | The reference is an automatic cascade, not an operator. The margin a good loop needs is 0.5 % of fuel | What forces a margin: numbers a plant does not know about itself, drawn per stream (emissivity, foam tendency, couple offset, fining band), and readings as poor as real ones | Any spread for those numbers; the couples' delay and accuracy |
+| Product changes | Time and production lost in changes cut by up to half [S7], losses cut by 20 to 50 % [S2]; float lines no longer run steady [TR14]; loops cycle for over 8 h after a pull change [S9] | Pull events of 10 %. No change of colour, thickness or glass | A composition carried with the glass, as the fining share is, that moves the melt's radiative conductivity and the fining range; the ribbon off its colour priced as lost glass until the tank has flushed (mean residence 68 h [S11]) | Sizes, frequency, notice, ramps and losses of a float change |
+| Yield beyond the blocks | Yield up to about 8 % better [S7]; 50 to over 90 % on one furnace once its foam was dispersed [TR7]. Fining moves with redox, small bubbles need a second fining on cooling [TR1], foam leaves bubbles and sand [S32] | The blocks and reboil only, at rates of ours. The reference loses 0.70 % of its glass | Batch redox as a walk and as steps, setting the fining onset (1430 to 1480 C oxidised, 1140 to 1350 C reduced); a dissolved-gas balance for the second fining (1350 to 1275 C); sand dissolution as a second time-temperature integral | Every rate: defects per kelvin, reboil kinetics |
+| Crown and campaign life | Corrosion doubled by cycling of 25 to 30 K [TR5]; one rebuild cost 35 MEUR for 18 years [S37], 1.9 MEUR a year of life | The override protects the crown. Wear has no price | A wear integral on the hot face's temperature and its cycling, priced by the rebuild | The rate against temperature; an activation energy |
+| Ageing | Regenerator fouling raises a furnace's energy use by 1 to more than 3 % a year [N1]; flat glass furnaces burn 5 to 8.5 GJ/t [N2], and a float furnace's use depends strongly on its age [N4] | Clean, fixed regenerators. The furnace burns 3.97 GJ/t | A fouling factor on the checkers' heat transfer and flow, drawn per stream from the furnace's age | Nothing more than [N1] for a first range |
+| The firing profile | The split between ports sets the hot spot [S15]; boosting where fitted [S5] | One valve, a fixed split, 10 % excess air (no source) | The split as moves: the bays and their gas temperatures are in the plant already. An air ratio needs a flue loss and an emissions limit | Per-port shares on a float furnace; excess-air practice |
+
+Two of these say the same thing about the reference. The family's 2 to 4 % was measured
+against operators, on furnaces that had aged and whose readings drift. The benchmark's
+reference is an automatic loop on a young, clean furnace that knows its own numbers.
+Little room over that reference is what the sources predict; what the model lacks is
+less a mechanism than the reasons a real plant keeps its margin.
+
+### 2. Is the room beyond seed noise, and what is it worth
+
+Paired by seed, on the plant with its defects: for each of the five seeds the
+scenario-weighted cost of each controller, then their difference, with Student's t on
+four degrees of freedom (nine for the ten-seed row).
+
+| | Difference, EUR per step | 95 % interval | Ratio | 95 % interval | Episodes won |
+|---|---|---|---|---|---|
+| Reference over ceiling | 2.26 | 1.91 to 2.62 | 1.0482 | 1.041 to 1.056 | 25 of 25 |
+| Reference over the library's planner | 0.97 | 0.58 to 1.36 | 1.0201 | 1.012 to 1.028 | 25 of 25 |
+| The library's planner over ceiling | 1.29 | 1.10 to 1.48 | 1.0275 | 1.024 to 1.032 | 25 of 25 |
+| Reference over the study planner, ten seeds | 1.20 | 0.83 to 1.57 | 1.0247 | 1.017 to 1.032 | 50 of 50 |
+
+- **The room is beyond seed noise.** One controller's J moves by 0.24 to 0.33 from seed
+  to seed. The room is eight times that, and the paired difference itself varies by
+  0.29.
+- **Its limits.** Five seeds. The reference was tuned on them, which favours it. The
+  interval is the seeds' noise around a lower bound (part 3).
+- **The plant as recorded** (rec/charter-records, room 1.0114, 1.008 to 1.020 by
+  scenario). The record holds the reference by scenario only, so no paired interval
+  can be read from it; its notes say no seed's plan is dearer than the reference. That
+  room was taken apart at the head of this report: about half is the reference's
+  accidental back-off, and its plans swing the crown between 1430 and 1615 C.
+
+What a furnace-year is worth, on the model's furnace of 500 t/d, at 60.5 EUR/MWh
+[S21], 56.1 t of CO2 per TJ of gas [N3] and lost glass at 600 EUR/t (ours):
+
+| | Fuel | Gas | CO2 | Glass | Money |
+|---|---|---|---|---|---|
+| Reference to ceiling | 1.10 % | 2.2 GWh | 450 t | 770 t, 0.42 % of the pull | 595 kEUR (501 to 688) |
+| Reference to the planner without foresight | 0.36 % | 0.7 GWh | 145 t | 350 t, 0.19 % of the pull | 255 kEUR (152 to 358) |
+| The recorded plant's room | 0.6 to 1.1 % | 1.2 to 2.2 GWh | 240 to 450 t | none | 73 to 134 kEUR |
+| The family's saving against operators [S2; S3; S7] | 2 to 4 % | 4.0 to 8.0 GWh | 810 to 1630 t | up to 8 % of yield | 243 to 487 kEUR in fuel |
+
+- **At a real furnace's fuel use the fuel shares are worth more.** The model's furnace
+  burns 3.97 GJ/t, under the 5 to 8.5 GJ/t of flat glass furnaces [N2]. At those, the
+  room to the ceiling is 2.8 to 4.7 GWh, 170 to 290 kEUR and 560 to 960 t of CO2 a
+  furnace-year in fuel alone, and the planner's share 0.9 to 1.5 GWh and 180 to 310 t.
+- **What rests on what.** The fuel figures rest on sourced prices and factors. The
+  glass figures rest on two numbers of ours, the blocks' release rate and the price of
+  lost glass, and scale with both.
+- **Not counted.** Glass that is lost is melted again, and that fuel is not in these
+  figures. Neither is any price on the CO2.
+
+### 3. What the ceiling's non-convergence means
+
+- **For part 2, the room and its worth are lower bounds.** The ceiling's figure is the
+  cost of a plan replayed through the env: some valve path achieves it, so the true
+  ceiling is at or under it. Whatever the solver missed adds to the room. The interval
+  in part 2 is seed noise around that bound, not the solver's gap.
+- **How much it may have missed.** 23 of 25 restarts moved the cost by 0.003 EUR per
+  step or less; two found 0.48 and 1.86. So a first stop can fall short by as much as
+  the room itself, about one time in twelve, and after the restart nothing bounds it:
+  a third start was not run. The plans are also held on 4 h knots.
+- **"0 of 25" overstates it.** The certificate counts a limit as active within 1e-6,
+  under a float32 step, and so reads 1 on 24 plans. Read at 1e-4 the stationarity is
+  0.003 to 0.04, against a tolerance of 1e-3.
+- **For part 1, the finding does not rest on the ceiling.** That the recorded plant
+  lacks room was shown without it: a usable fuel window of 4.5 %, a fixed crown within
+  0.3 % of the reference, six attempts that opened under 1.3 % each. A better solver
+  would not find the family's 2 to 4 % there.
+- **The planner's share is a bound of the same kind.** It is a policy that ran, so its
+  2.0 % is the least that is reachable without foresight from the true state. The
+  split between state and foresight (43 % and 57 %) is the least certain figure here,
+  since both ends are bounds.
+
+### 4. Issues, options and the recommendation
+
+Issues, ranked:
+
+1. **The task on record is still the plant without defects**, with a room of 1.011.
+   The plant with its defects and its planner sit on an unmerged, unpushed branch, and
+   every glass record is stale.
+2. **Three quarters of the new room is glass priced on numbers of ours**: the blocks'
+   release rate, its 1450 C threshold and the price of lost glass. The room's glass
+   part scales roughly with the rate.
+3. **No controller has earned room from the sensors.** The planner is handed the true
+   state; a loop on the floor couple gained nothing.
+4. **The reference's margin is the PI rung's**, a quarter of the room. (Measured the
+   same day, in the next section: that margin is 0.005 over the lowest a fixed
+   setpoint can be, so this issue falls.)
+5. **The plant is a young, clean furnace that knows itself**, run by an automatic
+   loop (part 1).
+6. **The ceiling is a bound, not a certified optimum** (part 3).
+7. **Cost.** The step is 3.2 times the median; the oracle row is 70 core-hours and the
+   ceiling 21 solve-hours.
+
+Options:
+
+- **I. Take the plant with its defects as the task and settle it**, with no new
+  physics. It needs the owner's word to merge, a ruling on the reference's margin
+  (decisions 1, 2 and 6), the planner run on an estimated state (the rung an agent
+  competes with), the room read at a third and three times the release rate, and a
+  third start for the ceiling. Evidence: room 1.048 (1.041 to 1.056), 2.0 % without
+  foresight, held-out seeds.
+- **II. A furnace that does not know itself.** Its age and its hidden numbers drawn
+  per stream. [N1] gives the first sourced range, and it is what makes a margin real
+  (part 1, first and fifth rows).
+- **III. Product changes as the transients.** Hand control is weakest in changes of
+  tonnage, glass or colour [TR13], and the sources put the most money there. Sizes
+  and frequency would be ours until someone publishes them.
+- **IV. Per-port firing** [S15]. The physics is in the plant; expect percent-level
+  room.
+- **V. Redox and the second fining.** More defect physics, at more rates of ours.
+
+Recommendation: I now, since it settles what the present task is worth and changes no
+physics. Then II, the one addition with a sourced range, aimed at why the reference
+is too good. Then III, which matches the owner's reading of where control is hard but
+needs sizes nobody has published. IV and V after.
+
+Readiness: about 6 out of 10 as a benchmark task on `study/glass-room`, and about 3
+out of 10 as recorded.
+
+## Settling the plant with its defects (2026-11-23)
+
+The same day the owner picked option I, then II, III and IV, in that order. Two cheap
+measurements came first, each a few minutes on one core of bob.
+
+### The room at other release rates and temperatures
+
+`rate_replay.py`: the three valve paths in hand (the kept cascade's, the library
+planner's and the ceiling's plans) replayed on plants whose blocks release at another
+rate, or from another temperature. Defects feed nothing back into the furnace, so every
+path keeps its marks. The planner's and the ceiling's paths are no longer the best for
+the other plant, so each room is a lower bound. Weighted cost over seeds 100 to 104:
+
+| Plant | Reference | Planner | Ceiling's plans | Room at least | Planner's share at least | Glass the reference loses |
+|---|---|---|---|---|---|---|
+| Registered: rate 270, from 1450 C | 49.23 | 48.26 | 46.96 | 1.048 | 1.020 | 2.91 |
+| A third of the rate | 47.29 | 46.85 | 46.20 | 1.024 | 1.009 | 0.98 |
+| Three times the rate | 54.97 | 52.43 | 49.24 | 1.116 | 1.049 | 8.66 |
+| Release from 50 K lower | 53.04 | 51.05 | 48.62 | 1.091 | 1.039 | 6.72 |
+| Release from 25 K lower | 51.14 | 49.66 | 47.42 | 1.078 | 1.030 | 4.82 |
+| Release from 25 K higher | 47.35 | 46.85 | 46.07 | 1.028 | 1.011 | 1.04 |
+| Release from 50 K higher | 46.32 | 46.15 | 45.82 | 1.011 | 1.004 | 0.01 |
+
+- **The room exists at every setting.** On each plant the reference is dearer than the
+  planner and than the ceiling's plans on each of the five seeds.
+- **The glass part goes with the rate,** nearly in proportion.
+- **The release temperature matters more than the rate.** From 50 K higher no block
+  releases and the room is the fuel alone, 1.011, the recorded plant's figure. From
+  50 K lower the reference loses 2.3 times the glass. Only 0.3 % of the block area is
+  at or over 1450 C, so the glass part of the room lives in the hottest few blocks.
+- **1450 C stays ours.** It is the lowest temperature in the one study sourced (swings
+  between 1450 and 1550 C [TR4]). An onset temperature for the exudation of the blocks
+  was searched for again on 2026-11-23 and not found; one patent places exudation
+  trouble at about 1500 C, in the superstructure (US7642211, seen once).
+- **So the room's existence is settled and its size is not.** It is 1.011 to 1.12 over
+  these settings, and two numbers of ours set where it falls.
+
+### The reference at other margins
+
+`margin_scan.py`: the kept cascade at lower fining setpoints, on the suite and the
+ladder's ten seeds.
+
+| Setpoint | Cost | Fuel | Glass | Steps under a mark | Where |
+|---|---|---|---|---|---|
+| 0.5523, as placed | 49.55 | 46.44 | 3.10 | 0 | |
+| 0.5500 | 49.49 | 46.41 | 3.08 | 0 | |
+| 0.5475 | 49.43 | 46.38 | 3.05 | 0 | pull up's lowest fining is 0.501 |
+| 0.5450 | 49.42 | 46.35 | 3.08 | 115 | pull up, 1 of 10 seeds |
+| 0.5400 | 49.46 | 46.28 | 3.18 | 455 | pull up, 2 of 10 seeds |
+| 0.5300 | 51.25 | 46.15 | 5.10 | 4939 | pull up, 7 of 10 seeds |
+| 0.5200 | 61.22 | 46.02 | 15.20 | 15034 | every scenario but pull down |
+
+- **The placed setpoint is 0.005 over the lowest a fixed setpoint can be.** At 0.5475
+  no step is lost on any of the 50 episodes, and the cost is 0.12 EUR per step lower
+  (0.24 %). Against a reference placed there the room would be 1.046, not 1.048.
+- **The pull rise sets it.** On those weeks the fining comes down to 0.501 at 0.5475.
+  The cascade's own spread of the fining after the first two days is 0.012 on a normal
+  week and 0.016 on a pull rise; two of its own sigmas would put it near 0.525, where
+  it loses glass.
+- **This corrects issue 4 above.** The fuel part of the room is not a sloppy
+  reference. It is a margin held every week for a transient that comes on one week in
+  twenty. On a normal week alone the cascade could run at 0.53 without losing a step
+  and save 0.51 EUR per step, 0.29 of it fuel and 0.22 glass, since a cooler furnace
+  also sheds fewer plates.
+- **For decisions 1, 2 and 6:** the evidence is for leaving the placed setpoint as it
+  is on this plant.
+
+### What the readings know of the state
+
+The library's planner is handed the true state. `state_filter.py` puts a particle
+filter in its place: the plant's own model on many sampled paths of the walks, each
+weighed by how well its readings match the agent's, and resampled. It starts from the
+task's reset law on keys of its own and is shown the readings and the valve only. It
+ran along the library planner's valve path on three normal weeks (seeds 100 to 102),
+70 s of one core a week at 512 particles. At each knot, the fining forecast over the
+next 16 h under the valve then fired, against what came out:
+
+| Lead | From the true state | From the readings, 128 particles | 512 particles |
+|---|---|---|---|
+| 4 h | 0.0001 | 0.0063 | 0.0027 |
+| 8 h | 0.0018 | 0.0074 | 0.0047 |
+| 12 h | 0.0042 | 0.0092 | 0.0070 |
+| 16 h | 0.0071 | 0.0117 | 0.0097 |
+
+- **The readings place the furnace to within 1 to 2 K.** Past the first day and at
+  512 particles: the blocks within 50 K of their release temperature are missed by 1.4
+  to 1.6 K, all blocks by 1.0 K, the bath's mean by 1.2 K, the fining now at the canal
+  by 0.001 to 0.003.
+- **They halve what is unknown of the hidden walks.** Gas is missed by 0.008 against
+  its spread of 0.02, the blanket by 0.06 against 0.10, the sulfate by 0.09 against
+  0.17. Pull and cullet are read exactly.
+- **128 particles are too few.** One seed locks onto a wrong state (0.010 off at 4 h),
+  and the particles' own spread is a third of their error. At 512 that seed is right.
+- **The forecast is 1.4 times wider than from the true state at 16 h,** and where the
+  true state forecasts 4 h to 0.0001, the readings give 0.003.
+- **One averaged state forecasts as well as the particles together** (0.0096 at 16 h
+  against 0.0097), so a planner can plan from it.
+- **The spread such a planner would price is about right where the valve still acts.**
+  Sixteen particles on sampled paths, against the averaged state's forecast: 0.0094 at
+  16 h for an error of 0.0096; the error is 0.8 to 1.7 of it by seed at 12 and 16 h.
+  At 4 h it is two to five times too narrow, but the valve no longer reaches the
+  fining there.
+- **Ours, all of it a filter's tuning:** the particle count, the couples weighed at
+  1 K (three times their scatter), the batch line at 0.5 m, resampling under half the
+  effective count. A better estimator would do better: these figures bound what the
+  readings give from below.
+- **Not covered:** the scenarios with events. The pull change is announced in the
+  readings; the gas swing is not, and the filter does not infer it yet.
+
+### The planner on the readings alone
+
+`readings_line.py`: the library's planner handed the filter's averaged state in place
+of the true one, pricing at each plan the spread of the filter's own particles on
+sampled paths (64 of 512). The benchmark runs it as it runs any agent: the runner
+never passes it the state. Normal scenario, seeds 100 to 104, 400 iterations at most
+per plan; 3.0 to 3.4 hours and 2 GB an episode.
+
+| | Cost | Fuel | Glass | Lowest fining of an episode |
+|---|---|---|---|---|
+| Reference | 49.21 | 46.31 | 2.90 | 0.526 to 0.536 |
+| Planner on the readings | 48.80 | 46.27 | 2.53 | 0.531 to 0.542 |
+| Planner on the true state | 48.25 | 46.14 | 2.11 | 0.525 to 0.528 |
+| Ceiling | 46.95 | 45.47 | 1.15 | 0.5002 |
+
+- **It keeps every mark.** No step under a mark, no trip, no plan kept; all 210 plans
+  stop on the solver's tolerance.
+- **It earns 0.41 EUR per step over the reference,** 0.8 %, on four seeds of five
+  (per seed 0.04, -0.04, 0.89, 0.46, 0.69). Paired over five seeds the interval is
+  -0.09 to 0.91: not yet beyond seed noise.
+- **That is 42 % of what the true state earns** (0.96) and 18 % of the room to the
+  ceiling. Not knowing the state costs 0.55 EUR per step (0.25 to 0.86).
+- **Its saving is glass.** It burns the reference's fuel: the spread it prices (0.009
+  at its last lead against 0.007 from the true state) keeps its fining 0.007 higher
+  than the true-state planner's.
+- **Its first day is blind.** No reading tells the hidden walks at reset, so its first
+  plan holds the reset's valve (the two-day smoke run cost 47.40 against the true
+  state's 46.53).
+- **So a controller on the readings can earn some of the room,** with a plain filter
+  whose tuning is ours. It bounds from below what an agent with memory can reach on a
+  normal week; the event scenarios are not covered.
+
+Still to do for option I: a third start for the ceiling (deferred: of little value now
+that the room's size hangs on the release numbers).
+
+## A furnace that does not know itself: first measurements (2026-11-23)
+
+Option II. Before any design, cheap tests of where a number the furnace does not know
+about itself could open room. Normal scenario, the ladder's ten seeds, two weeks, the
+second week read (the first lets a controller settle on a member, since the reset state
+is the registered plant's). Every size is ours; only the directions are sourced.
+
+### The cascade absorbs a hidden constant
+
+`hidden_members.py`: the kept cascade, as tuned on the registered plant, on members
+that differ in one number it is not told.
+
+| Member | Fuel | Against the registered plant | Glass | Fining, mean | Lowest | Spread |
+|---|---|---|---|---|---|---|
+| Registered | 46.39 | | 5.03 | 0.554 | 0.526 | 0.013 |
+| Regenerators fouled, 0.80 to 0.72 a node | 47.89 | +3.2 % | 5.02 | 0.554 | 0.526 | 0.013 |
+| Regenerators fouled, 0.80 to 0.64 a node | 49.68 | +7.1 % | 5.00 | 0.554 | 0.526 | 0.013 |
+| Surface emissivity 0.7 | 51.83 | +11.7 % | 5.18 | 0.554 | 0.523 | 0.014 |
+| Surface emissivity 0.9 | 42.03 | -9.4 % | 5.02 | 0.555 | 0.528 | 0.013 |
+| Fining band 20 K higher | 48.50 | +4.5 % | 9.95 | 0.554 | 0.524 | 0.013 |
+| Fining band 20 K lower | 44.71 | -3.6 % | 6.17 | 0.556 | 0.524 | 0.015 |
+| Fining a quarter slower | 47.08 | +1.5 % | 9.79 | 0.554 | 0.521 | 0.014 |
+| Crown loss up a quarter | 46.58 | +0.4 % | 5.03 | 0.555 | 0.526 | 0.013 |
+
+- **The fining sits where the cascade puts it on every member,** with the same spread.
+  Its outer loop integrates any constant away: it burns what the member needs and
+  holds no margin for not knowing which member it is on.
+- **A member that needs a hotter furnace loses twice the glass** through its blocks
+  (the band 20 K higher, the slower fining), whoever fires it.
+- **The canal is a member's own limit.** Three members have steps under the canal's
+  target (13, 378 and 51, on one or two seeds each): the refiner's cooling loop, not
+  the cascade, holds the canal.
+- **So a hidden constant opens no room against this reference.** The second week of
+  the registered plant also costs more than the first (51.42 against 49.52): the
+  lost glass keeps rising after the week the task scores.
+
+### A reference without quality feedback pays for the family
+
+Plants read defects, which show nothing while the glass is above its pass mark, so
+their crown setpoints come from tables with a safety factor [TR13]. `table_margin.py`:
+the cascade's crown loop alone, its setpoint held some kelvin over the crown at which
+the registered plant's fining sits at the cascade's setpoint (1544.8 C), on the
+registered plant and on members whose fining band the batch's redox has moved by 20 K,
+inside the 50 K the sources give for the fining onset (1430 to 1480 C [TR1]).
+
+| Table setpoint | Registered | Band 20 K higher | Band 20 K lower |
+|---|---|---|---|
+| 10 K under | 258.1, glass lost on 9 seeds | 463.6, on all 10 | 49.96 |
+| At the cascade's crown | 64.92, on 2 seeds | 429.8, on all 10 | 55.83 |
+| 5 K over | 52.35 | 337.6, on all 10 | 60.45 |
+| 10 K over | 54.48 | 196.7, on 7 seeds | 66.53 |
+| 15 K over | 58.10 | 79.97, on 2 seeds | 74.58 |
+| 20 K over | 64.13 | 60.32 | 84.75 |
+| 25 K over | 72.31 | 67.52 | 97.34 |
+| 30 K over | 83.62 | 77.76 | 113.43 |
+| The cascade, for comparison | 51.42 | 58.45 | 50.88 |
+
+- **A table needs a margin even on the plant it was made for.** With none, the walks
+  take the fining under its mark on two seeds in ten.
+- **To keep the mark on every member, the table must sit 20 K over.** At 10 K the
+  member with the band 20 K higher loses glass on seven seeds in ten.
+- **That margin is dear, and mostly in glass.** At 20 K over, the three members cost
+  60.3, 64.1 and 84.7, against 58.5, 51.4 and 50.9 under the cascade: 3, 25 and 67 %
+  more. The fuel is 0.4 to 3.6 % more; the rest is the plates a hotter furnace sheds,
+  4 to 9 % of the pull against the cascade's 1.2 to 2.4 %.
+- **These are the family's figures.** The sources give supervisory control 2 to 3 %
+  of energy and up to about 8 % of yield against operators [S7]. The model shows
+  gains of that size once its reference is what the plants had: a table and a safety
+  factor, in place of a loop on a fining share no plant reads.
+- **Why the task shows little room.** Its reference reads the fining share at the cold
+  end as a clean number, above the mark as below (COLD_REVIEW.md, item 2). With that
+  reading, the cascade is already the supervisory control the sources sell.
+
+- **A table that knows its member is as good as the cascade.** Each member's best
+  table that loses no glass costs 49.96 (10 K under, on the band 20 K lower), 52.35
+  (5 K over, registered) and 60.32 (20 K over, on the band 20 K higher): 1.8 % under
+  the cascade, 1.8 % over and 3.2 % over. What the cascade's fining loop buys is
+  knowing the member.
+- **Not knowing it costs 29 %.** The table safe for all three costs 69.7 on their
+  plain average, against 54.2 for each member's own best (three members of equal
+  weight, ours).
+
+### What tells the member
+
+`state_filter.py` again, 512 particles, with the fining reading left out of the
+weights, and then the defects' reading too. Forecast error of the fining at 4, 8, 12
+and 16 h:
+
+| Readings weighed | 4 h | 8 h | 12 h | 16 h |
+|---|---|---|---|---|
+| All | 0.0027 | 0.0047 | 0.0070 | 0.0097 |
+| Without the fining share | 0.0021 | 0.0045 | 0.0069 | 0.0095 |
+| Without the fining share and the defects | 0.0025 | 0.0042 | 0.0065 | 0.0092 |
+
+- **On a plant whose numbers are known, the couples place the fining.** The fining
+  share's own reading adds nothing to the filter: fining is a time-temperature
+  integral, and the temperatures are read well.
+- **What the couples cannot tell is the member.** A moved fining band changes no
+  temperature. Only the glass's quality shows it, and plants read that as defects,
+  which appear near and under the mark.
+
+### What this asks of a design
+
+Three changes, each to what the task is, so each the owner's to rule:
+
+- **The quality reading as plants have it:** a count of defects that says nothing
+  while the glass is good, in place of a fining share read above the mark as below.
+- **A reference from a table with a written safety rule,** since no loop can then hold
+  a fining setpoint.
+- **The numbers a furnace does not know drawn per stream,** inside sourced ranges: the
+  fining onset has one (50 K); the others searched so far have none.
+
+One thing stands in the way of an agent earning that room: a step under the mark
+loses the whole pull, nine times its fuel. Probing toward the mark is then ruinous,
+where a plant's quality falls off by degrees. The pass mark (0.5) and that cliff are
+ours.
+
+## The family run from a table: prototype (2026-11-24)
+
+The owner's go of 2026-11-24: prototype, in study scripts with the plant untouched, a
+quality reading that shows nothing while the glass is good, a table reference with a
+written safety rule, and the fining band drawn per stream; then measure reference,
+planner and ceiling.
+
+**The prototype's terms** (`family.py`), each ours and for the owner to rule before any
+of it enters the plant:
+
+- **The family:** the fining band moved by -20, -10, 0, 10 and 20 K, equal weights,
+  inside the 50 K the sources give for the fining onset [TR1].
+- **The reference:** the kept cascade's crown loop alone, on a table setpoint. It reads
+  the crown couple and nothing of the glass's quality.
+- **The safety rule:** the lowest table setpoint, on a 5 K grid, at which no member
+  loses a step on the ladder's ten seeds.
+- **The start:** each member as its operators run it, a week on the walks' mean path
+  under the family's table from the registered design state. The scored week starts
+  there, on the episode's own walks and keys.
+- **The reading an agent would get:** the defects per plate it has today, and in
+  place of the fining share only how far the glass is under its pass mark, nothing
+  above. No controller measured here reads it: the table reads the crown, and the
+  ceiling and the planner read the state.
+
+**The table.** Cost over the scored week, ten seeds:
+
+| Table setpoint | Band -20 K | -10 K | 0 | +10 K | +20 K | Family |
+|---|---|---|---|---|---|---|
+| 15 K over | 60.10 | 54.46 | 52.37 | 51.93 | 63.88, glass lost on 1 seed | 56.55 |
+| 20 K over | 66.33 | 58.27 | 54.63 | 53.73 | 54.25 | 57.44 |
+| 25 K over | 78.82 | 64.06 | 58.32 | 56.40 | 57.91 | 63.10 |
+| Each member's own best table | 47.42 | 47.54 | 49.23 | 50.84 | 54.25 | 49.86 |
+
+- **The rule picks 20 K over.** At 15 K the member with the band 20 K higher loses
+  1419 steps on one seed.
+- **The margin is paid by the members that do not need it.** Under the family's table
+  the member with the band 20 K lower sheds 4.8 % of its pull as plates (19.96 EUR per
+  step) and the one it was sized for 1.3 %.
+- **Not knowing the member costs 15 %.** The family's table costs 57.44 on the plain
+  average, each member's own best table 49.86 (the two coolest members' best sits at
+  the grid's low end, so theirs may be lower still).
+- **Costs are lower than the second-week figures of 2026-11-23** because a start
+  settled without walks has clean blocks, as the registered task's start has.
+
+**The kept cascade cannot take over from the table.** Started from the table's state
+with its crown setpoint where the table had it, the cascade loses glass on four
+members of five: 36989, 34765, 23299 and 1393 steps of 50400, on all ten seeds for the
+first three. Its fining starts 0.04 to 0.13 over its setpoint, its outer loop
+integrates that through the 12 h dead time, and the fining then falls through the
+mark. From the registered design state (0.03 over) it does not. So the reference as
+tuned is safe near its setpoint only: a large change of where it should sit, as a
+product change would be, needs a ramp or a limit on that integral.
+
+Still running: the ceiling and the library's planner on the members at -20, 0 and
++20 K, three seeds each, from the same start (`family_line.py`; 18 runs, about 40
+core-hours).
+
 ## What else the furnace lacks
 
 Asked by the owner on 2026-11-15, in the order I would add them:
@@ -778,6 +1236,10 @@ it is.
 7. The fair planner is in the library since 2026-11-16 (the owner's go), its spread
    read from the model. Left to rule: the normal error it assumes, the hold of the
    spread past the dead time and a knot, and 128 sampled paths, all ours.
+8. After the ruling of 2026-11-23: which of I to V in "As a nearly saturated task",
+   and whether the plant with its defects becomes the task on record. The owner picked
+   I, II, III and IV that day, in that order of work. The merge still waits for his
+   word.
 
 ## Sources seen today
 
@@ -788,6 +1250,24 @@ it is.
   Glass (seen once): float lines no longer run at stable pull rates, similar thicknesses
   and one colour or batch; customers ask for flexibility and just-in-time delivery.
   https://britglass.org.uk/knowledge-base/digital-library-and-information-services/advances-float-glass-furnace-control
+
+## Sources seen on 2026-11-23
+
+- [N1] Beerkens, Muysenberg, Barklage-Hilgefort, "Modeling of the aging of glass
+  furnace regenerators", Glastech. Ber. 65 (1992) no. 9, 246-255, abstract (read
+  twice): a model, said to agree with industrial furnaces.
+  https://oa.tib.eu/renate/items/7dfcb0c7-cc75-43fa-aea6-e4dcec5b0d22/full
+- [N2] IPCC AR4, WG3, section 7.4.5.3, citing Beerkens and van Limpt (2001): 4 to 10
+  GJ/t of container glass, 5 to 8.5 GJ/t of flat glass (returned by two searches; the
+  page refused a direct fetch).
+  https://archive.ipcc.ch/publications_and_data/ar4/wg3/en/ch7s7-4-5-3.html
+- [N3] 56.1 t of CO2 per TJ of natural gas, the IPCC 2006 default as reproduced in
+  Commission Regulation (EU) 2018/2066, Annex VI (seen once, from a search result).
+  https://www.legislation.gov.uk/eur/2018/2066/annex/VI/data.pdf
+- [N4] Beerkens, van Limpt, Jacobs, "Energy efficiency benchmarking of glass furnaces",
+  Glass Sci. Technol. 77 (2004) 47-57, abstract (read twice): a float furnace's energy
+  use depends strongly on its size, pull and age; no float figure in the abstract.
+  https://oa.tib.eu/renate/items/e9ec3ace-03db-4cf0-b650-3890c1731c23/full
 
 ## Reproducing
 
@@ -811,4 +1291,6 @@ and seed, 0.8 to 3.7 hours and up to 3.2 GB each (the script at 7143497, when th
 library's oracle without a seed was that planner). The fair line is 25 runs of
 `fair_line.py` at 5108011, 2.8 to 3.6 hours and 1.5 GB each. Since then `mpc_line.py`
 runs the library's planner, and `fair_line.py` hands it the measured table.
+`rate_replay.py` (from the ceiling's and the library planner's output directories)
+and `margin_scan.py` take two to three minutes each on one core.
 
