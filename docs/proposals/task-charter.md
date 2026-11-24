@@ -9,8 +9,11 @@ where each old rule number went, is in [charter-history.md](charter-history.md).
 
 TargetGym is a collection of industrial-like control tasks for benchmarking RL agents
 against good classical controllers. Its tasks are ones where such a controller still
-leaves room, so that we can see what reaches it. Each task stands for a family of
-plants, not one plant. The README states the benchmark's one claim:
+leaves room, so that we can see what reaches it. Room need not be large: a task whose
+reference is close to its ceiling is kept when the room is beyond seed noise and worth
+something at the plant's real scale (J5). On a furnace that burns fuel all year, one
+percent is a large sum. Each task stands for a family of plants, not one plant. The
+README states the benchmark's one claim:
 
 > Beating the reference on a task means handling the kind of difficulty that plants of
 > its family present (its named property, its limits and its operating job) under a
@@ -216,10 +219,24 @@ weakened. Room must not come from a weak controller.
   Where the family runs a different procedure for some scenarios (slow ramps against
   fast ramps, say), the reference switches between them by a rule written before any
   run.
-- *Zones:* on a zone, the setpoint is the edge the economics push toward, moved k
-  standard deviations of the controlled variable inside, and never past the zone's
-  centre. The deviation is measured on the bump-test seeds in the normal-day scenario.
-  k = 2, the usual give-away practice, fixed before any room is seen.
+- *Zones priced as give-away:* where leaving a zone costs give-away, the setpoint is the
+  edge the economics push toward, moved k standard deviations of the controlled variable
+  inside, and never past the zone's centre. The deviation is measured on the bump-test
+  seeds in the normal-day scenario. k = 2, the usual give-away practice, fixed before any
+  room is seen.
+- *Zones priced as a violation:* where the score charges every step outside a zone at
+  the price of a violation, not of give-away, a rung's setpoint is not 2 sigma inside the
+  edge: each rung, on its own, holds the first, counting from the edge the economics push
+  toward, of that edge and ten equal steps to the zone's centre at which it leaves the
+  zone on none of the ladder's seeds, in any scenario, each candidate run from episodes
+  established on it. A seed a rung cannot hold from any candidate does not constrain that
+  rung's placement: it is listed in the record and the rung pays for its exits there; if
+  no candidate holds every seed that some candidate holds, or no seed can be held at all,
+  the rung's setpoint is the centre and the record says so. The ladder keeps the cheapest
+  rung that trips no seed and leaves the zone on none of the seeds it can hold, and the
+  task's episodes start on that rung's setpoint, so an agent and the reference run the
+  same episodes. Where a rung's target is a schedule, a candidate shifts the whole
+  schedule (Amendment 7).
 
 When a reference copied from practice acts on something the score leaves free, or
 ignores something it charges, the disagreement is a finding about the score (B5) before
@@ -237,7 +254,9 @@ reliability. Other noise levels are reported only.
 **J3. Room and context.** Every task's page shows four lines: the best null policy, the
 reference, an MPC with the true model and the schedules operators know but no future
 disturbances, and the ceiling. The reference is the headline's anchor (J4); the other
-three are context, never anchors. Room is published per scenario and on `J`, from an
+three are context, never anchors. Where the room is under 1.2, a fifth line says what
+it is worth per plant and year, in money and in energy, from sources (J5). Room is
+published per scenario and on `J`, from an
 oracle run on the tagged plant and shown converged. A task whose oracle can't be run says
 "not measured". The MPC line backs its limits off by the oracle smoothing protocol's
 K11: where its plan, blind to the disturbance ahead, would ride a trip level the
@@ -260,11 +279,18 @@ improvement and the median of the tasks' savings, with the trip rate beside them
 domain weighs equally: a task counts one over the number of flagship tasks in its
 domain. Intervals come from the agent's training runs.
 
-**J5. Solved tasks and the flagship.** When the reference costs 0 on most seeds, the task
-first searches its family's sources for a cost operators really pay, such as fuel,
-energy or wear. If none is found, it stays in the core pool as solved, with no headline,
-outside the flagship. The flagship is chosen from the core pool by reading the room
-table, and each choice has a written reason.
+**J5. Solved tasks, nearly saturated tasks and the flagship.** When the reference costs
+0 on most seeds, the task first searches its family's sources for a cost operators really
+pay, such as fuel, energy or wear. If none is found, it is solved and goes to Extra with
+that reason. The flagship is chosen from the core pool by reading the room table, and
+each choice has a written reason.
+
+*Nearly saturated tasks.* A task whose room is small is neither solved nor dropped for
+that. Its page states the room with an interval on paired seeds, and what the room is
+worth in money and in energy per plant and year, from sources (J3's fifth line). Where
+the interval includes 1, the task is treated as solved. `glass_furnace` stays in the
+benchmark whatever its room: no room on it is a finding about the model, to be looked
+into, not a verdict on the task (Amendment 7).
 
 **J6. Cost.** It is measured by `benchmark_speed`, on CPU at batch 256. No task's step
 time may exceed 3 times the median over tasks, and no reset or step may run a solver
