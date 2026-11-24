@@ -429,24 +429,31 @@ def current(task: str) -> dict:
     """The env version stamp and each part's fingerprint as the tree stands."""
     from target_gym import provenance as P
     from target_gym.registry import REGISTRY
+    from target_gym.scoring_runs import PROTOCOLS
 
     spec = REGISTRY[task]
-    stamp = P.environment_fingerprint(spec)
     code = P._digest_paths
+    # A task scored on stream runs: the runner and its protocol are part of every
+    # line's measurement. Others keep their fingerprints as they were.
+    runs = (code([PKG / "scoring_runs.py"]),) if task in PROTOCOLS else ()
+    stamp = P.environment_fingerprint(spec)
     if task in EXPERT_REFERENCE:
-        ref = _digest(stamp, "expert", P.expert_fingerprint(spec))
+        ref = _digest(stamp, "expert", P.expert_fingerprint(spec), *runs)
     else:
         ladder = [ROWS_DIR / f"{task}.py", SCRIPTS / "reference_ladder.py"]
         ladder += [PKG / "experts" / f for f in ("ladder.py", "pid.py")]
-        ref = _digest(stamp, "ladder", code(ladder + [PKG / "identification.py"]))
+        ref = _digest(
+            stamp, "ladder", code(ladder + [PKG / "identification.py"]), *runs
+        )
     nulls = _digest(
         stamp,
         code([PKG / "null_policies.py", SCRIPTS / "reference_ladder.py"]),
         _file_digest(PKG / "data" / "null_policies" / f"{task}.json"),
+        *runs,
     )
     oracle = P.oracle_fingerprint(spec) if spec.make_mpc is not None else "none"
-    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task))
-    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"))
+    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task), *runs)
+    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"), *runs)
     package = type(spec.make_env()).__module__.rsplit(".", 1)[0].split(".")
     sweep = _digest(
         code([SCRIPTS / "family_sweep.py"]),

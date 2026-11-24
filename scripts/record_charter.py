@@ -14,6 +14,12 @@ seeds, and the family sweep, ``scripts/family_sweep.py``, on the task's
 scoring seeds). J3's lines run on the ladder seeds 100 to 109, as the ceilings do.
 ``nulls``, ``j2`` and ``anchor`` read the recorded reference.
 
+A task with a scoring-run protocol (``target_gym.scoring_runs``: the reactor) runs
+every part on its stream pinned to each kept scenario, with the twins' weight
+folded, instead of one-day windows; its ceiling part also names the scenarios
+whose room interval contains 1, which take the protocol's extra seeds (the stop
+rule), and its reference and ceiling are then run again on them.
+
 A part whose fingerprint is current is skipped unless ``--force``. Each part run
 is written at once and appended to ``data/charter/log.jsonl``.
 """
@@ -52,11 +58,15 @@ class Task:
         import reference_ladder as L
 
         from target_gym import scenarios
+        from target_gym import scoring_runs as S
         from target_gym.registry import REGISTRY
 
-        self.L, self.name, self.record = L, name, record
+        self.L, self.name, self.record, self.S = L, name, record, S
         self.spec = REGISTRY[name]
-        self.weights = scenarios.weights(self.spec)
+        self.protocol = name in S.PROTOCOLS
+        self.weights = (
+            S.weights(name) if self.protocol else scenarios.weights(self.spec)
+        )
         self.expert = name in charter.EXPERT_REFERENCE
         self.row = L.Row(0, None) if self.expert else L.ROWS[name]()
 
@@ -74,13 +84,18 @@ class Task:
 
         kept = self.kept()
         if self.expert:
-            return shipped_policy("pid")
+            return "pid" if self.protocol else shipped_policy("pid")
         return self.L.Reference(kept, self.L.build(self.name, self.row)[kept])
 
     def nulls(self, seeds=None) -> tuple[dict, dict]:
         runs, broken = {}, {}
         for null in self.L.null_set(self.name):
             try:
+                if self.protocol:
+                    # On the stream the reset is the stream's own: its held move.
+                    held = "null" if null.name == "hold reset" else null
+                    runs[null.name] = self.suite(held, seeds)
+                    continue
                 runs[null.name] = self.L.run_suite(
                     self.name, self.row, null, seeds=seeds
                 )
@@ -88,12 +103,63 @@ class Task:
                 broken[null.name] = f"{type(err).__name__}: {err}"
         return runs, broken
 
+    def seeds_for(self, scenario: str) -> list[int]:
+        """A protocol scenario's seeds: the first block, and the extra one where the
+        recorded ceiling part found its room interval containing 1."""
+        extended = scenario in self.record.get("ceiling", {}).get("extended", [])
+        return self.S.seeds(self.name, extended=extended)
+
+    def suite(self, policy, seeds=None) -> dict:
+        """``run_suite``'s result on the protocol's runs: ``policy`` a
+        ``scoring_runs`` kind or a ``benchmark`` policy; ``seeds`` one list for
+        every scenario, ``{scenario: seeds}``, or each scenario's own."""
+        per = {}
+        for s in self.weights:
+            own = seeds.get(s) if isinstance(seeds, dict) else seeds
+            out = self.S.run(self.name, s, policy, own or self.seeds_for(s))
+            per[s] = {"costs": out["costs"], "trips": sum(out["trips"])}
+        counts = {len(v["costs"]) for v in per.values()}
+        costs = None
+        if len(counts) == 1:
+            costs = [
+                sum(self.weights[s] * per[s]["costs"][i] for s in per)
+                for i in range(counts.pop())
+            ]
+        return {
+            "costs": costs,
+            "trips": sum(v["trips"] for v in per.values()),
+            "scenarios": per,
+        }
+
+
+def extended(reference, ceiling, weights: dict, more_seeds) -> list[str]:
+    """The stop rule on two J3 lines: the scenarios, run on their first seeds only,
+    whose room interval contains 1 (``scoring_runs.needs_more``)."""
+    if NM in (reference, ceiling):
+        return []
+    out = []
+    for s in weights:
+        r, c = (ln["scenarios"][s]["costs"] for ln in (reference, ceiling))
+        if len(r) == len(c) and len(r) < len(more_seeds) and _needs(r, c):
+            out.append(s)
+    return out
+
+
+def _needs(reference_costs, ceiling_costs) -> bool:
+    from target_gym.scoring_runs import needs_more
+
+    return needs_more(reference_costs, ceiling_costs)
+
 
 def part_reference(t: Task) -> dict:
     from target_gym.benchmark import shipped_policy
 
     if t.expert:
-        res = t.L.run_suite(t.name, t.row, shipped_policy("pid"))
+        res = (
+            t.suite("pid")
+            if t.protocol
+            else t.L.run_suite(t.name, t.row, shipped_policy("pid"))
+        )
         out = {"kept": "expert", "rungs": {"expert": res}, "left_out": {}}
     else:
         out = t.L.climb(t.name)
@@ -121,6 +187,8 @@ def part_mpc(t: Task) -> dict:
     why = charter.MPC_NOT_MEASURED.get(t.name)
     if why or t.spec.make_mpc is None:
         return {"line": NM, "why": why or "the task ships no oracle"}
+    if t.protocol:
+        return {"line": t.line(t.suite("mpc"))}
     return {"line": t.line(t.L.run_suite(t.name, t.row, shipped_policy("mpc")))}
 
 
@@ -130,13 +198,21 @@ def part_ceiling(t: Task) -> dict:
     stored = charter.load_ceiling(t.name)
     part = charter.ceiling_part(stored, environment_fingerprint(t.spec), t.weights)
     source = charter.CEILINGS / f"{t.name}.json"
-    return part | {"source": str(source.relative_to(charter.REPO)) if stored else None}
+    part |= {"source": str(source.relative_to(charter.REPO)) if stored else None}
+    if t.protocol:
+        ref = t.record.get("reference", {}).get("line", NM)
+        more = t.S.seeds(t.name, extended=True)
+        part["extended"] = extended(ref, part["line"], t.weights, more)
+    return part
 
 
 def part_j2(t: Task) -> dict:
     commit, dirty = git_commit()
     seeds = charter.j2_seeds(commit, t.weights)
-    ref = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
+    if t.protocol:
+        ref = t.suite(t.policy(), seeds)
+    else:
+        ref = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
     runs, broken = t.nulls(seeds)
     costs = {s: v["costs"] for s, v in ref["scenarios"].items()}
     wins = {
@@ -171,7 +247,10 @@ def part_j2(t: Task) -> dict:
 
 def part_anchor(t: Task) -> dict:
     seeds = list(charter.ANCHOR_SEEDS)
-    res = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
+    if t.protocol:
+        res = t.suite(t.policy(), seeds)
+    else:
+        res = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
     return {"seeds": seeds, "line": t.line(res)}
 
 
