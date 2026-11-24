@@ -519,10 +519,11 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
         # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
         ("hvac", 9.54 * 0.25 * 0.05),
-        # The reagent a step's hold needs for 0.005 pH more at pH 7 on the nominal
-        # streams: q3 15.5497 -> 15.5596 mL/s by bisection on the mix's charge
-        # balance, 0.009907 mL/s over 5 s, in litres.
-        ("ph_neutralization", 0.0099073575 * 5.0 / 1000.0),
+        # The reagent a step's hold needs for 0.005 pH more at the operator's set
+        # point, pH 6.5 (owner, 2026-11-24; it was 7 before #232), on the nominal
+        # streams: the mix's charge balance solved by Brent's method in float64,
+        # 0.0159565404 mL/s more over 5 s, in litres.
+        ("ph_neutralization", 0.0159565404 * 5.0 / 1000.0),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
