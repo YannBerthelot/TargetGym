@@ -147,7 +147,13 @@ def task_blocks(path: pathlib.Path) -> dict[str, dict]:
             body.append(line)
         entry = {"obs": _obs_rows(body)} if _obs_rows(body) else {}
         if m.group(1) == "Task":
-            entry["summary"] = _first_paragraph("\n".join(body))
+            # A link to a file beside PHYSICS.md (REALITY.md) leads nowhere from
+            # the site, so it keeps its text and loses its target.
+            entry["summary"] = re.sub(
+                r"\[([^\]]+)\]\((?!https?://)[^)]*\)",
+                r"\1",
+                _first_paragraph("\n".join(body)),
+            )
         for name in re.findall(r"`(\w+)`", m.group(2)):
             for key, value in entry.items():
                 if key in found.setdefault(name, {}):
@@ -351,16 +357,21 @@ def _baseline_section(spec, row: dict | None) -> str:
 def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     env = spec.make_env()
     params = spec.make_test_params()
-    # The Rewards and Episode end sections below describe the version-2
-    # reward. Refuse to put that text on a page whose environment scores
-    # differently, which is how "bounded in [0, 1]" outlived version 1.
-    if getattr(params, "reward_version", 2) != 2:
-        raise SystemExit(
-            f"{name}: reward_version {params.reward_version}, and the page "
-            "template describes version 2"
-        )
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
+    # The Rewards and Episode end sections below describe the cost contract
+    # every version from 2 on shares: named, non-negative terms, summed and
+    # negated. Refuse to put that text on a page whose environment scores
+    # differently, which is how "bounded in [0, 1]" outlived version 1. The
+    # version number alone says nothing: a task's own re-pricing raises it.
+    terms = env.reward_terms(state, params) if hasattr(env, "reward_terms") else None
+    if int(getattr(params, "reward_version", 2)) < 2 or not terms:
+        raise SystemExit(
+            f"{name}: reward_version {getattr(params, 'reward_version', None)} "
+            "has no cost terms, and the page template describes them"
+        )
+    if any(float(np.min(np.asarray(v))) < 0.0 for v in terms.values()):
+        raise SystemExit(f"{name}: a negative cost term, which the page says cannot be")
     module = _env_module(spec)
 
     obs_space = env.observation_space(params)
@@ -387,6 +398,14 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     episode = int(params.max_steps_in_episode)
 
     out = [f"# {title}", ""]
+    if spec.extra is not None:
+        out += [
+            '!!! note "Extra task"',
+            f"    {title} is kept in the repository but is not part of the "
+            "benchmark, so it is out of the headline and the capability claims. "
+            f"The reason: {spec.extra}.",
+            "",
+        ]
     if video:
         out += [
             # ``../../``, not ``../``.
@@ -451,10 +470,12 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         reward_doc or "See the environment's `compute_reward`.",
         "",
         "Every environment in this suite scores on one contract. The reward is",
-        "minus the sum of three non-negative costs,",
-        "`-(tracking_cost + running_cost + failure_cost)`. The running cost",
-        "charges consumption and the failure cost charges trips out of the",
-        "operating envelope. The reward is never positive, and its scale differs",
+        "minus the sum of non-negative costs: a tracking cost where the task",
+        "holds a target, a running cost for what the plant consumes or fails to",
+        "deliver, and a failure cost for trips out of the operating envelope.",
+        f"This task's terms are {', '.join(f'`{k}`' for k in terms)}, reported",
+        'each step in `info["reward_terms"]`.',
+        "The reward is never positive, and its scale differs",
         "by orders of magnitude between plants. Some plants are",
         "priced in dollars or euros and the rest are dimensionless; the",
         "[per-plant summary](../reward-shaping.md#per-plant-summary) says which.",

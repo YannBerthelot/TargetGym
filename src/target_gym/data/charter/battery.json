@@ -1,0 +1,2054 @@
+{
+ "anchor": {
+  "fingerprint": "5fdb92c30fb74370",
+  "generated": "2026-11-13T12:53:35+00:00",
+  "line": {
+   "J": 0.0017830077669928894,
+   "converged": null,
+   "scenarios": {
+    "long deviation": {
+     "costs": [
+      0.0004240145061964837,
+      0.0003077723789505803,
+      0.0005073136247830847,
+      0.0009966956937000582,
+      0.0005222436615974107,
+      0.0004889102136592448,
+      0.000316859129325135,
+      0.00025007628152631193,
+      0.000795721202529401,
+      0.0004223645104574124
+     ],
+     "mean": 0.0005031971202725123,
+     "trips": 0
+    },
+    "long deviation, wrong estimate": {
+     "costs": [
+      0.0004240145061964837,
+      0.00030777382880644823,
+      0.0005073142038760538,
+      0.000996695688295909,
+      0.000522243054953372,
+      0.0004889101478143074,
+      0.000316859129325135,
+      0.00025007632730746857,
+      0.0007957205936240837,
+      0.0004223645104574124
+     ],
+     "mean": 0.0005031971990656673,
+     "trips": 0
+    },
+    "negative price": {
+     "costs": [
+      0.011612806994538524,
+      0.014178801596457617,
+      0.011558569524636542,
+      0.013088026764892662,
+      0.013597079768691884,
+      0.011161353058199675,
+      0.014395213732037369,
+      0.012051098356783523,
+      0.010148935165397362,
+      0.012190241511411893
+     ],
+     "mean": 0.012398212647304705,
+     "trips": 0
+    },
+    "normal": {
+     "costs": [
+      0.0002802011996152112,
+      0.00031472423144799044,
+      0.00039459182322127773,
+      0.0002712964397883945,
+      0.00045888307353583475,
+      0.0003897465303865132,
+      0.00023447796275633895,
+      0.0002196057005512052,
+      0.0003486736680962031,
+      0.00026307958313442014
+     ],
+     "mean": 0.0003175280212533389,
+     "trips": 0
+    },
+    "price spike": {
+     "costs": [
+      0.04204994999821006,
+      0.014775516191454048,
+      0.038909947425817916,
+      0.03219159328299782,
+      0.012751761954373836,
+      0.05060489940099249,
+      0.015326268999611635,
+      0.03751183168417725,
+      0.04952012547942329,
+      0.04024068676521746
+     ],
+     "mean": 0.033388258118227584,
+     "trips": 0
+    },
+    "wrong estimate": {
+     "costs": [
+      0.0002802011996152112,
+      0.00031472587775938776,
+      0.00039459182322127773,
+      0.0002712958654144712,
+      0.0004588825691062542,
+      0.0003897465270575573,
+      0.00023447796275633895,
+      0.00021960571111732306,
+      0.00034867368096839536,
+      0.00026307958313442014
+     ],
+     "mean": 0.0003175280800150637,
+     "trips": 0
+    }
+   },
+   "trips": 0
+  },
+  "seeds": [
+   200,
+   201,
+   202,
+   203,
+   204,
+   205,
+   206,
+   207,
+   208,
+   209
+  ]
+ },
+ "j2": {
+  "accepted": false,
+  "broken": {},
+  "commit": "dad658e0e5fcf82c79ab34f9ea2408aca581b7da",
+  "dirty": false,
+  "fingerprint": "7077628e549d9ddf",
+  "generated": "2026-11-13T16:42:34+00:00",
+  "noise": 1.0,
+  "null_share": {
+   "I-only": 0.26666666666666666,
+   "constant 0.0": 0.23333333333333334,
+   "constant 0.5": 0.5333333333333333,
+   "constant 1.0": 0.2,
+   "echo": 0.26666666666666666,
+   "hold reset": 0.5333333333333333,
+   "table": 0.36666666666666664
+  },
+  "null_trips": {
+   "I-only": 0,
+   "constant 0.0": 0,
+   "constant 0.5": 0,
+   "constant 1.0": 0,
+   "echo": 0,
+   "hold reset": 0,
+   "table": 0
+  },
+  "null_wins": {
+   "I-only": 8,
+   "constant 0.0": 7,
+   "constant 0.5": 16,
+   "constant 1.0": 6,
+   "echo": 8,
+   "hold reset": 16,
+   "table": 11
+  },
+  "reasons": [
+   "null 'constant 0.5' beats the reference on 16 of 30",
+   "null 'hold reset' beats the reference on 16 of 30",
+   "sweep fails"
+  ],
+  "reference_trips": 0,
+  "reference_trips_by_scenario": {
+   "long deviation": 0,
+   "long deviation, wrong estimate": 0,
+   "negative price": 0,
+   "normal": 0,
+   "price spike": 0,
+   "wrong estimate": 0
+  },
+  "seeds": {
+   "long deviation": [
+    1239839750,
+    1495848587,
+    1192026144,
+    1510335300,
+    1492918126
+   ],
+   "long deviation, wrong estimate": [
+    1323876892,
+    567412605,
+    1082033407,
+    225012817,
+    1010551231
+   ],
+   "negative price": [
+    1348630131,
+    1265530271,
+    2130000749,
+    1748080557,
+    1145176508
+   ],
+   "normal": [
+    26781197,
+    347593622,
+    944174328,
+    1287982984,
+    1582320667
+   ],
+   "price spike": [
+    1881057286,
+    666535587,
+    65631014,
+    2011020684,
+    922200600
+   ],
+   "wrong estimate": [
+    464889370,
+    743378714,
+    389921161,
+    1454211830,
+    898265588
+   ]
+  },
+  "sweep": false,
+  "sweep_draws": [
+   {
+    "broken": {},
+    "draw": 0,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0013271581502971685,
+      "long deviation, wrong estimate": 0.0013271581502971685,
+      "negative price": 0.012115832528892966,
+      "normal": 0.001129373925129536,
+      "price spike": 0.03604193313899306,
+      "wrong estimate": 0.001129373925129536
+     },
+     "constant 0.0": {
+      "long deviation": 0.0021220273622283496,
+      "long deviation, wrong estimate": 0.0021220273622283496,
+      "negative price": 0.011021590799575574,
+      "normal": 0.0019593145731573417,
+      "price spike": 0.04081658539368685,
+      "wrong estimate": 0.0019593145731573417
+     },
+     "constant 0.5": {
+      "long deviation": 0.0010984253412303897,
+      "long deviation, wrong estimate": 0.0010984253412303897,
+      "negative price": 0.012990146413538697,
+      "normal": 0.0007960208399687106,
+      "price spike": 0.033541912131724735,
+      "wrong estimate": 0.0007960208399687106
+     },
+     "constant 1.0": {
+      "long deviation": 0.001268506248167542,
+      "long deviation, wrong estimate": 0.001268506248167542,
+      "negative price": 0.015664187548207458,
+      "normal": 0.0012721228980792434,
+      "price spike": 0.025712476755121234,
+      "wrong estimate": 0.0012721228980792434
+     },
+     "echo": {
+      "long deviation": 0.0011577709652287054,
+      "long deviation, wrong estimate": 0.0011577709652287054,
+      "negative price": 0.01323333992332685,
+      "normal": 0.001208612967481744,
+      "price spike": 0.03237364054777968,
+      "wrong estimate": 0.001208612967481744
+     },
+     "hold reset": {
+      "long deviation": 0.0010984253412303897,
+      "long deviation, wrong estimate": 0.0010984253412303897,
+      "negative price": 0.012990146413538697,
+      "normal": 0.0007960208399687106,
+      "price spike": 0.033541912131724735,
+      "wrong estimate": 0.0007960208399687106
+     },
+     "table": {
+      "long deviation": 0.0011851306033735958,
+      "long deviation, wrong estimate": 0.0011851306033735958,
+      "negative price": 0.012989833060095476,
+      "normal": 0.0010554641621676065,
+      "price spike": 0.03201843240531804,
+      "wrong estimate": 0.0010554641621676065
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0011436934772489178,
+      "long deviation, wrong estimate": 0.0011436934772489178,
+      "negative price": 0.012727956731833748,
+      "normal": 0.0008965730509044375,
+      "price spike": 0.03398620936051475,
+      "trips": 0,
+      "wrong estimate": 0.0008965730509044375
+     },
+     "override": {
+      "long deviation": 0.0011436934772489178,
+      "long deviation, wrong estimate": 0.0011436934772489178,
+      "negative price": 0.012727956731833748,
+      "normal": 0.0008965730509044375,
+      "price spike": 0.03398620936051475,
+      "trips": 0,
+      "wrong estimate": 0.0008965730509044375
+     },
+     "pi": {
+      "long deviation": 0.0011131170607632927,
+      "long deviation, wrong estimate": 0.0011131170607632927,
+      "negative price": 0.012913468884202863,
+      "normal": 0.0008646592264058069,
+      "price spike": 0.03333148773801384,
+      "trips": 0,
+      "wrong estimate": 0.0008646592264058069
+     },
+     "published": {
+      "long deviation": 0.001160656908998533,
+      "long deviation, wrong estimate": 0.001160656908998533,
+      "negative price": 0.01267244893328947,
+      "normal": 0.0010029998014717656,
+      "price spike": 0.03140942989791129,
+      "trips": 0,
+      "wrong estimate": 0.0010029998014717656
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.854066392545992,
+     "signal_interval": 2.9644704827908366,
+     "soc_error_std": 0.31811317574206704
+    }
+   },
+   {
+    "broken": {},
+    "draw": 1,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0010916851720128781,
+      "long deviation, wrong estimate": 0.0010916851720128781,
+      "negative price": 0.011773219093843568,
+      "normal": 0.0008607604922559844,
+      "price spike": 0.03800322231003104,
+      "wrong estimate": 0.0008607604922559844
+     },
+     "constant 0.0": {
+      "long deviation": 0.0016178352811339674,
+      "long deviation, wrong estimate": 0.0016178352811339674,
+      "negative price": 0.009910020954699625,
+      "normal": 0.001496384105728451,
+      "price spike": 0.03969471446903264,
+      "wrong estimate": 0.001496384105728451
+     },
+     "constant 0.5": {
+      "long deviation": 0.0006026136623574223,
+      "long deviation, wrong estimate": 0.0006026136623574223,
+      "negative price": 0.011918119325147442,
+      "normal": 0.00045427765077664145,
+      "price spike": 0.03468016665448768,
+      "wrong estimate": 0.00045427765077664145
+     },
+     "constant 1.0": {
+      "long deviation": 0.0010535375115136277,
+      "long deviation, wrong estimate": 0.0010535375115136277,
+      "negative price": 0.015365736862688165,
+      "normal": 0.0010487872751095688,
+      "price spike": 0.029712783356109898,
+      "wrong estimate": 0.0010487872751095688
+     },
+     "echo": {
+      "long deviation": 0.000742876804877347,
+      "long deviation, wrong estimate": 0.000742876804877347,
+      "negative price": 0.012208230985790255,
+      "normal": 0.0005086133598624363,
+      "price spike": 0.03624849635609717,
+      "wrong estimate": 0.0005086133598624363
+     },
+     "hold reset": {
+      "long deviation": 0.0006026136623574223,
+      "long deviation, wrong estimate": 0.0006026136623574223,
+      "negative price": 0.011918119325147442,
+      "normal": 0.00045427765077664145,
+      "price spike": 0.03468016665448768,
+      "wrong estimate": 0.00045427765077664145
+     },
+     "table": {
+      "long deviation": 0.0007298255745323168,
+      "long deviation, wrong estimate": 0.0007298255745323168,
+      "negative price": 0.012011204313047388,
+      "normal": 0.0004769393159210579,
+      "price spike": 0.036509083504372715,
+      "wrong estimate": 0.0004769393159210579
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0005616970334147818,
+      "long deviation, wrong estimate": 0.0005616970334147818,
+      "negative price": 0.011886956251740986,
+      "normal": 0.0005275546163037608,
+      "price spike": 0.0344061193276955,
+      "trips": 0,
+      "wrong estimate": 0.0005275546163037608
+     },
+     "override": {
+      "long deviation": 0.0005616970334147818,
+      "long deviation, wrong estimate": 0.0005616970334147818,
+      "negative price": 0.011884267159272887,
+      "normal": 0.0005275546163037608,
+      "price spike": 0.03437323719248614,
+      "trips": 0,
+      "wrong estimate": 0.0005275546163037608
+     },
+     "pi": {
+      "long deviation": 0.0005468219471836348,
+      "long deviation, wrong estimate": 0.0005468219471836348,
+      "negative price": 0.011975247160008081,
+      "normal": 0.0005189184104056291,
+      "price spike": 0.034384868864794305,
+      "trips": 0,
+      "wrong estimate": 0.0005189184104056291
+     },
+     "published": {
+      "long deviation": 0.0005721344328068293,
+      "long deviation, wrong estimate": 0.0005721344328068293,
+      "negative price": 0.011756102577131628,
+      "normal": 0.0005519839793174637,
+      "price spike": 0.035624612103912046,
+      "trips": 0,
+      "wrong estimate": 0.0005519839793174637
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.9095445555368302,
+     "signal_interval": 2.323034116909122,
+     "soc_error_std": 0.36942101742798283
+    }
+   },
+   {
+    "broken": {},
+    "draw": 2,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0008959885183633117,
+      "long deviation, wrong estimate": 0.0008959885183633117,
+      "negative price": 0.011154881261728727,
+      "normal": 0.0007870358180868998,
+      "price spike": 0.03614248627191447,
+      "wrong estimate": 0.0007870358180868998
+     },
+     "constant 0.0": {
+      "long deviation": 0.0017501430546073928,
+      "long deviation, wrong estimate": 0.0017501430546073928,
+      "negative price": 0.010347709943189847,
+      "normal": 0.0016373243306064499,
+      "price spike": 0.04420230629255642,
+      "wrong estimate": 0.0016373243306064499
+     },
+     "constant 0.5": {
+      "long deviation": 0.0005654096999080497,
+      "long deviation, wrong estimate": 0.0005654096999080497,
+      "negative price": 0.012504479591685106,
+      "normal": 0.0005140218059463031,
+      "price spike": 0.03343356935369267,
+      "wrong estimate": 0.0005140218059463031
+     },
+     "constant 1.0": {
+      "long deviation": 0.0009506504597238221,
+      "long deviation, wrong estimate": 0.0009506504597238221,
+      "negative price": 0.01612841063106575,
+      "normal": 0.0009055612109325573,
+      "price spike": 0.024169742510562715,
+      "wrong estimate": 0.0009055612109325573
+     },
+     "echo": {
+      "long deviation": 0.0007187708533231667,
+      "long deviation, wrong estimate": 0.0007187708533231667,
+      "negative price": 0.012792818626321655,
+      "normal": 0.0006261457361083463,
+      "price spike": 0.0315137826723378,
+      "wrong estimate": 0.0006261457361083463
+     },
+     "hold reset": {
+      "long deviation": 0.0005654096999080497,
+      "long deviation, wrong estimate": 0.0005654096999080497,
+      "negative price": 0.012504479591685106,
+      "normal": 0.0005140218059463031,
+      "price spike": 0.03343356935369267,
+      "wrong estimate": 0.0005140218059463031
+     },
+     "table": {
+      "long deviation": 0.000665598520594936,
+      "long deviation, wrong estimate": 0.000665598520594936,
+      "negative price": 0.012752769680692288,
+      "normal": 0.0005819698824642424,
+      "price spike": 0.03171712580979215,
+      "wrong estimate": 0.0005819698824642424
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0005515706465088785,
+      "long deviation, wrong estimate": 0.0005515706465088785,
+      "negative price": 0.01280734668291436,
+      "normal": 0.00045892264235050515,
+      "price spike": 0.031830547758456854,
+      "trips": 0,
+      "wrong estimate": 0.00045892264235050515
+     },
+     "override": {
+      "long deviation": 0.0005515706465088785,
+      "long deviation, wrong estimate": 0.0005515706465088785,
+      "negative price": 0.01280734668291436,
+      "normal": 0.00045892264235050515,
+      "price spike": 0.031830547758456854,
+      "trips": 0,
+      "wrong estimate": 0.00045892264235050515
+     },
+     "pi": {
+      "long deviation": 0.0005347870798769705,
+      "long deviation, wrong estimate": 0.0005347870798769705,
+      "negative price": 0.012943358836536713,
+      "normal": 0.00044376062493612105,
+      "price spike": 0.031377613157264755,
+      "trips": 0,
+      "wrong estimate": 0.00044376062493612105
+     },
+     "published": {
+      "long deviation": 0.0005952934392791883,
+      "long deviation, wrong estimate": 0.0005952934392791883,
+      "negative price": 0.01218168093316665,
+      "normal": 0.0005119588563128256,
+      "price spike": 0.03140597925470262,
+      "trips": 0,
+      "wrong estimate": 0.0005119588563128256
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.8947816112295155,
+     "signal_interval": 3.4354945321700523,
+     "soc_error_std": 0.0158547934090358
+    }
+   },
+   {
+    "broken": {},
+    "draw": 3,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.001046478470751132,
+      "long deviation, wrong estimate": 0.001046478470751132,
+      "negative price": 0.011826051019261812,
+      "normal": 0.0009221552528396041,
+      "price spike": 0.03594236587936463,
+      "wrong estimate": 0.0009221552528396041
+     },
+     "constant 0.0": {
+      "long deviation": 0.0018984367732160143,
+      "long deviation, wrong estimate": 0.0018984367732160143,
+      "negative price": 0.01069891332230791,
+      "normal": 0.0017704884562186132,
+      "price spike": 0.0402849712586518,
+      "wrong estimate": 0.0017704884562186132
+     },
+     "constant 0.5": {
+      "long deviation": 0.0009427591329050323,
+      "long deviation, wrong estimate": 0.0009427591329050323,
+      "negative price": 0.012758137191060196,
+      "normal": 0.0006497874292230887,
+      "price spike": 0.03345842809688687,
+      "wrong estimate": 0.0006497874292230887
+     },
+     "constant 1.0": {
+      "long deviation": 0.0011939459506132484,
+      "long deviation, wrong estimate": 0.0011939459506132484,
+      "negative price": 0.01564273165322555,
+      "normal": 0.0011966832441133364,
+      "price spike": 0.02569044449346134,
+      "wrong estimate": 0.0011966832441133364
+     },
+     "echo": {
+      "long deviation": 0.0009902701270741963,
+      "long deviation, wrong estimate": 0.0009902701270741963,
+      "negative price": 0.012884020304818045,
+      "normal": 0.0008085245137158499,
+      "price spike": 0.031549426547239405,
+      "wrong estimate": 0.0008085245137158499
+     },
+     "hold reset": {
+      "long deviation": 0.0009427591329050323,
+      "long deviation, wrong estimate": 0.0009427591329050323,
+      "negative price": 0.012758137191060196,
+      "normal": 0.0006497874292230887,
+      "price spike": 0.03345842809688687,
+      "wrong estimate": 0.0006497874292230887
+     },
+     "table": {
+      "long deviation": 0.000979464651469802,
+      "long deviation, wrong estimate": 0.000979464651469802,
+      "negative price": 0.012790641931236489,
+      "normal": 0.0007731563424994902,
+      "price spike": 0.031829952321263164,
+      "wrong estimate": 0.0007731563424994902
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0009079290413695734,
+      "long deviation, wrong estimate": 0.0009079290413695734,
+      "negative price": 0.012718019206014656,
+      "normal": 0.0006940242829642344,
+      "price spike": 0.03282220704587034,
+      "trips": 0,
+      "wrong estimate": 0.0006940242829642344
+     },
+     "override": {
+      "long deviation": 0.0009079290413695734,
+      "long deviation, wrong estimate": 0.0009079290413695734,
+      "negative price": 0.012718019206014656,
+      "normal": 0.0006940242829642344,
+      "price spike": 0.03282220704587034,
+      "trips": 0,
+      "wrong estimate": 0.0006940242829642344
+     },
+     "pi": {
+      "long deviation": 0.0008929239166428698,
+      "long deviation, wrong estimate": 0.0008929239166428698,
+      "negative price": 0.012871347875706573,
+      "normal": 0.0006743842241128591,
+      "price spike": 0.03230840680911066,
+      "trips": 0,
+      "wrong estimate": 0.0006743842241128591
+     },
+     "published": {
+      "long deviation": 0.000987124779897595,
+      "long deviation, wrong estimate": 0.000987124779897595,
+      "negative price": 0.01233805164019015,
+      "normal": 0.0008162697434571287,
+      "price spike": 0.031918769155020586,
+      "trips": 0,
+      "wrong estimate": 0.0008162697434571287
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.8808135979013241,
+     "signal_interval": 3.1957947233934307,
+     "soc_error_std": 0.29832218211605965
+    }
+   },
+   {
+    "broken": {},
+    "draw": 4,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0009356602927388864,
+      "long deviation, wrong estimate": 0.0009356602927388864,
+      "negative price": 0.012700046277376559,
+      "normal": 0.0007450050581208482,
+      "price spike": 0.03361148607461343,
+      "wrong estimate": 0.0007450050581208482
+     },
+     "constant 0.0": {
+      "long deviation": 0.0014933482817808003,
+      "long deviation, wrong estimate": 0.0014933482817808003,
+      "negative price": 0.009713823397972115,
+      "normal": 0.00137516574001191,
+      "price spike": 0.04500516027878428,
+      "wrong estimate": 0.00137516574001191
+     },
+     "constant 0.5": {
+      "long deviation": 0.0004405588537451482,
+      "long deviation, wrong estimate": 0.0004405588537451482,
+      "negative price": 0.011971311371110415,
+      "normal": 0.0003768789487829199,
+      "price spike": 0.0343570752898288,
+      "wrong estimate": 0.0003768789487829199
+     },
+     "constant 1.0": {
+      "long deviation": 0.0009754376860313031,
+      "long deviation, wrong estimate": 0.0009754376860313031,
+      "negative price": 0.015772528248940106,
+      "normal": 0.0009051888303744961,
+      "price spike": 0.02516965799915961,
+      "wrong estimate": 0.0009051888303744961
+     },
+     "echo": {
+      "long deviation": 0.0007359335146822311,
+      "long deviation, wrong estimate": 0.0007359335146822311,
+      "negative price": 0.011037323712837707,
+      "normal": 0.0005112616269012922,
+      "price spike": 0.03753546093934705,
+      "wrong estimate": 0.0005112616269012922
+     },
+     "hold reset": {
+      "long deviation": 0.0004405588537451482,
+      "long deviation, wrong estimate": 0.0004405588537451482,
+      "negative price": 0.011971311371110415,
+      "normal": 0.0003768789487829199,
+      "price spike": 0.0343570752898288,
+      "wrong estimate": 0.0003768789487829199
+     },
+     "table": {
+      "long deviation": 0.000503359040406028,
+      "long deviation, wrong estimate": 0.000503359040406028,
+      "negative price": 0.011422902409348814,
+      "normal": 0.00047284457426963894,
+      "price spike": 0.0365532383370969,
+      "wrong estimate": 0.00047284457426963894
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0003641807565282167,
+      "long deviation, wrong estimate": 0.0003641807565282167,
+      "negative price": 0.012223886456359113,
+      "normal": 0.00035102280825698,
+      "price spike": 0.032821907859655046,
+      "trips": 0,
+      "wrong estimate": 0.00035102280825698
+     },
+     "override": {
+      "long deviation": 0.0003641807565282167,
+      "long deviation, wrong estimate": 0.0003641807565282167,
+      "negative price": 0.012223886456359113,
+      "normal": 0.00035102280825698,
+      "price spike": 0.032821907859655046,
+      "trips": 0,
+      "wrong estimate": 0.00035102280825698
+     },
+     "pi": {
+      "long deviation": 0.0003555269572101239,
+      "long deviation, wrong estimate": 0.0003555269572101239,
+      "negative price": 0.012306958700450173,
+      "normal": 0.00034317292858988916,
+      "price spike": 0.03251613326192358,
+      "trips": 0,
+      "wrong estimate": 0.00034317292858988916
+     },
+     "published": {
+      "long deviation": 0.00039281094402382157,
+      "long deviation, wrong estimate": 0.00039281094402382157,
+      "negative price": 0.012306895550380646,
+      "normal": 0.0003719138158657545,
+      "price spike": 0.03225460342932029,
+      "trips": 0,
+      "wrong estimate": 0.0003719138158657545
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.9231804348073762,
+     "signal_interval": 3.6676095383734886,
+     "soc_error_std": 0.16910219314636338
+    }
+   },
+   {
+    "broken": {},
+    "draw": 5,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0013159696486388127,
+      "long deviation, wrong estimate": 0.0013159696486388127,
+      "negative price": 0.01238866340226295,
+      "normal": 0.0010525547985508273,
+      "price spike": 0.03523464345267614,
+      "wrong estimate": 0.0010525547985508273
+     },
+     "constant 0.0": {
+      "long deviation": 0.0018986345041523429,
+      "long deviation, wrong estimate": 0.0018986345041523429,
+      "negative price": 0.010467332650222025,
+      "normal": 0.0019185897915198148,
+      "price spike": 0.04276358524124281,
+      "wrong estimate": 0.0019185897915198148
+     },
+     "constant 0.5": {
+      "long deviation": 0.0007983952521185674,
+      "long deviation, wrong estimate": 0.0007983952521185674,
+      "negative price": 0.01225499707394443,
+      "normal": 0.0006615769814774492,
+      "price spike": 0.034657230990704224,
+      "wrong estimate": 0.0006615769814774492
+     },
+     "constant 1.0": {
+      "long deviation": 0.0012653066367234326,
+      "long deviation, wrong estimate": 0.0012653066367234326,
+      "negative price": 0.015860165410018806,
+      "normal": 0.0011874367027199717,
+      "price spike": 0.028533224890132138,
+      "wrong estimate": 0.0011874367027199717
+     },
+     "echo": {
+      "long deviation": 0.0010944748284932634,
+      "long deviation, wrong estimate": 0.0010944748284932634,
+      "negative price": 0.01154658418397331,
+      "normal": 0.0009173917624571004,
+      "price spike": 0.03783512178486856,
+      "wrong estimate": 0.0009173917624571004
+     },
+     "hold reset": {
+      "long deviation": 0.0007983952521185674,
+      "long deviation, wrong estimate": 0.0007983952521185674,
+      "negative price": 0.01225499707394443,
+      "normal": 0.0006615769814774492,
+      "price spike": 0.034657230990704224,
+      "wrong estimate": 0.0006615769814774492
+     },
+     "table": {
+      "long deviation": 0.000982683467205111,
+      "long deviation, wrong estimate": 0.000982683467205111,
+      "negative price": 0.011859325425526635,
+      "normal": 0.0008347423436834352,
+      "price spike": 0.036869510025142785,
+      "wrong estimate": 0.0008347423436834352
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0007530773957776443,
+      "long deviation, wrong estimate": 0.0007530773957776443,
+      "negative price": 0.012289169608386906,
+      "normal": 0.0006535410145274599,
+      "price spike": 0.0334468789394727,
+      "trips": 0,
+      "wrong estimate": 0.0006535410145274599
+     },
+     "override": {
+      "long deviation": 0.0007530773957776443,
+      "long deviation, wrong estimate": 0.0007530773957776443,
+      "negative price": 0.012289169608386906,
+      "normal": 0.0006535410145274599,
+      "price spike": 0.0334468789394727,
+      "trips": 0,
+      "wrong estimate": 0.0006535410145274599
+     },
+     "pi": {
+      "long deviation": 0.0007256616414642952,
+      "long deviation, wrong estimate": 0.0007256616414642952,
+      "negative price": 0.012431706578985305,
+      "normal": 0.0006287165480953484,
+      "price spike": 0.03287117871337671,
+      "trips": 0,
+      "wrong estimate": 0.0006287165480953484
+     },
+     "published": {
+      "long deviation": 0.0008563469401193421,
+      "long deviation, wrong estimate": 0.0008563469401193421,
+      "negative price": 0.01241925081641199,
+      "normal": 0.0006874159555173125,
+      "price spike": 0.032612210811457716,
+      "trips": 0,
+      "wrong estimate": 0.0006874159555173125
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.8667452027522725,
+     "signal_interval": 3.7750925089978797,
+     "soc_error_std": 0.2490643198596123
+    }
+   },
+   {
+    "broken": {},
+    "draw": 6,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0005288846471342159,
+      "long deviation, wrong estimate": 0.0005288846471342159,
+      "negative price": 0.011270964633745904,
+      "normal": 0.00040413278699421895,
+      "price spike": 0.037144170740291006,
+      "wrong estimate": 0.00040413278699421895
+     },
+     "constant 0.0": {
+      "long deviation": 0.0012932437257865636,
+      "long deviation, wrong estimate": 0.0012932437257865636,
+      "negative price": 0.008949157868108421,
+      "normal": 0.0012878963516330198,
+      "price spike": 0.04565728342479251,
+      "wrong estimate": 0.0012878963516330198
+     },
+     "constant 0.5": {
+      "long deviation": 0.0003469586462712843,
+      "long deviation, wrong estimate": 0.0003469586462712843,
+      "negative price": 0.011504544118463828,
+      "normal": 0.0003174232467611383,
+      "price spike": 0.03504036265787011,
+      "wrong estimate": 0.0003174232467611383
+     },
+     "constant 1.0": {
+      "long deviation": 0.0009395419383167476,
+      "long deviation, wrong estimate": 0.0009395419383167476,
+      "negative price": 0.01574055981943418,
+      "normal": 0.0007759388748589638,
+      "price spike": 0.026060654359563513,
+      "wrong estimate": 0.0007759388748589638
+     },
+     "echo": {
+      "long deviation": 0.0005096519160272632,
+      "long deviation, wrong estimate": 0.0005096519160272632,
+      "negative price": 0.01139048651808461,
+      "normal": 0.0003517790835839839,
+      "price spike": 0.03599168622910647,
+      "wrong estimate": 0.0003517790835839839
+     },
+     "hold reset": {
+      "long deviation": 0.0003469586462712843,
+      "long deviation, wrong estimate": 0.0003469586462712843,
+      "negative price": 0.011504544118463828,
+      "normal": 0.0003174232467611383,
+      "price spike": 0.03504036265787011,
+      "wrong estimate": 0.0003174232467611383
+     },
+     "table": {
+      "long deviation": 0.00046490161589104334,
+      "long deviation, wrong estimate": 0.00046490161589104334,
+      "negative price": 0.011556411988417805,
+      "normal": 0.00033492242345388006,
+      "price spike": 0.03613614665563439,
+      "wrong estimate": 0.00033492242345388006
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.00033719905700758837,
+      "long deviation, wrong estimate": 0.00033719905700758837,
+      "negative price": 0.01161983140685707,
+      "normal": 0.0002837800766313542,
+      "price spike": 0.03261916959467352,
+      "trips": 0,
+      "wrong estimate": 0.0002837800766313542
+     },
+     "override": {
+      "long deviation": 0.00033719905700758837,
+      "long deviation, wrong estimate": 0.00033719905700758837,
+      "negative price": 0.01161983140685707,
+      "normal": 0.0002837800766313542,
+      "price spike": 0.03261916959467352,
+      "trips": 0,
+      "wrong estimate": 0.0002837800766313542
+     },
+     "pi": {
+      "long deviation": 0.0003300253580837935,
+      "long deviation, wrong estimate": 0.0003300253580837935,
+      "negative price": 0.011713500827828535,
+      "normal": 0.00027744364048366973,
+      "price spike": 0.032335468098465735,
+      "trips": 0,
+      "wrong estimate": 0.00027744364048366973
+     },
+     "published": {
+      "long deviation": 0.0003782970394392339,
+      "long deviation, wrong estimate": 0.0003782970394392339,
+      "negative price": 0.011319316467294217,
+      "normal": 0.00031263693701547403,
+      "price spike": 0.032955613932685535,
+      "trips": 0,
+      "wrong estimate": 0.00031263693701547403
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.9281344554752355,
+     "signal_interval": 2.0462964125638017,
+     "soc_error_std": 0.0933648294368374
+    }
+   },
+   {
+    "broken": {},
+    "draw": 7,
+    "holds": false,
+    "kept": "pi",
+    "nulls": {
+     "I-only": {
+      "long deviation": 0.0009733459797119615,
+      "long deviation, wrong estimate": 0.0009733459797119615,
+      "negative price": 0.01139904773077266,
+      "normal": 0.0007120716559157773,
+      "price spike": 0.035200336891777824,
+      "wrong estimate": 0.0007120716559157773
+     },
+     "constant 0.0": {
+      "long deviation": 0.0018119758831013192,
+      "long deviation, wrong estimate": 0.0018119758831013192,
+      "negative price": 0.010270197917688878,
+      "normal": 0.0017040962631932987,
+      "price spike": 0.04409020520135444,
+      "wrong estimate": 0.0017040962631932987
+     },
+     "constant 0.5": {
+      "long deviation": 0.0006136942645930847,
+      "long deviation, wrong estimate": 0.0006136942645930847,
+      "negative price": 0.01258660821294269,
+      "normal": 0.0005520984381130075,
+      "price spike": 0.033294939147424533,
+      "wrong estimate": 0.0005520984381130075
+     },
+     "constant 1.0": {
+      "long deviation": 0.0009721589844609152,
+      "long deviation, wrong estimate": 0.0009721589844609152,
+      "negative price": 0.016257806837631533,
+      "normal": 0.0009275307713447311,
+      "price spike": 0.024016808214448918,
+      "wrong estimate": 0.0009275307713447311
+     },
+     "echo": {
+      "long deviation": 0.000711934006591169,
+      "long deviation, wrong estimate": 0.000711934006591169,
+      "negative price": 0.013016018639746975,
+      "normal": 0.0007275785855944932,
+      "price spike": 0.03164229809183364,
+      "wrong estimate": 0.0007275785855944932
+     },
+     "hold reset": {
+      "long deviation": 0.0006136942645930847,
+      "long deviation, wrong estimate": 0.0006136942645930847,
+      "negative price": 0.01258660821294269,
+      "normal": 0.0005520984381130075,
+      "price spike": 0.033294939147424533,
+      "wrong estimate": 0.0005520984381130075
+     },
+     "table": {
+      "long deviation": 0.0007083180643077736,
+      "long deviation, wrong estimate": 0.0007083180643077736,
+      "negative price": 0.012674734759338536,
+      "normal": 0.0006069139161150306,
+      "price spike": 0.0318039268761639,
+      "wrong estimate": 0.0006069139161150306
+     }
+    },
+    "rungs": {
+     "feedforward": {
+      "long deviation": 0.0005930198692814444,
+      "long deviation, wrong estimate": 0.0005930198692814444,
+      "negative price": 0.012961110919998457,
+      "normal": 0.0004877017164531735,
+      "price spike": 0.03231772904163212,
+      "trips": 0,
+      "wrong estimate": 0.0004877017164531735
+     },
+     "override": {
+      "long deviation": 0.0005930198692814444,
+      "long deviation, wrong estimate": 0.0005930198692814444,
+      "negative price": 0.012961110919998457,
+      "normal": 0.0004877017164531735,
+      "price spike": 0.03231772904163212,
+      "trips": 0,
+      "wrong estimate": 0.0004877017164531735
+     },
+     "pi": {
+      "long deviation": 0.000574029935981691,
+      "long deviation, wrong estimate": 0.000574029935981691,
+      "negative price": 0.013109055471035021,
+      "normal": 0.00047062529642185897,
+      "price spike": 0.03183477340151678,
+      "trips": 0,
+      "wrong estimate": 0.00047062529642185897
+     },
+     "published": {
+      "long deviation": 0.0006361608298259217,
+      "long deviation, wrong estimate": 0.0006361608298259217,
+      "negative price": 0.012189599855095538,
+      "normal": 0.0005482674144085061,
+      "price spike": 0.03070739477021029,
+      "trips": 0,
+      "wrong estimate": 0.0005482674144085061
+     }
+    },
+    "values": {
+     "round_trip_efficiency": 0.8887151382120414,
+     "signal_interval": 2.7319735330794686,
+     "soc_error_std": 0.10893105559341457
+    }
+   }
+  ]
+ },
+ "mpc": {
+  "fingerprint": "04f8c2baedb1776e",
+  "generated": "2026-11-13T12:48:40+00:00",
+  "line": {
+   "J": 0.0013508754654952403,
+   "converged": null,
+   "scenarios": {
+    "long deviation": {
+     "costs": [
+      0.00017039579449808865,
+      0.0006935684761126224,
+      0.0002468713762260805,
+      0.000772545945748296,
+      0.00023903370743604392,
+      0.0005763128151699341,
+      0.0002608351917691095,
+      0.00021467087349269005,
+      0.00025351905314994696,
+      0.0003543859138439388
+     ],
+     "mean": 0.0003782139147446751,
+     "trips": 0
+    },
+    "long deviation, wrong estimate": {
+     "costs": [
+      0.00017039579449808865,
+      0.0006935684761126224,
+      0.0002468713762260805,
+      0.000772545945748296,
+      0.00023903370743604392,
+      0.0005763128151699341,
+      0.0002608351917691095,
+      0.0002405519216325658,
+      0.00025351905314994696,
+      0.0003543859138439388
+     ],
+     "mean": 0.0003808020195586627,
+     "trips": 0
+    },
+    "negative price": {
+     "costs": [
+      0.008262555015296304,
+      0.00796802766395303,
+      0.008091402699540444,
+      0.008319222913933205,
+      0.008598971112579994,
+      0.008396741502744123,
+      0.00931774394689523,
+      0.00914880290734441,
+      0.00883095974438452,
+      0.0072890236139301935
+     ],
+     "mean": 0.008422345112060145,
+     "trips": 0
+    },
+    "normal": {
+     "costs": [
+      0.00015419893897715339,
+      0.0004570446149918044,
+      0.00023338502739512595,
+      0.00034655957109115893,
+      0.00023622391105040878,
+      0.0003729415047046511,
+      0.00025968857140831855,
+      0.00030410316442443925,
+      0.00024641007381219596,
+      0.00031622467037719797
+     ],
+     "mean": 0.0002926780048232454,
+     "trips": 0
+    },
+    "price spike": {
+     "costs": [
+      0.029510672427044353,
+      0.03198420293867869,
+      0.03206959209163368,
+      0.012689916173306148,
+      0.02254087128045561,
+      0.028854067586333833,
+      0.015193941415895746,
+      0.020556639429811417,
+      0.021336011036249623,
+      0.03703210839038836
+     ],
+     "mean": 0.02517680227697975,
+     "trips": 0
+    },
+    "wrong estimate": {
+     "costs": [
+      0.00015419893897715339,
+      0.0004570446149918044,
+      0.000233187912947008,
+      0.00034655957109115893,
+      0.00023622391105040878,
+      0.0003729415047046511,
+      0.00025968857140831855,
+      0.0003158655248102319,
+      0.00024641007381219596,
+      0.00031622467037719797
+     ],
+     "mean": 0.0002938345294170129,
+     "trips": 0
+    }
+   },
+   "trips": 0
+  }
+ },
+ "nulls": {
+  "broken": {},
+  "fingerprint": "c507714866252ad6",
+  "generated": "2026-11-13T11:01:30+00:00",
+  "lines": {
+   "I-only": {
+    "J": 0.002117411907800006,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0002596673272061914,
+       0.0008495331029247586,
+       0.000357017162636729,
+       0.00048139607730216406,
+       0.0007652651553871219,
+       0.0011124905699241765,
+       0.00135603179669808,
+       0.000680717240849494,
+       0.0003889920764945244,
+       0.0005111984349693562
+      ],
+      "mean": 0.0006762308944392596,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0002596673272061914,
+       0.0008495330996162191,
+       0.000357017162636729,
+       0.00048139607730216406,
+       0.0007652651553871219,
+       0.0011124905699241765,
+       0.00135603179669808,
+       0.000680717240849494,
+       0.0003889920764945244,
+       0.0005111984349693562
+      ],
+      "mean": 0.0006762308941084057,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.011481515732134682,
+       0.012141702162572782,
+       0.010119605634584746,
+       0.011163649952048233,
+       0.010261842685050343,
+       0.010620079803382119,
+       0.012469987188074785,
+       0.010807194421299668,
+       0.012645278580938077,
+       0.01141841220896588
+      ],
+      "mean": 0.011312926836905133,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.0003095363574513653,
+       0.00043582204648664124,
+       0.00039616096763548433,
+       0.0012723694365732563,
+       0.0004084769279782918,
+       0.0006383440578734553,
+       0.0006870069067926149,
+       0.0016351013043210678,
+       0.0004344975533059604,
+       0.00045970858480300395
+      ],
+      "mean": 0.0006677024143221142,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.03806261057376271,
+       0.03950398925935547,
+       0.04823978119001075,
+       0.018757021551133034,
+       0.03488693378156601,
+       0.04377688633376129,
+       0.022643008325284705,
+       0.0362656838118037,
+       0.02888052607008062,
+       0.04517972740227145
+      ],
+      "mean": 0.03561961682990297,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.0003095363574513653,
+       0.00043582204648664124,
+       0.00039616096763548433,
+       0.0012723694365732563,
+       0.0004084769279782918,
+       0.0006383440578734553,
+       0.0006870069067926149,
+       0.0016351013043210678,
+       0.0004344975533059604,
+       0.00045970858480300395
+      ],
+      "mean": 0.0006677024143221142,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "constant 0.0": {
+    "J": 0.0029504114356389494,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0016607251601889273,
+       0.0008650478032699994,
+       0.0008587975487131713,
+       0.001317279284347374,
+       0.0017475277929476206,
+       0.0014669926961816645,
+       0.001527107212778039,
+       0.0012686803471417423,
+       0.0012937199349845388,
+       0.0015226142316474443
+      ],
+      "mean": 0.001352849201220052,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0014839670513841928,
+       0.0008650478032699994,
+       0.0008996032303991066,
+       0.001317279284347374,
+       0.001727470583536509,
+       0.0014669926961816645,
+       0.001527107212778039,
+       0.0012686803471417423,
+       0.0012937199349845388,
+       0.0015226142316474443
+      ],
+      "mean": 0.0013372482375670612,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.008909979161151296,
+       0.008904890629075284,
+       0.008964486152001242,
+       0.008357043364671312,
+       0.009717205503714613,
+       0.009080418779236024,
+       0.01025482973757495,
+       0.01029945983851643,
+       0.00976225892850737,
+       0.008179285938507199
+      ],
+      "mean": 0.009242985803295573,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.0016781059465400317,
+       0.0013624608933597976,
+       0.001316057473105544,
+       0.0009988072513700294,
+       0.0015377938670449174,
+       0.001189323698800196,
+       0.001362926443774225,
+       0.001800414735234416,
+       0.0013624199912225324,
+       0.0014273705922489713
+      ],
+      "mean": 0.0014035680892700662,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.052058926186593586,
+       0.055930507517497806,
+       0.05729581711557336,
+       0.02111210857402,
+       0.04003099773221932,
+       0.051442375520250105,
+       0.02788671189253979,
+       0.03795642075558404,
+       0.03876980777247054,
+       0.06401583044277996
+      ],
+      "mean": 0.04464995035095285,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.001414164406626178,
+       0.0013624608933597976,
+       0.0011821319069913608,
+       0.0009988072513700294,
+       0.0015377938670449174,
+       0.001189323698800196,
+       0.001362926443774225,
+       0.001800414735234416,
+       0.0013624199912225324,
+       0.0014273705922489713
+      ],
+      "mean": 0.0013637813786672624,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "constant 0.5": {
+    "J": 0.001861904081662845,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0002759142747284962,
+       0.00031738697246485654,
+       0.00024928612921080664,
+       0.000441482594280392,
+       0.000698972007870502,
+       0.0005891273615564975,
+       0.00044585552471793647,
+       0.0002620229380888814,
+       0.0003305768683302072,
+       0.00047842553020032797
+      ],
+      "mean": 0.0004089050201448904,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0002759142747284962,
+       0.00031738697246485654,
+       0.00024928612921080664,
+       0.000441482594280392,
+       0.000698972007870502,
+       0.0005891273615564975,
+       0.00044585552471793647,
+       0.0002620229380888814,
+       0.0003305768683302072,
+       0.00047842553020032797
+      ],
+      "mean": 0.0004089050201448904,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.010810035358035045,
+       0.011048574283474303,
+       0.01107245645437464,
+       0.011540746627357648,
+       0.011984427346696466,
+       0.01151892288764583,
+       0.012888457530742027,
+       0.012997468061970423,
+       0.012233809435191588,
+       0.010234355980105326
+      ],
+      "mean": 0.01163292539655933,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.00029935008060541474,
+       0.00033470870016771056,
+       0.00029183713292406805,
+       0.00036250901825334204,
+       0.0003437006625794739,
+       0.00039093467088838614,
+       0.0003280482117039914,
+       0.0010053067565774882,
+       0.00036142078715849934,
+       0.00041284195945586274
+      ],
+      "mean": 0.0004130657980314237,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.04017182246580817,
+       0.043095992100025085,
+       0.043990274497807354,
+       0.016511630444459167,
+       0.030535420061092833,
+       0.0396287471443586,
+       0.021055743354470916,
+       0.029244371323864576,
+       0.029603172619485526,
+       0.04996310281610141
+      ],
+      "mean": 0.034380027682747366,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.00029935008060541474,
+       0.00033470870016771056,
+       0.00029183713292406805,
+       0.00036250901825334204,
+       0.0003437006625794739,
+       0.00039093467088838614,
+       0.0003280482117039914,
+       0.0010053067565774882,
+       0.00036142078715849934,
+       0.00041284195945586274
+      ],
+      "mean": 0.0004130657980314237,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "constant 1.0": {
+    "J": 0.002171661848194454,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0005359666653453049,
+       0.000984339812754903,
+       0.001165138504390694,
+       0.0010525314544574844,
+       0.00023559286464908444,
+       0.0013572783652328756,
+       0.0006332575275013023,
+       0.0009184785098714343,
+       0.00099696023229296,
+       0.0006431372810756879
+      ],
+      "mean": 0.000852268121757173,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0005359666653453049,
+       0.001192715813079788,
+       0.001165138504390694,
+       0.0010525314544574844,
+       0.00023559286464908444,
+       0.0013572783652328756,
+       0.0006332575275013023,
+       0.0009184785098714343,
+       0.00099696023229296,
+       0.0006431372810756879
+      ],
+      "mean": 0.0008731057217896616,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.01432999681594475,
+       0.014871480699035395,
+       0.014705085417337855,
+       0.01622528711923899,
+       0.015885945950102464,
+       0.015639089529910954,
+       0.017022936963092452,
+       0.01589422147165207,
+       0.015933724928523806,
+       0.013713346216919492
+      ],
+      "mean": 0.015422111511175823,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.0005404994647406067,
+       0.0009861793141977533,
+       0.0007922754223996186,
+       0.0012270480057363325,
+       0.0007839042128129689,
+       0.001274208134453256,
+       0.0007940216606228824,
+       0.0004089439122231584,
+       0.0005887865769002638,
+       0.000822233400147208
+      ],
+      "mean": 0.0008218100104234049,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.029904623989233166,
+       0.031940699427674996,
+       0.032209390394889424,
+       0.01341198949810929,
+       0.022674139106411372,
+       0.029496781189916967,
+       0.015725626549946477,
+       0.020731067116240086,
+       0.021664902485809476,
+       0.0373342953730238
+      ],
+      "mean": 0.025509351513125507,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.0005404994647406067,
+       0.0009861793141977533,
+       0.0007922754223996186,
+       0.0012270480057363325,
+       0.0007839042128129689,
+       0.001274208134453256,
+       0.0007940216606228824,
+       0.0006173199125480434,
+       0.0005887865769002638,
+       0.000822233400147208
+      ],
+      "mean": 0.0008426476104558933,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "echo": {
+    "J": 0.0019447753700508289,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0002816658410446726,
+       0.0003298750744397299,
+       0.0006134748580442246,
+       0.0005480954433011536,
+       0.0007064234241716575,
+       0.0006237682213037639,
+       0.0007640991260959614,
+       0.00025265077098080805,
+       0.00031031021301570957,
+       0.0005880477056355894
+      ],
+      "mean": 0.000501841067803327,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0002816658410446726,
+       0.0003298750744397299,
+       0.0006134748580442246,
+       0.0005480954433011536,
+       0.0007064234241716575,
+       0.0006237682213037639,
+       0.0007640991260959614,
+       0.00025265077098080805,
+       0.00031031021301570957,
+       0.0005880477056355894
+      ],
+      "mean": 0.000501841067803327,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.011035144205392939,
+       0.010765256709644733,
+       0.010735486972477675,
+       0.010953600969691139,
+       0.012427669654979037,
+       0.011853678064109268,
+       0.012525000652803498,
+       0.01182542906015138,
+       0.012542983075453155,
+       0.00966879331297363
+      ],
+      "mean": 0.011433304267767645,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.00030170427260422193,
+       0.0003586109075824753,
+       0.00029301905678519487,
+       0.0004365724664038111,
+       0.00032619425115645406,
+       0.0004251314250889999,
+       0.00043419115434683144,
+       0.0015051783834858106,
+       0.0003498805284861501,
+       0.0004689291446798714
+      ],
+      "mean": 0.000489941159061982,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.03946026461093529,
+       0.044263625772533274,
+       0.04531734835927765,
+       0.017271859035162773,
+       0.029412871611683298,
+       0.038640135045317436,
+       0.02190383486101836,
+       0.03353352967832506,
+       0.028837479640372077,
+       0.05265966384475138
+      ],
+      "mean": 0.03513006124593766,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.00030170427260422193,
+       0.0003586109075824753,
+       0.00029301905678519487,
+       0.0004365724664038111,
+       0.00032619425115645406,
+       0.0004251314250889999,
+       0.00043419115434683144,
+       0.0015051783834858106,
+       0.0003498805284861501,
+       0.0004689291446798714
+      ],
+      "mean": 0.000489941159061982,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "hold reset": {
+    "J": 0.001861904081662845,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.0002759142747284962,
+       0.00031738697246485654,
+       0.00024928612921080664,
+       0.000441482594280392,
+       0.000698972007870502,
+       0.0005891273615564975,
+       0.00044585552471793647,
+       0.0002620229380888814,
+       0.0003305768683302072,
+       0.00047842553020032797
+      ],
+      "mean": 0.0004089050201448904,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.0002759142747284962,
+       0.00031738697246485654,
+       0.00024928612921080664,
+       0.000441482594280392,
+       0.000698972007870502,
+       0.0005891273615564975,
+       0.00044585552471793647,
+       0.0002620229380888814,
+       0.0003305768683302072,
+       0.00047842553020032797
+      ],
+      "mean": 0.0004089050201448904,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.010810035358035045,
+       0.011048574283474303,
+       0.01107245645437464,
+       0.011540746627357648,
+       0.011984427346696466,
+       0.01151892288764583,
+       0.012888457530742027,
+       0.012997468061970423,
+       0.012233809435191588,
+       0.010234355980105326
+      ],
+      "mean": 0.01163292539655933,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.00029935008060541474,
+       0.00033470870016771056,
+       0.00029183713292406805,
+       0.00036250901825334204,
+       0.0003437006625794739,
+       0.00039093467088838614,
+       0.0003280482117039914,
+       0.0010053067565774882,
+       0.00036142078715849934,
+       0.00041284195945586274
+      ],
+      "mean": 0.0004130657980314237,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.04017182246580817,
+       0.043095992100025085,
+       0.043990274497807354,
+       0.016511630444459167,
+       0.030535420061092833,
+       0.0396287471443586,
+       0.021055743354470916,
+       0.029244371323864576,
+       0.029603172619485526,
+       0.04996310281610141
+      ],
+      "mean": 0.034380027682747366,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.00029935008060541474,
+       0.00033470870016771056,
+       0.00029183713292406805,
+       0.00036250901825334204,
+       0.0003437006625794739,
+       0.00039093467088838614,
+       0.0003280482117039914,
+       0.0010053067565774882,
+       0.00036142078715849934,
+       0.00041284195945586274
+      ],
+      "mean": 0.0004130657980314237,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   },
+   "table": {
+    "J": 0.001924003877407513,
+    "converged": null,
+    "scenarios": {
+     "long deviation": {
+      "costs": [
+       0.00027057210950998665,
+       0.00031428846584795957,
+       0.000622243601484903,
+       0.0004917031222683872,
+       0.0006974480927370132,
+       0.0006029740780348224,
+       0.0007362523556875426,
+       0.00025784783844103113,
+       0.0003126999420704064,
+       0.0005443159133358578
+      ],
+      "mean": 0.00048503455194179096,
+      "trips": 0
+     },
+     "long deviation, wrong estimate": {
+      "costs": [
+       0.00027057210950998665,
+       0.00031428846584795957,
+       0.000622243601484903,
+       0.0004917031222683872,
+       0.0006974480927370132,
+       0.0006029740780348224,
+       0.0007362523556875426,
+       0.00025784783844103113,
+       0.0003126999420704064,
+       0.0005443159133358578
+      ],
+      "mean": 0.00048503455194179096,
+      "trips": 0
+     },
+     "negative price": {
+      "costs": [
+       0.011050120256947318,
+       0.010987274874463214,
+       0.010858792504651136,
+       0.011465474556979218,
+       0.012226894704618808,
+       0.011682748266733734,
+       0.012925961432165395,
+       0.011913699126103107,
+       0.012666335361631467,
+       0.009947800486713447
+      ],
+      "mean": 0.011572510157100684,
+      "trips": 0
+     },
+     "normal": {
+      "costs": [
+       0.00029204987334126726,
+       0.0003349798568220545,
+       0.0002808653727999576,
+       0.0003948348348208351,
+       0.00032649534109467025,
+       0.0004018823161889758,
+       0.0004083916579367002,
+       0.001491701544156157,
+       0.0003509045521705032,
+       0.00043716357836365836
+      ],
+      "mean": 0.00047192689276947793,
+      "trips": 0
+     },
+     "price spike": {
+      "costs": [
+       0.03937167152462586,
+       0.04332548078438883,
+       0.04477405884597396,
+       0.016655615242925383,
+       0.02989542577290908,
+       0.03911944768358432,
+       0.02120377152316296,
+       0.03328944945291331,
+       0.028550851033725757,
+       0.05130788310012119
+      ],
+      "mean": 0.034749365496433066,
+      "trips": 0
+     },
+     "wrong estimate": {
+      "costs": [
+       0.00029204987334126726,
+       0.0003349798568220545,
+       0.0002808653727999576,
+       0.0003948348348208351,
+       0.00032649534109467025,
+       0.0004018823161889758,
+       0.0004083916579367002,
+       0.001491701544156157,
+       0.0003509045521705032,
+       0.00043716357836365836
+      ],
+      "mean": 0.00047192689276947793,
+      "trips": 0
+     }
+    },
+    "trips": 0
+   }
+  }
+ },
+ "reference": {
+  "fingerprint": "15cb240c6c859aaa",
+  "generated": "2026-11-13T10:47:39+00:00",
+  "kept": "pi",
+  "kind": "ladder",
+  "left_out": {
+   "cascade": "no faster reading of the charge: the meter sees a baseline only when its period starts, as the charge does",
+   "decoupler": "one loop",
+   "points": "the charge's slope per baseline is the capacity's at any charge, price or signal, and its delay is the market's gate closure"
+  },
+  "line": {
+   "J": 0.0017586008001416974,
+   "converged": null,
+   "scenarios": {
+    "long deviation": {
+     "costs": [
+      0.00019706813010817077,
+      0.0003360558993712222,
+      0.0002786614940642905,
+      0.0004719979258539158,
+      0.0004138480081794703,
+      0.0006434851451721952,
+      0.0004010379006774656,
+      0.00023825905121156726,
+      0.0003036315355801299,
+      0.0004189781550395525
+     ],
+     "mean": 0.000370302324525798,
+     "trips": 0
+    },
+    "long deviation, wrong estimate": {
+     "costs": [
+      0.00019706813010817077,
+      0.0003360570717626782,
+      0.0002786615602698614,
+      0.0004719979258539158,
+      0.0004138480081794703,
+      0.0006434851451721952,
+      0.00040103821732403034,
+      0.00023825931241209416,
+      0.0003036315523084138,
+      0.0004189781550395525
+     ],
+     "mean": 0.0003703025078430382,
+     "trips": 0
+    },
+    "negative price": {
+     "costs": [
+      0.011878937506968603,
+      0.010992367840431476,
+      0.011571459734949743,
+      0.010777893812891426,
+      0.012798515198245444,
+      0.01101725432789238,
+      0.01325720440137329,
+      0.0139815564044489,
+      0.012661333606143228,
+      0.010487098715929821
+     ],
+     "mean": 0.011942362154927432,
+     "trips": 0
+    },
+    "normal": {
+     "costs": [
+      0.00021121914902313719,
+      0.000337952853834634,
+      0.0002637811020022904,
+      0.0004249187866934376,
+      0.0002882041939272639,
+      0.00043679660695935933,
+      0.00029345902308545785,
+      0.0002757543234187675,
+      0.00032544513170006914,
+      0.0003757115685047986
+     ],
+     "mean": 0.00032332427391492156,
+     "trips": 0
+    },
+    "price spike": {
+     "costs": [
+      0.03637548706450089,
+      0.04332056143301172,
+      0.041895618544459695,
+      0.017430450733910544,
+      0.028394346100961382,
+      0.041537870849071644,
+      0.020383899601294605,
+      0.024630953448581055,
+      0.02847728581088021,
+      0.048694729212143247
+     ],
+     "mean": 0.0331141202798815,
+     "trips": 0
+    },
+    "wrong estimate": {
+     "costs": [
+      0.00021121914902313719,
+      0.00033795439609126353,
+      0.0002637811135402932,
+      0.0004249187866934376,
+      0.0002882041939272639,
+      0.00043679660695935933,
+      0.0002934592804339076,
+      0.00027575422276230455,
+      0.00032544515031060446,
+      0.0003757114389283621
+     ],
+     "mean": 0.0003233244338669933,
+     "trips": 0
+    }
+   },
+   "trips": 0
+  },
+  "rungs": {
+   "feedforward": {
+    "J": 0.001770038139730077,
+    "trips": 0
+   },
+   "override": {
+    "J": 0.001770038139730077,
+    "trips": 0
+   },
+   "pi": {
+    "J": 0.0017586008001416974,
+    "trips": 0
+   },
+   "published": {
+    "J": 0.0018078289104504091,
+    "trips": 0
+   }
+  }
+ },
+ "task": "battery",
+ "version": {
+  "env": "battery-v6",
+  "stamp": "625aacb301b65651"
+ },
+ "weights": {
+  "long deviation": 0.009170105456212746,
+  "long deviation, wrong estimate": 0.0004585052728106373,
+  "negative price": 0.04585052728106373,
+  "normal": 0.871160018340211,
+  "price spike": 0.027510316368638238,
+  "wrong estimate": 0.04585052728106373
+ }
+}
