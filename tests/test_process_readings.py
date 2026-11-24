@@ -69,7 +69,8 @@ SCATTER = {
 }
 #: Setpoints and the controller's own commands.
 EXACT = {
-    "cstr": (2, 3),
+    # The water, the feed and the setpoint (cstr-v8: the feed is a move).
+    "cstr": (2, 3, 4),
     "first_order": (1,),
     "unstable_cstr": (1, 2),
     # Flows, specs, and the feed meter (FC 1), read exactly: ours.
@@ -88,14 +89,12 @@ PERIOD = {"distillation": {0: CYCLE_STEPS, 1: CYCLE_STEPS}}
 #: A copy of the state with the target exactly on the tracked value, so a
 #: tracking cost on the measured copy is noise alone.
 ON_TARGET = {
-    "cstr": lambda s: s.replace(target_T=s.T),
     "first_order": lambda s: s.replace(target_x=s.x),
     "unstable_cstr": lambda s: s.replace(target_T=s.T),
 }
 #: The proposal's floor per step, with rounding's ``step^2 / 12`` on pH. The
 #: table's 0.11 and 0.034 are (9.17 Pa / 27.5 Pa)^2 and (1.1e-3 / 6e-3)^2.
 FLOOR = {
-    "cstr": (0.04 / 0.1) ** 2,
     "first_order": (1.1e-3 / 6e-3) ** 2,
     "unstable_cstr": (0.5 / 1.0) ** 2,
 }

@@ -6,24 +6,27 @@ A to B, cooled through a jacket by fresh cooling water. `REALITY.md` here is the
 family's record, sources [S1] to [S12]; `COLD_REVIEW.md` lists how the task
 before version 5 differed.
 
-**Status.** Back from Extra by the owner's decision (Amendment 3, 2026-11-08).
-The earlier Extra rested on one figure: PARSEX's loss of cooling heats at
-0.81 K/min where the audit's T6 asked 2 K/min, from Bayer's different plant.
-Under rule 19 that is a family member's figure, and T6 is restated on the
-family's pooled range below.
+**Status.** Version 8, by the owner's decision of 2026-11-24: the reactor is run
+for what it makes. The task of versions 5 to 7 held a temperature setpoint with
+one valve; a PI of the ladder's own form at four times its gain closed most of
+its room, since nothing in that plant made gain cost. With the feed as a second
+move, the cooling's limit and the interlock come into play, and what practice
+does when the cooling saturates, cut the feed [S13], becomes the job. How the
+version was prototyped, measured and reviewed is at the end of this page.
 
-**Named property: the jacket, and the runaway it must stay ahead of.** The
-jacket is in the model, with its own energy balance and holdup; a loss of
-circulation runs the reactor away until the interlock trips (rule 18). Fouling
-is gone: it acts over weeks and has no measured rate (owner's decision).
+**Named property: a cooling limit the production runs against, on a reactor
+whose first answer to a feed cut is to heat.** The jacket is in the model, with
+its own energy balance and holdup; the feed is colder than the reactor, so less
+of it cools less at once and reacts less only later. Fouling is gone: it acts
+over weeks and has no measured rate (owner's decision).
 
 ---
 
 ## 1. Model
 
 ```
-dC_A/dt = (C_Af - C_A) / tau - k(T) C_A,             k = k0 exp(-E/R / T)
-dT/dt   = (T_f - T) / tau + (-dH) k C_A / (rho cp) - UA (T - T_j) / (rho cp V)
+dC_A/dt = (C_Af - C_A) q / V - k(T) C_A,             k = k0 exp(-E/R / T)
+dT/dt   = (T_f - T) q / V + (-dH) k C_A / (rho cp) - UA (T - T_j) / (rho cp V)
 dT_j/dt = [F_w cp_w (T_w,in - T_j) + UA (T - T_j)] / (M_j cp_w)
 ```
 
@@ -31,7 +34,8 @@ PARSEX's reactor recirculates through an external cooler with water on the
 shell side [S1, p. 3, Fig. 1]; here the cooler is lumped as a jacket of its own
 holdup. Its reaction is first order A to B [S1, p. 4]. The operator moves the
 fresh cooling water [S1, p. 4], from S1's 40 g/s floor [S1, Table 1] to the
-136 g/s S1 logs [S1, Fig. 2]. A high
+136 g/s S1 logs [S1, Fig. 2], and the feed, up to S1's 110 g/s [S1, Table 1]:
+the feed is what practice cuts when the cooling saturates [S13, p. 436]. A high
 reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 
 ---
@@ -44,7 +48,8 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `EA_over_R` | 10700 | K | cited [S1, p. 4] |
 | `deltaHr` | -2.0e5 | J/mol | cited: -200 kJ/mol [S1, p. 4] |
 | `Caf` | 1.5 | mol/L | cited: 1.5 kmol/m3 [S1, p. 4] |
-| `q` | 5.4 | L/min | cited: 90 g/s of feed [S1, Tables 3, 4], as water |
+| `q` | 5.4 | L/min | cited: the design feed, 90 g/s [S1, Tables 3, 4], as water |
+| `q_min`, `q_max` | 2.4, 6.6 | L/min | the top cited: 110 g/s [S1, Table 1]; the floor ours, 40 g/s: S1's range starts at 0 and no turndown was found |
 | `V` | 183.6 | L | derived: q x the 34 min residence [S1, p. 5] |
 | `rho`, `C` | 1000, 4.18 | g/L, J/(g K) | the aqueous feed as water, textbook |
 | `UA` | 46717 | J/(min K) | derived: the duty S1's design point leaves (58 C, feed 24 C, CA 0.31 mol/L), 8.56 kW, over the 11 K to the cooler's 47 C [S1, Tables 3, 4] |
@@ -54,13 +59,17 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4]; the feed at room temperature swings across it |
 | `feed_T_period` | 1440 | min | ours: room temperature cycles once a day; the phase is drawn per episode, so an episode sees up to about 0.9 K of drift |
 | `T_setpoint` | 331.15 | K | cited: 58 C [S1, Tables 3, 4] |
+| `T_band` | 1 | K | ours: product made further from the setpoint is off-spec; no tolerance found (REALITY.md, third search); flat inside by the owner's decision (2026-11-24); the sweep draws it from 0.5 to 2 |
+| `setpoint_ramp` | 60 | min | derived: S1's closed loop took about an hour to carry its 2 C move to its peak [S1, Fig. 2] |
+| `valve_rest` | 0.95 | of span | cited: where [S13]'s example holds the cooling valve, short of its limit [S13, pp. 436, 438] |
 | `T_trip` | 348.15 | K | ours: 75 C, 17 K over the setpoint and short of the 81 C adiabatic rise, so a runaway trips; the interlock is cited [S3], its setting for this chemistry is not found |
 | `delta_t`, `max_steps_in_episode` | 0.25, 960 | min, steps | ours: 4 h, over twice the 110 min a 2 C step took to settle [S1, Fig. 2] |
 | `event_window` | 30, 150 | min | ours |
 | `setpoint_step` | 2 | K (scenario) | cited: a 2 C step [S1, Fig. 2] |
 | `k0_drop` | 0.4 | - (scenario) | cited: a 40 % drop [S1, Fig. 3] |
 | `k0_decay` | 90 | min (scenario) | ours: no source gives a rate inside hours; the slowest linear decay that ends inside the 240 min episode from the latest event, at 150 min |
-| `feed_rise` | 0.03 | - (scenario) | derived: feed build-up is sourced [S3], its size is not, so it is the largest whole percent the valve can hold at the design point, 135.5 of its 136 g/s at the middle feed temperature (112 to 128 g/s of design water leaves 1.5 % on the warmest feed and 4.7 % on the coldest) |
+| `feed_rise` | 0.1 | - (scenario) | ours: feed build-up is sourced [S3], its size is not; with the feed to cut it can be held (D6) |
+| (version 7's) | 0.03 | - | derived: feed build-up is sourced [S3], its size is not, so it is the largest whole percent the valve can hold at the design point, 135.5 of its 136 g/s at the middle feed temperature (112 to 128 g/s of design water leaves 1.5 % on the warmest feed and 4.7 % on the coldest) |
 | `cooling_loss` | 5 | min (scenario) | ours: cooling failures are sourced [S2; S3], their length is not |
 | `event_hold` | 480, 1440, 120 | min (stream, per scenario) | ours: how long a setpoint move (a shift), a catalyst loss (until a catalyst change, a day) and a feed rise (until its batch runs out) last before they return; no source gives these; a window never sets it, so its events hold to the end |
 | readings | 0.04 K; lag 13 s; dead time 2 min | - | Pt100 scatter as before; thin-walled well about 13 s [S10, Fig. 2]; jacket outlet about 2 min [S6] |
@@ -71,6 +80,12 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 
 | Limit | Kind | Model | Source |
 |---|---|---|---|
+| High reactor temperature | Trip | The interlock cuts the feed at 75 C; restart priced as 4 h of nameplate production (ours) | [S3, PDF p. 38]; setting ours |
+| Temperature band | Zone | Product made more than 1 K from the setpoint is off-spec and counts for nothing; flat inside | ours (no tolerance found); owner, 2026-11-24 |
+| Cooling water | Hardware | 40 to 136 g/s; none during a cooling loss | [S1, Table 1, Fig. 2]; [S2; S3] |
+| Feed | Hardware | 40 to 110 g/s | top [S1, Table 1]; floor ours |
+
+---|---|---|---|
 | High reactor temperature | Trip | The interlock cuts the feed at 75 C; restart priced as 4 h of lost production (ours) | [S3, PDF p. 38]; setting ours |
 | Cooling water | Hardware | 40 to 136 g/s; none during a cooling loss | [S1, Table 1, Fig. 2]; [S2; S3] |
 
@@ -78,22 +93,33 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 
 ## 4. Observation (rule 16)
 
-`[T, T_j, F_w_pct, T_setpoint]`: the reactor temperature through its
+`[T, T_j, F_w_pct, q_pct, T_setpoint]`: the reactor temperature through its
 thermowell [S4; S10], the jacket outlet temperature, 2 min late [S6; S8,
-Fig. 6], the water flow as logged on PARSEX [S1, Fig. 2], and the setpoint. No
-composition: an online analyser on such a reactor was not found, and Bayer
-sampled for the lab once a day [S3]. Pressure, level and circulation flow
-[S3, Fig. 11] are not modelled (D2).
+Fig. 6], the water and the feed flows as logged on PARSEX [S1, Fig. 2; Table 1],
+and the setpoint. No composition: an online analyser on such a reactor was not
+found, and Bayer sampled for the lab once a day [S3]. Pressure, level and
+circulation flow [S3, Fig. 11] are not modelled (D2).
 
 ---
 
 ## 5. Episode and scenarios (rules 17 and 20)
 
-The reactor starts on the steady state that holds 58 C for the day's feed
-temperature, with the water where that needs it. `scenarios.py`:
+A window starts in established production: the reactor on its 58 C setpoint
+for the day's feed temperature, the water valve at 95 % of its span [S13] and
+the feed that takes, or, where the feed's top binds, the feed at its top and
+the water that takes. `scenarios.py`:
 
 | Scenario | Event | Source |
 |---|---|---|
+| `normal` | the feed drifts with the room, 23 to 25 C over a day | [S1, Tables 3, 4] |
+| `setpoint_move` | setpoint +2 K, as a ramp over an hour, the band with it | [S1, Fig. 2]; the ramp derived |
+| `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
+| `feed_buildup` | feed reactant +10 % (ours) | [S3, PDF pp. 36-37, 46] |
+| `cooling_loss` | no water for 5 min (ours) | [S2, PDF p. 17]; [S3, Fig. 11] |
+
+Each event comes once, at a minute drawn in 30 to 150.
+
+---|---|---|
 | `normal` | the feed drifts with the room, 23 to 25 C over a day | [S1, Tables 3, 4] |
 | `setpoint_step` | setpoint +2 K | [S1, Fig. 2] |
 | `catalyst_loss` | activity -40 % over 90 min (rate ours) | [S1, Fig. 3; p. 6] |
@@ -106,15 +132,30 @@ Each event comes once, at a minute drawn in 30 to 150.
 
 ## 6. Score (rule 15)
 
-The job [S5; S6]: hold the reactor temperature at its setpoint, and never run
-away. Tracking is the real job here, so it is scored:
+The job [S13; S5; S6]: make product, inside the temperature band, and never run
+away. The score is the production lost against the nameplate, the top feed fully
+converted, as a fraction of it per step:
 
 ```
-reward = -((T_sp - T) / 0.1 K)^2,   and 960 x 2.45e5 on an interlock trip
+reward = -(1 - made / nameplate)             inside the band
+       = -1                                  outside it (the product is off-spec)
+       = -960 x 1                            on an interlock trip
+made = q (C_Af - C_A),   nameplate = q_max C_Af
 ```
+
+One unit throughout, so no price is needed. Nothing pulls toward the setpoint
+inside the band (owner, 2026-11-24).
 
 | parameter | value | source |
 | --- | --- | --- |
+| `T_band` | 1 K | ours: no tolerance found (REALITY.md, third search) |
+| `e_floor` | 0.1 K | ours: a reactor probe's resolution, what the band's edge is read to |
+| `failure_cost` | 1 | a step of nameplate production |
+| `restart_steps` | 960 | ours: 4 h of lost production, seven residence times; no restart time found |
+| `rho_floor` | 0 | not measured on this plant |
+| `precision_floor` | 0.1 K | version 1 only |
+
+--- | --- | --- |
 | `e_floor` | 0.1 K | ours: a reactor probe's resolution, the documented minimum the score resolves |
 | `e_tol` | 0 | no band found |
 | `tracking_exponent` | 2 | ours |
@@ -140,7 +181,12 @@ restated on the family (Amendment 3):
 | T5. Analyser | no composition reading (none found) | pass |
 | T6. Loss of circulation | 0.75 to 8 K/min over 3 min, pooled: Morton's 1 to 2 C/min [S4], Bayer's over 2 C/min [S3], the audit's factor 4 on top and 25 % below | pass (0.81) |
 | T7. 25 K rise | 3 to 48 min [S2; S3] | pass |
-| T8. Open-loop settling | within 5 % of its final value from 1.6 to 6.4 residence times on [S1, Fig. 2] | pass (3.72) |
+| T8. Open-loop settling | within 5 % of its final value from 1.6 to 6.4 residence times on [S1, Fig. 2], at the feed the reset holds | pass |
+| A feed cut first heats, then cools | the balances; the feed is colder than the reactor [S1, Tables 3, 4] | pass |
+| The feed build-up is past the cooling and inside a feed cut | [S3]; [S13, p. 436] | pass |
+| The score is product inside the band | section 6 | pass |
+| A setpoint move is a 2 K ramp the band follows | [S1, Fig. 2] | pass |
+| A window starts in established production | [S13, pp. 436, 438] | pass |
 | Runaway trips the interlock | [S3] | pass |
 | Starts at rest on its setpoint | rule 17 | pass |
 
@@ -153,7 +199,9 @@ that value at 0.99 residence times, which is a rise time: the test read that
 figure until 2026-11-23 and stood as a strict xfail. S1's own figure is a
 settling time after an overshoot (a peak near 60 min, settled after about 110
 [S1, Fig. 2]), so the plant is now read the same way. The plant and the audit's
-range are as the owner kept them on 2026-11-12.
+range are as the owner kept them on 2026-11-12. The finding of 2026-11-12 (the
+plant settling too fast, kept as a strict xfail) is withdrawn by the owner's
+decision of 2026-11-24: it was the test's measure, not the plant.
 
 ---
 
@@ -192,7 +240,8 @@ did: 1272 per step for the foresight ceiling and 1360 for the reference, 97 %
 and 69 % of their costs over the suite. Bayer's cooler held its temperature
 only while the feed stayed under a limit [S3, PDF pp. 36-37], so the documented
 day is a feed at the edge of the cooling, not past it. What practice does past
-it is cut the feed (D3: this task has no such handle).
+it is cut the feed (D3: version 7 had no such handle). Version 8 has it, so its
+build-up is the 10 % again and the scenario is one a feed cut can hold.
 
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the
@@ -209,36 +258,27 @@ v5 and are stale.
 
 ## 9. Expert
 
-`experts.py`: a PI from the reactor temperature to the cooling water, biased
-at the water the setpoint needs at the design feed. Gains by SIMC (tau_c =
-theta) on single-run bump tests of the water, seeds 100 to 109 at noise scale 1
-(`docs/proposals/expert-protocols-process.md`, section 9): k = -9.68 K per raw
-unit, tau 15.4 min, theta 7.4 min, so Kp = 0.105 per K and Ti = 15.4 min, with
-a 0.18 min filter on the reading (`src/target_gym/data/pid_gains.json`). Noise
-levels 0.5 and 2 have gains of their own (`pid_gains_0.5x.json`,
-`pid_gains_2x.json`).
+None ships with version 8 yet (registry, `baselines_note`). The reference is the
+ladder's (section 10); a shipped expert returns when its gains are recorded on
+this plant.
 
 ## 10. What the reference ladder row needs
 
-- Tracking of the reactor temperature, no zone; scenarios as section 5.
-- Bump tests on the water from the reset steady state with the event off.
-- A bumpless start (the row's `bumpless`, 2026-11-23): the reset stands on the
-  steady state of the day's feed temperature, which no reading shows, so each
-  rung re-bases its bias on the valve and the jacket's rest on its reading at
-  the reset. Without it the cascade's normal day cost 3.52 per step, with it
-  0.24 (seeds 100 to 109).
-- PI by SIMC on T, then feedforward: none measured (feed temperature and
-  activity are hidden); then the cascade on the jacket outlet (obs 1, 2 min
-  late); the expert above is the PI rung.
+`scripts/ladder_rows/cstr.py`: the temperature on the water by SIMC, and the
+water valve held short of its limit by the feed, the ladder's valve position
+rung [S13]. Bump tests from a reset with both valves in mid-range, at the
+middle and both ends of the feed's temperature range. The rungs start bumpless:
+the reset stands on the day's feed temperature, which no reading shows. The
+feedforward, the cascade and a second temperature loop on the feed were each
+tried under the valve position loop on 2026-11-23 and leave the band at every
+set point, the last because a feed cut first heats the reactor.
 
 ## 11. Oracle needs
 
-`oracle.py` plans on the reactor and jacket balances, with the interlock as a
-limit and the scenario's event held from the state. It does not see a later
-event. Last run on the normal day on 2026-11-12 (10 seeds, no trip, a cost
-under 0.001 per step, `data/baseline_returns/cstr.json`); the shared solver has
-changed since, so that row is stale. The foresight ceilings are in
-`data/oracle_ceilings/cstr.json` (2026-11-09).
+No oracle on the shared solver ships with version 8 yet: the planner model of
+versions 5 to 7 moved one valve to track a setpoint. The foresight ceiling's
+pieces are in `oracle.py`: the smooth term (the production lost) and, as
+margins, the band's two edges and the interlock, priced at a step's product.
 
 ---
 
@@ -299,13 +339,14 @@ accepted a class exception on 2026-11-06: no published figure could be found or 
 after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
 says what was tried.
 
-## Production prototype (unregistered, 2026-11-23)
+## How version 8 was prepared (the production prototype, 2026-11-23)
 
 The owner asked for a version of this task scored on what the reactor makes, to
 be prepared to replace the tracking task and brought back to him first. It is
 `scripts/prototypes/cstr_production.py`: this plant with the feed as a second
-handle, scored in lost nameplate production. Nothing in it is registered,
-recorded or fingerprinted, and the task above is unchanged by it.
+handle, scored in lost nameplate production. It was unregistered when the
+figures below were measured; the owner made it version 8 on 2026-11-24 and its
+plant moved into this package. No record has been taken on the registered version.
 
 Why: on the tracking task a PI of the ladder's own form at four times its gain
 closes most of the room, since nothing in the plant makes gain cost. With the

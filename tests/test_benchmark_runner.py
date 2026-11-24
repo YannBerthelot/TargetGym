@@ -223,10 +223,10 @@ def test_records_are_the_protocols():
 
 def test_a_task_the_policy_cannot_run_is_reported_not_run():
     res = B.run_policy_on_benchmark(
-        SingleInputOnly(), tasks=["cstr", "four_tank"], n_episodes=1, test_params=True,
-        verbose=False,
+        SingleInputOnly(), tasks=["first_order", "four_tank"], n_episodes=1,
+        test_params=True, verbose=False,
     )  # fmt: skip
-    assert "metrics" in res["cstr"]
+    assert "metrics" in res["first_order"]
     assert res["four_tank"] == {"unsupported": "2 actuators"}
 
 
