@@ -221,7 +221,22 @@ def test_the_reference_flies_the_clearances_inside_the_rules_in_still_air():
 # airspeed in the plant 879 to 1 123 fpm, so plane_energy is Extra
 # (plane/EXTRA.md). This test is the evidence: it fails the day the plant's
 # thrust lapse brings the trade into play.
-@pytest.mark.parametrize("flight_level", [330, 350, 370])
+# Finding, kept (owner, 2026-11-14): on the standard atmosphere above the
+# tropopause the plant gives 1 080, 922 and 739 fpm at FL330, 350 and 370, so
+# FL370 is under the 750 fpm line. Before that fix it gave 757 fpm there; the
+# 909 to 1 163 fpm above predate the airframe rebuild of 2026-11-10. Whether
+# plane_energy stays in Extra is the owner's open decision (plane/EXTRA.md).
+_FL370 = pytest.param(
+    370,
+    marks=pytest.mark.xfail(
+        strict=True,
+        reason="finding, kept (owner, 2026-11-14): 739 fpm of residual climb at "
+        "FL370 and 78 t, under 1.5 times the AIM's 500 fpm (plane/EXTRA.md).",
+    ),
+)
+
+
+@pytest.mark.parametrize("flight_level", [330, 350, _FL370])
 def test_thrust_does_not_run_out_at_heavy_cruise_levels(flight_level):
     from target_gym.plane.dynamics import (
         compute_air_density_from_altitude,

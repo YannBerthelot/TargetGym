@@ -160,6 +160,18 @@ opposite of what happened.
 
 ## 5. Algorithms
 
+!!! warning "Sections 5 and 6 predate the continuing tasks"
+    From 0.8.0 a task is a plant that runs without end, scored on its average
+    cost per step, so there is no episode length `N` and the rule
+    `gamma = 1 - 1/N` below is retired (decided 2026-11-10). Its replacement:
+    SAC and PPO use `gamma = 1 - 1/(c T)` with `c = 10`, where `T` is the
+    longer of the task's slowest mode and the longest preview in its
+    observation; `gamma` is never searched; `c = 5` and `c = 20` are reported
+    as a check; and one average-reward agent (APO) runs in the same table, on
+    the same budget and scoring. Each task's `T` comes with its charter
+    record, which is not published yet. Until these sections are rewritten,
+    read the table below as each plant's open-loop response time only.
+
 **Headline: SAC and PPO.** One off-policy and one on-policy, so that a poor
 result cannot be pinned on the quirks of a single family. Both are standard,
 widely reimplemented, and what a sceptical reader will ask for. SAC is the

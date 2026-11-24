@@ -28,6 +28,7 @@ RECORD_CHECKS = {
     },
     "tests/test_charter_records.py": {
         "test_each_charter_task_has_a_current_valid_record",
+        "test_the_ceiling_never_costs_more_than_the_oracle_on_the_same_seed",
     },
 }
 

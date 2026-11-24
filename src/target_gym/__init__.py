@@ -7,6 +7,7 @@ from target_gym.api import (
     make_expert,
     make_gymnasium,
     make_oracle,
+    make_stream,
 )
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
@@ -88,6 +89,7 @@ __all__ = (
     "make_expert",
     "make_oracle",
     "make_gymnasium",
+    "make_stream",
     "list_envs",
     "score_policy",
     # Environment and parameter classes
