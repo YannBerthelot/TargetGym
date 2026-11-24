@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/cstr/pid_output.gif" width="480px"/></p>
 
-Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. Each step is charged the production lost against the reactor's nameplate, and all of it while the temperature is more than 1 K from its setpoint, where the product is off spec. The policy reads the reactor and jacket temperatures, its two flows and the setpoint, and never the composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of lost production.
+Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. Each step is charged the production lost against the reactor's nameplate, and all of it while the temperature is more than 1 K from its setpoint, where the product is off spec. The policy reads the reactor and jacket temperatures, its two flows and the setpoint, and never the composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of lost production. The reference keeps the band on the normal day and through a setpoint move, but not in the three upsets (catalyst loss, a richer feed, a short loss of cooling): there it leaves the band on every seed, and their rooms are reported as measured.
 
 ```python
 import target_gym as tg

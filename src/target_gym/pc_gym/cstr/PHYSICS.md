@@ -109,6 +109,10 @@ from its setpoint, where the product is off spec. The policy reads the reactor
 and jacket temperatures, its two flows and the setpoint, and never the
 composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of
 lost production.
+The reference keeps the band on the normal day and through a setpoint move,
+but not in the three upsets (catalyst loss, a richer feed, a short loss of
+cooling): there it leaves the band on every seed, and their rooms are reported
+as measured.
 
 | obs | meaning |
 |---|---|
@@ -318,6 +322,16 @@ the reset stands on the day's feed temperature, which no reading shows. The
 feedforward, the cascade and a second temperature loop on the feed were each
 tried under the valve position loop on 2026-11-23 and leave the band at every
 set point, the last because a feed cut first heats the reactor.
+
+**The reference does not hold the three upsets** (owner, 2026-11-24: report
+them as unheld). On the ladder's seeds every candidate set point leaves the
+band on all ten seeds of `catalyst_loss`, `feed_buildup` and `cooling_loss`, on
+both rungs, so they do not constrain the placement. The kept rung is the PI,
+the feed held where the reset left it, 0.7 K above the setpoint (median J
+0.3331 against 0.3334 for valve position). Per-scenario rooms are reported as
+measured: about 1.15 on the normal day, 1.21 on the setpoint move, and 1.9 to
+2.3 in the upsets, where the reference is close to holding the reset's valves;
+the task's room is 1.39 (ceiling not re-solved on the merged tree).
 
 ## 11. Oracle needs
 
