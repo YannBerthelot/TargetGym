@@ -174,6 +174,12 @@ The next release is 0.8.0, because these changes break code written for
 - **`consumption_ratio` reads the quantity itself** on `glass_furnace`,
   `cement_kiln`, `boiler_drum`, `distillation`, `ph_neutralization` and
   `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
+- **The patrol family's lead engages in trim.** The scripted lead of `patrol`,
+  `patrol_range_bearing` and `wake_surf`, which is part of the plant, and
+  `formation`'s reference lead now start their TECS on the level trim they spawn
+  in, as the A320 tasks' autopilot does (owner, 2026-11-24). They used to start
+  on the airliner's trim constants and sink 11 to 22 m in their first seconds.
+  The versions keep their number (none shipped); the records are re-recorded.
 - **`first_order` has left the capability radar.** It is a sanity fixture, and
   `CAPABILITIES["first_order"]` is now empty.
 - **`boiler_drum` is Extra, as solved, and the radar has ten axes.** Its
