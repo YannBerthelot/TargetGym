@@ -583,6 +583,19 @@ def tune_distillation() -> dict:
 SURGE_LADDER = (0.10, 0.125, 0.15)
 
 
+def _full_delay(loop, reading: str) -> float:
+    """The detune rule (owner, picker 2026-11-25), fixed before the run: a
+    loop's SIMC tau_c is at least its full delay, the dead time it was read
+    with plus the first-order lag of the transmitter it reads (``reading``'s
+    ``lag``), counted whole as delay. For the anti-surge loop that is the
+    valve's 0.15 s dead time and half a sample, plus the flow transmitter's
+    0.15 s; for the pressure loop 0.05 s plus the pressure transmitter's 0.3 s."""
+    from target_gym.compressor_surge.env_jax import CompressorSurge
+
+    lag = {r.field: r.lag for r in CompressorSurge.readings}[reading]
+    return float(loop["theta"]) + float(lag)
+
+
 def _compressor_pair(line: float) -> dict:
     """The pair at control line ``line``, from bumps at each seed's rest there."""
     from target_gym.compressor_surge import experts as X
@@ -624,7 +637,7 @@ def _compressor_pair(line: float) -> dict:
     # the drive takes, at its rate, to make the move the test itself made: the
     # loop asks no faster than the drive delivers a normal step.
     step_N = 0.05 * span
-    tau_c_N = step_N / float(p.drive_rate)
+    tau_c_N = max(step_N / float(p.drive_rate), _full_delay(speed, "dp"))
     kc_N, ti_N = simc(speed["k"] / speed["tau1"], None, speed["theta"], tau_c_N)
     speed_out = {"Kc": kc_N, "Ti": ti_N, "Tf": 0.0, "tau_c": tau_c_N}
     print(f"    Kc {kc_N:.4g}, Ti {ti_N:.4g}, tau_c {tau_c_N:.4g} (drive rate)")
@@ -642,6 +655,11 @@ def _compressor_pair(line: float) -> dict:
         - float(X.consumer_flow(25e3, 0.6, p, np))
     ) / float(X.recycle_flow(25e3, 1.0, p, np))
     valve_out = tuned(valve, inst.h, DEAD_BAND, u_d)
+    floor = _full_delay(valve, "m_c")
+    if valve_out["tau_c"] < floor:  # the detune rule
+        kc_x, ti_x = simc(valve["k"], valve["tau1"], valve_out["theta"], floor)
+        valve_out = {**valve_out, "Kc": kc_x, "Ti": ti_x, "tau_c": floor}
+        print(f"    detuned: Kc {kc_x:.4g}, Ti {ti_x:.4g}, tau_c {floor:.4g}")
     kp_surge = min(abs(valve_out["Kc"]), 1.0)  # Mirsky's "less than 1"
     Tt = np.sqrt(valve_out["Ti"] * (valve_out["tau_c"] + valve["theta"]))  # C8
     return {
