@@ -1,5 +1,8 @@
 # Distillation
 
+!!! note "Under review"
+    Distillation is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/distillation/pid_output.gif" width="480px"/></p>
 
 Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. The policy reads the two product analysers, one tray temperature, its own two flows, the specs and the feed flow. The feed composition and the column's interior profile are hidden. Each step is charged, in kmol of boilup, the boilup itself, any product outside its spec, and the light component leaving in the bottoms. Nothing trips.
@@ -17,6 +20,7 @@ env, params = tg.make("distillation")
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
 | Episode length | 400 steps of 60 s (6.67 h) |
 | Cite as | `distillation-v9` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space
@@ -72,7 +76,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

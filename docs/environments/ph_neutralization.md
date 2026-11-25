@@ -17,6 +17,7 @@ env, params = tg.make("ph_neutralization")
 | Tracked variable(s) | pH |
 | Episode length | 1440 steps of 5 s (2 h) |
 | Cite as | `ph_neutralization-v6` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 
 ## Action space
@@ -70,9 +71,22 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Truncation.** After 1440 steps.
 
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies | not current | |
+| Reference | the controller to beat | not current | |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+
+Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
+
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
 ## Arguments
 

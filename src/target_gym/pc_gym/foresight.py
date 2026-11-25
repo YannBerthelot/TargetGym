@@ -35,17 +35,38 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.optimize import minimize
 
-from target_gym.benchmark import episode_keys, episodes_of, run_policy, task_info
+from target_gym.benchmark import (
+    episode_keys,
+    episodes_of,
+    run_policy,
+    seed_params,
+    task_info,
+)
 
 #: rho's stages, on the task's price.
 RHO = (1.0, 100.0, 1e4)
+
+#: The stop rule (owner, picker 2026-11-24, ruling A), fixed before any result:
+#: the starts' J agree within ``AGREE`` and the kept plan's J lies within
+#: ``NEAR`` above the task's balance floor.
+AGREE, NEAR = 0.01, 0.03
+
+
+def ceiling_converged(starts: dict, floor: float, agree=AGREE, near=NEAR) -> bool:
+    """Whether a ceiling counts as converged: ``starts`` maps each start to the
+    J its plan reaches (the suite's weighted cost), ``floor`` is the J no plan
+    can beat by more than the plenum's storage. The kept plan is the cheapest;
+    the spread is taken on it. A plan under the floor is near it."""
+    costs = [float(c) for c in starts.values()]
+    kept = min(costs)
+    return (max(costs) - kept) <= agree * kept and kept <= (1.0 + near) * floor
 
 
 def _episode(env, params, seed: int):
     """The seed's reset state and step keys, as ``run_policy`` draws them."""
     T = int(params.max_steps_in_episode)
     reset_keys, step_keys = episode_keys(jax.random.PRNGKey(seed), 1, T)
-    _, s0 = env.reset_env(reset_keys[0], params)
+    _, s0 = env.reset_env(reset_keys[0], seed_params(env, params, seed))
     return s0, step_keys[:, 0]
 
 

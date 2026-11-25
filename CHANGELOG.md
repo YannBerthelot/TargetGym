@@ -14,6 +14,26 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **Five tasks are scored, and the other twenty ship registered, not scored.**
+  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
+  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+  - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
+    all 25 names.
+  - Results are published for the scored suite only. The page of a task
+    outside it says where the task stands (under review, Extra or a test
+    fixture) and prints no recorded number. Its recorded rows stay in
+    `src/target_gym/data/` and are no longer kept current.
+  - `suite.run_suite` runs the scored tasks by default, and `suite.profile`
+    counts a task's tags only if it is scored. Name a task in `tasks` to run
+    it anyway.
+  - The capability profile page and its chart are left out of the docs for
+    this release. `target_gym.suite` still works, and the page returns when
+    the radar is rebuilt on the saving over the reference.
+  - The generated pages publish a recorded row only while its fingerprint or
+    version stamp matches the code. A stale row stays in `data/`; its task's
+    page says it was recorded on an earlier version and shows the numbers
+    again once it is re-recorded. `records.current_parts` gives the current
+    part of an old-format row.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and
@@ -473,6 +493,11 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `target_gym.scoring_runs`: a task scored on its stream pinned to each
+  scenario, from the reset, over a protocol's days, with twin scenarios folded
+  and a stop rule for seeds set before results. The reactor's protocol (owner,
+  2026-11-24): 7 days, baseload, edf_daily, fast_return and krsko_slow, 10 seeds
+  and 10 more where a scenario's room interval contains 1.
 - `tg.make_stream(name)`: the task as a continuing plant, the form an
   average-reward algorithm trains on. It never ends, its scenarios take turns
   by their weights, and the reset key fixes its world.

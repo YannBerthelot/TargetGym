@@ -170,10 +170,22 @@ drawn within its size, ramped over 10 min.
 | Scenario | What moves | Source |
 |---|---|---|
 | `normal` | buffer drift only | [P5, p. 1]; [P2] |
-| `acid_strength` | acid strength, +-20 % | [P3, p. 4] |
-| `flow_swing` | influent flow, +-20 %, metered | [P3, Figure 2]; Amendment 3 |
+| `bad_day` | acid strength and influent flow together, each +-20 %, the flow metered | [P3, p. 8]; acid [P3, p. 4]; flow [P3, Figure 2] |
 | `buffer_loss` | buffering falls away (nominal buffer 0) | [P1]; [P2] |
-| `bad_day` | acid strength and flow together | [P3, p. 8] |
+
+**The evaluation cut** (owner, 2026-11-24): a scenario stays only if removing it
+would hide a named behaviour or change which controller looks better. Each kept
+one shows one: the edge held against the unmetered buffer (`normal`), the permit
+held through an unannounced upset (`bad_day`), the steep curve (`buffer_loss`). The
+acid-only and flow-only windows repeated the bad day: the reference's cost over the
+ceiling's was 1.138 and 1.139 against the bad day's 1.139 on seeds 200 to 249, and
+every exit that set the reference's back-off was on the bad day or the acid window
+on the same seeds. They are folded into the bad day. On the cut suite the reference
+is placed at 6.5 on every rung, the feedforward is kept, the best null wins 2 seeds
+of 10, and the room on seeds 200 to 209 is 1.167 (1.154 to 1.179), as on the full
+suite (1.167, 1.154 to 1.180). Windows stay 2 h: the permit's 60 min clock is the
+only trip. The scoring seeds follow the stop rule (`charter.stop_seeds`): blocks
+of 10 from seed 200 until the room's 95 % interval excludes 1, at most 50.
 
 Probe coating [P5, pp. 2-3; P6] is documented as a bad day but has no sourced
 rate, so it is not a scenario yet (D1).
@@ -360,16 +372,18 @@ differs from by at most the bisection's half-width, 7e-6 pH, far under the limit
 
 ### Scenario weights (charter J4)
 
-`normal` 0.7, `acid_strength` 0.1, `flow_swing` 0.1, `buffer_loss` 0.05, `bad_day` 0.05: shares of operating time for the headline. No source says how often each
-window occurs (`REALITY.md`), so each is ours, the normal day in the family
-range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
-draws them.
+`normal` 0.80, `bad_day` 0.15, `buffer_loss` 0.05: shares of operating time for
+the headline. No source says how often each window occurs (`REALITY.md`), so each
+is ours, the normal day in the family range 0.5 to 0.9. The bad day carries the
+shares of the acid-only and flow-only windows it absorbed (owner, 2026-11-24: each
+disturbance keeps its former share of time, 0.10 + 0.05), and the normal day the
+rest.
 
 ### The stream (docs/proposals/long-strata.md, S1)
 
 As a continuing plant (`target_gym.stream`) the normal day lasts 24 h on average
-and each upset regime a shift, 8 h. `acid_strength`, `flow_swing` and `bad_day`
-bring one upset per visit on average (`events_per_h` 1/8); `buffer_loss` is the
+and each upset regime a shift, 8 h. `bad_day` brings one upset per visit on
+average (`events_per_h` 1/8); `buffer_loss` is the
 regime itself and brings none. An upset ramps over `acid_upset_ramp` to a level
 drawn within its scenario's size, holds `event_hold`, then ramps back to nominal,
 so it runs to its return through a switch of regime; an upset of one kind never
