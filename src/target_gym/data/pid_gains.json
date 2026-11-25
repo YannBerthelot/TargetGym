@@ -299,20 +299,39 @@
     }
   },
   "cstr": {
-    "Kp": 0.105366,
-    "Ti": 15.40763,
-    "Tf": 0.175803,
+    "Kp": 0.106535,
+    "Ti": 15.551523,
+    "Tf": 0.181161,
+    "Kv": 0.623441,
+    "Tiv": 45.443399,
+    "under_top": 0.9,
+    "valve": 0.95,
     "model": {
       "T": {
-        "k": -9.683025,
-        "tau1": 15.40763,
+        "k": -9.659421,
+        "tau1": 15.551523,
         "theta": 7.375,
         "band": 0.242744,
-        "step": 0.125041,
-        "bands": 4.987852,
-        "spread": 1.022073,
+        "step": 0.125512,
+        "bands": 4.994456,
+        "spread": 1.022438,
         "tests": 10.0,
-        "tau_c": 7.550803
+        "tau_c": 7.556161
+      },
+      "valve": {
+        "k": 0.895746,
+        "tau1": 45.443399,
+        "theta": 2.625,
+        "band": 0.019829,
+        "step": 0.111069,
+        "bands": 5.017323,
+        "spread": 1.005605,
+        "tests": 10.0,
+        "tau_c": 78.750005
+      },
+      "placement": {
+        "left_out": [],
+        "holds": true
       }
     },
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"

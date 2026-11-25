@@ -37,10 +37,10 @@ key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset_env(reset_key, params)
 
 step = jax.jit(env.step_env)
+action = jnp.zeros(env.action_space(params).shape)   # every move at mid-range
 total = 0.0
 for _ in range(params.max_steps_in_episode):
     key, step_key = jax.random.split(key)   # a fresh key every step
-    action = jnp.array([0.0])
     obs, state, reward, terminated, info = step(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):
@@ -71,7 +71,8 @@ def episode_return(key):
 
     def body(carry, step_key):
         state, total = carry
-        _, state, reward, _, _ = env.step_env(step_key, state, jnp.zeros(1), params)
+        action = jnp.zeros(env.action_space(params).shape)
+        _, state, reward, _, _ = env.step_env(step_key, state, action, params)
         return (state, total + reward), None
 
     step_keys = jax.random.split(steps_key, params.max_steps_in_episode)

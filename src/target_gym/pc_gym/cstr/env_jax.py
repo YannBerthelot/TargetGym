@@ -21,6 +21,7 @@ from target_gym.pc_gym.cstr.env import (
     compute_reward,
     compute_reward_terms,
     event_sizes,
+    feed_at_rest,
     feed_temperature,
     get_obs,
     steady_state,
@@ -30,10 +31,12 @@ from target_gym.video import SavesVideo
 
 
 class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRParams]):
-    """Jacketed exothermic CSTR holding its temperature with cooling water.
+    """Jacketed exothermic CSTR run for what it makes: the temperature held in
+    its band by the cooling water, the feed carried as far as the cooling allows.
 
-    Observation (4,): [T, T_j, F_w_pct, T_setpoint]
-    Action      (1,): cooling water, raw in [-1, 1] -> [Fw_min, Fw_max]
+    Observation (5,): [T, T_j, F_w_pct, q_pct, T_setpoint]
+    Action      (2,): cooling water, raw in [-1, 1] -> [Fw_min, Fw_max];
+                      feed, raw in [-1, 1] -> [q_min, q_max]
     """
 
     #: What a trip's restart carries over (``base.failure_kernel``): the outside
@@ -56,10 +59,10 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     screen_width = 600
     screen_height = 400
 
-    # obs = [T, T_j, F_w_pct, T_setpoint]
+    # obs = [T, T_j, F_w_pct, q_pct, T_setpoint]
     obs_value_index: int = 0  # T
     tracked_names: tuple = ("T (K)",)
-    obs_target_index: int = 3  # the setpoint
+    obs_target_index: int = 4  # the setpoint
 
     # Readings, in ``delta_t``'s minutes (PHYSICS.md, Readings): the reactor's
     # Pt100 in a thin-walled thermowell, 63 % in about 13 s [S10, Fig. 2]; the
@@ -70,7 +73,7 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
     )
 
     def __init__(self, integration_method: str = "rk4_1"):
-        self.obs_shape = (4,)
+        self.obs_shape = (5,)
         self.positions_history = []
         self.integration_method = integration_method
 
@@ -97,10 +100,10 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         if params is None:
             params = self.default_params
 
-        action, state = actuate(self, state, jnp.reshape(action, (1,)), params)
+        action, state = actuate(self, state, jnp.reshape(action, (2,)), params)
 
         new_state, metrics = compute_next_state(
-            action.reshape(()),
+            action,
             state,
             params,
             integration_method=self.integration_method,
@@ -144,13 +147,17 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
 
         feed_key, event_key = jax.random.split(key)
 
-        # Established operation (charter rule 17): the reactor on the steady
-        # state that holds its setpoint for the feed it meets today, the
-        # cooling water where that needs it.
+        # Established production (charter B5): the reactor on its setpoint for
+        # the feed temperature it meets today, the water valve at
+        # ``valve_rest`` of its span [S13] and the feed that takes. Where the
+        # feed's top binds, the feed at its top and the water that takes.
         phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
         T_feed = feed_temperature(phase, params, 0.0)
         T = jnp.asarray(params.T_setpoint)
-        C_a, T_j, F_w = steady_state(T, T_feed, params)
+        span = params.Fw_max - params.Fw_min
+        q = feed_at_rest(T, T_feed, params.Fw_min + params.valve_rest * span, params)
+        q = jnp.clip(q, params.q_min, params.q_max)
+        C_a, T_j, F_w = steady_state(T, T_feed, params, q)
         lo, hi = params.event_window
         event_at = jax.random.uniform(event_key, minval=lo, maxval=hi)
         state = CSTRState(
@@ -159,6 +166,7 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
             T=T,
             target_T=T,
             F_w=jnp.clip(F_w, params.Fw_min, params.Fw_max),
+            q=q,
             T_j=T_j,
             T_feed=T_feed,
             feed_phase=phase,
@@ -182,16 +190,18 @@ class CSTR(RegistryExperts, SavesVideo, environment.Environment[CSTRState, CSTRP
         )
 
     def initial_action(self, state, params):
-        """The raw action that holds the reset's cooling water."""
-        span = params.Fw_max - params.Fw_min
-        return jnp.reshape(2.0 * (state.F_w - params.Fw_min) / span - 1.0, (1,))
+        """The raw action that holds the reset's cooling water and feed."""
+        p = params
+        water = 2.0 * (state.F_w - p.Fw_min) / (p.Fw_max - p.Fw_min) - 1.0
+        feed = 2.0 * (state.q - p.q_min) / (p.q_max - p.q_min) - 1.0
+        return jnp.stack([water, feed])
 
     def action_space(self, params: CSTRParams | None = None) -> spaces.Discrete:
         """Action space of the environment."""
         return spaces.Box(
-            low=jnp.array([-1.0]),
-            high=jnp.array([1.0]),
-            shape=(1,),
+            low=-jnp.ones(2),
+            high=jnp.ones(2),
+            shape=(2,),
             dtype=jnp.float32,
         )
 

@@ -62,12 +62,10 @@ def test_the_record_names_the_cv_that_tripped(task):
 
 def test_a_non_compliant_cstr_keeps_the_horizon_its_oracle_plans_on():
     """cstr-v6's water-on-T bump tests are all invalid, so it is non-compliant;
-    its oracle keeps the horizon measured on v5 (T_c 1, P 32) and still builds."""
-    from target_gym.registry import REGISTRY
-
+    its row keeps the horizon measured on v5 (T_c 1, P 32). cstr-v8 ships no
+    planner, so the row waits for one to return and nothing builds on it (owner,
+    2026-11-24: keep the facts, drop the build)."""
     row = records.load_row("oracle_horizons", "cstr")
     assert not row["compliant"] and row["counts"]["valid"] == 0
     assert (row["T_c_steps"], row["P"]) == (1, 32)
     assert row["horizon_kept_from"]["generated"] == "2026-11-03T20:59:53+00:00"
-    spec = REGISTRY["cstr"]
-    spec.make_mpc(spec.make_env(), spec.make_test_params())

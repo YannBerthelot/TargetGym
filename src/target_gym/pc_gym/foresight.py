@@ -63,11 +63,18 @@ def ceiling_converged(starts: dict, floor: float, agree=AGREE, near=NEAR) -> boo
 
 
 def _episode(env, params, seed: int):
-    """The seed's reset state and step keys, as ``run_policy`` draws them."""
+    """The seed's reset state and step keys, as ``run_policy`` draws them. The
+    reset is compiled as the benchmark's loop compiles it (``benchmark._batched``),
+    so a plan starts from the very state its replay does. Run eagerly, a reset
+    that solves a nearly degenerate balance rounds apart from it: cstr's, near
+    its cooling limit, by 6.6e-6 of its feed, which showed as a planned cost
+    1.3e-6 off its replay."""
     T = int(params.max_steps_in_episode)
     reset_keys, step_keys = episode_keys(jax.random.PRNGKey(seed), 1, T)
-    _, s0 = env.reset_env(reset_keys[0], seed_params(env, params, seed))
-    return s0, step_keys[:, 0]
+    _, batch = jax.jit(jax.vmap(env.reset_env, in_axes=(0, None)))(
+        reset_keys, seed_params(env, params, seed)
+    )
+    return jax.tree_util.tree_map(lambda x: x[0], batch), step_keys[:, 0]
 
 
 def _rollout(env, params, s0, keys, plan, margins: Callable | None):

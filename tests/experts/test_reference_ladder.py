@@ -29,6 +29,11 @@ in ``row.score`` are the pi rung's until a rung is kept, then the kept one's. On
 ``first_order`` the
 band is the tracking term's own: with ``e_tol`` 0.5 around a target pinned at 1.0, it
 charges x outside 0.5 to 1.5 and nothing else is charged.
+
+A valve position loop is bump-tested with
+the row's loops closed (Reyes-Lua, Zotica and Skogestad, IFAC ADCHEM 2018, Fig. 6):
+``closed_loops`` runs each loop's PI from its MV at rest, holding its CV where the
+test found it, and leaves the tested MV alone.
 """
 
 import importlib.util
@@ -498,6 +503,21 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
 
     assert worst(row.rest) < 0.02
     assert worst(None) > 0.1
+
+
+def test_closed_loops_hold_each_cv_at_rest_and_leave_the_tested_mv_alone(ladder):
+    import numpy as np
+
+    from target_gym.experts.ladder import Pi
+
+    actuate = ladder.closed_loops([Pi(0, 2.0, 4.0)], [0], 1.0)
+    # At rest: MV 0 at 0.3, the CV at 1.0, which becomes its set point.
+    u, memory = actuate([0.3, 0.5], [1.0], None)
+    np.testing.assert_allclose(u, [0.3, 0.5])
+    # MV 1 stepped to 0.7 and the CV at 1.1: Kc 2, Ti 4, dt 1 on an error of -0.1
+    # is 2 * (-0.1 - 0.1 / 4) = -0.25 from the 0.3 at rest.
+    u, memory = actuate([0.3, 0.7], [1.1], memory)
+    np.testing.assert_allclose(u, [0.05, 0.7])
 
 
 def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):

@@ -15,14 +15,16 @@ import pytest
 
 from target_gym import (
     CSTR,
+    BuildingHVAC,
     CSTRParams,
     FirstOrderParams,
     FirstOrderSystem,
     FourTank,
     FourTankParams,
+    HVACParams,
 )
+from target_gym.hvac.oracle import make_hvac_mpc
 from target_gym.oracles.controller import Oracle
-from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
 from target_gym.pc_gym.distillation.oracle import make_distillation_mpc
 from target_gym.pc_gym.first_order.oracle import make_first_order_mpc
 from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
@@ -100,7 +102,8 @@ def test_importing_the_runners_keeps_the_callers_matplotlib_backend():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_fn,make_kwargs,action_dim",
     [
-        (CSTR, CSTRParams, make_cstr_mpc, {}, 1),
+        # hvac since cstr-v8, which ships no planner (owner, 2026-11-24).
+        (BuildingHVAC, HVACParams, make_hvac_mpc, {}, 1),
         (FirstOrderSystem, FirstOrderParams, make_first_order_mpc, {}, 1),
         (FourTank, FourTankParams, make_four_tank_mpc, {}, 2),
     ],
@@ -188,7 +191,7 @@ def test_plane_env_make_pid_returns_controller():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_kwargs,expected_type",
     [
-        (CSTR, CSTRParams, {}, Oracle),
+        (BuildingHVAC, HVACParams, {}, Oracle),
         (FirstOrderSystem, FirstOrderParams, {}, Oracle),
         (FourTank, FourTankParams, {}, Oracle),
     ],

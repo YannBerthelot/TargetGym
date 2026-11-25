@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/cstr/pid_output.gif" width="480px"/></p>
 
-Hold the temperature of a jacketed exothermic reactor at its setpoint with the cooling water flow. The policy reads the reactor and jacket temperatures, its own water flow and the setpoint, and never the composition. Each step is charged the squared temperature error, counted in units of 0.1 K. A reactor that reaches 75 C trips its interlock, which is charged as a restart.
+Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. Each step is charged the production lost against the reactor's nameplate, and all of it while the temperature is more than 1 K from its setpoint, where the product is off spec. The policy reads the reactor and jacket temperatures, its two flows and the setpoint, and never the composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of lost production. The reference keeps the band on the normal day and through a setpoint move, but not in the three upsets (catalyst loss, a richer feed, a short loss of cooling): there it leaves the band on every seed, and their rooms are reported as measured.
 
 ```python
 import target_gym as tg
@@ -12,11 +12,11 @@ env, params = tg.make("cstr")
 
 | | |
 |---|---|
-| Action space | `Box((1,))`, all actions in [-1, 1] |
-| Observation space | `Box((4,))` |
+| Action space | `Box((2,))`, all actions in [-1, 1] |
+| Observation space | `Box((5,))` |
 | Tracked variable(s) | T (K) |
 | Episode length | 960 steps of 15 s (4 h) |
-| Cite as | `cstr-v7` |
+| Cite as | `cstr-v8` |
 | Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 
@@ -27,18 +27,20 @@ actuator range inside the environment.
 
 | # | meaning | min | max |
 |---|---|---|---|
-| 0 | cooling water | -1 | 1 |
+| 0 |  | -1 | 1 |
+| 1 |  | -1 | 1 |
 
 ## Observation space
 
-4 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[3]`.
+5 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`.
 
 | # | meaning |
 |---|---|
 | 0 | `T`, reactor temperature (K) |
-| 1 | `T_j`, jacket temperature (K) |
+| 1 | `T_j`, jacket temperature (K), 2 min late |
 | 2 | cooling water flow, percent of its 40 to 136 g/s range |
-| 3 | reactor temperature setpoint (K) |
+| 3 | feed flow, percent of its 40 to 110 g/s range |
+| 4 | reactor temperature setpoint (K) |
 
 ## Rewards
 
@@ -48,7 +50,7 @@ Every environment in this suite scores on one contract. The reward is
 minus the sum of non-negative costs: a tracking cost where the task
 holds a target, a running cost for what the plant consumes or fails to
 deliver, and a failure cost for trips out of the operating envelope.
-This task's terms are `tracking`, `failure`, reported
+This task's terms are `lost_production`, `off_spec`, `failure`, reported
 each step in `info["reward_terms"]`.
 The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
@@ -58,7 +60,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 14 fields.
+`reset` samples the initial condition and the target; state has 15 fields.
 
 ## Episode end
 
@@ -102,6 +104,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `deltaHr` | -200000 | J/mol |
 | `Caf` | 1.5 | mol/L |
 | `q` | 5.4 | L/min |
+| `q_min` | 2.4 | L/min |
+| `q_max` | 6.6 | L/min |
 | `V` | 183.6 | L |
 | `rho` | 1000 | g/L |
 | `C` | 4.18 | J/(g*K) |
@@ -112,6 +116,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `M_j` | 36720 | g |
 | `feed_T_period` | 1440 | min |
 | `T_setpoint` | 331.15 | K |
+| `T_band` | 1 | K |
+| `setpoint_ramp` | 60 | min |
+| `valve_rest` | 0.95 | fraction of span |
 | `T_trip` | 348.15 | K |
 | `time_unit_seconds` | 60 | s |
 | `setpoint_step` | 0 | K |
@@ -122,11 +129,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `event_hold` | 1e+09 | min |
 | `reward_version` | 3 | - |
 | `e_floor` | 0.1 | K |
-| `e_tol` | 0 | K |
-| `tracking_exponent` | 2 | - |
-| `failure_cost` | 245000 | reward |
+| `failure_cost` | 1 | reward |
 | `restart_steps` | 960 | steps |
-| `rho_floor_tracking` | 0 | reward |
 | `rho_floor` | 0 | reward |
 | `precision_floor` | 0.1 | K |
 

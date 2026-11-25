@@ -57,7 +57,7 @@ are the observation and action lengths, and the episode is the scored one.
 
 | Task | Name | Status | What it asks | Obs | Act | Episode |
 |---|---|---|---|---|---|---|
-| [CSTR](environments/cstr.md) | `cstr` | Scored | Hold the temperature of a jacketed exothermic reactor at its setpoint with the cooling water flow. | 4 | 1 | 960 steps, 4 h |
+| [CSTR](environments/cstr.md) | `cstr` | Scored | Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. | 5 | 2 | 960 steps, 4 h |
 | [First order](environments/first_order.md) | `first_order` | Test fixture, never scored | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
 | [Four-tank](environments/four_tank.md) | `four_tank` | Extra, never scored | Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. | 6 | 2 | 3300 steps, 55 min |
 | [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Scored | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
