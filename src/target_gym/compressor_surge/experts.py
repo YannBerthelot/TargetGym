@@ -38,6 +38,7 @@ from target_gym.compressor_surge.env import (
     KPA,
     N_DEMAND_BLOCKS,
     N_SETPOINT_BLOCKS,
+    VALVE_HISTORY,
     CompressorSurgeParams,
     CompressorSurgeState,
     characteristic,
@@ -511,8 +512,11 @@ def settled_point(p_ref, u, gains, params: CompressorSurgeParams) -> np.ndarray:
 
 def _state_at(z, setpoints, levels, block_clock, params: CompressorSurgeParams):
     """A state at the first five entries of the closed-loop vector ``z``, no
-    deviation, with the given schedule and clock."""
+    deviation, with the given schedule and clock. The valve's commands in
+    flight behind its dead time are ``z[7:]`` where ``z`` carries them, else
+    all at the valve, as in a settled loop."""
     zero = jnp.zeros_like(z[0])
+    in_flight = z[7:] if z.shape[0] > 7 else jnp.full((VALVE_HISTORY,), z[4])
     return CompressorSurgeState(
         time=jnp.asarray(0, jnp.int32),
         m_c=z[0],
@@ -525,6 +529,7 @@ def _state_at(z, setpoints, levels, block_clock, params: CompressorSurgeParams):
         setpoint_levels=setpoints,
         demand_levels=levels,
         block_clock=jnp.asarray(block_clock, jnp.int32),
+        valve_cmds=in_flight,
     )
 
 
@@ -548,7 +553,12 @@ def _guard_functions(params: CompressorSurgeParams):
         ps = ps._replace(margin=jnp.full_like(z[0], jnp.nan))
         u_raw, ps = pair_step(gains, ps, get_obs(state, quiet), quiet, xp=jnp)
         new = compute_next_state(u_raw, state, quiet, jax.random.PRNGKey(0))[0]
-        return jnp.stack([new.m_c, new.dp, new.N, new.N_ramp, new.x, ps.I_N, ps.I_x])
+        return jnp.concatenate(
+            [
+                jnp.stack([new.m_c, new.dp, new.N, new.N_ramp, new.x, ps.I_N, ps.I_x]),
+                new.valve_cmds,
+            ]
+        )
 
     def jacobian(z, p_ref, u, gains):
         return jax.jacfwd(closed_loop_step)(z, p_ref, u, gains)
@@ -581,6 +591,15 @@ def _traced_gains(gains, dtype):
     return {k: jnp.asarray(float(gains[k]), dtype) for k in DEFAULT_GAINS}
 
 
+def slowest_decay(step, z, dt) -> float:
+    """A discrete loop's slowest decay rate, -ln(max |eigenvalue|) / ``dt``,
+    of the Jacobian of ``step`` (state to next state) at ``z``: positive
+    decays, negative grows. Float64."""
+    with enable_x64():
+        J = np.asarray(jax.jacfwd(step)(jnp.asarray(z, jnp.float64)))
+    return float(-np.log(np.abs(np.linalg.eigvals(J)).max()) / dt)
+
+
 def closed_loop_decay(
     gains, params: CompressorSurgeParams | None = None, points=GUARD_POINTS
 ) -> np.ndarray:
@@ -589,12 +608,21 @@ def closed_loop_decay(
 
     J is the Jacobian of one closed-loop step (``pair_step``, then the env's
     own ``compute_next_state`` with the deviation off) in
-    ``(m_c, dp, N, N_ramp, x, I_N, I_x)`` at ``settled_point``, where the
-    rate limits, the override and the reset band are inactive. Computed in
-    float64, so the verdict does not depend on the caller's precision.
+    ``(m_c, dp, N, N_ramp, x, I_N, I_x)`` and the valve's commands in flight
+    behind its dead time (``valve_cmds``; owner, 2026-11-25: without them this
+    step's command never reached the valve and the anti-surge integrator read
+    as open), at ``settled_point``, where the rate limits, the override and
+    the reset band are inactive. Computed in float64, so the verdict does not
+    depend on the caller's precision. ``slowest_decay`` is the same rate for
+    any step function.
     """
     params = CompressorSurgeParams() if params is None else params
-    z = np.stack([settled_point(p, u, gains, params) for p, u in points])
+    z = np.stack(
+        [
+            np.concatenate([zp, np.full(VALVE_HISTORY, zp[4])])
+            for zp in (settled_point(p, u, gains, params) for p, u in points)
+        ]
+    )
     jacobians = _guard_functions(params)[0]
     with enable_x64():
         J = np.asarray(
