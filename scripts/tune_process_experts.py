@@ -52,6 +52,7 @@ from target_gym.identification import (  # noqa: E402
     noise_tune,
     pick_fit,
     rga,
+    simc,
     single_run,
 )
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
@@ -617,11 +618,23 @@ def _compressor_pair(line: float) -> dict:
         plant, "dp on N", 0, 0, 0.05 * span * per_speed, 100, inst, room=plant.room(0)
     )
     speed = rescaled(speed, per_speed)
-    speed_out = tuned(speed, inst.h)  # a drive: no sourced dead band
+    # The pressure on speed reads as integrating: its fitted lag runs to tens of
+    # thousands of seconds against a 0.05 s delay, past SIMC's 8 theta, so it is
+    # tuned on the slope k / tau1 (owner, picker 2026-11-25). tau_c is the time
+    # the drive takes, at its rate, to make the move the test itself made: the
+    # loop asks no faster than the drive delivers a normal step.
+    step_N = 0.05 * span
+    tau_c_N = step_N / float(p.drive_rate)
+    kc_N, ti_N = simc(speed["k"] / speed["tau1"], None, speed["theta"], tau_c_N)
+    speed_out = {"Kc": kc_N, "Ti": ti_N, "Tf": 0.0, "tau_c": tau_c_N}
+    print(f"    Kc {kc_N:.4g}, Ti {ti_N:.4g}, tau_c {tau_c_N:.4g} (drive rate)")
     active = [i for i, r in enumerate(rests) if r[4] > 0.02]
+    # Re-identified on the plant with the positioner's dead time [C7], held as
+    # the datasheet's delay (owner, picker 2026-11-25).
     valve = read_loop(
-        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active
-    )
+        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active,
+        delay=float(p.valve_lag),
+    )  # fmt: skip
     valve = rescaled(valve, 2.0)  # raw 2 is one full opening
     # The largest load in hold, the demand's 3 sd, as a recycle opening.
     u_d = (
@@ -641,6 +654,9 @@ def _compressor_pair(line: float) -> dict:
         "override_line": line / 2,
         "override_hold": 1.0 / float(p.valve_open_rate),
         "reset_band": kp_surge * max(1 - Tt / valve_out["Ti"], 0.0) * line,
+        # Rate action [C3, p. 2; C7]: the line leads by the loop's own delay, so
+        # the valve opens as early as the loop answers late (ours).
+        "rate_lead": float(valve_out["theta"]),
         "model": {"speed": record(speed, speed_out), "valve": record(valve, valve_out)},
     }
 

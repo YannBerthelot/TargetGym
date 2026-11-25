@@ -176,8 +176,12 @@ def test_gains_are_read_under_the_task_key(monkeypatch, params):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="finding, a report since D2: the recipe's line is 0.10, so the battery "
-    "reaches 0.070 against a GUARD_MIN_MARGIN frozen for a line of 0.15",
+    reason="finding, a report since D2: the pair re-run by its recipe (owner, "
+    "2026-11-25) keeps the battery's margin (0.107, 0 trips) but decays at 0 /s "
+    "at four guard points and -0.018 /s at one, and its valve travels 0.95 at the "
+    "battery's end. The linearisation leaves the valve's dead-time history at its "
+    "default, so the anti-surge integrator is open over one step (eigenvalue 1); "
+    "the travel is a limit cycle under the dead time, with or without rate action",
 )
 def test_shipped_gains_pass_the_guard():
     """The shipped pair's closed loop decays at ``GUARD_MIN_DECAY`` or faster at

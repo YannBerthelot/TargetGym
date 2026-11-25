@@ -170,41 +170,42 @@
     "tuning_rule": "docs/proposals/expert-protocols-process.md, section 9: SIMC (Skogestad and Grimholt 2012) on single-run bump tests, seeds 100-109"
   },
   "compressor_surge": {
-    "kp_speed": 2.088986,
-    "ki_speed": 5.222465,
-    "kp_surge": 0.979961,
-    "ki_surge": 2.93402,
-    "Tf_surge": 0.0334,
+    "kp_speed": 0.285885,
+    "ki_speed": 0.112849,
+    "kp_surge": 0.75131,
+    "ki_surge": 1.955663,
+    "Tf_surge": 0.038417,
     "surge_line": 0.15,
     "override_line": 0.075,
     "override_hold": 2.0,
-    "reset_band": 0.027801,
+    "reset_band": 0.0,
+    "rate_lead": 0.238417,
     "model": {
       "speed": {
-        "k": 112215.388659,
-        "tau1": 23441.641676,
+        "k": 118.602432,
+        "tau1": 21.474193,
         "theta": 0.05,
-        "band": 0.507694,
-        "step": 0.1,
-        "bands": 3868.016566,
-        "spread": 2900.836078,
-        "tests": 2.0,
-        "tau_c": 0.05
+        "band": 0.579264,
+        "step": 0.177784,
+        "bands": 3.503048,
+        "spread": 3.098928,
+        "tests": 3.0,
+        "tau_c": 0.583333
       },
       "valve": {
-        "k": 1.347117,
-        "tau1": 0.333999,
-        "theta": 0.05,
-        "band": 0.037941,
-        "step": 0.267508,
-        "bands": 3.445889,
-        "spread": 2.216313,
-        "tests": 2.0,
-        "tau_c": 0.169607
+        "k": 1.072354,
+        "tau1": 0.384172,
+        "theta": 0.2,
+        "band": 0.036249,
+        "step": 0.454538,
+        "bands": 3.41988,
+        "spread": 2.82179,
+        "tests": 3.0,
+        "tau_c": 0.238417
       },
       "rga": NaN,
       "schedule": {
-        "least margin": 0.08027911186218262,
+        "least margin": 0.09412944316864014,
         "trips": 0
       }
     },

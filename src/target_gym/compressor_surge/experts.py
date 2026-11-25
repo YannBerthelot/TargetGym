@@ -94,12 +94,26 @@ DEFAULT_GAINS: dict = {
     # Filter on the margin the anti-surge PI reads, in s; the override reads
     # the margin unfiltered.
     "Tf_surge": 0.0,
+    # Rate action's lead, in s: the control line moves right by this times the
+    # margin's rate of fall [C3, p. 2; C7]. No source gives a size; the recipe
+    # sets it to the anti-surge loop's own dead time, the time the valve takes
+    # to answer, so it opens as early as the loop is late (ours). Off here, so
+    # the fallback is the PI pair with its backup line: the term divides a
+    # margin change by the step, which amplifies rounding tenfold.
+    "rate_lead": 0.0,
 }
 #: The gains the tuner searches.
 TUNED_GAINS = ("kp_speed", "ki_speed", "kp_surge", "ki_surge")
 #: The gains it holds. Their right value is set by the distance to the surge
 #: line, which the return sees only once a trip happens.
-HELD_GAINS = ("surge_line", "override_line", "override_hold", "reset_band", "Tf_surge")
+HELD_GAINS = (
+    "surge_line",
+    "override_line",
+    "override_hold",
+    "reset_band",
+    "Tf_surge",
+    "rate_lead",
+)
 
 
 def surge_margin_from_obs(obs, params: CompressorSurgeParams):
@@ -197,7 +211,11 @@ def pair_step(gains, ps: PairState, obs, params: CompressorSurgeParams, xp=np):
     moves = 1.0 - xp.exp(-dt / xp.where(gains["Tf_surge"] > 0, gains["Tf_surge"], 1.0))
     moves = xp.where(gains["Tf_surge"] > 0, moves, 1.0)
     filtered = last + moves * (margin - last)
-    es = gains["surge_line"] - filtered
+    # Rate action [C3, p. 2; C7]: while the margin falls, the line held moves
+    # right by ``rate_lead`` times the rate of fall, so the valve opens before
+    # the control line is reached. A steady or rising margin moves nothing.
+    falling = xp.maximum(last - filtered, 0.0) / dt
+    es = gains["surge_line"] + gains["rate_lead"] * falling - filtered
     I_x = xp.clip(ps.I_x, x_obs - band, x_obs + band)
     x_raw = I_x + gains["kp_surge"] * es
     x_held = ((x_raw <= 0.0) & (es < 0.0)) | ((x_raw >= 1.0) & (es > 0.0))
@@ -340,6 +358,7 @@ class CompressorSurgePIDParams:
     override_hold: float
     reset_band: float
     Tf_surge: float
+    rate_lead: float
     plant: CompressorSurgeParams
 
 
