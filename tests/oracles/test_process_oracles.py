@@ -523,10 +523,19 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
         ("hvac", 9.54 * 0.25 * 0.05),
         # The reagent a step's hold needs for 0.005 pH more at the operator's set
-        # point, pH 6.5 (owner, 2026-11-24; it was 7 before #232), on the nominal
-        # streams: the mix's charge balance solved by Brent's method in float64,
-        # 0.0159565404 mL/s more over 5 s, in litres.
-        ("ph_neutralization", 0.0159565404 * 5.0 / 1000.0),
+        # point, pH 6.45 (owner, 2026-11-25; 6.5 from #232, 7 before), on the
+        # nominal streams (PHParams: q1 16.6, q2 0.55 mL/s; Wa1 3e-3, Wb1 0;
+        # Wa2 -3e-2, Wb2 3e-2; Wa3 -3.05e-3, Wb3 5e-5 M; pK 6.35, 10.25). At a
+        # fixed pH the charge balance (PHYSICS.md section 1) is linear in the
+        # flows, so the steady base flow is closed form, with
+        # f = (1 + 2*10^(pH-pK2)) / (1 + 10^(pK1-pH) + 10^(pH-pK2)) and
+        # h = 10^(pH-14) - 10^(-pH):
+        #   q3 = -(q1*(Wa1 + Wb1*f) + q2*(Wa2 + Wb2*f) + (q1 + q2)*h)
+        #        / (Wa3 + Wb3*f + h).
+        # In 40-digit decimals: q3(6.455) - q3(6.45) = 14.0750315745
+        # - 14.0588188099 = 0.0162127646 mL/s, over 5 s, in litres. (The same
+        # formula gives 0.0159565404 at 6.5, what Brent's method gave there.)
+        ("ph_neutralization", 0.0162127646 * 5.0 / 1000.0),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
