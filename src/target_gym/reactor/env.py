@@ -380,13 +380,17 @@ class ReactorParams(EnvParams):
     ril_full: float = 0.22
     ril_half: float = 0.78
     ril_allowed: float = 7200.0  # s
-    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1: at or below the COLR's
-    # value, restored within 2 h, else MODE 2 within 6 h (hot standby here).
+    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1 (NUREG-1431 Rev. 5.0):
+    # at or below the COLR's value, restored within 2 h (Condition A), else MODE 2
+    # within 6 h (Condition B), and a parameter restored before then ends the
+    # required action (LCO 3.0.2). So the plant goes to hot standby only after
+    # 2 h + 6 h above the limit without a break (owner, 2026-11-25, from the
+    # document; it went at 2 h until then).
     # Braidwood's COLR: nominal Tavg at rated power 588.0 F, limit 593.1 F, so 5.1 F
     # above the full-power program at every power (from a search summary; nrc.gov
     # blocks automated reads). The only plant found with both numbers.
     dnb_margin: float = 5.1 / 1.8  # K above the full-power program
-    dnb_allowed: float = 7200.0  # s
+    dnb_allowed: float = 7200.0 + 6.0 * 3600.0  # s
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg

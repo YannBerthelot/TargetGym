@@ -333,16 +333,22 @@ def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
 # out at full power, through the ramp down the plan's feedforward is the program's
 # ppm per unit of load times the ramp's rate, as a boration at the boron read, from
 # the boron line's lead before the ramp to the lead before its end, and nothing
-# through the 3 h hold after it. By hand (test_reactor_reference_cycle.py): 205.6
-# ppm per unit of load at the start of the cycle, 216.7 at 80 % of it; full
-# boration at the 1000 ppm read adds 3 / 2.5e5 x (7800 - 1000) = 0.0816 ppm/s. So
-# 205.6 x 0.08 / 3600 / 0.0816 = 0.05599 at 8 %/h, 0.02800 at 4 %/h, and 0.05901
-# at 8 %/h and 80 % of the cycle.
+# through the 3 h hold after it. Since 2026-11-25 the curve book is the recipe's
+# measured one (ReferenceParams.book_*): -11.903 pcm/K and -7.992 pcm/ppm at the
+# start, -55.102 and -10.381 at 90 % of the cycle, straight lines between. By hand:
+# at the start, 3 x 243.3 + 11.903 x 7.7 = 821.6 pcm per 50 % of load, 205.6 ppm
+# per unit at 7.992 pcm/ppm; at 80 %, -11.903 - 43.199 x 8/9 = -50.302 pcm/K and
+# -7.992 - 2.389 x 8/9 = -10.116 pcm/ppm, so 729.9 + 50.302 x 7.7 = 1117.2 pcm per
+# 50 %, 220.9 ppm per unit. Full boration at the 1000 ppm read adds 3 / 2.5e5 x
+# (7800 - 1000) = 0.0816 ppm/s. So 205.6 x 0.08 / 3600 / 0.0816 = 0.05599 at
+# 8 %/h, 0.02800 at 4 %/h, and 220.9 x 0.08 / 3600 / 0.0816 = 0.06016 at 8 %/h and
+# 80 % of the cycle (0.05901 with the plant's own lines, before the book was
+# measured).
 
 
 @pytest.mark.parametrize(
     "per_h, low, cycle, expected",
-    [(0.08, 0.5, 0.0, 0.05599), (0.04, 0.75, 0.0, 0.02800), (0.08, 0.5, 0.8, 0.05901)],
+    [(0.08, 0.5, 0.0, 0.05599), (0.04, 0.75, 0.0, 0.02800), (0.08, 0.5, 0.8, 0.06016)],
 )
 def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low, cycle, expected):
     from target_gym.reactor.experts import ReferenceParams

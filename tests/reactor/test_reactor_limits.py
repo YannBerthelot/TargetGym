@@ -23,6 +23,12 @@ Contracts, from the family's sources, written before the code:
   reversing Amendment 3 decision 7): both cited procedures keep a two-sided band
   (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), and at part power the hot side is
   bounded by the steam side, not by DNB.
+- Tavg above its DNB limit (Westinghouse STS, NUREG-1431 Rev. 5.0, LCO 3.4.1): the
+  parameter is restored within 2 h (Condition A), else the unit is in MODE 2 within
+  6 h (Condition B), and a parameter restored before then ends the required action
+  (LCO 3.0.2). So the plant is lost to hot standby only after 2 h + 6 h = 28,800 s
+  above the limit without a break (owner, 2026-11-25, from the document; until then
+  2 h).
 - The operator reads the recent power history the starting xenon is balanced with,
   and the core boron only through a boronmeter 20 min late (Areva, US 8,489,338).
 
@@ -213,8 +219,8 @@ def test_the_dnb_limit_is_the_full_power_programs_at_every_power():
     )
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_above_the_dnb_limit_cost_hot_standby(seconds, ends):
     env, p, obs, s = reset()
     s = at(s, above_dnb=seconds)
     terminated, _ = check_is_terminal(s, p)

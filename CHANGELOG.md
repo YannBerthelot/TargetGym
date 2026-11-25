@@ -9,6 +9,19 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Reactor curve book and cycle draw (2026-11-25)
+
+- The reactor's expert reads a measured curve book: the recipe's physics tests at
+  power (a dilution bump, a calibrated rod bump) at both ends of the load-following
+  range replace the plant's own lines. Its turbine thresholds follow a rule on the
+  measured load wobble.
+- A reactor run's core is drawn so it never reaches the end of its load-following
+  range (reactor-v10, re-stamped in place: it never shipped). Scoring runs build
+  their stream's params with the run's length.
+- The reactor's DNB limit follows NUREG-1431 Rev. 5.0, LCO 3.4.1: 2 h to restore,
+  then 6 h to reach MODE 2, so the plant goes to hot standby after 8 h above the
+  limit without a break, where it went at 2 h (`dnb_allowed` 28,800 s).
+
 ### Upgrading from 0.7.0
 
 The next release is 0.8.0, because these changes break code written for

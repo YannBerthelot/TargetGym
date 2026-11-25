@@ -122,6 +122,9 @@ def stream(name: str, scenario: str, steps: int | None = None):
     env, params, suite = spec.make_env(), spec.make_test_params(), scenarios.suite(spec)
     pin = [s.name for s in suite].index(scenario)
     scored = scored_steps(name) if steps is None else int(steps)
+    # The plant knows the run's length: a core drawn at reset stays inside its
+    # load-following range for all of it (owner, 2026-11-25).
+    params = params.replace(max_steps_in_episode=scored)
     from target_gym.registry import control_step_seconds
 
     hours = control_step_seconds(env, params) / 3600.0

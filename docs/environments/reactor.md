@@ -184,7 +184,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ril_half` | 0.78 |  |
 | `ril_allowed` | 7200 | s |
 | `dnb_margin` | 2.83333 | K |
-| `dnb_allowed` | 7200 | s |
+| `dnb_allowed` | 28800 | s |
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |
