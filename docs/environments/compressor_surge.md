@@ -62,7 +62,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 19 fields.
+`reset` samples the initial condition and the target; state has 20 fields.
 
 ## Episode end
 
@@ -130,6 +130,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `surge_trip_count` | 3 | - |
 | `surge_window` | 15 | s |
 | `reset_margin` | 0.1 | - |
+| `line_shift_max` | 0.05 | - |
+| `machine_stratum` | -1 | - |
 | `N_reset` | 1 | - |
 | `x_reset` | 0.35 | - |
 | `reset_newton_iters` | 6 | - |
