@@ -729,6 +729,61 @@ def test_a_channel_reading_does_not_inherit_the_noise_of_its_fields():
 # ---------------------------------------------------------------------------
 
 
+def _coordinate_atol(state):
+    """The atol for comparing a channel across two compiled programs: a channel
+    derived from km-scale coordinates (an error to a path 36 km out, say)
+    inherits their float32 step: 1 mm at 15 km, 3.9 mm at 36 km. Two such
+    steps at the farthest coordinate for each body a channel subtracts, never
+    under 2 mm.
+
+    A patrol state holds two bodies, ``follower`` and ``lead``, and its height
+    error is one altitude minus the other, each rounded on its own: on
+    wake_surf under JAX 0.11.2 the follower sat 2 steps off and the lead 1,
+    3 steps (2.9 mm at 10.7 km) in all, from vertical speeds that the two
+    programs fuse 1e-4 m/s apart (2026-11-25)."""
+    bodies = [state] + [
+        getattr(state, f) for f in ("follower", "lead") if hasattr(state, f)
+    ]
+    coords = [
+        float(np.max(np.abs(np.asarray(getattr(b, f)))))
+        for b in bodies
+        for f in ("x", "y", "z")
+        if hasattr(b, f)
+    ]
+    far = max(coords + [0.0])
+    with_coords = sum(any(hasattr(b, f) for f in ("x", "y", "z")) for b in bodies)
+    steps = 2 * max(with_coords, 1)
+    return max(2e-3, steps * float(np.spacing(np.float32(far))))
+
+
+def test_the_coordinate_atol_reads_both_aircraft_of_a_patrol_state():
+    """A patrol state keeps its coordinates on ``follower`` and ``lead``, and a
+    channel such as the height error subtracts one aircraft's altitude from the
+    other's, each rounded to its own float32 step: two steps for each of the two.
+    Expected by hand: the farthest coordinate of the wake_surf reset is the
+    lead at about 10.75 km, where a float32 step is 2**-10 m (8192 to 16384 m),
+    so 2 aircraft x 2 steps x 2**-10 m."""
+    spec = REGISTRY["wake_surf"]
+    _, state = spec.make_env().reset_env(jax.random.PRNGKey(4), spec.make_test_params())
+    assert 8192.0 <= float(state.lead.z) < 16384.0
+    assert _coordinate_atol(state) == pytest.approx(4 * 2.0**-10)
+
+
+def test_the_coordinate_atol_of_a_single_body_is_two_steps():
+    """One body, one coordinate per channel: two float32 steps at the farthest
+    coordinate, or 2 mm where that is less."""
+
+    @struct.dataclass
+    class Body:
+        x: float
+        z: float
+
+    far = Body(x=jnp.float32(36_000.0), z=jnp.float32(10.0))
+    # 32768 to 65536 m: a float32 step of 2**-8 m
+    assert _coordinate_atol(far) == pytest.approx(2 * 2.0**-8)
+    assert _coordinate_atol(Body(x=jnp.float32(100.0), z=jnp.float32(10.0))) == 2e-3
+
+
 @noisy_tasks
 def test_noise_runs_under_jit_vmap_and_scan(spec):
     """A scanned, vmapped, jitted rollout is the rollout taken one step at a
@@ -776,19 +831,7 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
     assert np.all(np.isfinite(obs)) and np.all(np.isfinite(measured))
 
     rows = _rollout(env, params, keys[1], action, steps=8)
-    # atol: a channel derived from km-scale coordinates (an error to a path
-    # 36 km out, say) inherits their float32 step: 1 mm at 15 km, 3.9 mm at
-    # 36 km. Two such steps at the farthest coordinate, never under 2 mm.
-    state = env.reset_env(keys[1], params)[1]
-    far = max(
-        [
-            float(np.max(np.abs(np.asarray(getattr(state, f)))))
-            for f in ("x", "y", "z")
-            if hasattr(state, f)
-        ]
-        + [0.0]
-    )
-    atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
+    atol = _coordinate_atol(env.reset_env(keys[1], params)[1])
 
     def same_integers(got, want):
         got, want = np.asarray(got), np.asarray(want)
