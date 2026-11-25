@@ -57,8 +57,8 @@ observed — the glass furnace hides 6 of 9 dynamic states, the reactor 7 of 11,
 the kiln 64 behind 8 measurements — so on those the MPC is solving a materially
 easier problem than the one the agent faces.
 
-Therefore: **the PID is the learned policy's peer, and the MPC is an upper bound
-with more information.** Beating the PID is the result. Approaching the MPC is
+Therefore: **the PID is the learned policy's peer, and the MPC is the best known
+plan, with more information.** Beating the PID is the result. Approaching the MPC is
 interesting. Beating the MPC would be a claim requiring explanation, not a
 victory lap, and the first hypothesis should be a simulator exploit rather than
 superior control.
@@ -460,7 +460,7 @@ rather than floating:
 | row | what it establishes |
 | --- | --- |
 | **PID** | **the peer** |
-| MPC | the model-based, full-state upper bound |
+| MPC | the model-based, full-state best known plan |
 
 These are what `src/target_gym/data/baseline_returns/` records, ten episode seeds each, and
 they are what a learned policy is compared against.

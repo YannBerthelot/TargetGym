@@ -44,7 +44,8 @@ standard through its signature (B3).
 - **Reference:** the controller the domain's recipe builds (J1). It is a textbook
   recipe, not a claim about what plants run.
 - **Ceiling:** the best cost an oracle finds with the true model, the true state and the
-  future. It cheats on purpose. It is a limit, never a claim that an agent could reach it.
+  future. It cheats on purpose. It is the best known plan: an achieved cost, not a bound
+  no controller can pass, and never a claim that an agent could reach it.
 - **Cost:** the score of B5 per step, in the source's units, unavoidable cost included,
   as industry reports its savings. `J` is a task's expected cost per step over its
   weighted scenarios (J4).
