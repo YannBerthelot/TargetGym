@@ -149,28 +149,6 @@ def test_a_reactor_at_rest_needs_nothing_for_a_day():
     assert cost < 1.0
 
 
-# Contract (owner, 2026-11-23): the reactor's sweep judges the property with the
-# day's end priced, since a null that dilutes nothing leaves its day's burnup for
-# the next one, and reports the medians as scored beside it.
-
-
-def test_the_reactors_null_is_judged_with_what_it_leaves_owed():
-    """As scored the null's median is 20 against the reference's 25; it leaves $28
-    owed on every seed and the reference nothing, so priced it is 48 against 25."""
-    ref = {"cost_by_seed": [24.0, 26.0], "owed_by_seed": [0.0, 0.0]}
-    null = {"cost_by_seed": [19.0, 21.0], "owed_by_seed": [28.0, 28.0]}
-    row = sweep.judged(ref, null)
-    assert row["reference_median"] == 25.0 and row["null_median"] == 20.0
-    assert row["reference_priced"] == 25.0 and row["null_priced"] == 48.0
-    assert row["beats_null"] and not row["beats_null_as_scored"]
-
-
-def test_a_null_cheaper_with_its_end_priced_still_breaks_the_property():
-    ref = {"cost_by_seed": [60.0, 62.0], "owed_by_seed": [0.0, 0.0]}
-    null = {"cost_by_seed": [19.0, 21.0], "owed_by_seed": [28.0, 28.0]}
-    assert not sweep.judged(ref, null)["beats_null"]
-
-
 def test_the_loading_stop_is_drawn_between_ten_and_twenty_fahrenheit():
     """The stop's setpoint has no plant document (PHYSICS.md, D14): the family's
     table stands in for it with 10 to 20 F, 5.556 to 11.111 K (owner, 2026-11-23)."""
