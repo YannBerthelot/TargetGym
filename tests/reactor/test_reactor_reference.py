@@ -380,3 +380,34 @@ def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low, cycle, expected
     after = (t > 1.0 + ramp_h + 0.1) & (t < 1.0 + ramp_h + hold_h - lead_h - 0.1)
     np.testing.assert_allclose(flow[during], expected, rtol=3e-3)
     np.testing.assert_allclose(flow[after], 0.0, atol=1e-6)
+
+
+# --- the Tavg loop acts only past the free band (package review, 2026-11-25) ---
+# Contract (PHYSICS.md section 6: "The Tavg loop acts past the free band, on what is
+# charged"): back inside the band, the loop moves no boron. Oracle: a plant held
+# lined out at full power, xenon balanced, no day announced; Tavg reads 3 K cold for
+# an hour, then on its program. Past the band the loop dilutes to warm it, and
+# an hour after Tavg is back on its program the flow is nothing.
+
+
+def test_back_inside_the_band_the_tavg_loop_moves_no_boron():
+    p = ReactorParams(**START_OF_CYCLE)
+    expert = make_reactor_pid_controller()
+    T_avg = p.T_avg_full_load
+    lined_out = np.array(
+        [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
+         0.0, 0.0, 1.0, 2.0, 0.5, 0.0, 1.0, 0.0],
+        np.float32,
+    )  # fmt: skip
+    obs = np.tile(lined_out, (3 * HOUR_STEPS, 1))
+    obs[:HOUR_STEPS, 4] = T_avg - 3.0  # an hour 3 K cold, past the 1.6 K band
+
+    def body(m, o):
+        a, m = expert.act(m, o)
+        return m, a[1]
+
+    flow = np.asarray(
+        jax.jit(lambda o: jax.lax.scan(body, expert.init_state, o)[1])(jnp.asarray(obs))
+    )
+    assert float(np.min(flow[:HOUR_STEPS])) < -0.01  # it dilutes while cold
+    np.testing.assert_allclose(flow[2 * HOUR_STEPS :], 0.0, atol=1e-6)

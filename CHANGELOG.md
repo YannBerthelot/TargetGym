@@ -9,7 +9,7 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
-### Reactor curve book and cycle draw (2026-11-25)
+### Reactor curve book, cycle draw and limits (2026-11-25)
 
 - The reactor's expert reads a measured curve book: the recipe's physics tests at
   power (a dilution bump, a calibrated rod bump) at both ends of the load-following
@@ -22,6 +22,13 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
   to restore, then the turbine unloads along a straight line to MODE 2's 5 % over
   6 h, and the plant goes to hot standby after 8 h above the limit without a break,
   where it went at 2 h (`dnb_restore`, `dnb_allowed`, `mode_2_load`).
+- The reactor's rod insertion limit follows NUREG-1431 Rev. 5.0, LCO 3.1.6
+  Conditions B and D: 2 h to restore, then the turbine unloads along a straight
+  line to no load over 6 h, and hot standby after 8 h past the limit
+  (`ril_restore`, `ril_allowed`).
+- The reactor's expert lets its Tavg loop go once Tavg is back inside its free
+  band. Holding the loop's output there kept moving boron for a Tavg nothing
+  charges, which made the expert fragile to its curve book late in the cycle.
 
 ### Upgrading from 0.7.0
 

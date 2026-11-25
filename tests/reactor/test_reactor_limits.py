@@ -11,8 +11,13 @@ Contracts, from the family's sources, written before the code:
   full at every power.
 - Rod insertion limit (family shape, KAIST's lead): a straight line in power, 22 %
   of the stroke in at full power, 78 % at half. Time deeper than the limit counts,
-  resets once the rods are back above it, and 2 h of it (STS 3.1.6) ends the run
-  in hot standby.
+  and resets once the rods are back above it. The rods are the lead bank (bank D),
+  so STS 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0, ML21259A155, pages 3.1.6-1
+  and 3.1.6-2; Condition A covers only banks A, B and C): 2 h to restore; then
+  Condition D, MODE 2 with keff < 1.0 within 6 h, so the turbine unloads along a
+  straight line to no load over those 6 h, and the plant goes to hot standby at
+  2 h + 6 h (owner, 2026-11-25; until then hot standby at 2 h). By hand, 3 h into
+  the shutdown the turbine may carry 1 - 3 / 6 = 0.5 of rated load.
 - Trips are lost production at the spot price on 1 GWe: a scram's restart takes
   48 h (ours, family 24 to 70 h: Doel-3's 6 h shutdown then 18 h at reduced power,
   INIS 1ypr9-dk595; APR1400 restart windows of 22 to 70 h, KNS 20A-065); hot
@@ -117,8 +122,20 @@ def test_time_past_the_insertion_limit_counts_and_resets():
     assert float(step(env, p, shallow).ril_outside) == 0.0
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_past_the_insertion_limit_ends_the_run(seconds, ends):
+@pytest.mark.parametrize(
+    "seconds, load", [(7000.0, 1.0), (7200.0 + 3 * 3600.0, 0.5), (28795.0, 5.0 / 21600)]
+)
+def test_past_two_hours_past_the_insertion_limit_the_turbine_unloads(seconds, load):
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    extra = float(rod_worth(0.3, p) - rod_worth(float(s.rod_in), p))
+    deep = at(
+        s, rod_in=0.3, ril_outside=seconds, boron=float(s.boron) - extra / p.boron_worth
+    )
+    assert float(step(env, p, deep).target_n) == pytest.approx(load, abs=2e-3)
+
+
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_past_the_insertion_limit_end_the_run(seconds, ends):
     env, p, obs, s = reset()
     terminated, _ = check_is_terminal(at(s, ril_outside=seconds), p)
     assert bool(terminated) is ends
@@ -134,7 +151,7 @@ def test_a_scram_costs_two_days_of_output():
 
 
 @pytest.mark.parametrize(
-    "field, value", [("below_floor", 900.0), ("ril_outside", 7200.0)]
+    "field, value", [("below_floor", 900.0), ("ril_outside", 28800.0)]
 )
 def test_a_timed_limits_overrun_costs_hot_standby(field, value):
     env, p, obs, s = reset()

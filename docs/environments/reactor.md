@@ -194,7 +194,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ao_limit_allowed` | 1800 | s |
 | `ril_full` | 0.22 |  |
 | `ril_half` | 0.78 |  |
-| `ril_allowed` | 7200 | s |
+| `ril_restore` | 7200 | s |
+| `ril_allowed` | 28800 | s |
 | `dnb_margin` | 2.83333 | K |
 | `dnb_restore` | 7200 | s |
 | `dnb_allowed` | 28800 | s |

@@ -490,7 +490,10 @@ def reference_step(params, state, obs, xp=jnp, book=None):
     Kc = 1.0 / (tavg_per_ppm(plant) * 2.0 * p.theta)  # ppm/s per K, negative
     Ti = 8.0 * p.theta
     trim = state.trim + Kc * ((e - state.last_e) + p.dt / Ti * e)
-    trim = xp.clip(trim, -dilute, borate)
+    # Back inside the band the loop lets go: its output held there kept borating or
+    # diluting a Tavg nothing charges, which carried it to the band's far edge
+    # (package review, 2026-11-25). The tool below takes over inside the band.
+    trim = xp.where(e == 0.0, 0.0, xp.clip(trim, -dilute, borate))
     # The operator's tool keeps the boron that xenon and the fuel's burnup ask for
     # as a debt, the Tavg it would leave off its program, and moves it only once
     # that Tavg nears the band's edge (the play, with the back-off). Burnup is
