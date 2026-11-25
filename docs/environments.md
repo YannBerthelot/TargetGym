@@ -71,12 +71,14 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|
-| `cstr` | `cstr-v7` | (4,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
+| `cstr` | `cstr-v8` | (5,) | (2,) | T (K) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 | `first_order` | `first_order-v5` | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 | `four_tank` | `four_tank-v7` | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v6` | (8,) | (2,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
 | `distillation` | `distillation-v9` | (8,) | (2,) | yD (mole fraction), xB (mole fraction) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 | `unstable_cstr` | `unstable_cstr-v7` | (3,) | (1,) | T (K) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
+
+> `cstr` -- Version 8 (the reactor run for what it makes, owner's decision of 2026-11-24) ships no oracle: its planner model is not written for two moves and the production score, and the owner decided the same day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's (cstr/oracle.py).
 
 ## Industrial / Energy
 
