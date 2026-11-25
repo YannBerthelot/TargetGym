@@ -464,6 +464,66 @@ def test_a_valve_position_loop_takes_its_mv_over_where_the_reset_left_it():
     np.testing.assert_allclose(actions[:, 1], [0.6, 0.7], atol=1e-7)
 
 
+def ceiling_on_the_valve_positions_mv():
+    """Keep ``obs[4]`` at or under 0.5 by MV 1, the valve position loop's own MV,
+    whose gain on it is positive: Shinskey's high-temperature override on the feed
+    over the valve position loop that sets it [S13, p. 436]."""
+    return Override(
+        read=lambda o, xp: o[4],
+        limit=0.5,
+        floor=False,
+        mv=1,
+        gain_sign=1.0,
+        kc=1.0,
+        ti=1e9,
+    )
+
+
+def valve_with_override(vp):
+    """``two_valves`` with the ceiling above. Observations: ``[cv, target, valve,
+    held MV 1, hot]``."""
+    return ladder_controller(
+        Rung(
+            name="test",
+            loops=(Pi(0, 0.0, 1.0),),
+            mix=np.array([[1.0], [0.0]]),
+            overrides=(ceiling_on_the_valve_positions_mv(),),
+            valve_positions=(vp,),
+        ),
+        read_cv,
+        read_target,
+        lambda o, xp: xp.asarray([0.0, 1.0]),
+        1.0,
+    )
+
+
+def test_an_override_on_a_valve_position_loops_mv_cuts_it_past_its_ceiling():
+    # The valve on its set point: the valve position loop asks the top, 1. Then the
+    # reading 0.2 over its ceiling at 0.5: Kc 1 takes 0.2 off that ask, 0.8, and
+    # the lower of the two is applied (a low select).
+    ctrl = valve_with_override(ValvePosition(watched, 0.8, 1, 0.5, 1e9))
+    actions = run(ctrl, [[0.0, 0.0, 0.8, 0.0, 0.0], [0.0, 0.0, 0.8, 0.0, 0.7]])
+    np.testing.assert_allclose(actions[:, 1], [1.0, 0.8], atol=1e-6)
+
+
+def test_a_valve_position_integral_holds_while_an_override_has_its_mv():
+    # Ti 1: with the valve 0.1 over its set point the integral would add -0.1 a
+    # step. Two steps the override holds must not add it, so back on its set point
+    # the loop asks the top again, 1, not 1 + 0.5 * (-0.2) = 0.9.
+    ctrl = valve_with_override(ValvePosition(watched, 0.8, 1, 0.5, 1.0))
+    actions = run(
+        ctrl,
+        [
+            [0.0, 0.0, 0.8, 0.0, 0.0],
+            [0.0, 0.0, 0.9, 0.0, 0.9],
+            [0.0, 0.0, 0.9, 0.0, 0.9],
+            [0.0, 0.0, 0.8, 0.0, 0.0],
+        ],
+    )
+    assert actions[1, 1] < 0.9 and actions[2, 1] < 0.9
+    np.testing.assert_allclose(actions[3, 1], 1.0, atol=1e-6)
+
+
 def floor_override():
     """Keep ``obs[2]`` at or above 0.5, by MV 0 whose gain on it is positive."""
     return Override(
