@@ -472,6 +472,9 @@ def _baseline_section(spec, row: dict | None, scored: bool, fps: dict) -> str:
             "The recorded comparison was measured on an earlier version of this "
             "task, so it is not shown; it shows again once re-recorded."
         )
+        # What a baseline is stays true without its numbers.
+        if spec.baselines_note:
+            lines.append(f"\n{spec.baselines_note}")
     elif spec.has_mpc:
         lines.append(
             "A PID and an MPC ship with this environment, but no comparison has "
