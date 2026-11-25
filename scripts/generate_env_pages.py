@@ -44,8 +44,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from generate_env_reference import BLOB, physics_path, status_label  # noqa: E402
 
-from target_gym import charter  # noqa: E402
-from target_gym.provenance import BASELINES_PATH, load_recorded_baselines  # noqa: E402
+from target_gym import charter, records  # noqa: E402
+from target_gym.provenance import (  # noqa: E402
+    BASELINES_PATH,
+    fingerprints,
+    load_recorded_baselines,
+)
 from target_gym.registry import GROUPS, REGISTRY, display_name  # noqa: E402
 from target_gym.units import param_units  # noqa: E402
 
@@ -333,16 +337,32 @@ _LINES = (
 )
 
 
-def charter_section(record: dict) -> str:
+def _listed(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+
+
+#: The record part each J3 line is read from.
+_PART = {"best_null": "nulls", "reference": "reference", "mpc": "mpc"}
+_PART["ceiling"] = "ceiling"
+
+
+def charter_section(record: dict, stale=()) -> str:
     """A scored task's four lines (charter J3) and its room, from its record.
     A line the record lacks reads "not measured", with the record's reason
     under the table: the MPC line may be missing in this release (owner,
-    2026-11-24), and the records tests hold the other three."""
+    2026-11-24), and the records tests hold the other three. A line whose part
+    is in ``stale`` (``charter.stale_parts``) reads "not current" and gives no
+    number until it is re-recorded (owner, 2026-11-25)."""
+    record = {k: v for k, v in record.items() if k not in set(stale)}
     lines = charter.j3(record)
     rows = ["| Line | What it is | Cost per step | Trips |", "|---|---|---|---|"]
-    reasons = []
+    reasons, old = [], []
     for key, label, what in _LINES:
         ln = lines[key]
+        if _PART[key] in stale:
+            rows.append(f"| {label} | {what} | not current | |")
+            old.append(label if label.isupper() else label.lower())
+            continue
         if ln == charter.NOT_MEASURED:
             rows.append(f"| {label} | {what} | not measured | |")
             why = record.get(key, {}).get("why")
@@ -353,8 +373,16 @@ def charter_section(record: dict) -> str:
         rows.append(
             f"| {label} | {what}{named} | {ln['J']:.4g}{loose} | {ln['trips']} |"
         )
+    if old:
+        reasons.append(
+            f"Recorded on an earlier version of this task, so not shown: the "
+            f"{_listed(old)} line{'s' if len(old) > 1 else ''}, which show again "
+            "once re-recorded."
+        )
     room = charter.room(lines["reference"], lines["ceiling"], record.get("weights", {}))
-    if room == charter.NOT_MEASURED:
+    if room == charter.NOT_MEASURED and {"reference", "ceiling"} & set(stale):
+        said = "The room shows again with the reference and the ceiling."
+    elif room == charter.NOT_MEASURED:
         said = "Room is not measured: it needs both the reference and the ceiling."
     elif room["J"] == charter.UNBOUNDED:
         said = "Room is unbounded: the ceiling costs nothing."
@@ -377,7 +405,10 @@ def charter_section(record: dict) -> str:
     )
 
 
-def _baseline_section(spec, row: dict | None, scored: bool) -> str:
+def _baseline_section(spec, row: dict | None, scored: bool, fps: dict) -> str:
+    """The recorded comparison, from ``row`` as far as it is current (``fps``,
+    owner's decision of 2026-11-25): a stale part is not shown."""
+    recorded, row = row, records.current_parts(row or {}, fps)
     if not scored:
         ships = "A PID and an MPC ship" if spec.has_mpc else "A PID ships"
         ships = f"{ships} and run" if spec.has_pid else "No baseline ships"
@@ -426,11 +457,21 @@ def _baseline_section(spec, row: dict | None, scored: bool) -> str:
                     " across them"
                 )
             lines.append(summary + ".")
+        elif recorded.get("mpc_returns"):
+            lines.append(
+                "\nThe MPC's numbers were recorded on an earlier version of its "
+                "oracle, so they are not shown; they show again once re-recorded."
+            )
         # A note on a task that ships both baselines says what one of them
         # is (patrol_range_bearing's MPC is a full-state bound), so it stays
         # beside the numbers it qualifies.
         if spec.baselines_note:
             lines.append(f"\n{spec.baselines_note}")
+    elif recorded and recorded.get("pid_returns"):
+        lines.append(
+            "The recorded comparison was measured on an earlier version of this "
+            "task, so it is not shown; it shows again once re-recorded."
+        )
     elif spec.has_mpc:
         lines.append(
             "A PID and an MPC ship with this environment, but no comparison has "
@@ -512,6 +553,8 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     episode = int(params.max_steps_in_episode)
 
     scored = charter.status(name) == charter.SCORED
+    record = (charter.load(name) or {}) if scored else {}
+    current = charter.current(name) if scored else None
     out = [f"# {title}", "", *_status_note(name, title)]
     if video:
         out += [
@@ -637,7 +680,7 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
             [
                 "## Reference and ceiling",
                 "",
-                charter_section(charter.load(name) or {}),
+                charter_section(record, charter.stale_parts(record, current)),
                 "",
             ]
             if scored
@@ -645,7 +688,7 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         ),
         "## Baselines",
         "",
-        _baseline_section(spec, recorded.get(name), scored),
+        _baseline_section(spec, recorded.get(name), scored, fingerprints(spec)),
         "",
         "## Arguments",
         "",

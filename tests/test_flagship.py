@@ -257,7 +257,18 @@ def results():
     return _script("generate_baseline_table")
 
 
-def test_the_results_page_has_a_row_for_scored_tasks_only(results):
+@pytest.fixture
+def as_if_current(monkeypatch):
+    """Every record read as current. The pages publish only rows that match
+    the tree (owner, 2026-11-25), so between a plant change and its re-record
+    they may publish none; the scored-only rule is checked apart from that."""
+    from target_gym import records
+
+    monkeypatch.setattr(records, "current_parts", lambda row, fps: dict(row))
+    monkeypatch.setattr(charter, "stale_parts", lambda record, current: [])
+
+
+def test_the_results_page_has_a_row_for_scored_tasks_only(results, as_if_current):
     page = results.outputs()[results.PAGE]
     body, unscored = page.split("\n## Not scored\n")
     linked = set(re.findall(r"^\| \[`(\w+)`\]\(environments/", body, re.MULTILINE))
@@ -267,7 +278,7 @@ def test_the_results_page_has_a_row_for_scored_tasks_only(results):
     assert set(_names(unscored)) == OTHERS
 
 
-def test_the_readme_chart_draws_scored_tasks_only(results):
+def test_the_readme_chart_draws_scored_tasks_only(results, as_if_current):
     svg = results.outputs()[results.IMAGES[False]]
     drawn = {n for n in registry.REGISTRY if f">{n}<" in svg}
     assert drawn and drawn <= FIVE
