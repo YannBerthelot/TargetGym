@@ -335,10 +335,14 @@ def test_the_lead_flies_clear_of_its_own_wake():
 
 
 def test_the_wake_comes_from_the_lift_of_each_step():
-    """A reset aircraft carries much less than its weight until it pitches up, so the
-    wake it sheds then is weaker than its weight's. Ten spans out it is ``L / (2 pi
-    rho V y^2)`` on the lift it made that step."""
+    """A lead half again heavier than the trim it spawned in carries much less than
+    its weight on its first step, so the wake it sheds then is weaker than its
+    weight's. Ten spans out it is ``L / (2 pi rho V y^2)`` on the lift it made that
+    step. (The lead spawns in trim and its autopilot engages there, owner
+    2026-11-24, so its mass is raised by hand to tell the step's lift from the
+    weight.)"""
     env, params, _, state = _slot("patrol", 30.0)
+    state = state.replace(lead=state.lead.replace(m=1.5 * state.lead.m))
     lift = float(step_lead(state, params)[2])
     assert lift < 0.8 * float(state.lead.m * params.gravity)
     _, new, _, _, _ = env.step_env(KEY, state, jnp.zeros(3), params)
@@ -361,13 +365,15 @@ def test_the_wake_stays_with_the_lead_down_the_route():
     """Eight seconds on, over a kilometre from where it began (250 KCAS is 163.5
     m/s at 5000 m), the follower in its slot still has the wake on it: at least
     half the upwash a level Hornet's pair gives 40 m out, Gamma / (2 pi) b0 / (y^2 -
-    b0^2 / 4) with Gamma = W / (rho V b0) = 137 m^2/s and b0 = 8.96 m, 0.12 m/s
-    (half, since the lead pitches up from a lift below its weight)."""
-    env, params, _, state = _slot("patrol", 40.0)
+    b0^2 / 4) with Gamma = W / (rho V b0) = 137 m^2/s and b0 = 8.96 m, 0.12 m/s.
+    The follower holds its slot under the task's expert: the lead flies level from
+    its first step (owner, 2026-11-24), so a fixed pitch-up would climb out of it."""
+    env, params, obs, state = _slot("patrol", 40.0)
+    expert = tg.make_expert("patrol").host()
     step = jax.jit(env.step_env)
     for t in range(8):
-        action = jnp.array([0.0, 0.1, 0.0])
-        _, state, _, _, _ = step(jax.random.PRNGKey(t), state, action, params)
+        action = expert(np.asarray(obs))
+        obs, state, _, _, _ = step(jax.random.PRNGKey(t), state, action, params)
     assert float(state.lead.x**2 + state.lead.y**2) > 1000.0**2
     assert abs(float(state.follower.gust_z)) > 0.06
 

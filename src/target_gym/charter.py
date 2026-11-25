@@ -33,6 +33,8 @@ import json
 import math
 import pathlib
 
+import numpy as np
+
 PKG = pathlib.Path(__file__).resolve().parent
 REPO = PKG.parents[1]
 DATA = PKG / "data" / "charter"
@@ -53,6 +55,9 @@ TRIPS_PER = 30
 J2_SEED_FLOOR = 1000
 #: J4's scoring seeds, the same in every scenario, set at the tag.
 ANCHOR_SEEDS = tuple(range(200, 210))
+#: The scoring seeds' stop rule (owner, 2026-11-24): blocks of this many from 200,
+#: up to this many seeds in all; resamples of the paired bootstrap, on a fixed seed.
+STOP_BLOCK, STOP_MAX, STOP_RESAMPLES = 10, 50, 5000
 #: Rows in ladder_rows that are test fixtures, not tasks.
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
@@ -476,3 +481,40 @@ def stale_report(tasks=None) -> dict:
     """``{task: stale parts}`` over the charter tasks, the current ones left out."""
     report = {t: stale_parts(load(t), current(t)) for t in tasks or charter_tasks()}
     return {t: parts for t, parts in report.items() if parts}
+
+
+def _weighted(costs: dict, weights: dict, picks: dict | None = None):
+    """J = sum over scenarios of w_s times the mean over that scenario's seeds; with
+    ``picks``, over each scenario's resampled indices, one row per resample."""
+    if picks is None:
+        return sum(w * float(np.mean(costs[s])) for s, w in weights.items())
+    return sum(w * np.asarray(costs[s])[picks[s]].mean(-1) for s, w in weights.items())
+
+
+def paired_interval(a: dict, b: dict, weights: dict) -> tuple:
+    """``(J_a / J_b, [low, high])``: the ratio and its 95 % interval by a paired
+    bootstrap that resamples seeds within each scenario (J4), on a fixed seed."""
+    rng = np.random.default_rng(0)
+    picks = {
+        s: rng.integers(0, len(a[s]), (STOP_RESAMPLES, len(a[s]))) for s in weights
+    }
+    ratios = _weighted(a, weights, picks) / _weighted(b, weights, picks)
+    low, high = np.percentile(ratios, [2.5, 97.5])
+    return _weighted(a, weights) / _weighted(b, weights), [float(low), float(high)]
+
+
+def stop_seeds(measure, weights: dict, threshold: float = 1.0) -> dict:
+    """The scoring seeds' stop rule (owner, 2026-11-24, written before any result).
+    ``measure(seeds)`` gives two paired runs on ``seeds``, each ``{scenario: costs
+    per seed}``. Seeds come in blocks of ``STOP_BLOCK`` from 200; the run stops at
+    the first block whose 95 % interval on ``J_a / J_b`` excludes ``threshold``, or
+    at ``STOP_MAX`` seeds, undecided. Returns the seeds, the ratio, its interval and
+    whether it was decided."""
+    for n in range(STOP_BLOCK, STOP_MAX + 1, STOP_BLOCK):
+        seeds = tuple(range(ANCHOR_SEEDS[0], ANCHOR_SEEDS[0] + n))
+        a, b = measure(seeds)
+        ratio, (low, high) = paired_interval(a, b, weights)
+        decided = low > threshold or high < threshold
+        if decided:
+            break
+    return {"seeds": seeds, "ratio": ratio, "interval": [low, high], "decided": decided}

@@ -15,6 +15,24 @@ Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviatio
 
 ---
 
+## Status: `plane3d_circle` and `plane3d_figure8` are Extra, 2026-11-24
+
+The owner's decision on the aircraft five-task review: the circle and the
+figure-8 leave the core pool, solved and with no airliner duty behind them.
+`plane3d_heading` and `plane3d_racetrack` are not affected. Both stay
+registered with their plant, expert, oracle and tests; in code each is
+`EnvSpec.extra`, so `registry.benchmark_specs()` leaves it out, and their
+capability tags are empty. The reasons, measured on seeds 100 to 109:
+
+- **No duty.** No source makes a constant-radius orbit a transport duty, and
+  the figure-8 is neither eights on pylons nor a documented loiter
+  (`plane/EXTRA.md`). The airliner's holding duty is `plane3d_racetrack`.
+- **Solved after the start.** 87 % (circle) and 84 % (figure-8) of the
+  reference's cost falls in the first minute, which starts wings level on a
+  curve. After it the circle's reference holds 0.76 m of height and 0.60 m
+  of path, and the figure-8's is 0.96 m from the curve, RMS: any band a
+  source could give leaves it at 0.
+
 ## 1. What the third dimension adds
 
 Three things, and nothing else:
