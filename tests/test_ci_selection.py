@@ -531,3 +531,21 @@ def test_the_push_runs_the_whole_tier_on_313_and_314_and_a_light_set_on_the_rest
         "test_step_env_is_jittable",
     ):
         assert part in runs, part
+
+
+def test_a_shard_with_no_solo_test_passes_its_solo_step():
+    """Thirteen solo tests over four shards leave some shard with none of a
+    tier's, and pytest exits 5 when it collects nothing: PR 295's shard 4/4
+    failed that way after its 1,340 tests passed. A run of solo tests accepts
+    that exit code, and only that one."""
+    jobs = _workflow_jobs()
+    calls = [
+        line.strip()
+        for name in ("test", "medium")
+        for step in jobs[name]["steps"]
+        for line in step.get("run", "").splitlines()
+        if "pytest" in line and "-n 0" in line and "solo and" in line
+    ]
+
+    assert len(calls) == 2, calls
+    assert all(c.endswith("|| test $? -eq 5") for c in calls), calls

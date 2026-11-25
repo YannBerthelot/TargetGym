@@ -320,7 +320,8 @@ jobs:
     # alone on one worker, after the rest (owner, 2026-11-25). Each shard runs
     # its own share of them: together they take too long for one runner.
     - name: Solo tests
-      run: uv run pytest -q -n 0 -m "solo and not medium and not large and not records"
+      # Exit code 5 is "no tests collected": a shard may hold none of them.
+      run: uv run pytest -q -n 0 -m "solo and not medium and not large and not records" || test $? -eq 5
 
     - name: Save the XLA compilation cache
       if: always() && github.event_name == 'push'
@@ -390,7 +391,7 @@ jobs:
     - name: Medium tests
       run: |
         uv run pytest -q -m "medium and not solo and not records" -n 2 --durations=0 --durations-min=3
-        uv run pytest -q -m "medium and solo and not records" -n 0
+        uv run pytest -q -m "medium and solo and not records" -n 0 || test $? -eq 5
 
     - name: Save the XLA compilation cache
       if: always() && github.event_name == 'push'
