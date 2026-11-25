@@ -46,6 +46,7 @@ from target_gym.patrol.env import (
     lead_cruise_speed,
     lead_leg,
     make_cruise_state,
+    separation,
     station_distance,
     wake_sink,
 )
@@ -421,9 +422,12 @@ class PlanePatrolRangeBearing(_PlanePatrolBase):
         return get_obs_range_bearing(state, xp=jnp)
 
     def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
-        # The tracked value is that one range reading, not a second instrument.
+        # The range is seen on the true geometry: worked out from the position
+        # fixes, as the rest of the observation is, it would inherit their GNSS
+        # noise. The tracked value is that same range, not a second instrument.
         obs = super().get_obs(state, params)
-        return obs.at[19].set(obs[10])
+        seen = separation(state).astype(obs.dtype)
+        return obs.at[10].set(seen).at[19].set(seen)
 
     # ``true_obs`` reads the plant here. With no instrument in the way the two
     # are one value already.
