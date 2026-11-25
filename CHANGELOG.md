@@ -473,6 +473,11 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `target_gym.scoring_runs`: a task scored on its stream pinned to each
+  scenario, from the reset, over a protocol's days, with twin scenarios folded
+  and a stop rule for seeds set before results. The reactor's protocol (owner,
+  2026-11-24): 7 days, baseload, edf_daily, fast_return and krsko_slow, 10 seeds
+  and 10 more where a scenario's room interval contains 1.
 - `tg.make_stream(name)`: the task as a continuing plant, the form an
   average-reward algorithm trains on. It never ends, its scenarios take turns
   by their weights, and the reset key fixes its world.
