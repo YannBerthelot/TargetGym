@@ -326,3 +326,17 @@ def test_a_solo_test_never_shares_a_runner_with_another_worker():
     assert any(m.startswith("solo:") for m in markers)
     source = (ROOT / "tests" / "formation" / "test_formation_marl.py").read_text()
     assert "mark.solo" in source
+
+
+def test_a_push_run_is_never_cancelled_by_a_later_push():
+    """Two merges into int an hour apart cancelled each push run before its
+    medium tier finished (2026-11-25, runs 45623244455 and 45634414414), so
+    the tier never reported. A pull request's run still gives way to its next
+    push; a branch push waits its turn instead."""
+    import yaml
+
+    group = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "python-app.yml").read_text()
+    )["concurrency"]
+    cancel = str(group["cancel-in-progress"])
+    assert "pull_request" in cancel and cancel.startswith("${{"), cancel
