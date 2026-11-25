@@ -85,10 +85,6 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | Cooling water | Hardware | 40 to 136 g/s; none during a cooling loss | [S1, Table 1, Fig. 2]; [S2; S3] |
 | Feed | Hardware | 40 to 110 g/s | top [S1, Table 1]; floor ours |
 
----|---|---|---|
-| High reactor temperature | Trip | The interlock cuts the feed at 75 C; restart priced as 4 h of lost production (ours) | [S3, PDF p. 38]; setting ours |
-| Cooling water | Hardware | 40 to 136 g/s; none during a cooling loss | [S1, Table 1, Fig. 2]; [S2; S3] |
-
 ---
 
 ## 4. Observation (rule 16)
@@ -168,15 +164,6 @@ inside the band (owner, 2026-11-24).
 | `rho_floor` | 0 | not measured on this plant |
 | `precision_floor` | 0.1 K | version 1 only |
 
---- | --- | --- |
-| `e_floor` | 0.1 K | ours: a reactor probe's resolution, the documented minimum the score resolves |
-| `e_tol` | 0 | no band found |
-| `tracking_exponent` | 2 | ours |
-| `failure_cost` | 2.45e5 | ours: twice the tracking cost of 35 K, past any untripped state (a reactor cooled to its feed) |
-| `restart_steps` | 960 | ours: 4 h of lost production, seven residence times; no restart time found |
-| `rho_floor`, `rho_floor_tracking` | 0 | not measured on this plant |
-| `precision_floor` | 0.1 K | version 1 only |
-
 ---
 
 ## 7. Behaviour tests
@@ -228,8 +215,9 @@ dead time of [S6] is on the jacket reading, not the heat path.
 on was high pressure [S3, Fig. 11]. Effect: the runaway is seen on temperature
 alone.
 
-**D3. One handle.** PARSEX also moves feed concentration [S1, p. 4]; HSE lists
-inhibitor, quench and dump [S5]. Effect: a narrower job.
+**D3. Two handles, the water and the feed.** PARSEX also moves feed
+concentration [S1, p. 4]; HSE lists inhibitor, quench and dump [S5]. Effect: a
+narrower job, with no last resort past a feed cut.
 
 **D4. A simulated reaction.** PARSEX injects steam for the heat a reaction
 would release [S1]; the model is that reaction.
@@ -253,8 +241,9 @@ did: 1272 per step for the foresight ceiling and 1360 for the reference, 97 %
 and 69 % of their costs over the suite. Bayer's cooler held its temperature
 only while the feed stayed under a limit [S3, PDF pp. 36-37], so the documented
 day is a feed at the edge of the cooling, not past it. What practice does past
-it is cut the feed (D3: version 7 had no such handle). Version 8 has it, so its
-build-up is the 10 % again and the scenario is one a feed cut can hold.
+it is cut the feed (version 7 had no such handle). Version 8 has it, so its
+build-up is the 10 % again and the scenario is one a feed cut could
+hold; the reference does not (owner, 2026-11-24: reported unheld).
 
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the
@@ -375,7 +364,7 @@ are ours, searched again on 2026-11-11 without a source (`REALITY.md`). In a win
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `cstr` | 960 | 15 | 4.0 h | 1 in [-1, 1] | 4 | 33 |
+| `cstr` | 960 | 15 | 4.0 h | 2 in [-1, 1] | 5 | 35 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -433,7 +422,8 @@ search, says what was looked for):
 Sourced: the feed's top, 110 g/s [S1, Table 1]; the structure of the reference
 and its valve position loop's closed-loop time of 30 dead times [S13].
 
-The reference is the ladder's, with its valve position rung
+The reference was then the ladder's valve position rung (on the merged tree
+the ladder keeps the PI, see the upsets' ruling above)
 (`scripts/reference_ladder.py`): the temperature on the water by SIMC, the
 water valve held by the feed. Set points are placed on a fixed grid by the
 owner's rule of 2026-11-23, the cheapest at which no deciding seed of the
