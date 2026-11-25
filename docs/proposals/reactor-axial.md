@@ -433,6 +433,65 @@ moderator coefficients, and priced the null costs two and a half times the
 reference there. That settles the cause the first sweep only suggested: the
 null wins a baseload day by leaving its dilution for the next one.
 
+### The evaluation cut (2026-11-24)
+
+The owner asked for the evaluation to be cut by one rule: a scenario, a seed or a
+day of simulation stays only if removing it would hide a named behaviour or change
+which controller looks better. He chose, by picker: runs of 7 days, the source's
+standard day of each twin pair, no priced day's end, and the stream as the picture.
+`target_gym.scoring_runs` scores the reactor that way. Measured on the plant of
+PR 249; nothing was recorded.
+
+**Behaviours and scenarios.** Four behaviours, one scenario each:
+
+- the calm day's boron trim against burnup (baseload);
+- a deep daily load follow with xenon: lost output, Tavg off program, the turbine's
+  rate and the offset's clock (edf_daily);
+- a return faster than boron, which takes the rods (fast_return: the reference
+  moves 284 rod steps a day, against about 60 on the EDF days);
+- a slow ramp that boron alone follows (krsko_slow: 97 % effluent, no lost output).
+
+edf_short_hold repeats edf_daily, and krsko_shallow repeats krsko_slow: on one-day
+windows their per-seed rooms correlate 0.99 and their costs split the same way.
+Their weights go to the twin kept, so the shares are 0.8919, 0.0433, 0.0216 and
+0.0433.
+
+**Why 7 days and no burn-in.** On calm days the reference lets Tavg drift through
+its dead band with burnup and then dilutes it back. Its daily Tavg error
+correlates 0.71 a day apart and turns negative at 3 to 6 days, a cycle near 8 days.
+Coupled pairs (long-strata R1) never reconverge in 12 days: the cycle's phase is a
+neutral mode, so a burn-in removes nothing. The bias of the phase goes when the run
+covers a cycle. Day one from the reset costs the reference 0.02 to 5 times its
+later daily mean.
+
+**The do-nothing.** It holds the rods parked, no boron and the turbine on its plan.
+On 24-day baseload streams it costs less than the reference on 5 of 20 seeds over
+one day, 1 of 20 over two days and none from three days on. On krsko_shallow it
+never costs less and trips on most seeds from the first day.
+
+**The planner against the reference on 10-day streams** (no trips, no failed
+solves; room over the first 1, 3, 5, 7 and 10 days):
+
+| scenario | seeds | 1 | 3 | 5 | 7 | 10 |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseload | 8 | 0.66 | 1.07 | 1.18 | 1.20 | 1.18 [1.11, 1.22] |
+| edf_daily | 4 | 3.18 | 3.08 | 3.21 | 3.23 | 3.20 |
+| fast_return | 4 | 3.13 | 3.19 | 3.38 | 3.29 | 3.32 |
+| krsko_slow | 4 | 1.44 | 1.42 | 1.41 | 1.40 | 1.41 |
+| krsko_shallow | 4 | 1.75 | 1.52 | 1.59 | 1.56 | 1.61 |
+
+The load-follow rooms do not depend on the length; baseload needs a week. The
+planner wins all 8 baseload seeds over 10 days (1.07 to 1.26). The folded suite is
+2.53 [1.75, 3.17] over 7 days, against 4.48 on one-day windows. On the stream a
+load-follow day is an announced event, one per visit on average, so a pinned week
+also holds calm stretches. That is the likely reason for the lower load-follow
+rooms; it is not separated from the notice's timing.
+
+**Compute** (bob, 2 threads, load near 100, 4.0 GB a process): the planner takes 13
+to 15 minutes for 10 calm days and 19 to 27 for 10 load-follow days. The 40 runs of
+the cut protocol are about 9 process-hours; the ceiling, the same solver, has not
+been measured on the stream.
+
 ### Not measured yet
 
 - A ceiling that is certified: the candidate above is the planner's own plan

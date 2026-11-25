@@ -3,11 +3,17 @@ plant and write ``data/oracle_ceilings/<task>.json`` stamped with that plant.
 
     python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR [--start mpc[+expert]]
     python scripts/record_ceilings.py write TASK OUT_DIR
+    python scripts/record_ceilings.py owed TASK OUT_DIR
 
 ``solve`` plans one episode with the true model, the true state and the episode's
 future, on the seed's own keys (``benchmark.episode_keys``), and replays the plan
 through ``benchmark.run_policy`` at sensor noise 1 with the ladder row's score
-parameters, as the J3 lines are scored. Only the replayed cost is reported.
+parameters, as the J3 lines are scored. Only the replayed cost is reported, read over
+the task's scored window (``evaluation.Evaluation``): a plan charges the whole
+episode, its burn-in and its tail included, and a line reads the window alone.
+``owed`` prints, per scenario, the seeds still to solve under the seed rule
+(``evaluation.line_seeds``): the evaluation seeds first, then the extra seeds where
+the kept reference's saving over the solved ceilings has an interval that touches 0.
 ``write`` gathers every solved seed into the ceilings file, which
 ``scripts/record_charter.py --parts ceiling`` then reads. The glass furnace has its
 own script, ``scripts/glass_slow_oracle.py``.
@@ -31,8 +37,12 @@ The protocols are the ones the ceilings were first measured with (2026-11-08 to
 
 - process (cstr, distillation, compressor_surge, unstable_cstr, ph_neutralization): ``pc_gym.foresight``
   L-BFGS-B from the reset's hold (the reference's first move held) and the kept
-  reference's moves, the cheaper untripped plan kept; compressor_surge also from their
-  midpoint, each start restarted twice from its own end plan.
+  reference's moves, each through the oracle's ``ceiling_start`` where it has one, the
+  cheaper untripped plan kept. compressor_surge (owner, 2026-11-24, ruling A) takes
+  exactly those two starts (its ``CEILING_STARTS``), and the file records the stop
+  rule: converged when the two starts' J agree within 1 % and the kept J is within 3 %
+  of the balance floor (``pc_gym.foresight.ceiling_converged``). Its first records
+  (2026-11-09) also started from the midpoint, each start restarted twice.
 - shooting (boiler_drum, hvac, wind_turbine): the shared interior-point solver
   (``oracles.shooting``) on the oracle's own model, one plan over the episode, block 1,
   through K7's width rungs (``data/oracle_widths``), limits backed off by the task's
@@ -65,11 +75,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from target_gym import charter, scenarios  # noqa: E402
+from target_gym import charter, evaluation, scenarios  # noqa: E402
 from target_gym.benchmark import (  # noqa: E402
     episode_keys,
     episodes_of,
     run_policy,
+    seed_params,
     task_info,
 )  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
@@ -100,7 +111,7 @@ def setup(task, scenario, seed):
     env = spec.make_env()
     T = int(params.max_steps_in_episode)
     resets, steps = episode_keys(jax.random.PRNGKey(seed), 1, T)
-    _, st = env.reset_env(resets[0], params)
+    _, st = env.reset_env(resets[0], seed_params(env, params, seed))
     package = type(env).__module__.rsplit(".", 1)[0]
     oracle = importlib.import_module(package + ".oracle")
     return L, spec, row, env, params, st, steps[:, 0], T, oracle
@@ -110,7 +121,10 @@ def replay(task, env, params, seed, policy) -> dict:
     (ep,) = episodes_of(
         run_policy(policy, env, params, task_info(task, env, params, 1), seeds=[seed])
     )
-    return {"cost": float(ep.cost.mean()), "trips": int(np.sum(ep.failed))}
+    return {
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
+        "trips": int(np.sum(ep.failed)),
+    }
 
 
 class StatePlan:
@@ -147,7 +161,7 @@ def oracle_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": float(ep.cost.mean()),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -168,7 +182,7 @@ def expert_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": float(ep.cost.mean()),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -189,13 +203,14 @@ def solve_process(task, scenario, seed, warm=None, expert=None):
     if expert is not None:
         starts["expert"] = expert
     restarts = 0
-    if task == "compressor_surge":
-        starts["mid"] = 0.5 * (starts["hold"] + starts["reference"])
-        restarts = 2
+    own = getattr(O, "CEILING_STARTS", None)
+    if own is not None:  # the task's own starts and stop rule (compressor_surge)
+        starts = {k: v for k, v in starts.items() if k in own or k in ("mpc", "expert")}
+    begin = getattr(O, "ceiling_start", None)
     window = getattr(O, "CEILING_WINDOW", None)
     runs = []
     for name, init in starts.items():
-        plan = init
+        plan = init if begin is None else begin(env, params, st, init)
         for k in range(restarts + 1):
             plan, cert = F.solve(env, params, seed, O.ceiling_margins, O.CEILING_TERMS,
                                  plan, maxiter=PROCESS[task], window=window)  # fmt: skip
@@ -212,6 +227,11 @@ def solve_process(task, scenario, seed, warm=None, expert=None):
         path = F.tracking(env, params, seed, plan, feedback)
         policy = F.TrackingPolicy(plan[None], [path], feedback[0])
     out = replay(task, env, params, seed, policy)
+    floor = getattr(O, "seed_floor", None)
+    if floor is not None:  # the demand the seed brings, whatever the plan
+        trace = run_policy(ref, env, params, task_info(task, env, params, 1),
+                           seeds=[seed], record={"opening": O.floor_opening})  # fmt: skip
+        out["floor"] = floor(np.asarray(trace["records"]["opening"][0]), params, st)
     solver = {k: cert[k] for k in ("status", "capped", "fell_back", "iterations",
                                    "projected_gradient", "min_margin")}  # fmt: skip
     return out | {
@@ -532,11 +552,64 @@ def write(task, out_dir):
         ),
         "J_ceiling": sum(weights[s] * rows[s]["ceiling_mean"] for s in weights),
         "scenarios": rows,
+        **_stop_rule(weights, got),
         "generated": datetime.date.today().isoformat(),
         "cpu": platform.node(),
     }
     p = charter.write_ceiling(task, data, environment_fingerprint(spec))
     print(f"{task}: J_ceiling {data['J_ceiling']:.6g}, wrote {p}")
+
+
+def owed(task, out_dir) -> dict:
+    """``{scenario: seeds}`` still to solve in ``out_dir`` under the seed rule, the
+    kept reference read from the task's charter record."""
+    import reference_ladder as L
+
+    spec = REGISTRY[task]
+    ev = evaluation.of(spec)
+    got: dict = {}
+    for f in pathlib.Path(out_dir).glob(f"{task}__*.json"):
+        r = json.loads(f.read_text())
+        got.setdefault(r["scenario"], {})[r["seed"]] = r["cost"]
+    names = list(scenarios.weights(spec))
+    out = {s: [x for x in ev.seeds if x not in got.get(s, {})] for s in names}
+    ready = [s for s in names if not out[s] and ev.extra_seeds]
+    if ready:
+        kept = ((charter.load(task) or {}).get("reference") or {}).get("kept")
+        if not kept:
+            raise SystemExit(f"{task}: record the reference before the extra seeds")
+        row = L.ROWS[task]()
+        policy = L.Reference(kept, L.build(task, row)[kept])
+        ref = L.run_suite(task, row, policy, seeds={s: ev.seeds for s in names})
+        for s in ready:
+            costs = ref["scenarios"][s]["costs"]
+            saving = [c - got[s][x] for c, x in zip(costs, ev.seeds)]
+            want = evaluation.line_seeds(spec, saving)
+            out[s] = [x for x in want if x not in got[s]]
+    print(json.dumps(out))
+    return out
+
+
+def _stop_rule(weights, got) -> dict:
+    """The stop rule's verdict where the task has one (rows carry ``floor``):
+    each start's J (its planned cost, weighted as the suite), the balance
+    floor's J, and ``pc_gym.foresight.ceiling_converged`` on them."""
+    runs = [r for s in weights for r in got[s]]
+    if not all("floor" in r for r in runs):
+        return {}
+    from target_gym.pc_gym.foresight import AGREE, NEAR, ceiling_converged
+
+    names = set.intersection(*(set(r["starts"]) for r in runs))
+
+    def J(value):
+        return sum(
+            w * float(np.mean([value(r) for r in got[s]])) for s, w in weights.items()
+        )
+
+    starts = {n: J(lambda r, n=n: r["starts"][n]) for n in sorted(names)}
+    floor = J(lambda r: r["floor"])
+    return {"stop_rule": {"starts_J": starts, "floor_J": floor, "agree": AGREE,
+                          "near": NEAR, "converged": ceiling_converged(starts, floor)}}  # fmt: skip
 
 
 def _method(task) -> str:
@@ -557,5 +630,7 @@ if __name__ == "__main__":
         solve(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], start)
     elif sys.argv[1] == "write":
         write(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "owed":
+        owed(sys.argv[2], sys.argv[3])
     else:
         raise SystemExit(__doc__)

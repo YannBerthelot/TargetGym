@@ -1,5 +1,8 @@
 # 3D holding pattern
 
+!!! note "Under review"
+    3D holding pattern is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane3d_racetrack/pid_output.gif" width="480px"/></p>
 
 Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. The observation gives the signed cross-track error, the tangent heading and the curvature at the nearest point of the pattern, so the work is in the transitions between straight and turning flight. What the hold costs is the fuel it burns, at whatever speed the aircraft flies under the maximum holding airspeed.
@@ -17,6 +20,7 @@ env, params = tg.make("plane3d_racetrack")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 1200 steps of 1 s (20 min) |
 | Cite as | `plane3d_racetrack-v10` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -81,7 +85,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).
 
 ## Arguments
 

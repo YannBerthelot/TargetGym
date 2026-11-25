@@ -20,6 +20,7 @@ env, params = tg.make("unstable_cstr")
 | Tracked variable(s) | T (K) |
 | Episode length | 1800 steps of 1 s (30 min) |
 | Cite as | `unstable_cstr-v7` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/unstable_cstr/PHYSICS.md) |
 
 ## Action space
@@ -69,14 +70,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1800-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -64.59 | 0.03588 |
-| MPC | 0 | -0 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

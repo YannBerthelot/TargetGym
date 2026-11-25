@@ -28,10 +28,14 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
+- **Five scored tasks.** `reactor`, `hvac`, `cstr`, `compressor_surge` and
+  `ph_neutralization` are scored: each has a measured reference to beat and a
+  ceiling. The other twenty run the same way and are not scored yet, so no
+  result is published for them. See [Environments](#environments).
 - **Baselines included.** Every environment ships a tuned PID, and all but
   `wake_surf`, whose oracle is not built yet, an MPC with full state access,
-  which serves as an upper bound. Both are recorded
-  over ten seeds in `src/target_gym/data/baseline_returns/`.
+  which serves as an upper bound. For the scored tasks both are recorded in
+  `src/target_gym/data/`.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
   parameter table, published validation targets asserted by tests, and its
   documented approximations.
@@ -93,8 +97,8 @@ print("Expert return:", total)
 `tg.make(name)` returns the environment and the configuration the published
 baselines are scored on, as `gymnax.make` does, and `reset` and `step` follow
 the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
-change single fields, as in `tg.make("plane", max_steps_in_episode=500)`, and
-`tg.list_envs()` gives the 25 names.
+change single fields, as in `tg.make("plane", max_steps_in_episode=500)`.
+`tg.list_envs()` gives the 25 names, and `tg.FLAGSHIP` the five that are scored.
 
 The expert's memory is its PID's integral and last error. You carry it as
 you carry `state`, so the same `expert.step` also runs under `jit`, `vmap`
@@ -138,6 +142,9 @@ m = tg.score_policy("four_tank", policy, seeds=3)   # 10 for a result
 print(m["ratio"], m["win_rate"], m["score"], m["headroom"])
 ```
 
+`score_policy` works on every registered task. The published results cover the
+scored suite only.
+
 `ratio` is the expert's cost over yours, so above 1 beats the expert. `score`
 runs from 0 at the expert to 1 at the task's ceiling, and `headroom` is the room
 the task leaves beyond the expert, in decades; [docs/rl-protocol.md](docs/rl-protocol.md)
@@ -156,15 +163,39 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 
 ## Environments
 
-| Family | Count | Environments |
-|---|---|---|
-| **Aircraft** | 11 | A320-like 2D aircraft on three reference patterns; four 3D path-following tasks; an A320 surfing another's wake; two F/A-18 formation-patrol variants; a multi-agent F/A-18 formation |
-| **Process control** | 6 | CSTR, first-order lag, four-tank, pH neutralisation, binary distillation, CSTR on its unstable steady state |
-| **Industrial / energy** | 6 | Glass furnace, nuclear reactor, building HVAC, boiler drum, cement kiln, compressor held off its surge line |
-| **Renewable energy** | 2 | Wind turbine, grid battery |
+25 tasks are registered, and every one of them runs through `tg.make`. Five
+are scored. The rest wait for their review.
 
-**[Full environment reference →](docs/environments.md)** with observation and
-action shapes, tracked variables, baseline returns and physics contracts.
+### The scored suite
+
+A scored task has a measured reference to beat, a ceiling and the room between
+them on its page, and its numbers are kept current with the code. Results are
+published for these five only.
+
+| Task | Family | Plant |
+|---|---|---|
+| [`reactor`](docs/environments/reactor.md) | Industrial / Energy | A pressurised water reactor following a day's load plan |
+| [`hvac`](docs/environments/hvac.md) | Industrial / Energy | An office heated through a concrete slab |
+| [`cstr`](docs/environments/cstr.md) | Process Control | A jacketed exothermic reactor |
+| [`compressor_surge`](docs/environments/compressor_surge.md) | Industrial / Energy | A variable-speed compressor held off its surge line |
+| [`ph_neutralization`](docs/environments/ph_neutralization.md) | Process Control | A two-stage acid neutralisation kept inside its discharge permit |
+
+### Registered, not scored
+
+These tasks have the same interface and ship the same controllers, but no
+result is published for them. Most are under review and can join the scored
+suite in a later release. A few are kept as Extra, with the reason on their
+page, and `first_order` is a test fixture.
+
+| Family | Tasks |
+|---|---|
+| **Aircraft** | `plane`, `plane_energy`, `plane_sine`, `plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`, `patrol`, `patrol_range_bearing`, `wake_surf`, `formation` |
+| **Process Control** | `first_order`, `four_tank`, `distillation`, `unstable_cstr` |
+| **Industrial / Energy** | `glass_furnace`, `cement_kiln`, `boiler_drum` |
+| **Renewable Energy** | `wind_turbine`, `battery` |
+
+**[Full environment reference →](docs/environments.md)** with each task's
+status, observation and action shapes, tracked variables and physics contract.
 
 The CSTR, first-order and four-tank models are adapted from
 [PC-gym](https://github.com/MaximilianB2/pc-gym) and checked against its source
@@ -209,9 +240,9 @@ Ornstein-Uhlenbeck turbulence, unobservable by default.
 
 ## Baselines
 
-How the two shipped controllers compare on every task: how many times cheaper
-the oracle (a full-state MPC) holds each target than the expert, and where the
-ceiling sits, tracking within the instruments' resolution. The
+How the two shipped controllers compare on the scored tasks: how many times
+cheaper the oracle (a full-state MPC) holds each target than the expert, and
+where the ceiling sits, tracking within the instruments' resolution. The
 [interactive version](https://yannberthelot.github.io/TargetGym/latest/baseline-results/#at-a-glance)
 can also anchor on the ceiling and gives the numbers.
 

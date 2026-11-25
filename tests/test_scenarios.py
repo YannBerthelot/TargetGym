@@ -18,7 +18,7 @@ import dataclasses
 import numpy as np
 import pytest
 
-from target_gym import scenarios
+from target_gym import evaluation, scenarios
 from target_gym.registry import REGISTRY
 from target_gym.scenarios import Scenario
 
@@ -105,3 +105,91 @@ def test_each_scenario_runs_its_own_episodes_on_fixed_seeds():
     np.testing.assert_array_equal(first["dead"], again["dead"])
     np.testing.assert_array_equal(first["live"], again["live"])
     assert not np.allclose(first["dead"], first["live"])
+
+
+# --- The evaluation window and seed rule --------------------------------------------
+#
+# Contract (owner, 2026-11-24, the evaluation cut; long-strata note R2 and R6): a task
+# may declare an ``Evaluation`` on its registry entry. Its first ``unscored_steps``
+# burn the plant in and its last steps are the ceiling's tail: an evaluation reads only
+# the ``scored_steps`` between, as a mean cost per step. Its lines run on ``seeds``,
+# and on ``extra_seeds`` too in a scenario where the paired saving of the reference
+# over the ceiling on ``seeds`` has a 95 % Student t interval that touches 0. A task
+# that declares none scores every step on the ladder's seeds 100 to 109, as before.
+
+LADDER_SEEDS = tuple(range(100, 110))
+
+
+def evaluating(**fields):
+    return dataclasses.replace(
+        REGISTRY["first_order"], evaluation=lambda: evaluation.Evaluation(**fields)
+    )
+
+
+def test_a_task_with_no_declared_evaluation_scores_every_step_on_the_ladder_seeds():
+    spec = dataclasses.replace(REGISTRY["first_order"], evaluation=None)
+    assert evaluation.scored_window(spec, 150) == slice(0, 150)
+    assert evaluation.line_seeds(spec) == LADDER_SEEDS
+    assert evaluation.line_seeds(spec, [1.0, -1.0, 0.5, -0.5, 0.0]) == LADDER_SEEDS
+
+
+def test_the_scored_cost_is_the_mean_over_the_window_alone():
+    spec = evaluating(unscored_steps=3, scored_steps=4)
+    # 9 on the three burn-in steps and the two tail steps, 1 to 4 in the window.
+    cost = np.array([9, 9, 9, 1, 2, 3, 4, 9, 9], float)
+    assert evaluation.scored_window(spec, 9) == slice(3, 7)
+    assert evaluation.scored_cost(spec, cost) == pytest.approx(2.5)
+
+
+def test_a_window_past_the_episodes_end_is_an_error():
+    with pytest.raises(ValueError):
+        evaluation.scored_window(evaluating(unscored_steps=3, scored_steps=7), 9)
+
+
+def test_scenario_costs_read_the_tasks_window():
+    from target_gym.eval import Episode
+
+    spec = evaluating(unscored_steps=2, scored_steps=2)
+    ep = Episode(
+        cost=np.array([5.0, 5.0, 1.0, 3.0, 5.0]),
+        in_band=np.ones(5, bool),
+        target_change=np.zeros(5, bool),
+    )
+    out = evaluation.costs({"normal": [ep]}, spec)
+    np.testing.assert_allclose(out["normal"], [2.0])
+
+
+#: Student's t at 97.5 % with 4 degrees of freedom (tables: 2.7764).
+T4 = 2.7764
+
+
+def test_the_saving_interval_is_students_t_at_95_percent():
+    # mean 1, sample sd 1 (squares 1, 1, 1, 1, 0 over 4), so 1 +- 2.7764 / sqrt 5.
+    lo, hi = evaluation.saving_interval([2.0, 0.0, 2.0, 0.0, 1.0])
+    half = T4 / np.sqrt(5.0)
+    assert (lo, hi) == (
+        pytest.approx(1.0 - half, rel=1e-4),
+        pytest.approx(1.0 + half, rel=1e-4),
+    )
+
+
+BASE, EXTRA = tuple(range(100, 105)), tuple(range(105, 110))
+
+
+@pytest.mark.parametrize(
+    "savings, seeds",
+    [
+        # mean 1.5, sd 0.5: 1.5 +- 0.62, clear of 0, so the five seeds stand.
+        ([2.0, 1.0, 2.0, 1.0, 1.5], BASE),
+        # mean 1, sd 1: 1 +- 1.24 reaches below 0, so five more run.
+        ([2.0, 0.0, 2.0, 0.0, 1.0], BASE + EXTRA),
+        # a ceiling worse than the reference on average, its interval through 0 too.
+        ([-2.0, 0.0, -2.0, 0.0, -1.0], BASE + EXTRA),
+        # no spread: the interval is the point 1.
+        ([1.0] * 5, BASE),
+    ],
+)
+def test_extra_seeds_run_only_where_the_saving_interval_touches_zero(savings, seeds):
+    spec = evaluating(seeds=BASE, extra_seeds=EXTRA)
+    assert evaluation.line_seeds(spec) == BASE
+    assert evaluation.line_seeds(spec, savings) == seeds

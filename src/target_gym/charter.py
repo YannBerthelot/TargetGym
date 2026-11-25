@@ -33,6 +33,8 @@ import json
 import math
 import pathlib
 
+import numpy as np
+
 PKG = pathlib.Path(__file__).resolve().parent
 REPO = PKG.parents[1]
 DATA = PKG / "data" / "charter"
@@ -53,6 +55,9 @@ TRIPS_PER = 30
 J2_SEED_FLOOR = 1000
 #: J4's scoring seeds, the same in every scenario, set at the tag.
 ANCHOR_SEEDS = tuple(range(200, 210))
+#: The scoring seeds' stop rule (owner, 2026-11-24): blocks of this many from 200,
+#: up to this many seeds in all; resamples of the paired bootstrap, on a fixed seed.
+STOP_BLOCK, STOP_MAX, STOP_RESAMPLES = 10, 50, 5000
 #: Rows in ladder_rows that are test fixtures, not tasks.
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
@@ -68,12 +73,38 @@ MPC_NOT_MEASURED: dict[str, str] = {
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
+#: The flagship (charter Words and J5): the scored suite, the owner's choice of
+#: 2026-11-24. This is the one place its membership is written. The results,
+#: the headline, the radar and the records held current all follow it, and a
+#: task outside it ships registered, not scored. A task joins by the bar the
+#: owner set the same day: a review score of 8 or more, a room whose interval
+#: is above 1 from a converged ceiling, J2 and the sweep (B7) passed, and its
+#: plant, reference and tests merged.
+FLAGSHIP = ("reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization")
+
+SCORED, UNDER_REVIEW, EXTRA, FIXTURE = "scored", "under review", "extra", "fixture"
+
+
+def status(name: str) -> str:
+    """Where task ``name`` stands, derived and never stored: ``"scored"`` in
+    the flagship, ``"extra"`` with a reason in ``EnvSpec.extra``, ``"fixture"``
+    in ``FIXTURES``, and ``"under review"`` otherwise: registered and runnable,
+    its charter lines not measured. ``KeyError`` for an unregistered name."""
+    from target_gym.registry import get
+
+    spec = get(name)
+    if name in FLAGSHIP:
+        return SCORED
+    if spec.extra is not None:
+        return EXTRA
+    return FIXTURE if name in FIXTURES else UNDER_REVIEW
+
 
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
-    """Every task with a ladder row, less the fixtures and the Extra tasks, plus
-    the expert-reference tasks. An Extra task (``EnvSpec.extra``) is never
-    scored, so its record is kept but no longer held current (owner's
-    decision, 2026-11-15)."""
+    """The candidates the recorder can run: every task with a ladder row, less
+    the fixtures and the Extra tasks, plus the expert-reference tasks. Only
+    the flagship's records are held current (owner's decisions, 2026-11-15
+    for Extra and 2026-11-24 for every task outside the flagship)."""
     from target_gym.registry import REGISTRY
 
     if not rows_dir.is_dir():
@@ -159,6 +190,23 @@ def sweep_result(draws):
 
 
 # --- J3 and J4 --------------------------------------------------------------
+
+
+def line_seeds(spec, weights: dict, stored: dict | None) -> dict:
+    """``{scenario: seeds}`` the J3 lines run on: the task's evaluation seeds
+    (``evaluation.Evaluation``), and its extra seeds in a scenario where the ceilings
+    file ``stored`` solved them. The seed rule (``evaluation.line_seeds``) is applied
+    where the ceiling is solved (``scripts/record_ceilings.py owed``), so every line
+    is paired with the ceiling seed by seed."""
+    from target_gym import evaluation
+
+    ev = evaluation.of(spec)
+    out = {}
+    for s in weights:
+        row = ((stored or {}).get("scenarios") or {}).get(s) or {}
+        ran = set(row.get("seeds") or ())
+        out[s] = ev.seeds + (ev.extra_seeds if ran & set(ev.extra_seeds) else ())
+    return out
 
 
 def line(scenarios: dict, weights: dict, converged=None) -> dict:
@@ -429,24 +477,31 @@ def current(task: str) -> dict:
     """The env version stamp and each part's fingerprint as the tree stands."""
     from target_gym import provenance as P
     from target_gym.registry import REGISTRY
+    from target_gym.scoring_runs import PROTOCOLS
 
     spec = REGISTRY[task]
-    stamp = P.environment_fingerprint(spec)
     code = P._digest_paths
+    # A task scored on stream runs: the runner and its protocol are part of every
+    # line's measurement. Others keep their fingerprints as they were.
+    runs = (code([PKG / "scoring_runs.py"]),) if task in PROTOCOLS else ()
+    stamp = P.environment_fingerprint(spec)
     if task in EXPERT_REFERENCE:
-        ref = _digest(stamp, "expert", P.expert_fingerprint(spec))
+        ref = _digest(stamp, "expert", P.expert_fingerprint(spec), *runs)
     else:
         ladder = [ROWS_DIR / f"{task}.py", SCRIPTS / "reference_ladder.py"]
         ladder += [PKG / "experts" / f for f in ("ladder.py", "pid.py")]
-        ref = _digest(stamp, "ladder", code(ladder + [PKG / "identification.py"]))
+        ref = _digest(
+            stamp, "ladder", code(ladder + [PKG / "identification.py"]), *runs
+        )
     nulls = _digest(
         stamp,
         code([PKG / "null_policies.py", SCRIPTS / "reference_ladder.py"]),
         _file_digest(PKG / "data" / "null_policies" / f"{task}.json"),
+        *runs,
     )
     oracle = P.oracle_fingerprint(spec) if spec.make_mpc is not None else "none"
-    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task))
-    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"))
+    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task), *runs)
+    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"), *runs)
     package = type(spec.make_env()).__module__.rsplit(".", 1)[0].split(".")
     sweep = _digest(
         code([SCRIPTS / "family_sweep.py"]),
@@ -462,10 +517,58 @@ def current(task: str) -> dict:
     stored = load_ceiling(task)
     if stored is not None:
         out["ceiling_stamp"] = stored.get("stamp")
+    if spec.evaluation is not None:
+        # The lines run on the seeds the ceiling solved (``line_seeds``): a ceiling
+        # that adds a scenario's extra seeds stales them. A task that declares no
+        # evaluation runs on fixed seeds, and its fingerprints stay as they were.
+        from target_gym import scenarios
+
+        weights = scenarios.weights(spec)
+        seeds = _digest(sorted(line_seeds(spec, weights, stored).items()))
+        for part in ("reference", "nulls", "mpc"):
+            fps[part] = _digest(fps[part], seeds)
     return out
 
 
-def stale_report(tasks=None) -> dict:
-    """``{task: stale parts}`` over the charter tasks, the current ones left out."""
-    report = {t: stale_parts(load(t), current(t)) for t in tasks or charter_tasks()}
+def stale_report(tasks=FLAGSHIP) -> dict:
+    """``{task: stale parts}`` over the flagship, whose records are the ones
+    held current, or over ``tasks``; the current ones are left out."""
+    report = {t: stale_parts(load(t), current(t)) for t in tasks}
     return {t: parts for t, parts in report.items() if parts}
+
+
+def _weighted(costs: dict, weights: dict, picks: dict | None = None):
+    """J = sum over scenarios of w_s times the mean over that scenario's seeds; with
+    ``picks``, over each scenario's resampled indices, one row per resample."""
+    if picks is None:
+        return sum(w * float(np.mean(costs[s])) for s, w in weights.items())
+    return sum(w * np.asarray(costs[s])[picks[s]].mean(-1) for s, w in weights.items())
+
+
+def paired_interval(a: dict, b: dict, weights: dict) -> tuple:
+    """``(J_a / J_b, [low, high])``: the ratio and its 95 % interval by a paired
+    bootstrap that resamples seeds within each scenario (J4), on a fixed seed."""
+    rng = np.random.default_rng(0)
+    picks = {
+        s: rng.integers(0, len(a[s]), (STOP_RESAMPLES, len(a[s]))) for s in weights
+    }
+    ratios = _weighted(a, weights, picks) / _weighted(b, weights, picks)
+    low, high = np.percentile(ratios, [2.5, 97.5])
+    return _weighted(a, weights) / _weighted(b, weights), [float(low), float(high)]
+
+
+def stop_seeds(measure, weights: dict, threshold: float = 1.0) -> dict:
+    """The scoring seeds' stop rule (owner, 2026-11-24, written before any result).
+    ``measure(seeds)`` gives two paired runs on ``seeds``, each ``{scenario: costs
+    per seed}``. Seeds come in blocks of ``STOP_BLOCK`` from 200; the run stops at
+    the first block whose 95 % interval on ``J_a / J_b`` excludes ``threshold``, or
+    at ``STOP_MAX`` seeds, undecided. Returns the seeds, the ratio, its interval and
+    whether it was decided."""
+    for n in range(STOP_BLOCK, STOP_MAX + 1, STOP_BLOCK):
+        seeds = tuple(range(ANCHOR_SEEDS[0], ANCHOR_SEEDS[0] + n))
+        a, b = measure(seeds)
+        ratio, (low, high) = paired_interval(a, b, weights)
+        decided = low > threshold or high < threshold
+        if decided:
+            break
+    return {"seeds": seeds, "ratio": ratio, "interval": [low, high], "decided": decided}

@@ -19,10 +19,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from target_gym.charter import FLAGSHIP
 from target_gym.provenance import fingerprints, load_recorded_baselines
 from target_gym.registry import REGISTRY, specs_in_group
 
 MPC_ENVS = [name for name, spec in REGISTRY.items() if spec.has_mpc]
+#: The tasks whose recorded rows are held current: the scored suite (owner,
+#: 2026-11-24). A row outside it is kept in the repository and not checked.
+SCORED_MPC_ENVS = [name for name in MPC_ENVS if name in FLAGSHIP]
 CLOSED_LOOP_STEPS = 3
 
 #: Planners too heavy to compile in the fast job even at the smallest size.
@@ -215,7 +219,7 @@ PID_SHORTFALL_TOLERANCE = 0.10
 
 
 @pytest.mark.records
-@pytest.mark.parametrize("name", MPC_ENVS)
+@pytest.mark.parametrize("name", SCORED_MPC_ENVS)
 def test_recorded_baseline_still_describes_this_tree(name):
     """A recorded measurement must not be believed after the code moved.
 
@@ -256,7 +260,7 @@ def test_recorded_baseline_still_describes_this_tree(name):
 
 
 @pytest.mark.records
-@pytest.mark.parametrize("name", MPC_ENVS)
+@pytest.mark.parametrize("name", SCORED_MPC_ENVS)
 def test_mpc_controls_at_least_as_well_as_the_pid(name):
     """The MPC is presented as an upper bound; hold it to that.
 
@@ -316,7 +320,8 @@ def test_mpc_controls_at_least_as_well_as_the_pid(name):
 
 @pytest.mark.records
 @pytest.mark.parametrize(
-    "name", [n for n in MPC_ENVS if REGISTRY[n].has_pid and REGISTRY[n].oracle_data]
+    "name",
+    [n for n in SCORED_MPC_ENVS if REGISTRY[n].has_pid and REGISTRY[n].oracle_data],
 )
 def test_an_oracle_under_the_rule_beats_its_expert_on_every_seed(name):
     """The owner's gate (2026-11-04): an oracle built under the oracle rule

@@ -20,6 +20,7 @@ env, params = tg.make("battery")
 | Tracked variable(s) | delivered power (MW) |
 | Episode length | 14400 steps of 1 s (4 h) |
 | Cite as | `battery-v6` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/battery/PHYSICS.md) |
 
 ## Action space
@@ -83,7 +84,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 
