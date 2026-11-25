@@ -266,10 +266,10 @@ def test_ci_shards_the_selected_run_and_requires_one_aggregate_check():
     )["jobs"]
     matrix = jobs["test"]["strategy"]["matrix"]
 
-    assert "[1, 2, 3]" in matrix["shard"] or "[1,2,3]" in matrix["shard"]
+    assert "[1, 2, 3, 4]" in matrix["shard"]
     assert "TG_SHARD" in jobs["test"]["env"]
     assert jobs["tests-pass"]["name"] == "tests pass"
-    assert jobs["tests-pass"]["needs"] == "test"
+    assert set(jobs["tests-pass"]["needs"]) == {"test", "medium", "light"}
 
 
 def _workflow_jobs():
@@ -281,13 +281,13 @@ def _workflow_jobs():
 
 
 def test_a_push_to_the_integration_branch_runs_the_whole_tier_in_shards():
-    """Owner, 2026-11-25: the push after a merge runs the whole tier on every
-    Python, split in three shards like a pull request, since unsplit it ran past
-    the job's 60 minutes on three of four Pythons."""
+    """Owner, 2026-11-25: the push after a merge runs the whole tier in shards
+    like a pull request, since unsplit it ran past the job's 60 minutes; four
+    shards on each full column (picker, same day)."""
     matrix = _workflow_jobs()["test"]["strategy"]["matrix"]
 
     assert "refs/heads/int/amendment3" in matrix["shard"]
-    assert "[1, 2, 3]" in matrix["shard"]
+    assert "[1, 2, 3, 4]" in matrix["shard"]
 
 
 def test_sharded_coverage_is_combined_and_gated_once():
@@ -413,7 +413,9 @@ def test_no_parallel_step_runs_a_solo_test_and_one_worker_runs_them_all():
     """Every pytest call on more than one worker leaves solo tests out, and the
     solo tests of each tier run on one worker in every shard, since thirteen of
     them on one runner would take most of an hour."""
-    steps = _workflow_jobs()["test"]["steps"]
+    jobs = _workflow_jobs()
+    tiers = ("test", "medium", "light")  # the small and medium tiers' jobs
+    steps = [step for name in tiers for step in jobs[name]["steps"]]
     calls = [
         line
         for step in steps
@@ -426,5 +428,124 @@ def test_no_parallel_step_runs_a_solo_test_and_one_worker_runs_them_all():
     assert parallel and all("not solo" in c for c in parallel), parallel
     assert any("not medium" in c for c in alone), alone  # the small tier's
     assert any('"medium and solo' in c for c in alone), alone  # the medium's
-    solo_step = next(s for s in steps if '-m "solo' in s.get("run", ""))
+    solo_step = next(s for s in jobs["test"]["steps"] if '-m "solo' in s.get("run", ""))
     assert "if" not in solo_step and "TG_SHARD" not in solo_step.get("env", {})
+
+
+# Owner's picks of 2026-11-25 (picker, after the timing study in the side
+# session notes, ci-test-speed-study.md): the compile cache per shard and saved
+# even when a job fails, the medium tier in jobs of its own, shards balanced by
+# recorded durations, the whole tier on 3.13 and 3.14 and a light set on 3.11
+# and 3.12, the tests of 60 s or more kept on every push.
+
+
+def test_balanced_shards_are_disjoint_cover_every_test_and_ignore_order():
+    shards_of = _conftest().shards_of
+    ids = [f"tests/test_x.py::test_{i}" for i in range(200)]
+    durations = {t: float(i % 13) for i, t in enumerate(ids) if i % 3}
+
+    forward = shards_of(ids, durations, 4)
+    backward = shards_of(list(reversed(ids)), durations, 4)
+
+    assert forward == backward
+    assert set(forward) == set(ids)
+    assert set(forward.values()) == {1, 2, 3, 4}
+
+
+def test_no_balanced_shard_runs_past_the_mean_by_more_than_one_test():
+    """Greedy longest-first assignment bounds the slowest shard by the mean
+    load plus the longest single test (Graham, 1969). A hash split has no such
+    bound: one column's shards ran 12.7 to 27.6 min (run 45655952101)."""
+    import random
+
+    rng = random.Random(0)
+    ids = [f"tests/test_x.py::test_{i}" for i in range(500)]
+    durations = {t: rng.lognormvariate(0, 1.5) for t in ids}
+    n = 4
+
+    shard = _conftest().shards_of(ids, durations, n)
+    load = [sum(durations[t] for t in ids if shard[t] == k) for k in range(1, 5)]
+
+    assert max(load) <= sum(durations.values()) / n + max(durations.values())
+
+
+def test_a_test_with_no_recorded_duration_keeps_its_hash_shard():
+    conftest = _conftest()
+    ids = ["tests/test_x.py::test_known", "tests/test_x.py::test_new[a]"]
+
+    shard = conftest.shards_of(ids, {"tests/test_x.py::test_known": 30.0}, 3)
+
+    assert conftest.in_shard("tests/test_x.py::test_new[a]", shard[ids[1]], 3)
+
+
+def test_each_shard_keeps_and_saves_its_own_compile_cache_even_on_failure():
+    """Three shards on one cache key left two unable to save, and a failing job
+    saved nothing, so 3.11 and 3.14 compiled cold on every push. A pull request
+    restores what the pushes saved and saves nothing itself."""
+    for job in ("test", "medium", "light"):
+        steps = _workflow_jobs()[job]["steps"]
+        restore = [s for s in steps if "actions/cache/restore" in s.get("uses", "")]
+        save = [s for s in steps if "actions/cache/save" in s.get("uses", "")]
+
+        assert len(restore) == 1 and len(save) == 1, job
+        assert save[0]["with"]["key"] == restore[0]["with"]["key"], job
+        assert "always()" in save[0]["if"] and "push" in save[0]["if"], job
+        if job != "light":
+            assert "matrix.shard" in restore[0]["with"]["key"], job
+
+
+def test_the_medium_tier_runs_beside_the_small_tier_on_313_and_314():
+    """Run after the small tier on the same runner, it put py3.11's shards at
+    53 to 59 min of a 60-minute limit."""
+    jobs = _workflow_jobs()
+    medium = jobs["medium"]
+    runs = " ".join(s.get("run", "") for s in medium["steps"])
+    small = " ".join(s.get("run", "") for s in jobs["test"]["steps"])
+
+    assert medium["needs"] == "records" and "medium" not in str(jobs["test"]["needs"])
+    assert medium["strategy"]["matrix"]["python-version"] == ["3.13", "3.14"]
+    assert '-m "medium and not solo and not records" -n 2' in runs
+    assert '-m "medium and solo and not records" -n 0' in runs
+    assert '-m "medium' not in small
+    assert "refs/heads/int/amendment3" in medium["if"]
+
+
+def test_the_push_runs_the_whole_tier_on_313_and_314_and_a_light_set_on_the_rest():
+    """3.11 to 3.13 resolve the same JAX, so 3.11 and 3.12 differ from 3.13 by
+    the interpreter alone: they import every test module, run the documented
+    examples and the public API, and reset and step every task."""
+    jobs = _workflow_jobs()
+    columns = jobs["test"]["strategy"]["matrix"]["python-version"]
+    light = jobs["light"]
+    runs = " ".join(s.get("run", "") for s in light["steps"])
+
+    assert "refs/heads/int/amendment3" in columns and '["3.13", "3.14"]' in columns
+    assert light["strategy"]["matrix"]["python-version"] == ["3.11", "3.12"]
+    assert (
+        "refs/heads/int/amendment3" in light["if"] and "pull_request" not in light["if"]
+    )
+    assert "--collect-only" in runs  # imports every module, whatever -m keeps
+    for part in (
+        "tests/test_docs.py",
+        "tests/test_public_api.py",
+        "test_step_env_is_jittable",
+    ):
+        assert part in runs, part
+
+
+def test_a_shard_with_no_solo_test_passes_its_solo_step():
+    """Thirteen solo tests over four shards leave some shard with none of a
+    tier's, and pytest exits 5 when it collects nothing: PR 295's shard 4/4
+    failed that way after its 1,340 tests passed. A run of solo tests accepts
+    that exit code, and only that one."""
+    jobs = _workflow_jobs()
+    calls = [
+        line.strip()
+        for name in ("test", "medium")
+        for step in jobs[name]["steps"]
+        for line in step.get("run", "").splitlines()
+        if "pytest" in line and "-n 0" in line and "solo and" in line
+    ]
+
+    assert len(calls) == 2, calls
+    assert all(c.endswith("|| test $? -eq 5") for c in calls), calls

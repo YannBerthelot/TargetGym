@@ -10,6 +10,7 @@ the box by a factor of N and every one of them slows down. One thread per
 worker leaves the parallelism to xdist, which is where it belongs.
 """
 
+import json
 import os
 import zlib
 
@@ -123,8 +124,10 @@ def _free_compiled_programs_when_large(request):
         _drop_compiled_programs()
 
 
-def pytest_configure(config):  # noqa: ARG001
-    """Enable the persistent compilation cache once the process has a JAX."""
+def pytest_configure(config):
+    """Register the shard filter, and enable the persistent compilation cache
+    once the process has a JAX."""
+    config.pluginmanager.register(_Sharding(), "targetgym-sharding")
     try:
         import jax
     except ImportError:  # pragma: no cover - jax is a hard dependency
@@ -178,16 +181,53 @@ FILLS_A_RUNNER = {
 
 
 @pytest.hookimpl(tryfirst=True)  # before ``-m`` deselects on the marks
-def pytest_collection_modifyitems(config, items):
-    """``TG_SHARD=k/n`` keeps shard ``k`` of ``n``: CI runs a pull request's
-    tests on several runners at once (owner, 2026-11-24)."""
+def pytest_collection_modifyitems(items):
+    """Mark the tests in ``FILLS_A_RUNNER`` solo."""
     for item in items:
         if item.nodeid in FILLS_A_RUNNER:
             item.add_marker(pytest.mark.solo)
-    shard = os.environ.get("TG_SHARD", "")
-    if not shard:
-        return
-    k, n = (int(x) for x in shard.split("/"))
-    kept = [item for item in items if in_shard(item.nodeid, k, n)]
-    config.hook.pytest_deselected(items=[i for i in items if i not in kept])
-    items[:] = kept
+
+
+#: Seconds per test, for the tests of 3 s or more, as CI's ``--durations``
+#: reported them. ``scripts/ci_durations.py`` rewrites it from CI logs.
+_DURATIONS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "ci_durations.json"
+)
+
+
+def shards_of(nodeids, durations, n):
+    """Shard (1 to ``n``) of each test. Tests with a recorded duration go
+    longest first to the least loaded shard, so no shard runs past the mean by
+    more than one test; the rest keep the shard their id hashes to, and are
+    counted there at no time. The result does not depend on the order."""
+    shard = {t: zlib.crc32(t.encode()) % n + 1 for t in nodeids}
+    load = [0.0] * n
+    for t in sorted(
+        (t for t in shard if t in durations), key=lambda t: (-durations[t], t)
+    ):
+        k = min(range(n), key=lambda i: (load[i], i))
+        shard[t] = k + 1
+        load[k] += durations[t]
+    return shard
+
+
+class _Sharding:
+    """``TG_SHARD=k/n`` keeps shard ``k`` of ``n``: CI runs a pull request's
+    tests on several runners at once (owner, 2026-11-24), balanced by their
+    recorded durations (owner, 2026-11-25). A plugin of its own, since it must
+    run after ``-m`` and ``-k`` have deselected and the hook above before."""
+
+    @pytest.hookimpl(trylast=True)
+    def pytest_collection_modifyitems(self, config, items):
+        shard = os.environ.get("TG_SHARD", "")
+        if not shard:
+            return
+        k, n = (int(x) for x in shard.split("/"))
+        try:
+            with open(_DURATIONS) as f:
+                durations = json.load(f)
+        except (OSError, ValueError):
+            durations = {}
+        of = shards_of([item.nodeid for item in items], durations, n)
+        config.hook.pytest_deselected(items=[i for i in items if of[i.nodeid] != k])
+        items[:] = [item for item in items if of[item.nodeid] == k]
