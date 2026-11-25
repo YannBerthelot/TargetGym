@@ -53,6 +53,7 @@ from target_gym.identification import (  # noqa: E402
     noise_tune,
     pick_fit,
     rga,
+    simc,
     single_run,
 )
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
@@ -696,6 +697,19 @@ def tune_distillation() -> dict:
 SURGE_LADDER = (0.10, 0.125, 0.15)
 
 
+def _full_delay(loop, reading: str) -> float:
+    """The detune rule (owner, picker 2026-11-25), fixed before the run: a
+    loop's SIMC tau_c is at least its full delay, the dead time it was read
+    with plus the first-order lag of the transmitter it reads (``reading``'s
+    ``lag``), counted whole as delay. For the anti-surge loop that is the
+    valve's 0.15 s dead time and half a sample, plus the flow transmitter's
+    0.15 s; for the pressure loop 0.05 s plus the pressure transmitter's 0.3 s."""
+    from target_gym.compressor_surge.env_jax import CompressorSurge
+
+    lag = {r.field: r.lag for r in CompressorSurge.readings}[reading]
+    return float(loop["theta"]) + float(lag)
+
+
 def _compressor_pair(line: float) -> dict:
     """The pair at control line ``line``, from bumps at each seed's rest there."""
     from target_gym.compressor_surge import experts as X
@@ -731,11 +745,23 @@ def _compressor_pair(line: float) -> dict:
         plant, "dp on N", 0, 0, 0.05 * span * per_speed, 100, inst, room=plant.room(0)
     )
     speed = rescaled(speed, per_speed)
-    speed_out = tuned(speed, inst.h)  # a drive: no sourced dead band
+    # The pressure on speed reads as integrating: its fitted lag runs to tens of
+    # thousands of seconds against a 0.05 s delay, past SIMC's 8 theta, so it is
+    # tuned on the slope k / tau1 (owner, picker 2026-11-25). tau_c is the time
+    # the drive takes, at its rate, to make the move the test itself made: the
+    # loop asks no faster than the drive delivers a normal step.
+    step_N = 0.05 * span
+    tau_c_N = max(step_N / float(p.drive_rate), _full_delay(speed, "dp"))
+    kc_N, ti_N = simc(speed["k"] / speed["tau1"], None, speed["theta"], tau_c_N)
+    speed_out = {"Kc": kc_N, "Ti": ti_N, "Tf": 0.0, "tau_c": tau_c_N}
+    print(f"    Kc {kc_N:.4g}, Ti {ti_N:.4g}, tau_c {tau_c_N:.4g} (drive rate)")
     active = [i for i, r in enumerate(rests) if r[4] > 0.02]
+    # Re-identified on the plant with the positioner's dead time [C7], held as
+    # the datasheet's delay (owner, picker 2026-11-25).
     valve = read_loop(
-        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active
-    )
+        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active,
+        delay=float(p.valve_lag),
+    )  # fmt: skip
     valve = rescaled(valve, 2.0)  # raw 2 is one full opening
     # The largest load in hold, the demand's 3 sd, as a recycle opening.
     u_d = (
@@ -743,6 +769,11 @@ def _compressor_pair(line: float) -> dict:
         - float(X.consumer_flow(25e3, 0.6, p, np))
     ) / float(X.recycle_flow(25e3, 1.0, p, np))
     valve_out = tuned(valve, inst.h, DEAD_BAND, u_d)
+    floor = _full_delay(valve, "m_c")
+    if valve_out["tau_c"] < floor:  # the detune rule
+        kc_x, ti_x = simc(valve["k"], valve["tau1"], valve_out["theta"], floor)
+        valve_out = {**valve_out, "Kc": kc_x, "Ti": ti_x, "tau_c": floor}
+        print(f"    detuned: Kc {kc_x:.4g}, Ti {ti_x:.4g}, tau_c {floor:.4g}")
     kp_surge = min(abs(valve_out["Kc"]), 1.0)  # Mirsky's "less than 1"
     Tt = np.sqrt(valve_out["Ti"] * (valve_out["tau_c"] + valve["theta"]))  # C8
     return {
@@ -755,6 +786,9 @@ def _compressor_pair(line: float) -> dict:
         "override_line": line / 2,
         "override_hold": 1.0 / float(p.valve_open_rate),
         "reset_band": kp_surge * max(1 - Tt / valve_out["Ti"], 0.0) * line,
+        # Rate action [C3, p. 2; C7]: the line leads by the loop's own delay, so
+        # the valve opens as early as the loop answers late (ours).
+        "rate_lead": float(valve_out["theta"]),
         "model": {"speed": record(speed, speed_out), "valve": record(valve, valve_out)},
     }
 

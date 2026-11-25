@@ -19,6 +19,10 @@ A. The ceiling is converged when its two starts (the reference's moves and the
    episode's demand: the compressor on its machine's own surge line at the
    speed whose head there is the header pressure, the cheapest pressure in the
    zone.
+   Amended (owner, picker 2026-11-25): converged only if, besides, every
+   seed's kept plan holds its surge and zone rows within -0.1 unit (0.01 kPa
+   of header pressure, 0.001 of Phi). A plan that leaves its zone or crosses
+   the machine's line is priced, not tripped, so its cost alone cannot show it.
 """
 
 import jax
@@ -28,7 +32,12 @@ import pytest
 from target_gym.benchmark import run_policy, task_info
 from target_gym.compressor_surge.env import CompressorSurgeParams
 from target_gym.compressor_surge.env_jax import CompressorSurge
-from target_gym.compressor_surge.oracle import CEILING_STARTS, balance_floor
+from target_gym.compressor_surge.oracle import (
+    CEILING_HELD_ROWS,
+    CEILING_ROWS,
+    CEILING_STARTS,
+    balance_floor,
+)
 from target_gym.pc_gym.foresight import ceiling_converged
 from target_gym.registry import REGISTRY
 from target_gym.scenarios import suite, weights
@@ -117,6 +126,32 @@ def test_the_stop_rule_needs_both_starts_to_agree_and_sit_near_the_floor(
     starts, floor, converged
 ):
     assert ceiling_converged(starts, floor) is converged
+
+
+AGREEING = {"reference": 1.954, "hold": 1.960}
+
+
+@pytest.mark.parametrize(
+    "worst, converged",
+    [
+        (0.0, True),
+        (2.5, True),
+        (-0.05, True),  # inside the -0.1 unit allowed
+        (-0.15, False),
+        (-37.2, False),  # the stored fast_approach seed (2026-11-17)
+    ],
+)
+def test_the_stop_rule_also_needs_every_seed_s_surge_and_zone_rows_to_hold(
+    worst, converged
+):
+    """The starts agree (0.31 %) and sit 2.2 % above the floor, so only the
+    worst held margin over the seeds decides."""
+    assert ceiling_converged(AGREEING, 1.912, worst_margin=worst) is converged
+
+
+def test_the_held_rows_are_the_surge_line_and_the_zone():
+    assert set(CEILING_HELD_ROWS) == {"zone_low", "zone_high", "surge"}
+    assert set(CEILING_HELD_ROWS) <= set(CEILING_ROWS)
 
 
 def _floor_inputs():
