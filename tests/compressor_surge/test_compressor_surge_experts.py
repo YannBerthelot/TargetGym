@@ -176,11 +176,11 @@ def test_gains_are_read_under_the_task_key(monkeypatch, params):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="finding, a report since D2: the pair re-run by its recipe (owner, "
-    "2026-11-25) keeps the battery's margin (0.107, 0 trips), but with the "
-    "valve's dead time in the guard's state its loop grows at 1.6 to 2.0 /s at "
-    "the five guard points, and its valve limit-cycles (end travel 0.87 to 0.95); "
-    "both loops feed the growth",
+    reason="finding, a report since D2: the pair re-run by its recipe and "
+    "detuned to tau_c at least each loop's full delay (owner, 2026-11-25) keeps "
+    "the battery's margin (0.105, 0 trips), but with the valve's dead time in "
+    "the guard's state its loop grows at 1.2 to 1.6 /s at the five guard points, "
+    "and its valve limit-cycles (end travel up to 0.85); both loops feed it",
 )
 def test_shipped_gains_pass_the_guard():
     """The shipped pair's closed loop decays at ``GUARD_MIN_DECAY`` or faster at
