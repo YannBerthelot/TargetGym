@@ -74,7 +74,8 @@ class CompressorSurge(
     screen_width = 600
     screen_height = 400
 
-    # obs = [dp (kPa), m_c, m_d, N (%), N_ramp (%), x (%), live setpoint (kPa)]
+    # obs = [dp (kPa), m_c, m_d, N (%), N_ramp (%), x (%), live setpoint (kPa),
+    #        surge count]
     obs_value_index: int = 0  # header pressure
     tracked_names: tuple = ("header pressure (kPa)",)
     obs_target_index: int = 6  # live setpoint
