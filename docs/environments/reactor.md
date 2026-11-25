@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/reactor/pid_output.gif" width="480px"/></p>
 
-Run a day of a pressurized water reactor at the start of its fuel cycle, with control rods and soluble boron, knowing the day's load plan: hold the average coolant temperature within 1.6 K of its program on either side and the axial offset within 0.05 of its reference, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. Six scenarios weigh baseload days against five kinds of load-follow day (REALITY.md sections 6 and 7).
+Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. Six scenarios weigh baseload days against five kinds of load-follow day (REALITY.md sections 6 and 7).
 
 ```python
 import target_gym as tg
@@ -12,11 +12,12 @@ env, params = tg.make("reactor")
 
 | | |
 |---|---|
-| Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((13,))` |
+| Action space | `Box((3,))`, all actions in [-1, 1] |
+| Observation space | `Box((16,))` |
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
 | Cite as | `reactor-v10` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -28,10 +29,11 @@ actuator range inside the environment.
 |---|---|---|---|
 | 0 | rod demand | -1 | 1 |
 | 1 | boron flow | -1 | 1 |
+| 2 | turbine loading rate | -1 | 1 |
 
 ## Observation space
 
-13 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
+16 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
@@ -48,16 +50,21 @@ actuator range inside the environment.
 | 10 | the recent power the starting xenon is balanced with (rule 16: operators know their power history); after a trip's restart, the power whose balance is the restart's xenon, 1 when it is above full power's |
 | 11 | the day's ramp rate, % of rated load a minute, as the dispatch gives it (owner, 2026-11-12) |
 | 12 | the day's minimum load, a fraction of rated, as the dispatch gives it |
+| 13 | the fraction of its cycle the core has burnt, which the operator's curve book is indexed by |
+| 14 | the dispatch plan's load now, a fraction of rated: what the turbine may take, where observation 3 is what it takes |
+| 15 | the offset's penalty deviation time over the last 24 h, in hours, as the process computer keeps it (NUREG-1431, B 3.2.3A) |
 
 ## Rewards
 
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `running`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -65,7 +72,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 44 fields.
+`reset` samples the initial condition and the target; state has 49 fields.
 
 ## Episode end
 
@@ -73,9 +80,24 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Truncation.** After 2880 steps.
 
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies | not current | |
+| Reference | the controller to beat | not current | |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+
+Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
+
+The ceiling reads what the policy does not observe: the core's xenon and iodine, top and bottom; the boron in the core now, where the policy reads it 20 min late; the load's frequency-control wobble ahead. Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
 ## Arguments
 
@@ -108,6 +130,14 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `boration_flow` | 3 | kg/s |
 | `boric_acid_ppm` | 7800 | ppm |
 | `primary_mass` | 250000 | kg |
+| `alpha_coolant_end` | -0.0006 | 1/K |
+| `boron_worth_end` | -0.000109 | 1/ppm |
+| `turbine_rate` | 0.000833333 | 1/s |
+| `valve_margin` | 1.05 | fraction of rated steam flow |
+| `steam_slope` | 4618.5 | K |
+| `loading_stop` | 5.55556 | K |
+| `relief_temperature` | 570 | K |
+| `relief_accumulation` | 0.03 | fraction of the set pressure |
 | `sigma_x` | 2.72e-18 | cm^2 |
 | `D_diffusion` | 4.99301 | cm |
 | `alpha_power` | 3.64e-16 | cm^2 s |
@@ -139,15 +169,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_avg_min` | 556 | K |
 | `floor_allowed` | 900 | s |
 | `rod_motion_weight` | 0.02 | - |
-| `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
-| `renewal_days` | 0 | d |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
-| `imbalance_factor` | 3 | - |
 | `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |
@@ -158,13 +185,23 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ao_band` | 0.05 | - |
 | `ao_ref` | 0 | - |
 | `ao_allowed` | 3600 | s |
+| `ao_half_power` | 0.5 |  |
+| `ao_free_power` | 0.15 |  |
 | `derate_to` | 0.5 |  |
 | `derate_price_per_MWh` | 80 | $/MWh |
+| `ao_strict_power` | 0.9 |  |
+| `ao_strict_allowed` | 1800 | s |
+| `ao_limit_high` | 0.11 | - |
+| `ao_limit_low` | 0.31 | - |
+| `ao_limit_allowed` | 1800 | s |
 | `ril_full` | 0.22 |  |
 | `ril_half` | 0.78 |  |
-| `ril_allowed` | 7200 | s |
+| `ril_restore` | 7200 | s |
+| `ril_allowed` | 28800 | s |
 | `dnb_margin` | 2.83333 | K |
-| `dnb_allowed` | 7200 | s |
+| `dnb_restore` | 7200 | s |
+| `dnb_allowed` | 28800 | s |
+| `mode_2_load` | 0.05 | - |
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "d3fb87792e20e415",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "7172caac547e040a",
+  "note": "2026-11-25, owner: the permit is 6 to 9 (40 CFR 133.102(c)), the observation's target channel shows the permit's centre instead of the set point, the KPI band is the permit's half-width, and the set point is 6.45, where the reference ladder's rule places it on the 6 to 9 grid (J1, rule 17). A behaviour change on a version no release shipped, so re-stamped in place (unreleased-versions rule).",
+  "stamped": "2026-11-25T08:35:59+00:00"
 }

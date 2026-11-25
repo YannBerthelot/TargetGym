@@ -1,8 +1,11 @@
 # Distillation
 
+!!! note "Under review"
+    Distillation is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/distillation/pid_output.gif" width="480px"/></p>
 
-Hold both product purities of a 40-tray binary distillation column (Skogestad's Column A) with reflux and boilup. The two purities move together far more easily than apart, which makes the plant ill-conditioned. Only the two products are analysed, plus one tray temperature: the tray compositions that hold the column's memory, and the drifting feed composition, are hidden. The reward scores both purities.
+Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. The policy reads the two product analysers, one tray temperature, its own two flows, the specs and the feed flow. The feed composition and the column's interior profile are hidden. Each step is charged, in kmol of boilup, the boilup itself, any product outside its spec, and the light component leaving in the bottoms. Nothing trips.
 
 ```python
 import target_gym as tg
@@ -13,10 +16,11 @@ env, params = tg.make("distillation")
 | | |
 |---|---|
 | Action space | `Box((2,))`, all actions in [-1, 1] |
-| Observation space | `Box((7,))` |
+| Observation space | `Box((8,))` |
 | Tracked variable(s) | yD (mole fraction), xB (mole fraction) |
 | Episode length | 400 steps of 60 s (6.67 h) |
 | Cite as | `distillation-v9` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/distillation/PHYSICS.md) |
 
 ## Action space
@@ -31,27 +35,30 @@ actuator range inside the environment.
 
 ## Observation space
 
-7 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`, `obs[1]` against `obs[5]`.
+8 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[0]` against `obs[4]`, `obs[1]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
-| 0 | `yD`, light-component mole fraction in the distillate (top product) |
-| 1 | `xB`, light-component mole fraction in the bottoms |
-| 2 | reflux flow, fraction of its range (0 to 1) |
-| 3 | boilup, fraction of its range (0 to 1) |
-| 4 | target `yD` |
-| 5 | target `xB` |
-| 6 | `T_15`, stage 15's temperature (K) |
+| 0 | `yD`, light-component fraction in the distillate |
+| 1 | `xB`, light-component fraction in the bottoms |
+| 2 | reflux `L`, as a fraction (0 to 1) of its range |
+| 3 | boilup `V`, as a fraction (0 to 1) of its range |
+| 4 | distillate spec for `yD` |
+| 5 | bottoms spec for `xB` |
+| 6 | stage-15 tray temperature (K) |
+| 7 | feed flow `F` (kmol/min) |
 
 ## Rewards
 
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `boilup`, `off_spec`, `light_lost`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -59,17 +66,17 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 11 fields.
+`reset` samples the initial condition and the target; state has 20 fields.
 
 ## Episode end
 
-**Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
+**Termination.** None: nothing trips this plant. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 400 steps.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 
@@ -87,36 +94,33 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `actuator_lag` | 0 | delta_t units |
 | `alpha` | 1.5 | - |
 | `M_tray` | 0.5 | kmol |
-| `M_drum` | 0.5 | kmol |
+| `M_reboiler` | 10 | kmol |
+| `M_condenser` | 32.1 | kmol |
 | `tau_L` | 0.063 | min |
 | `L_nominal` | 2.706 | kmol/min |
 | `F` | 1 | kmol/min |
 | `zF_nominal` | 0.5 | - |
 | `qF` | 1 | - |
-| `zF_noise_std` | 0.03 | - |
-| `zF_min` | 0.4 | - |
-| `zF_max` | 0.6 | - |
-| `L_min` | 2.2 | kmol/min |
-| `L_max` | 3.4 | kmol/min |
-| `V_min` | 2.7 | kmol/min |
-| `V_max` | 3.9 | kmol/min |
+| `feed_step` | 0.2 | - |
+| `zF_step` | 0.1 | - |
+| `event_hold` | 1e+09 | min |
+| `L_min` | 1.85 | kmol/min |
+| `L_max` | 3.11 | kmol/min |
+| `V_min` | 2.18 | kmol/min |
+| `V_max` | 3.83 | kmol/min |
 | `D_min` | 0.1 | kmol/min |
 | `D_max` | 0.9 | kmol/min |
-| `yD_floor` | 0.9 | - |
-| `xB_ceiling` | 0.1 | - |
-| `tracking_band` | 0.02 | - |
+| `yD_spec` | 0.985714 | - |
+| `xB_spec` | 0.0142857 | - |
 | `precision_floor` | 0.0004 | - |
 | `boilup_cost_weight` | 0 | - |
 | `time_unit_seconds` | 60 | s |
-| `reward_version` | 2 | - |
+| `reward_version` | 3 | - |
+| `boilup_price` | 1 | kmol |
+| `reprocess_price` | 3.206 | kmol/kmol |
+| `recovery_price` | 100 | kmol/kmol |
+| `failure_cost` | 0 | kmol |
+| `restart_steps` | 1 | steps |
 | `e_floor_top` | 0.0004 | - |
 | `e_floor_bottom` | 0.0004 | - |
-| `e_tol` | 0 | - |
-| `tracking_exponent` | 2 | - |
-| `c_hold` | 3.282 | kmol/min |
-| `running_weight` | 1 | - |
-| `failure_cost` | 225625 | reward |
-| `restart_steps` | 240 | steps |
-| `rho_floor_tracking` | 5.33161e-06 | reward |
-| `rho_floor` | 5.33161e-06 | reward |
 

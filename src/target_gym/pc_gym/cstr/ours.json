@@ -1,8 +1,27 @@
 {
- "member": "a PARSEX-like member of the jacketed exothermic CSTR family (cstr/PHYSICS.md:3)",
- "ranges": {},
- "ranges_why": "no source gives a family range for any of this task's ours numbers; the sweep runs the shipped member alone (owner, 2026-11-12)",
+ "member": "a PARSEX-like member of the jacketed exothermic CSTR family, run for what it makes (cstr/PHYSICS.md, Status)",
+ "ranges": {
+  "T_band": {
+   "lo": 0.5,
+   "hi": 2.0,
+   "unit": "K",
+   "why": "ours: no tolerance on the reactor temperature was found (cstr/REALITY.md, third search). The top is the size of PARSEX's own excursions, 1.7 and 2 C [S1, Figs. 2, 3]; the bottom is half the shipped 1 K (cstr/PHYSICS.md, section 2; env.py, T_band)"
+  },
+  "q_min": {
+   "lo": 0.0,
+   "hi": 2.4,
+   "unit": "L/min",
+   "why": "ours: PARSEX's feed range starts at 0 [S1, Table 1] and no turndown was found; the shipped floor is 40 g/s (cstr/PHYSICS.md, section 2; env.py, q_min)"
+  },
+  "setpoint_ramp": {
+   "lo": 30.0,
+   "hi": 120.0,
+   "unit": "min",
+   "why": "derived from one trace: S1's closed loop took about an hour to carry its 2 C move to its peak [S1, Fig. 2]; half and twice that (cstr/PHYSICS.md, section 2; env.py, setpoint_ramp)"
+  }
+ },
  "coupled": [],
+ "coupled_why": "none of the three moves with another",
  "no_range": [
   "M_j",
   "feed_T_period",
@@ -11,12 +30,12 @@
   "max_steps_in_episode",
   "e_floor",
   "precision_floor",
-  "tracking_exponent",
   "failure_cost",
   "restart_steps",
   "k0_decay",
   "feed_rise",
   "cooling_loss",
   "event_hold"
- ]
+ ],
+ "no_range_why": "the scenario sizes (feed_rise, cooling_loss, k0_decay, event_hold) are ours with ranges written in cstr/PHYSICS.md, but scripts/family_sweep.py applies a drawn number over every scenario's own, which would switch each event on in every scenario; they and the scenario weights were swept by the review's own script on 2026-11-23 (PHYSICS.md, The sweep). No source gives a range for the rest."
 }

@@ -50,10 +50,10 @@ def cstr_scenarios() -> tuple[dict, ...]:
             stream_overrides=_NO_WINDOW_EVENT,
         ),
         _row(
-            "setpoint_step",
+            "setpoint_move",
             {"setpoint_step": 2.0},
             source="[S1, Fig. 2]",
-            description="the reactor's setpoint moved up 2 K",
+            description="the reactor's setpoint moved up 2 K over an hour",
             weight=0.1,
             **_upset(hold_min=_SHIFT_H * 60.0),
         ),
@@ -70,6 +70,9 @@ def cstr_scenarios() -> tuple[dict, ...]:
         ),
         _row(
             "feed_buildup",
+            # Ours: feed build-up is sourced [S3], its size is not. With the
+            # feed to cut it can be held, so it is the 10 % of versions 5 and 6,
+            # not the 3 % version 7 took to stay inside the valve's range.
             {"feed_rise": 0.1},
             source="[S3, PDF pp. 36-37, 46]",
             description="the feed's reactant rises 10 % (size ours)",

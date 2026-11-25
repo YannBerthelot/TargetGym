@@ -6,6 +6,9 @@ docs/proposals/task-charter.md:
   most 1 seed in every 30, no null beats it on more than half the seeds, and the
   sweep (B7) holds.
 - J3: four lines, each per scenario and on J, or "not measured".
+- J3 and Words: room is the reference's cost over the ceiling's, published per
+  scenario and on J, and "reported as unbounded when the ceiling's cost is within
+  its measurement noise of 0".
 - J4: J = sum over scenarios of w_s times the mean cost over that scenario's seeds.
 - A part is stale when its fingerprint moved, every part when the env stamp moved.
 
@@ -125,6 +128,49 @@ def test_J_is_the_weighted_sum_of_scenario_means():
     assert ln["trips"] == 3 and ln["converged"] is None
 
 
+def test_room_is_read_per_scenario_and_on_J():
+    # normal: 4 over 2. storm: 100 over 80. J: 0.75 * 4 + 0.25 * 100 = 28 over
+    # 0.75 * 2 + 0.25 * 80 = 21.5.
+    reference = _line({"normal": [3.0, 5.0], "storm": [100.0]})
+    ceiling = _line({"normal": [2.0], "storm": [80.0]})
+    room = charter.room(reference, ceiling, W)
+    assert room["scenarios"]["normal"]["room"] == pytest.approx(2.0)
+    assert room["scenarios"]["storm"]["room"] == pytest.approx(1.25)
+    assert room["J"] == pytest.approx(28.0 / 21.5)
+
+
+def test_each_scenarios_weighted_gap_sums_to_the_gap_on_J():
+    # normal 0.75 * (4 - 2) = 1.5, storm 0.25 * (100 - 80) = 5, and 28 - 21.5 = 6.5.
+    reference = _line({"normal": [4.0], "storm": [100.0]})
+    ceiling = _line({"normal": [2.0], "storm": [80.0]})
+    room = charter.room(reference, ceiling, W)
+    assert room["scenarios"]["normal"]["gap"] == pytest.approx(1.5)
+    assert room["scenarios"]["storm"]["gap"] == pytest.approx(5.0)
+    assert room["gap"] == pytest.approx(6.5)
+
+
+def test_room_is_unbounded_where_the_ceiling_is_within_its_noise_of_zero():
+    reference = _line({"normal": [4.0], "storm": [100.0]})
+    ceiling = _line({"normal": [0.001], "storm": [80.0]})
+    room = charter.room(reference, ceiling, W, noise={"normal": 0.01})
+    assert room["scenarios"]["normal"]["room"] == charter.UNBOUNDED
+    assert room["scenarios"]["storm"]["room"] == pytest.approx(1.25)
+    # J's ceiling, 0.75 * 0.001 + 0.25 * 80, is far above its noise, 0.75 * 0.01.
+    assert room["J"] == pytest.approx(28.0 / 20.00075)
+    # With no noise given, only a ceiling of exactly 0 is unbounded.
+    assert charter.room(reference, ceiling, W)["scenarios"]["normal"][
+        "room"
+    ] == pytest.approx(4000.0)
+    free = _line({"normal": [0.0], "storm": [0.0]})
+    assert charter.room(reference, free, W)["J"] == charter.UNBOUNDED
+
+
+def test_room_is_not_measured_without_both_lines():
+    reference = _line({"normal": [4.0], "storm": [100.0]})
+    assert charter.room(reference, NM, W) == NM
+    assert charter.room(NM, reference, W) == NM
+
+
 def test_the_best_null_is_the_cheapest_on_J_and_none_reads_not_measured():
     rec = _record()
     rec["nulls"]["lines"]["table"] = _line({"normal": [0.5], "storm": [0.5]})
@@ -153,6 +199,28 @@ def test_a_ceiling_missing_a_scenario_is_not_measured():
     stored = _ceiling()
     del stored["scenarios"]["storm"]
     assert charter.ceiling_line(stored, W) == NM
+
+
+def test_each_lines_seeds_are_the_evaluation_seeds_and_any_extra_the_ceiling_ran():
+    # The seed rule (evaluation.line_seeds) is decided where the ceiling is solved, and
+    # the ceilings file records the seeds solved: the other J3 lines run on the same
+    # ones, so every line is paired with the ceiling seed by seed.
+    import dataclasses
+
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    base, extra = tuple(range(100, 105)), tuple(range(105, 110))
+    spec = dataclasses.replace(
+        REGISTRY["first_order"],
+        evaluation=lambda: evaluation.Evaluation(seeds=base, extra_seeds=extra),
+    )
+    weights = {"normal": 1.0}
+    assert charter.line_seeds(spec, weights, None) == {"normal": base}
+    solved = {"scenarios": {"normal": {"seeds": list(base + extra)}}}
+    assert charter.line_seeds(spec, weights, solved) == {"normal": base + extra}
+    solved = {"scenarios": {"normal": {"seeds": list(base)}}}
+    assert charter.line_seeds(spec, weights, solved) == {"normal": base}
 
 
 # --- schema -------------------------------------------------------------------
@@ -205,6 +273,16 @@ def test_a_moved_fingerprint_stales_that_part_alone():
 
 def test_charter_tasks_are_the_ladder_rows_less_fixtures_plus_reactor(tmp_path):
     for stem in ("cstr", "first_order", "_shared"):
+        (tmp_path / f"{stem}.py").write_text("")
+    assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
+
+
+def test_charter_tasks_leave_out_extra_tasks(tmp_path):
+    """Owner's decision, 2026-11-15: an Extra task (EnvSpec.extra) is never
+    scored, so its record is kept but no longer held current. four_tank,
+    battery, unstable_cstr and, since 2026-11-24, boiler_drum are Extra and
+    have ladder rows."""
+    for stem in ("cstr", "four_tank", "battery", "unstable_cstr", "boiler_drum"):
         (tmp_path / f"{stem}.py").write_text("")
     assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
 
@@ -283,3 +361,18 @@ def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
 def test_one_draw_that_fails_fails_the_sweep():
     sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
+
+
+def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
+    """The ladder rows live in the repository's ``scripts/``, which an installed
+    package does not have. Asked there, the list is not silently the
+    expert-reference tasks alone."""
+    with pytest.raises(FileNotFoundError, match="source checkout"):
+        charter.charter_tasks(tmp_path / "absent")
+
+
+def test_the_distillation_oracle_is_not_measured_until_its_rebuild_lands():
+    """Owner's decision, 2026-11-13: the distillation oracle is rebuilt in its
+    own PR, so its MPC line stays out of the record until then, with the reason
+    J3 prints."""
+    assert "rebuil" in charter.MPC_NOT_MEASURED.get("distillation", "")

@@ -33,6 +33,8 @@ import json
 import math
 import pathlib
 
+import numpy as np
+
 PKG = pathlib.Path(__file__).resolve().parent
 REPO = PKG.parents[1]
 DATA = PKG / "data" / "charter"
@@ -53,23 +55,110 @@ TRIPS_PER = 30
 J2_SEED_FLOOR = 1000
 #: J4's scoring seeds, the same in every scenario, set at the tag.
 ANCHOR_SEEDS = tuple(range(200, 210))
+#: The scoring seeds' stop rule (owner, 2026-11-24): blocks of this many from 200,
+#: up to this many seeds in all; resamples of the paired bootstrap, on a fixed seed.
+STOP_BLOCK, STOP_MAX, STOP_RESAMPLES = 10, 50, 5000
 #: Rows in ladder_rows that are test fixtures, not tasks.
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
 EXPERT_REFERENCE = ("reactor",)
-#: Tasks whose oracle may not be run, with the reason J3 prints.
-MPC_NOT_MEASURED = {
-    "ph_neutralization": "oracle not rebuilt for the job score (oracle.py, ph_stage)"
+#: Tasks whose oracle may not be run, with the reason J3 prints. pH's oracle was
+#: rebuilt for the job score on the shared solver (#199), so it is measured.
+MPC_NOT_MEASURED: dict[str, str] = {
+    "distillation": (
+        "the oracle is being rebuilt in its own PR (owner, 2026-11-13); its "
+        "MPC line is recorded when that lands"
+    ),
 }
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
+#: The flagship (charter Words and J5): the scored suite, the owner's choice of
+#: 2026-11-24. This is the one place its membership is written. The results,
+#: the headline, the radar and the records held current all follow it, and a
+#: task outside it ships registered, not scored. A task joins by the bar the
+#: owner set the same day: a review score of 8 or more, a room whose interval
+#: is above 1 from a converged ceiling, J2 and the sweep (B7) passed, and its
+#: plant, reference and tests merged.
+FLAGSHIP = ("reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization")
+
+#: What each scored task's ceiling reads that its policy does not observe (owner,
+#: picker 2026-11-25, "Report foresight, name it plainly"): the ceiling stays the
+#: room's top, and its page says so in these words. Each list is taken from the
+#: ceiling's code: ``pc_gym.foresight`` plans on the seed's own keys from the
+#: true state, so it knows every draw ahead; hvac's ``ceiling_data`` reads the
+#: weather's path off the episode's keys; the reactor's ceiling
+#: (``scripts/reactor_ipopt.py``, ``reactor.oracle`` with a seed) starts from the
+#: simulated state and reads the load's wobble the key draws. What is hidden is
+#: the env's state and draws against its observation table. Kept here, outside
+#: every fingerprint, so a wording change stales no record.
+CEILING_READS = {
+    # reactor/env.py: Xe_hat, I_hat and their tilts in the state, boron in the
+    # core (obs 7 is the boronmeter, 20 min late), load_wobble keyed on demand_key.
+    "reactor": (
+        "the core's xenon and iodine, top and bottom",
+        "the boron in the core now, where the policy reads it 20 min late",
+        "the load's frequency-control wobble ahead",
+    ),
+    # hvac/env.py: weather_dev, an OU draw per step; the policy reads the
+    # outdoor temperature now and its next-24 h mean.
+    "hvac": ("the outdoor temperature ahead, hour by hour, past its 24 h mean",),
+    # cstr/env_jax.py: C_a, T_feed on a drawn phase, event_at drawn in its window,
+    # the scenario's event sizes.
+    "cstr": (
+        "the composition in the reactor",
+        "the feed's temperature",
+        "when the scenario's event comes (the setpoint move, the catalyst's loss, "
+        "the richer feed or the cooling water's failure)",
+    ),
+    # compressor_surge/env.py: line_shift (the machine's surge line off the map),
+    # demand_levels drawn per block, demand_dev an OU draw per step.
+    "compressor_surge": (
+        "the machine's true surge line, up to 5 % off its map",
+        "the consumers' demand levels ahead and their random part",
+    ),
+    # ph_neutralization/env.py: q2, an OU draw per step; acid_scale and the
+    # influent upsets drawn by start_upset (the flow now is metered, obs 6).
+    "ph_neutralization": (
+        "the acid strength",
+        "the buffer flow",
+        "when the influent's acid and flow upsets come and how large",
+    ),
+}
+
+SCORED, UNDER_REVIEW, EXTRA, FIXTURE = "scored", "under review", "extra", "fixture"
+
+
+def status(name: str) -> str:
+    """Where task ``name`` stands, derived and never stored: ``"scored"`` in
+    the flagship, ``"extra"`` with a reason in ``EnvSpec.extra``, ``"fixture"``
+    in ``FIXTURES``, and ``"under review"`` otherwise: registered and runnable,
+    its charter lines not measured. ``KeyError`` for an unregistered name."""
+    from target_gym.registry import get
+
+    spec = get(name)
+    if name in FLAGSHIP:
+        return SCORED
+    if spec.extra is not None:
+        return EXTRA
+    return FIXTURE if name in FIXTURES else UNDER_REVIEW
+
 
 def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
-    """Every task with a ladder row, less the fixtures, plus the expert-reference
-    tasks."""
+    """The candidates the recorder can run: every task with a ladder row, less
+    the fixtures and the Extra tasks, plus the expert-reference tasks. Only
+    the flagship's records are held current (owner's decisions, 2026-11-15
+    for Extra and 2026-11-24 for every task outside the flagship)."""
+    from target_gym.registry import REGISTRY
+
+    if not rows_dir.is_dir():
+        raise FileNotFoundError(
+            f"{rows_dir} is absent: the charter's ladder rows ship in the "
+            "repository's scripts/, so this needs a source checkout"
+        )
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
-    return sorted((rows - set(FIXTURES)) | set(EXPERT_REFERENCE))
+    extra = {name for name, spec in REGISTRY.items() if spec.extra}
+    return sorted((rows - set(FIXTURES) - extra) | set(EXPERT_REFERENCE))
 
 
 # --- J2 ---------------------------------------------------------------------
@@ -147,6 +236,23 @@ def sweep_result(draws):
 # --- J3 and J4 --------------------------------------------------------------
 
 
+def line_seeds(spec, weights: dict, stored: dict | None) -> dict:
+    """``{scenario: seeds}`` the J3 lines run on: the task's evaluation seeds
+    (``evaluation.Evaluation``), and its extra seeds in a scenario where the ceilings
+    file ``stored`` solved them. The seed rule (``evaluation.line_seeds``) is applied
+    where the ceiling is solved (``scripts/record_ceilings.py owed``), so every line
+    is paired with the ceiling seed by seed."""
+    from target_gym import evaluation
+
+    ev = evaluation.of(spec)
+    out = {}
+    for s in weights:
+        row = ((stored or {}).get("scenarios") or {}).get(s) or {}
+        ran = set(row.get("seeds") or ())
+        out[s] = ev.seeds + (ev.extra_seeds if ran & set(ev.extra_seeds) else ())
+    return out
+
+
 def line(scenarios: dict, weights: dict, converged=None) -> dict:
     """A J3 line from ``{scenario: {"costs": [...], "trips": int}}``."""
     per = {
@@ -180,6 +286,41 @@ def j3(record: dict) -> dict:
         "reference": record.get("reference", {}).get("line", NOT_MEASURED),
         "mpc": record.get("mpc", {}).get("line", NOT_MEASURED),
         "ceiling": record.get("ceiling", {}).get("line", NOT_MEASURED),
+    }
+
+
+#: Room where the ceiling's cost is within its measurement noise of 0 (charter, Words).
+UNBOUNDED = "unbounded"
+
+
+def room(reference, ceiling, weights: dict, noise: dict | None = None):
+    """Room (charter, Words and J3): the reference's cost over the ceiling's, per
+    scenario and on ``J``, from two J3 lines, or ``NOT_MEASURED`` without both.
+
+    ``noise`` is each scenario's ceiling measurement noise in cost per step, such
+    as what its solver's starts end apart; a scenario it leaves out has none.
+    Where the ceiling is within it of 0 the room is ``UNBOUNDED``, and on ``J``
+    against the weighted noise. Each scenario also carries its ``gap``, ``w_s``
+    times the reference's mean less the ceiling's; they sum to ``J``'s. A scenario
+    whose cost no controller can avoid shows as a large cost on both lines and a
+    small gap, which a ratio of the two ``J`` alone would hide.
+    """
+    if NOT_MEASURED in (reference, ceiling):
+        return NOT_MEASURED
+    noise = noise or {}
+
+    def ratio(cost, floor, within):
+        return UNBOUNDED if floor <= within else cost / floor
+
+    per = {}
+    for s, w in weights.items():
+        r, c = (ln["scenarios"][s]["mean"] for ln in (reference, ceiling))
+        per[s] = {"room": ratio(r, c, noise.get(s, 0.0)), "gap": w * (r - c)}
+    within = sum(w * noise.get(s, 0.0) for s, w in weights.items())
+    return {
+        "scenarios": per,
+        "J": ratio(reference["J"], ceiling["J"], within),
+        "gap": reference["J"] - ceiling["J"],
     }
 
 
@@ -380,24 +521,31 @@ def current(task: str) -> dict:
     """The env version stamp and each part's fingerprint as the tree stands."""
     from target_gym import provenance as P
     from target_gym.registry import REGISTRY
+    from target_gym.scoring_runs import PROTOCOLS
 
     spec = REGISTRY[task]
-    stamp = P.environment_fingerprint(spec)
     code = P._digest_paths
+    # A task scored on stream runs: the runner and its protocol are part of every
+    # line's measurement. Others keep their fingerprints as they were.
+    runs = (code([PKG / "scoring_runs.py"]),) if task in PROTOCOLS else ()
+    stamp = P.environment_fingerprint(spec)
     if task in EXPERT_REFERENCE:
-        ref = _digest(stamp, "expert", P.expert_fingerprint(spec))
+        ref = _digest(stamp, "expert", P.expert_fingerprint(spec), *runs)
     else:
         ladder = [ROWS_DIR / f"{task}.py", SCRIPTS / "reference_ladder.py"]
         ladder += [PKG / "experts" / f for f in ("ladder.py", "pid.py")]
-        ref = _digest(stamp, "ladder", code(ladder + [PKG / "identification.py"]))
+        ref = _digest(
+            stamp, "ladder", code(ladder + [PKG / "identification.py"]), *runs
+        )
     nulls = _digest(
         stamp,
         code([PKG / "null_policies.py", SCRIPTS / "reference_ladder.py"]),
         _file_digest(PKG / "data" / "null_policies" / f"{task}.json"),
+        *runs,
     )
     oracle = P.oracle_fingerprint(spec) if spec.make_mpc is not None else "none"
-    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task))
-    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"))
+    mpc = _digest(stamp, oracle, MPC_NOT_MEASURED.get(task), *runs)
+    ceiling = _digest(stamp, oracle, _file_digest(CEILINGS / f"{task}.json"), *runs)
     package = type(spec.make_env()).__module__.rsplit(".", 1)[0].split(".")
     sweep = _digest(
         code([SCRIPTS / "family_sweep.py"]),
@@ -413,10 +561,58 @@ def current(task: str) -> dict:
     stored = load_ceiling(task)
     if stored is not None:
         out["ceiling_stamp"] = stored.get("stamp")
+    if spec.evaluation is not None:
+        # The lines run on the seeds the ceiling solved (``line_seeds``): a ceiling
+        # that adds a scenario's extra seeds stales them. A task that declares no
+        # evaluation runs on fixed seeds, and its fingerprints stay as they were.
+        from target_gym import scenarios
+
+        weights = scenarios.weights(spec)
+        seeds = _digest(sorted(line_seeds(spec, weights, stored).items()))
+        for part in ("reference", "nulls", "mpc"):
+            fps[part] = _digest(fps[part], seeds)
     return out
 
 
-def stale_report(tasks=None) -> dict:
-    """``{task: stale parts}`` over the charter tasks, the current ones left out."""
-    report = {t: stale_parts(load(t), current(t)) for t in tasks or charter_tasks()}
+def stale_report(tasks=FLAGSHIP) -> dict:
+    """``{task: stale parts}`` over the flagship, whose records are the ones
+    held current, or over ``tasks``; the current ones are left out."""
+    report = {t: stale_parts(load(t), current(t)) for t in tasks}
     return {t: parts for t, parts in report.items() if parts}
+
+
+def _weighted(costs: dict, weights: dict, picks: dict | None = None):
+    """J = sum over scenarios of w_s times the mean over that scenario's seeds; with
+    ``picks``, over each scenario's resampled indices, one row per resample."""
+    if picks is None:
+        return sum(w * float(np.mean(costs[s])) for s, w in weights.items())
+    return sum(w * np.asarray(costs[s])[picks[s]].mean(-1) for s, w in weights.items())
+
+
+def paired_interval(a: dict, b: dict, weights: dict) -> tuple:
+    """``(J_a / J_b, [low, high])``: the ratio and its 95 % interval by a paired
+    bootstrap that resamples seeds within each scenario (J4), on a fixed seed."""
+    rng = np.random.default_rng(0)
+    picks = {
+        s: rng.integers(0, len(a[s]), (STOP_RESAMPLES, len(a[s]))) for s in weights
+    }
+    ratios = _weighted(a, weights, picks) / _weighted(b, weights, picks)
+    low, high = np.percentile(ratios, [2.5, 97.5])
+    return _weighted(a, weights) / _weighted(b, weights), [float(low), float(high)]
+
+
+def stop_seeds(measure, weights: dict, threshold: float = 1.0) -> dict:
+    """The scoring seeds' stop rule (owner, 2026-11-24, written before any result).
+    ``measure(seeds)`` gives two paired runs on ``seeds``, each ``{scenario: costs
+    per seed}``. Seeds come in blocks of ``STOP_BLOCK`` from 200; the run stops at
+    the first block whose 95 % interval on ``J_a / J_b`` excludes ``threshold``, or
+    at ``STOP_MAX`` seeds, undecided. Returns the seeds, the ratio, its interval and
+    whether it was decided."""
+    for n in range(STOP_BLOCK, STOP_MAX + 1, STOP_BLOCK):
+        seeds = tuple(range(ANCHOR_SEEDS[0], ANCHOR_SEEDS[0] + n))
+        a, b = measure(seeds)
+        ratio, (low, high) = paired_interval(a, b, weights)
+        decided = low > threshold or high < threshold
+        if decided:
+            break
+    return {"seeds": seeds, "ratio": ratio, "interval": [low, high], "decided": decided}

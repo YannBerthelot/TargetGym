@@ -265,6 +265,20 @@ def test_every_task_has_a_page_in_the_nav():
     assert not problems, "\n".join(problems)
 
 
+def test_a_task_page_says_when_its_task_is_extra():
+    """An Extra task is kept in the repository and never scored (charter rule
+    5). Its page tells the reader so with the registry's reason, and no
+    benchmark task's page carries the note."""
+    from target_gym.registry import REGISTRY
+
+    for name, spec in REGISTRY.items():
+        text = (DOCS / "environments" / f"{name}.md").read_text()
+        said = "not part of the benchmark" in text
+        assert said == (spec.extra is not None), name
+        if spec.extra is not None:
+            assert spec.extra in text, name
+
+
 def test_the_colab_notebook_still_runs():
     """Execute the quickstart notebook's code cells.
 

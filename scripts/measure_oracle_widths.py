@@ -100,10 +100,6 @@ GUARDS = {
         "in-range command stays in range",
         "betz": "energy/wind_turbine/env.py:288, Cp's ceiling, never reached",
     },
-    "reactor": {
-        "rod_range": "reactor/env.py:569, the rods' range clip; the demand is in "
-        "range",
-    },
     "cement_kiln": {
         "plant_guards": "cement_kiln/env.py:313, :363, :366, :392, :416, :444, "
         ":445, :456, :457, :546, :547, :548, :549; the limits and the speed box "
@@ -347,41 +343,6 @@ def wind_sites(points) -> tuple[dict, list]:
     return out, [float(b) for b in limit_backoff(speed, widths, pts, 1)]
 
 
-def reactor_sites(points) -> tuple[dict, list]:
-    """The rods' rate limit (env.py:568), once per sub-step, against Tavg; and the
-    back-off of the limits on every sub-step's state."""
-    from target_gym.reactor.oracle import reactor_model, reactor_step, rod_travel
-
-    spec = REGISTRY["reactor"]
-    env, p = spec.make_env(), float64(spec.make_test_params())
-    model = reactor_model(env, p)
-    pts = _plan_moves("reactor", points)
-    n, scale = env.control_period, float(2.0 * rod_travel(p))
-
-    def run(probe, deltas):
-        state, u = probe
-        task = model.data(state)
-        return reactor_step(env, p, model.state_x(state), u, 0, task, 0.0, deltas)
-
-    @jax.jit
-    def site(probe, delta):
-        return run(probe, delta)[1][-1:, 4]
-
-    width = kink_width(site, scale, pts, [p.precision_floor], n)
-    out = {
-        "rod_rate": {
-            "site": "reactor/env.py:568", "scale": scale, "width": width,
-            "evaluations": n,
-        }
-    }  # fmt: skip
-
-    @jax.jit
-    def limited(probe, deltas):
-        return run(probe, deltas[0])[1][:, 1:].ravel()
-
-    return out, [float(b) for b in limit_backoff(limited, [width or 0.0], pts, n)]
-
-
 def _aircraft(name, points):
     """A flight task's params, probes and ``run(probe, deltas, gust, roll)``, one
     planned step at width 0 giving its tracked outputs and limited quantities."""
@@ -550,7 +511,6 @@ def kiln_sites(_points) -> tuple[dict, list]:
 
 SITES = {
     **{n: functools.partial(aircraft_sites, n) for n in AIRCRAFT},
-    "reactor": reactor_sites,
     "battery": battery_sites,
     "cement_kiln": kiln_sites,
     "compressor_surge": compressor_sites,
@@ -558,7 +518,6 @@ SITES = {
 }
 #: Each task's count of smoothed sites, which its planner's ``widths`` hold.
 N_SITES = {
-    "reactor": 1,
     "battery": 1,
     "cement_kiln": 1,
     "compressor_surge": 2,
@@ -568,10 +527,6 @@ N_SITES = {
 #: boiler_drum and unstable_cstr draw their upsets at reset and step without
 #: noise, so K11 has no innovation to back off from there.
 NOISY = {
-    "reactor": (
-        "target_gym.reactor.oracle:reactor_model",
-        lambda p: _wobble(p, 6),
-    ),
     "compressor_surge": (
         "target_gym.compressor_surge.oracle:compressor_model",
         lambda p: (np.exp(-p.demand_theta * p.delta_t), p.demand_sigma),
@@ -623,15 +578,8 @@ def _theta(module, name):
     return getattr(importlib.import_module(f"target_gym.{module}"), name)
 
 
-def _wobble(p, period):
-    """The reactor's load wobble over a control step: its decay, and the
-    stationary deviation its innovations imply."""
-    a = 1.0 - p.demand_theta * p.delta_t
-    return a**period, p.demand_sigma * np.sqrt(p.delta_t / (1.0 - a**2))
-
-
 #: Where a task's deviation sits in its model's task data, if not last.
-DEVIATION_AT = {"compressor_surge": 3, "hvac": 1, "reactor": 3, "wind_turbine": 2}
+DEVIATION_AT = {"compressor_surge": 3, "hvac": 1, "wind_turbine": 2}
 
 
 def _with_deviation(name, task, d):

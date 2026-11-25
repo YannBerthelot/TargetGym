@@ -47,7 +47,8 @@ def curve_supply(params, T_out_24h, xp=jnp):
 
 def curve_step(params, state, obs, xp=jnp):
     """obs: ``[T_air, T_out, T_out_24h, T_core, T_return, T_supply, sin_h,
-    cos_h, band_centre]``."""
+    cos_h, band_centre, T_out_forecast_24h, price_now, h_to_price_change]``
+    (``env.get_obs``); the curve reads channel 2 only."""
     p = params
     T_sup = xp.clip(curve_supply(p, obs[..., 2], xp), p.T_supply_min, p.T_supply_max)
     raw = 2.0 * (T_sup - p.T_supply_min) / (p.T_supply_max - p.T_supply_min) - 1.0

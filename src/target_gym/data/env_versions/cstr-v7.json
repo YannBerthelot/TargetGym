@@ -1,5 +1,5 @@
 {
-  "fingerprint": "42733087011c240c",
-  "note": "Bumped in the re-record pass (owner, 2026-11-12): long strata (#173) changed every task; also #192 event rates (boiler_drum, glass_furnace, reactor), #193 reactor restart and obs 11-12, #194 aircraft leads (patrol family, formation), #182/#184/#187 plant fixes (cstr, four_tank, compressor_surge, glass_furnace).",
-  "stamped": "2026-11-12T11:37:40+00:00"
+  "fingerprint": "f425f456bdf57fc0",
+  "note": "Unreleased versions keep their number (owner, 2026-11-14). cstr: the feed build-up's rise is 3 %, the top of what the valve holds at the design point, not 10 % (owner, 2026-11-23, PHYSICS.md D6). The scenario's records are redone in the re-record pass. Stamped again on the merge with the review fixes of PR 203, which change no step, reward or observation here: A reading's interval counts control steps (no shipped reading has both an interval and sub-steps), and utils.py lost two unused rollout helpers. No step, reward or observation of a shipped task changes. Stamped again on the merge with the physics fixes of PR 204: Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
+  "stamped": "2026-11-23T16:22:54+00:00"
 }

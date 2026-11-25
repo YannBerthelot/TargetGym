@@ -266,7 +266,10 @@ def test_scale_zero_is_the_noise_free_task_exactly(spec):
         _rollout(noisy, _quiet(params), key, action),
         _rollout(free, params, key, action),
     ):
-        np.testing.assert_array_equal(a[0], b[0])
+        # The reading as the reward below: two programs, and JAX 0.11 rounds one
+        # value in 25 a float32 step apart (200.37903 against 200.37904 on
+        # plane3d_racetrack, Python 3.14, 2026-11-23; owner, 2026-11-23).
+        np.testing.assert_allclose(a[0], b[0], rtol=TWO_PROGRAMS)
         jax.tree_util.tree_map(np.testing.assert_array_equal, a[1], b[1])
         if a[2] is not None:
             np.testing.assert_allclose(a[2], b[2], rtol=TWO_PROGRAMS)
@@ -290,6 +293,23 @@ def test_scale_scales_the_noise(spec):
     two, _ = _added(env, state, params.replace(sensor_noise_scale=2.0))
     tol = 8 * np.spacing(np.abs(np.asarray(values, np.float32)))
     assert np.all(np.abs(two - 2.0 * one) <= tol)
+
+
+@noisy_tasks
+def test_the_true_observation_has_no_instrument_in_the_way(spec):
+    """``true_obs`` is the plant now, what a claim about the plant is read on
+    (the time-in-band KPI). Instruments a hundred times noisier leave it where
+    it was, and move what the policy reads."""
+    from target_gym.base import true_obs
+
+    env, params = spec.make_env(), spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(3), params)
+    loud = params.replace(sensor_noise_scale=100.0)
+
+    np.testing.assert_array_equal(
+        true_obs(env, state, loud), true_obs(env, state, params)
+    )
+    assert not np.array_equal(env.get_obs(state, loud), env.get_obs(state, params))
 
 
 @noisy_tasks
@@ -709,11 +729,84 @@ def test_a_channel_reading_does_not_inherit_the_noise_of_its_fields():
 # ---------------------------------------------------------------------------
 
 
+def _coordinate_atol(state):
+    """The atol for comparing a channel across two compiled programs: a channel
+    derived from km-scale coordinates (an error to a path 36 km out, say)
+    inherits their float32 step: 1 mm at 15 km, 3.9 mm at 36 km. Two such
+    steps at the farthest coordinate for each body a channel subtracts, never
+    under 2 mm.
+
+    A patrol state holds two bodies, ``follower`` and ``lead``, and its height
+    error is one altitude minus the other, each rounded on its own: on
+    wake_surf under JAX 0.11.2 the follower sat 2 steps off and the lead 1,
+    3 steps (2.9 mm at 10.7 km) in all, from vertical speeds that the two
+    programs fuse 1e-4 m/s apart (2026-11-25)."""
+    bodies = [state] + [
+        getattr(state, f) for f in ("follower", "lead") if hasattr(state, f)
+    ]
+    coords = [
+        float(np.max(np.abs(np.asarray(getattr(b, f)))))
+        for b in bodies
+        for f in ("x", "y", "z")
+        if hasattr(b, f)
+    ]
+    far = max(coords + [0.0])
+    with_coords = sum(any(hasattr(b, f) for f in ("x", "y", "z")) for b in bodies)
+    steps = 2 * max(with_coords, 1)
+    return max(2e-3, steps * float(np.spacing(np.float32(far))))
+
+
+def test_the_coordinate_atol_reads_both_aircraft_of_a_patrol_state():
+    """A patrol state keeps its coordinates on ``follower`` and ``lead``, and a
+    channel such as the height error subtracts one aircraft's altitude from the
+    other's, each rounded to its own float32 step: two steps for each of the two.
+    Expected by hand: the farthest coordinate of the wake_surf reset is the
+    lead at about 10.75 km, where a float32 step is 2**-10 m (8192 to 16384 m),
+    so 2 aircraft x 2 steps x 2**-10 m."""
+    spec = REGISTRY["wake_surf"]
+    _, state = spec.make_env().reset_env(jax.random.PRNGKey(4), spec.make_test_params())
+    assert 8192.0 <= float(state.lead.z) < 16384.0
+    assert _coordinate_atol(state) == pytest.approx(4 * 2.0**-10)
+
+
+def test_the_coordinate_atol_of_a_single_body_is_two_steps():
+    """One body, one coordinate per channel: two float32 steps at the farthest
+    coordinate, or 2 mm where that is less."""
+
+    @struct.dataclass
+    class Body:
+        x: float
+        z: float
+
+    far = Body(x=jnp.float32(36_000.0), z=jnp.float32(10.0))
+    # 32768 to 65536 m: a float32 step of 2**-8 m
+    assert _coordinate_atol(far) == pytest.approx(2 * 2.0**-8)
+    assert _coordinate_atol(Body(x=jnp.float32(100.0), z=jnp.float32(10.0))) == 2e-3
+
+
 @noisy_tasks
 def test_noise_runs_under_jit_vmap_and_scan(spec):
-    """A scanned, vmapped, jitted rollout returns the eager rollout's readings,
-    within float32 fusion (the reset's copy compiled inside the step differs
-    by a step or so), and nothing in it needs a key but the episode's."""
+    """A scanned, vmapped, jitted rollout is the rollout taken one step at a
+    time, and nothing in it needs a key but the episode's. In two parts,
+    because an instrument that rounds to a digital step cannot be compared
+    across two compiled programs: where a value sits on a rounding edge, one
+    float32 step in the plant becomes one whole step of the instrument. On
+    plane_sine the altitudes 6147.9111 and 6147.9116 m, one float32 step apart,
+    read 6147.816 and 6148.121 m (2026-11-23).
+
+    - The plant: what the instruments look at, the observation with none of
+      them in the way (``true_obs``), is the same in both within float32
+      fusion, and so, exactly, are the sensor key, the clock and every other
+      integer in the state. Not every state field: one the observation does
+      not read can drift further on a stiff plant (one of the glass furnace's
+      20 cells by 1.3e-5 of its value in 8 steps), and the readings were never
+      held to more than this.
+    - The instruments: each scanned reading is the reading of the scanned state
+      it came with, which holds the sensor key and the clock the noise is
+      drawn from. Same state in, same reading out, rounding included.
+    """
+    from target_gym.base import true_obs
+
     env, params = spec.make_env(), spec.make_test_params()
     keys = jax.random.split(jax.random.PRNGKey(4), 3)
     low, high = _bounds(env, params)
@@ -728,29 +821,57 @@ def test_noise_runs_under_jit_vmap_and_scan(spec):
             o, s, _, _, info = env.step_env(
                 jax.random.fold_in(stream, t), s, action, params
             )
-            return s, (o, info["measured_reward"])
+            return s, (o, info["measured_reward"], s)
 
         return obs, jax.lax.scan(step, state, jnp.arange(8))[1]
 
-    first, (obs, measured) = jax.jit(jax.vmap(episode))(keys)
+    first, (obs, measured, states) = jax.jit(jax.vmap(episode))(keys)
     assert obs.shape == (3, 8, *first.shape[1:])
     assert measured.shape == (3, 8)
     assert np.all(np.isfinite(obs)) and np.all(np.isfinite(measured))
 
     rows = _rollout(env, params, keys[1], action, steps=8)
-    eager = np.stack([np.asarray(o) for o, *_ in rows[1:]])
-    # atol: a channel derived from km-scale coordinates (an error to a path
-    # 36 km out, say) inherits their float32 step: 1 mm at 15 km, 3.9 mm at
-    # 36 km. Two such steps at the farthest coordinate, never under 2 mm.
-    state = env.reset_env(keys[1], params)[1]
-    far = max(
-        [
-            float(np.max(np.abs(np.asarray(getattr(state, f)))))
-            for f in ("x", "y", "z")
-            if hasattr(state, f)
-        ]
-        + [0.0]
+    atol = _coordinate_atol(env.reset_env(keys[1], params)[1])
+
+    def same_integers(got, want):
+        got, want = np.asarray(got), np.asarray(want)
+        if not np.issubdtype(want.dtype, np.floating):
+            np.testing.assert_array_equal(got, want)
+
+    ours = jax.tree_util.tree_map(lambda leaf: leaf[1], states)
+    for t, (_, stepped, *_) in enumerate(rows[1:]):
+        jax.tree_util.tree_map(
+            same_integers, jax.tree_util.tree_map(lambda leaf: leaf[t], ours), stepped
+        )
+    seen = jax.jit(jax.vmap(lambda s: true_obs(env, s, params)))(ours)
+    stepped_seen = np.stack(
+        [np.asarray(true_obs(env, stepped, params)) for _, stepped, *_ in rows[1:]]
     )
-    atol = max(2e-3, 2 * float(np.spacing(np.float32(far))))
-    np.testing.assert_allclose(obs[1], eager, rtol=1e-5, atol=atol)
+    np.testing.assert_allclose(seen, stepped_seen, rtol=1e-5, atol=atol)
+    read = jax.jit(jax.vmap(lambda s: env.get_obs(s, params)))(ours)
+    np.testing.assert_allclose(obs[1], read, rtol=1e-5, atol=atol)
     np.testing.assert_allclose(first[1], rows[0][0], rtol=1e-5, atol=atol)
+
+
+def test_a_readings_interval_counts_control_steps_where_a_step_has_sub_steps():
+    """``Reading.interval`` is in plant seconds, and ``state.time`` counts control
+    steps. The reactor's control step is 6 sub-steps of ``delta_t`` (30 s), so a
+    flux reading that updates every 60 s holds its noise for 2 steps: steps 0-1
+    share a draw, steps 2-3 share the next, and the two draws differ."""
+    from target_gym.base import FieldReading, true_obs
+    from target_gym.reactor.env_jax import Reactor
+
+    class SlowFlux(Reactor):
+        readings = (FieldReading("n", sigma=1.9e-4, interval=60.0),)
+
+    env = SlowFlux()
+    params = REGISTRY["reactor"].make_test_params()
+    assert float(params.delta_t) * env.control_period == 30.0
+    _, state = env.reset_env(jax.random.PRNGKey(0), params)
+    true = float(true_obs(env, state, params)[0])
+    noise = [
+        float(env.get_obs(dataclasses.replace(state, time=t), params)[0]) - true
+        for t in range(4)
+    ]
+    assert noise[0] == noise[1] and noise[2] == noise[3]
+    assert noise[1] != noise[2]

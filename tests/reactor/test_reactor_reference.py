@@ -33,6 +33,10 @@ from target_gym.reactor.experts import (
     xenon_play,
 )
 
+#: These tests run a core at the start of its cycle, where their hand values were
+#: written; test_reactor_reference_cycle.py runs the reference through the cycle.
+START_OF_CYCLE = {"cycle_range": (0.0, 0.0)}
+
 
 def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     env = Reactor()
@@ -48,7 +52,7 @@ def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
     )
     _, s = env.reset_env(jax.random.PRNGKey(0), p)
     s = s.replace(ramp_down_at=jnp.float32(0.0), ramp_up_at=jnp.float32(1e8))
-    hold = jnp.array([1.0 - 2.0 * float(s.rod_in), 0.0], jnp.float32)
+    hold = jnp.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0], jnp.float32)
 
     def step(c, _):
         s, I, Xe, first = c
@@ -69,7 +73,7 @@ def test_xenon_tool_follows_the_plants_xenon_through_a_load_cut():
 def test_the_reference_keeps_the_rods_inside_their_insertion_limit(seed):
     """The owner's condition for the procedure (2026-11-08): bank D holds the offset
     only from above its insertion limit, on the EDF day."""
-    env, p = Reactor(), ReactorParams()
+    env, p = Reactor(), ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
@@ -97,7 +101,8 @@ def _day(scenario, seed, **changes):
 
     spec = REGISTRY["reactor"]
     (sc,) = [s for s in scenarios.suite(spec) if s.name == scenario]
-    p = scenarios.params_for(spec, sc, **changes)  # scored: sensor noise on
+    # Scored (sensor noise on), at the start of the cycle.
+    p = scenarios.params_for(spec, sc, **{**START_OF_CYCLE, **changes})
     env, expert = Reactor(), make_reactor_pid_controller()
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
@@ -143,7 +148,7 @@ EDGE = 1.6 / K_PER_PPM  # 3 ppm
 
 
 def _play(debt, rate):
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     return xenon_play(debt, rate, p, dt=30.0, lead=600.0, dead_band=1.6)
 
 
@@ -252,7 +257,7 @@ def _dispatch(steps, onsets, notice_h, ramp_h, hold_h):
 
 
 def test_the_reference_reads_each_day_s_dispatch():
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     ramp_h = (1.0 - p.load_min) / p.load_ramp_rate / 3600.0
     second = 24 * HOUR_STEPS
@@ -261,7 +266,7 @@ def test_the_reference_reads_each_day_s_dispatch():
     T_avg = p.T_avg_full_load  # on the program at full load
     lined_out = np.array(
         [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, 1.0, 2.0, 0.5],
+         0.0, 0.0, 1.0, 2.0, 0.5, 0.0, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     obs = np.tile(lined_out, (steps, 1))
@@ -292,13 +297,14 @@ def test_the_reference_reads_each_day_s_dispatch():
 
 
 def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
-    p = ReactorParams()
+    p = ReactorParams(**START_OF_CYCLE)
     expert = make_reactor_pid_controller()
     load = 0.15
     T_avg = p.T_avg_no_load + (p.T_avg_full_load - p.T_avg_no_load) * load
+    # The plan's load reads 1 throughout: the turbine, at 15 %, is far under it.
     reloading = np.array(
         [load, T_avg + 2.5, 1.0 - 2.0 * 3.0 / 228.0, load, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, load, 2.0, 0.5],
+         0.0, 0.0, load, 2.0, 0.5, 0.0, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     steps = 2 * HOUR_STEPS
@@ -320,19 +326,34 @@ def test_the_reference_feeds_forward_only_the_load_the_turbine_takes():
 
 # --- the day's own ramp (re-record pass, step 2; owner, 2026-11-12) ---
 # Contract: the reference plans with the day's own ramp rate and minimum, read
-# from the dispatch (obs 11, % of rated load a minute; obs 12, the day's minimum).
-# Oracle: on a plant held lined out at full power, through the ramp down the plan's
-# feedforward is ``ff`` times the load the ramp moves in a 30 s step, ``-rate *
-# 30 s``, from the boron line's lead before the ramp to the lead before its end,
-# and nothing through the 3 h hold after it: 97.256 x 0.08 / 3600 x 30 = 0.06484
-# at 8 %/h over 6.25 h, and 0.03242 at 4 %/h over the 6.25 h a 25 % depth takes.
+# from the dispatch (obs 11, % of rated load a minute; obs 12, the day's minimum),
+# and feeds forward the boron the program asks for the load the ramp moves, from
+# the curve book at the day's cycle point (owner, 2026-11-15; until then a gain
+# fitted on a bump test at the start of the cycle). Oracle: on a plant held lined
+# out at full power, through the ramp down the plan's feedforward is the program's
+# ppm per unit of load times the ramp's rate, as a boration at the boron read, from
+# the boron line's lead before the ramp to the lead before its end, and nothing
+# through the 3 h hold after it. Since 2026-11-25 the curve book is the recipe's
+# measured one (ReferenceParams.book_*): -11.903 pcm/K and -7.992 pcm/ppm at the
+# start, -55.102 and -10.381 at 90 % of the cycle, straight lines between. By hand:
+# at the start, 3 x 243.3 + 11.903 x 7.7 = 821.6 pcm per 50 % of load, 205.6 ppm
+# per unit at 7.992 pcm/ppm; at 80 %, -11.903 - 43.199 x 8/9 = -50.302 pcm/K and
+# -7.992 - 2.389 x 8/9 = -10.116 pcm/ppm, so 729.9 + 50.302 x 7.7 = 1117.2 pcm per
+# 50 %, 220.9 ppm per unit. Full boration at the 1000 ppm read adds 3 / 2.5e5 x
+# (7800 - 1000) = 0.0816 ppm/s. So 205.6 x 0.08 / 3600 / 0.0816 = 0.05599 at
+# 8 %/h, 0.02800 at 4 %/h, and 220.9 x 0.08 / 3600 / 0.0816 = 0.06016 at 8 %/h and
+# 80 % of the cycle (0.05901 with the plant's own lines, before the book was
+# measured).
 
 
-@pytest.mark.parametrize("per_h, low", [(0.08, 0.5), (0.04, 0.75)])
-def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
+@pytest.mark.parametrize(
+    "per_h, low, cycle, expected",
+    [(0.08, 0.5, 0.0, 0.05599), (0.04, 0.75, 0.0, 0.02800), (0.08, 0.5, 0.8, 0.06016)],
+)
+def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low, cycle, expected):
     from target_gym.reactor.experts import ReferenceParams
 
-    p, ref = ReactorParams(), ReferenceParams()
+    p, ref = ReactorParams(**START_OF_CYCLE), ReferenceParams()
     expert = make_reactor_pid_controller()
     ramp_h = (1.0 - low) / per_h
     hold_h = 3.0
@@ -340,7 +361,7 @@ def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
     T_avg = p.T_avg_full_load
     lined_out = np.array(
         [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
-         0.0, 0.0, 1.0, per_h * 100.0 / 60.0, low],
+         0.0, 0.0, 1.0, per_h * 100.0 / 60.0, low, cycle, 1.0, 0.0],
         np.float32,
     )  # fmt: skip
     obs = np.tile(lined_out, (steps, 1))
@@ -357,6 +378,36 @@ def test_the_reference_plans_with_the_day_s_own_ramp(per_h, low):
     lead_h = ref.lead / 3600.0
     during = (t > 1.0 - lead_h + 0.1) & (t < 1.0 + ramp_h - lead_h - 0.1)
     after = (t > 1.0 + ramp_h + 0.1) & (t < 1.0 + ramp_h + hold_h - lead_h - 0.1)
-    expected = -ref.ff * per_h / 3600.0 * 30.0
-    np.testing.assert_allclose(flow[during], expected, rtol=1e-3)
+    np.testing.assert_allclose(flow[during], expected, rtol=3e-3)
     np.testing.assert_allclose(flow[after], 0.0, atol=1e-6)
+
+
+# --- the Tavg loop acts only past the free band (package review, 2026-11-25) ---
+# Contract (PHYSICS.md section 6: "The Tavg loop acts past the free band, on what is
+# charged"): back inside the band, the loop moves no boron. Oracle: a plant held
+# lined out at full power, xenon balanced, no day announced; Tavg reads 3 K cold for
+# an hour, then on its program. Past the band the loop dilutes to warm it, and
+# an hour after Tavg is back on its program the flow is nothing.
+
+
+def test_back_inside_the_band_the_tavg_loop_moves_no_boron():
+    p = ReactorParams(**START_OF_CYCLE)
+    expert = make_reactor_pid_controller()
+    T_avg = p.T_avg_full_load
+    lined_out = np.array(
+        [1.0, T_avg + 16.7, 1.0 - 2.0 * 3.0 / 228.0, 1.0, T_avg, T_avg, 0.0, 1000.0,
+         0.0, 0.0, 1.0, 2.0, 0.5, 0.0, 1.0, 0.0],
+        np.float32,
+    )  # fmt: skip
+    obs = np.tile(lined_out, (3 * HOUR_STEPS, 1))
+    obs[:HOUR_STEPS, 4] = T_avg - 3.0  # an hour 3 K cold, past the 1.6 K band
+
+    def body(m, o):
+        a, m = expert.act(m, o)
+        return m, a[1]
+
+    flow = np.asarray(
+        jax.jit(lambda o: jax.lax.scan(body, expert.init_state, o)[1])(jnp.asarray(obs))
+    )
+    assert float(np.min(flow[:HOUR_STEPS])) < -0.01  # it dilutes while cold
+    np.testing.assert_allclose(flow[2 * HOUR_STEPS :], 0.0, atol=1e-6)

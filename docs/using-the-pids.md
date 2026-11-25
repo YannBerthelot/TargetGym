@@ -41,7 +41,7 @@ The same `step` runs in a Python loop, under `jit` and inside `lax.scan`, on
 CPU or GPU. It returns the action in the environment's own units, already
 clipped to its bounds. It reads the observation only, never the hidden state,
 which is what makes the PID a fair peer for a learned policy. (The MPC reads
-the true state, so it is an upper bound, not a peer.)
+the true state, so it is the best known plan, not a peer.)
 
 Two rules keep the memory right:
 
@@ -109,9 +109,9 @@ from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import baseline_policy, rollout
 
-spec = REGISTRY["cstr"]
+spec = REGISTRY["four_tank"]
 params = spec.make_test_params()
-recorded = load_recorded_baselines()["cstr"]
+recorded = load_recorded_baselines()["four_tank"]
 seeds = range(recorded["seeds"])
 
 
@@ -250,9 +250,9 @@ from target_gym.benchmark import episode_keys
 from target_gym.provenance import load_recorded_baselines
 from target_gym.registry import REGISTRY
 
-spec = REGISTRY["cstr"]
+spec = REGISTRY["four_tank"]
 env, params = spec.make_env(), spec.make_test_params()
-expert = tg.make_expert("cstr")
+expert = tg.make_expert("four_tank")
 
 
 def episode_return(key):
@@ -274,7 +274,7 @@ def episode_return(key):
 keys = jax.numpy.stack([jax.random.PRNGKey(s) for s in range(10)])
 returns = jax.jit(jax.vmap(episode_return))(keys)   # ten episodes at once
 
-recorded = load_recorded_baselines()["cstr"]["pid_returns"]
+recorded = load_recorded_baselines()["four_tank"]["pid_returns"]
 assert np.allclose(returns, recorded, rtol=1e-3)     # the host-scored numbers
 ```
 

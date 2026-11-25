@@ -1,8 +1,350 @@
 {
  "task": "ph_neutralization",
- "reference": "pi",
- "maxiter": 2000,
+ "method": "process (cstr, distillation, compressor_surge, unstable_cstr, ph_neutralization): ``pc_gym.foresight`` L-BFGS-B from the reset's hold (the reference's first move held) and the kept reference's moves, the cheaper untripped plan kept; compressor_surge also from their midpoint, each start restarted twice from its own end plan.",
+ "start_option": [
+  "mpc"
+ ],
+ "J_ceiling": 0.055597379592164875,
  "scenarios": {
+  "normal": {
+   "weight": 0.7,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_costs": [
+    0.0535379593239613,
+    0.04489756839131979,
+    0.06124191360755099,
+    0.05630252791043476,
+    0.054564498127335055,
+    0.05114447478893756,
+    0.06212614122034413,
+    0.052061959348035695,
+    0.05311875217679219,
+    0.06062695347112215
+   ],
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.05496227483658336,
+   "solver": {
+    "status": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "capped": 0,
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10
+   },
+   "per_seed": [
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 100,
+     "seconds": 895.6486015319824,
+     "start_option": "mpc",
+     "cost": 0.0535379593239613,
+     "trips": 0,
+     "planned": 0.05353795737028122,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 163,
+      "projected_gradient": 0.0012122659219798992,
+      "min_margin": -0.008018113672733307
+     },
+     "oracle_run": {
+      "cost": 0.055014971309232844,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.055014971309232844,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 101,
+     "seconds": 865.282103061676,
+     "start_option": "mpc",
+     "cost": 0.04489756839131979,
+     "trips": 0,
+     "planned": 0.044897567480802536,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 57,
+      "projected_gradient": 0.0008944659883234549,
+      "min_margin": -0.005633927881717682
+     },
+     "oracle_run": {
+      "cost": 0.04701693540797569,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04701693540797569,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 102,
+     "seconds": 949.2763824462891,
+     "start_option": "mpc",
+     "cost": 0.06124191360755099,
+     "trips": 0,
+     "planned": 0.061241913586854935,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 8,
+      "projected_gradient": 0.005601799347232483,
+      "min_margin": -0.011594392359256744
+     },
+     "oracle_run": {
+      "cost": 0.06216810595416982,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06216810595416982,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 103,
+     "seconds": 865.5015065670013,
+     "start_option": "mpc",
+     "cost": 0.05630252791043476,
+     "trips": 0,
+     "planned": 0.05630252882838249,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.0006643188954238433,
+      "min_margin": 0.0004695877432823181
+     },
+     "oracle_run": {
+      "cost": 0.057494140936570085,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.057494140936570085,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 104,
+     "seconds": 1021.0157001018524,
+     "start_option": "mpc",
+     "cost": 0.054564498127335055,
+     "trips": 0,
+     "planned": 0.054564498364925385,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 96,
+      "projected_gradient": 0.002530946950778337,
+      "min_margin": -0.005300141870975494
+     },
+     "oracle_run": {
+      "cost": 0.05603763279755497,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05603763279755497,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 105,
+     "seconds": 875.3122475147247,
+     "start_option": "mpc",
+     "cost": 0.05114447478893756,
+     "trips": 0,
+     "planned": 0.051144473254680634,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0007291294199019973,
+      "min_margin": 1.8161700963974
+     },
+     "oracle_run": {
+      "cost": 0.05238362688630846,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05238362688630846,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 106,
+     "seconds": 945.1844782829285,
+     "start_option": "mpc",
+     "cost": 0.06212614122034413,
+     "trips": 0,
+     "planned": 0.06212615221738815,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 5,
+      "projected_gradient": 0.0006082889885728054,
+      "min_margin": 0.17461052536964417
+     },
+     "oracle_run": {
+      "cost": 0.06278996019197124,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06278996019197124,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 107,
+     "seconds": 850.0358035564423,
+     "start_option": "mpc",
+     "cost": 0.052061959348035695,
+     "trips": 0,
+     "planned": 0.052061960101127625,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0007260258371953876,
+      "min_margin": 4.237692356109619
+     },
+     "oracle_run": {
+      "cost": 0.052607553403472174,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.052607553403472174,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 108,
+     "seconds": 845.6634323596954,
+     "start_option": "mpc",
+     "cost": 0.05311875217679219,
+     "trips": 0,
+     "planned": 0.0531187504529953,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 110,
+      "projected_gradient": 0.0006945037625256667,
+      "min_margin": 0.005762480199337006
+     },
+     "oracle_run": {
+      "cost": 0.05499531118330003,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05499531118330003,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "normal",
+     "seed": 109,
+     "seconds": 928.2956824302673,
+     "start_option": "mpc",
+     "cost": 0.06062695347112215,
+     "trips": 0,
+     "planned": 0.06062695384025574,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0006280471661550546,
+      "min_margin": 5.5889058113098145
+     },
+     "oracle_run": {
+      "cost": 0.06081461364487251,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06081461364487251,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    }
+   ]
+  },
   "acid_strength": {
    "weight": 0.1,
    "seeds": [
@@ -17,23 +359,20 @@
     108,
     109
    ],
-   "reference_mean": 1.1190900970721205,
-   "ceiling_mean": 0.06258131132849182,
    "ceiling_costs": [
-    0.06653584504706991,
-    0.0480392538347385,
-    0.07303563199626903,
-    0.06027688408373959,
-    0.060449698321624765,
-    0.05594045057530618,
-    0.0705860756803304,
-    0.0647414086593522,
-    0.053612963441345425,
-    0.07259490164514217
+    0.05907224447356485,
+    0.03956170085178866,
+    0.06801463413285092,
+    0.05508481423118307,
+    0.054828820047259794,
+    0.04991380861845553,
+    0.06306258006629327,
+    0.05524269235150617,
+    0.04619658691776244,
+    0.06421690472618341
    ],
    "ceiling_trips": 0,
-   "room": 17.882177175834038,
-   "planned_minus_replayed_max": 9.931520453254628e-09,
+   "ceiling_mean": 0.05551947864168481,
    "solver": {
     "status": [
      0,
@@ -47,192 +386,303 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.012955309456469916,
     "capped": 0,
-    "iterations_max": 36,
-    "min_margin": -0.0762535110116005,
-    "start": [
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "hold"
-    ],
     "fell_back": 0,
-    "rho": [
-     1.0,
-     1.0,
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0
-    ],
-    "two_starts_max_rel_gap": 0.4113106648551736,
-    "two_starts_median_rel_gap": 0.08994380655764456
-   }
-  },
-  "bad_day": {
-   "weight": 0.05,
-   "seeds": [
-    100,
-    101,
-    102,
-    103,
-    104,
-    105,
-    106,
-    107,
-    108,
-    109
-   ],
-   "reference_mean": 1.0452343129480464,
-   "ceiling_mean": 0.06139546412340781,
-   "ceiling_costs": [
-    0.06911931365159237,
-    0.049895548199613886,
-    0.06583742190462848,
-    0.058569550922968325,
-    0.05806672147138872,
-    0.05793135083642685,
-    0.07624645857657823,
-    0.0535483261052933,
-    0.0478311357812749,
-    0.07690881378431287
-   ],
-   "ceiling_trips": 0,
-   "room": 17.024617825953325,
-   "planned_minus_replayed_max": 8.832042416861974e-09,
-   "solver": {
-    "status": [
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0
-    ],
-    "projected_gradient_max": 0.0007521550628461077,
-    "capped": 0,
-    "iterations_max": 75,
-    "min_margin": -0.017507173120975494,
-    "start": [
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
-    "fell_back": 0,
-    "rho": [
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     1.0
-    ],
-    "two_starts_max_rel_gap": 0.3532998823703769,
-    "two_starts_median_rel_gap": 0.13797618893334176
-   }
-  },
-  "buffer_loss": {
-   "weight": 0.05,
-   "seeds": [
-    100,
-    101,
-    102,
-    103,
-    104,
-    105,
-    106,
-    107,
-    108,
-    109
-   ],
-   "reference_mean": 0.5408598990086466,
-   "ceiling_mean": 0.073149231277251,
-   "ceiling_costs": [
-    0.07307526926872217,
-    0.06882417191647822,
-    0.07527027076317204,
-    0.07274361742246482,
-    0.07350182821456756,
-    0.07168355558791922,
-    0.07645674749381012,
-    0.07136390833184122,
-    0.0730648243592845,
-    0.07550811941425005
-   ],
-   "ceiling_trips": 0,
-   "room": 7.393924578081671,
-   "planned_minus_replayed_max": 1.5004641473748137e-08,
-   "solver": {
-    "status": [
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0,
-     0
-    ],
-    "projected_gradient_max": 0.02471006987534574,
-    "capped": 0,
-    "iterations_max": 44,
-    "min_margin": -0.017507173120975494,
-    "start": [
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "hold",
-     "reference",
-     "reference"
-    ],
-    "fell_back": 0,
-    "rho": [
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     1.0
-    ],
-    "two_starts_max_rel_gap": 0.13108307442602818,
-    "two_starts_median_rel_gap": 0.014339876859347754
-   }
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10
+   },
+   "per_seed": [
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 100,
+     "seconds": 922.9111788272858,
+     "start_option": "mpc",
+     "cost": 0.05907224447356485,
+     "trips": 0,
+     "planned": 0.05907224118709564,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 25,
+      "projected_gradient": 0.015299732231293162,
+      "min_margin": -0.03438720852136612
+     },
+     "oracle_run": {
+      "cost": 0.060329024075809874,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.060329024075809874,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 101,
+     "seconds": 854.7781736850739,
+     "start_option": "mpc",
+     "cost": 0.03956170085178866,
+     "trips": 0,
+     "planned": 0.03956170007586479,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 11,
+      "projected_gradient": 0.0009208089668830965,
+      "min_margin": -5.4933130741119385e-05
+     },
+     "oracle_run": {
+      "cost": 0.04221417390136307,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04221417390136307,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 102,
+     "seconds": 996.9341750144958,
+     "start_option": "mpc",
+     "cost": 0.06801463413285092,
+     "trips": 0,
+     "planned": 0.06801463663578033,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 5,
+      "projected_gradient": 0.009963595082653876,
+      "min_margin": -0.014026261866092682
+     },
+     "oracle_run": {
+      "cost": 0.06882622868409381,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06882622868409381,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 103,
+     "seconds": 959.2561340332031,
+     "start_option": "mpc",
+     "cost": 0.05508481423118307,
+     "trips": 0,
+     "planned": 0.05508481338620186,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.022800745994276117,
+      "min_margin": -0.04258880764245987
+     },
+     "oracle_run": {
+      "cost": 0.05628638485847946,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05628638485847946,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 104,
+     "seconds": 879.5280673503876,
+     "start_option": "mpc",
+     "cost": 0.054828820047259794,
+     "trips": 0,
+     "planned": 0.05482882633805275,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 10,
+      "projected_gradient": 0.00887860630863488,
+      "min_margin": -0.03858337551355362
+     },
+     "oracle_run": {
+      "cost": 0.055977237416197353,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.055977237416197353,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 105,
+     "seconds": 975.068520784378,
+     "start_option": "mpc",
+     "cost": 0.04991380861845553,
+     "trips": 0,
+     "planned": 0.049913808703422546,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.009533113842887115,
+      "min_margin": -0.036389924585819244
+     },
+     "oracle_run": {
+      "cost": 0.05150195119567604,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05150195119567604,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 106,
+     "seconds": 964.4791114330292,
+     "start_option": "mpc",
+     "cost": 0.06306258006629327,
+     "trips": 0,
+     "planned": 0.06306257843971252,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 8,
+      "projected_gradient": 0.04949186054211052,
+      "min_margin": -0.040013886988162994
+     },
+     "oracle_run": {
+      "cost": 0.06387436624087471,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06387436624087471,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 107,
+     "seconds": 924.0089383125305,
+     "start_option": "mpc",
+     "cost": 0.05524269235150617,
+     "trips": 0,
+     "planned": 0.05524269863963127,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0006845694829685778,
+      "min_margin": 4.236881732940674
+     },
+     "oracle_run": {
+      "cost": 0.055793375796280784,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.055793375796280784,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 108,
+     "seconds": 861.0689816474915,
+     "start_option": "mpc",
+     "cost": 0.04619658691776244,
+     "trips": 0,
+     "planned": 0.0461965873837471,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 26,
+      "projected_gradient": 0.0007927208592231616,
+      "min_margin": -0.007112123072147369
+     },
+     "oracle_run": {
+      "cost": 0.04778590906280249,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04778590906280249,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "acid_strength",
+     "seed": 109,
+     "seconds": 951.9570205211639,
+     "start_option": "mpc",
+     "cost": 0.06421690472618341,
+     "trips": 0,
+     "planned": 0.06421691179275513,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0005930261522220093,
+      "min_margin": 5.58828592300415
+     },
+     "oracle_run": {
+      "cost": 0.06440601084921187,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06440601084921187,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    }
+   ]
   },
   "flow_swing": {
    "weight": 0.1,
@@ -248,23 +698,20 @@
     108,
     109
    ],
-   "reference_mean": 0.9561354201204247,
-   "ceiling_mean": 0.06170400950824843,
    "ceiling_costs": [
-    0.06283819803243709,
-    0.057691776341137785,
-    0.06148952132142666,
-    0.059698007185943425,
-    0.06041562775305162,
-    0.060966265827624336,
-    0.07533562397066917,
-    0.05341285228108366,
-    0.052825353897383645,
-    0.07236686847172677
+    0.05378070453477461,
+    0.04958830178543899,
+    0.05431725410922405,
+    0.05346409257181221,
+    0.054413136602993795,
+    0.052314349386986536,
+    0.07001136201373205,
+    0.044445291029276426,
+    0.04626939186386557,
+    0.06498500923626124
    ],
    "ceiling_trips": 0,
-   "room": 15.495515246746018,
-   "planned_minus_replayed_max": 9.918585425205961e-09,
+   "ceiling_mean": 0.054358889313436555,
    "solver": {
     "status": [
      0,
@@ -278,41 +725,306 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.0019951506486993453,
     "capped": 0,
-    "iterations_max": 43,
-    "min_margin": -0.026853181421756744,
-    "start": [
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
     "fell_back": 0,
-    "rho": [
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     100.0,
-     1.0
-    ],
-    "two_starts_max_rel_gap": 0.2176698434695894,
-    "two_starts_median_rel_gap": 0.03988804412842062
-   }
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10
+   },
+   "per_seed": [
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 100,
+     "seconds": 848.0802140235901,
+     "start_option": "mpc",
+     "cost": 0.05378070453477461,
+     "trips": 0,
+     "planned": 0.053780704736709595,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 68,
+      "projected_gradient": 0.0006923767335343944,
+      "min_margin": 0.0013278946280479431
+     },
+     "oracle_run": {
+      "cost": 0.055164251705070236,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.055164251705070236,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 101,
+     "seconds": 822.7831771373749,
+     "start_option": "mpc",
+     "cost": 0.04958830178543899,
+     "trips": 0,
+     "planned": 0.04958830028772354,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0007554229457442108,
+      "min_margin": 3.517763614654541
+     },
+     "oracle_run": {
+      "cost": 0.050560345026149624,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.050560345026149624,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 102,
+     "seconds": 901.479024887085,
+     "start_option": "mpc",
+     "cost": 0.05431725410922405,
+     "trips": 0,
+     "planned": 0.054317254573106766,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 16,
+      "projected_gradient": 0.0036937618314012155,
+      "min_margin": -0.00010261684656143188
+     },
+     "oracle_run": {
+      "cost": 0.05524431025348863,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05524431025348863,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 103,
+     "seconds": 933.4894738197327,
+     "start_option": "mpc",
+     "cost": 0.05346409257181221,
+     "trips": 0,
+     "planned": 0.053464096039533615,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 8,
+      "projected_gradient": 0.0457797473928665,
+      "min_margin": -0.06423721462488174
+     },
+     "oracle_run": {
+      "cost": 0.05466003497619854,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05466003497619854,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 104,
+     "seconds": 933.129467010498,
+     "start_option": "mpc",
+     "cost": 0.054413136602993795,
+     "trips": 0,
+     "planned": 0.05441313982009888,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 9,
+      "projected_gradient": 0.015159499392487175,
+      "min_margin": -0.024230577051639557
+     },
+     "oracle_run": {
+      "cost": 0.05555181439889777,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05555181439889777,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 105,
+     "seconds": 942.4114694595337,
+     "start_option": "mpc",
+     "cost": 0.052314349386986536,
+     "trips": 0,
+     "planned": 0.05231434479355812,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 13,
+      "projected_gradient": 0.000706768071428332,
+      "min_margin": 0.0022338852286338806
+     },
+     "oracle_run": {
+      "cost": 0.054040989168422926,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.054040989168422926,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 106,
+     "seconds": 929.7873766422272,
+     "start_option": "mpc",
+     "cost": 0.07001136201373205,
+     "trips": 0,
+     "planned": 0.07001137733459473,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.016521321775993525,
+      "min_margin": -0.02809295803308487
+     },
+     "oracle_run": {
+      "cost": 0.07070397620302182,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.07070397620302182,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 107,
+     "seconds": 988.1538691520691,
+     "start_option": "mpc",
+     "cost": 0.044445291029276426,
+     "trips": 0,
+     "planned": 0.04444529488682747,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0008474728715938684,
+      "min_margin": 3.4787583351135254
+     },
+     "oracle_run": {
+      "cost": 0.04506863463312492,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04506863463312492,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 108,
+     "seconds": 885.9004647731781,
+     "start_option": "mpc",
+     "cost": 0.04626939186386557,
+     "trips": 0,
+     "planned": 0.04626939818263054,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.016100842515381242,
+      "min_margin": -0.02713928371667862
+     },
+     "oracle_run": {
+      "cost": 0.04779406948404568,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04779406948404568,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "flow_swing",
+     "seed": 109,
+     "seconds": 916.3256919384003,
+     "start_option": "mpc",
+     "cost": 0.06498500923626124,
+     "trips": 0,
+     "planned": 0.0649850144982338,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.0005860357642222258,
+      "min_margin": 5.724422931671143
+     },
+     "oracle_run": {
+      "cost": 0.06517425328767794,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06517425328767794,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    }
+   ]
   },
-  "normal": {
-   "weight": 0.7,
+  "buffer_loss": {
+   "weight": 0.05,
    "seeds": [
     100,
     101,
@@ -325,23 +1037,20 @@
     108,
     109
    ],
-   "reference_mean": 0.8401664020501386,
-   "ceiling_mean": 0.061583719380044685,
    "ceiling_costs": [
-    0.06261392820678237,
-    0.050114545407187606,
-    0.0666962694324967,
-    0.06345563521091309,
-    0.06004055837790171,
-    0.05665980963967741,
-    0.06906291983969924,
-    0.05913507364069422,
-    0.059574141066210964,
-    0.06848431297888359
+    0.06717010289697403,
+    0.06294755376325661,
+    0.07139665307360651,
+    0.06850980825655645,
+    0.06852137483527056,
+    0.06599816873678432,
+    0.07214586520622737,
+    0.06516105762388583,
+    0.06755303412039455,
+    0.07102677125618079
    ],
    "ceiling_trips": 0,
-   "room": 13.642670668611522,
-   "planned_minus_replayed_max": 8.257726821780942e-09,
+   "ceiling_mean": 0.0680430389769137,
    "solver": {
     "status": [
      0,
@@ -355,45 +1064,645 @@
      0,
      0
     ],
-    "projected_gradient_max": 0.026153880096076547,
     "capped": 0,
-    "iterations_max": 40,
-    "min_margin": -0.024182893335819244,
-    "start": [
-     "reference",
-     "hold",
-     "reference",
-     "reference",
-     "hold",
-     "hold",
-     "reference",
-     "reference",
-     "reference",
-     "reference"
-    ],
     "fell_back": 0,
-    "rho": [
-     1.0,
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     100.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10
+   },
+   "per_seed": [
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 100,
+     "seconds": 1031.097094297409,
+     "start_option": "mpc",
+     "cost": 0.06717010289697403,
+     "trips": 0,
+     "planned": 0.06717010587453842,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 11,
+      "projected_gradient": 0.004593886214530163,
+      "min_margin": -0.012357331812381744
+     },
+     "oracle_run": {
+      "cost": 0.06761300921950865,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06761300921950865,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 101,
+     "seconds": 914.144129037857,
+     "start_option": "mpc",
+     "cost": 0.06294755376325661,
+     "trips": 0,
+     "planned": 0.06294755637645721,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.017430079092425586,
+      "min_margin": -0.0006748214364051819
+     },
+     "oracle_run": {
+      "cost": 0.0638217584821538,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.0638217584821538,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 102,
+     "seconds": 1079.7025389671326,
+     "start_option": "mpc",
+     "cost": 0.07139665307360651,
+     "trips": 0,
+     "planned": 0.07139665633440018,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.00884848299189428,
+      "min_margin": -0.010116197168827057
+     },
+     "oracle_run": {
+      "cost": 0.07158622818535144,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.07158622818535144,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 103,
+     "seconds": 951.9999361038208,
+     "start_option": "mpc",
+     "cost": 0.06850980825655645,
+     "trips": 0,
+     "planned": 0.06850981712341309,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 4,
+      "projected_gradient": 0.0005536046513888726,
+      "min_margin": 0.0006603226065635681
+     },
+     "oracle_run": {
+      "cost": 0.06899227486802267,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06899227486802267,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 104,
+     "seconds": 964.6214663982391,
+     "start_option": "mpc",
+     "cost": 0.06852137483527056,
+     "trips": 0,
+     "planned": 0.06852137297391891,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.0005538647767987515,
+      "min_margin": 0.021545790135860443
+     },
+     "oracle_run": {
+      "cost": 0.0689598750917241,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.0689598750917241,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 105,
+     "seconds": 882.9492418766022,
+     "start_option": "mpc",
+     "cost": 0.06599816873678432,
+     "trips": 0,
+     "planned": 0.06599816679954529,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.0005717488104673152,
+      "min_margin": 0.00018348544836044312
+     },
+     "oracle_run": {
+      "cost": 0.06680283345665475,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06680283345665475,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 106,
+     "seconds": 1103.0447998046875,
+     "start_option": "mpc",
+     "cost": 0.07214586520622737,
+     "trips": 0,
+     "planned": 0.07214586436748505,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 27,
+      "projected_gradient": 0.0007093523208553387,
+      "min_margin": -0.0023437514901161194
+     },
+     "oracle_run": {
+      "cost": 0.07252391572295844,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.07252391572295844,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 107,
+     "seconds": 1002.6071908473969,
+     "start_option": "mpc",
+     "cost": 0.06516105762388583,
+     "trips": 0,
+     "planned": 0.06516105681657791,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 15,
+      "projected_gradient": 0.005577111726998138,
+      "min_margin": -0.015933610498905182
+     },
+     "oracle_run": {
+      "cost": 0.06590886427285021,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06590886427285021,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 108,
+     "seconds": 945.6491882801056,
+     "start_option": "mpc",
+     "cost": 0.06755303412039455,
+     "trips": 0,
+     "planned": 0.06755303591489792,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 10,
+      "projected_gradient": 0.0031815335619296836,
+      "min_margin": -0.007159806787967682
+     },
+     "oracle_run": {
+      "cost": 0.06825136011922732,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06825136011922732,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "buffer_loss",
+     "seed": 109,
+     "seconds": 1104.2219760417938,
+     "start_option": "mpc",
+     "cost": 0.07102677125618079,
+     "trips": 0,
+     "planned": 0.07102677971124649,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.040125406968388844,
+      "min_margin": -0.04812011867761612
+     },
+     "oracle_run": {
+      "cost": 0.07126810536770511,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.07126810536770511,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    }
+   ]
+  },
+  "bad_day": {
+   "weight": 0.05,
+   "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+   ],
+   "ceiling_costs": [
+    0.059188443297817785,
+    0.042943605993059464,
+    0.060362835393002315,
+    0.052352111715946295,
+    0.05444160282293321,
+    0.05157565359044535,
+    0.07117152305872879,
+    0.04636855751968041,
+    0.03947657406818255,
+    0.06887878497994583
+   ],
+   "ceiling_trips": 0,
+   "ceiling_mean": 0.0546759692439742,
+   "solver": {
+    "status": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ],
-    "two_starts_max_rel_gap": 0.04430006978532236,
-    "two_starts_median_rel_gap": 0.012315597047151104
-   }
+    "capped": 0,
+    "fell_back": 0,
+    "oracle_fallback": 0,
+    "improved_on_oracle": 10
+   },
+   "per_seed": [
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 100,
+     "seconds": 995.3781189918518,
+     "start_option": "mpc",
+     "cost": 0.059188443297817785,
+     "trips": 0,
+     "planned": 0.05918844789266586,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 9,
+      "projected_gradient": 0.0006315709304283179,
+      "min_margin": 0.0012802109122276306
+     },
+     "oracle_run": {
+      "cost": 0.060475309250289065,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.060475309250289065,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 101,
+     "seconds": 887.2362396717072,
+     "start_option": "mpc",
+     "cost": 0.042943605993059464,
+     "trips": 0,
+     "planned": 0.04294360429048538,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 11,
+      "projected_gradient": 0.03284778083011425,
+      "min_margin": -0.05574951320886612
+     },
+     "oracle_run": {
+      "cost": 0.04484962191506703,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04484962191506703,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 102,
+     "seconds": 964.4103970527649,
+     "start_option": "mpc",
+     "cost": 0.060362835393002315,
+     "trips": 0,
+     "planned": 0.060362838208675385,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 41,
+      "projected_gradient": 0.0068644341563206535,
+      "min_margin": -0.040967561304569244
+     },
+     "oracle_run": {
+      "cost": 0.061555545310044875,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.061555545310044875,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 103,
+     "seconds": 996.8522918224335,
+     "start_option": "mpc",
+     "cost": 0.052352111715946295,
+     "trips": 0,
+     "planned": 0.05235211178660393,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 6,
+      "projected_gradient": 0.01953876905915064,
+      "min_margin": -0.041158296167850494
+     },
+     "oracle_run": {
+      "cost": 0.053557534060742346,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.053557534060742346,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 104,
+     "seconds": 968.8601229190826,
+     "start_option": "mpc",
+     "cost": 0.05444160282293321,
+     "trips": 0,
+     "planned": 0.05444160848855972,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 12,
+      "projected_gradient": 0.023663907632322657,
+      "min_margin": -0.033910371363162994
+     },
+     "oracle_run": {
+      "cost": 0.05559031128876701,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05559031128876701,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 105,
+     "seconds": 1000.8571410179138,
+     "start_option": "mpc",
+     "cost": 0.05157565359044535,
+     "trips": 0,
+     "planned": 0.05157565698027611,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 36,
+      "projected_gradient": 0.0031731008464950805,
+      "min_margin": -0.011260606348514557
+     },
+     "oracle_run": {
+      "cost": 0.05337309908120014,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.05337309908120014,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 106,
+     "seconds": 970.0133333206177,
+     "start_option": "mpc",
+     "cost": 0.07117152305872879,
+     "trips": 0,
+     "planned": 0.07117152959108353,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.027223245979079436,
+      "min_margin": -0.03271827846765518
+     },
+     "oracle_run": {
+      "cost": 0.07191565934618574,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.07191565934618574,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 107,
+     "seconds": 923.6351006031036,
+     "start_option": "mpc",
+     "cost": 0.04636855751968041,
+     "trips": 0,
+     "planned": 0.046368557959795,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 7,
+      "projected_gradient": 0.030567203560104506,
+      "min_margin": -0.017554856836795807
+     },
+     "oracle_run": {
+      "cost": 0.047753005314813676,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.047753005314813676,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 108,
+     "seconds": 924.7037310600281,
+     "start_option": "mpc",
+     "cost": 0.03947657406818255,
+     "trips": 0,
+     "planned": 0.03947657719254494,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 87,
+      "projected_gradient": 0.0013882160840575364,
+      "min_margin": -0.003964997828006744
+     },
+     "oracle_run": {
+      "cost": 0.04130414374289313,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.04130414374289313,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    },
+    {
+     "task": "ph_neutralization",
+     "scenario": "bad_day",
+     "seed": 109,
+     "seconds": 955.8133907318115,
+     "start_option": "mpc",
+     "cost": 0.06887878497994583,
+     "trips": 0,
+     "planned": 0.06887877732515335,
+     "start": "mpc",
+     "solver": {
+      "status": 0,
+      "capped": false,
+      "fell_back": false,
+      "iterations": 3,
+      "projected_gradient": 0.000552972732849516,
+      "min_margin": 5.7238030433654785
+     },
+     "oracle_run": {
+      "cost": 0.06907111484558813,
+      "trips": 0,
+      "moves_replayed": {
+       "cost": 0.06907111484558813,
+       "trips": 0
+      }
+     },
+     "improved_on_oracle": true,
+     "oracle_fallback": false
+    }
+   ]
   }
  },
- "weights_covered": 1.0,
- "J_reference": 0.8749437437521862,
- "J_ceiling": 0.062264370419738244,
- "room_J": 14.052077261104417,
- "method": "pc_gym.foresight.solve: L-BFGS-B in float32 on env.step_env and the reward's smooth terms (CEILING_TERMS), the step terms as margins (ceiling_margins), the seed's own keys, from two starts (the reset's hold and the kept reference's actions), the cheaper replayed; replayed through benchmark.run_policy at sensor noise 1 on seeds 100-109.",
- "replay": "PlanPolicy (open loop)",
- "convergence": "status is L-BFGS-B's at float32 resolution; two_starts_*_rel_gap is how far the two starts' plans ended apart, per seed"
+ "generated": "2026-11-14",
+ "cpu": "scool-bob",
+ "stamp": "d3fb87792e20e415"
 }

@@ -178,6 +178,32 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   of the art hot 80 min to 2.5 h. Minimum load 25 to 40 %.
 - **Pump restart.** Feedwater pumps "may take more than 30 seconds to start,
   come up to speed and pressure" [S11].
+- **The standby pump's start, searched again on 2026-11-23.** [S11]'s passage
+  in full, read again from the patent's own pages: "The designed Normal Water
+  Level (NWL) for a boiler is intended to maintain a minimum water inventory
+  in the steam drum to allow a feedwater pump trip event, and subsequent
+  recovery, without a low-level trip event. Feedwater pumps in power plants
+  are large machines and may take more than 30 seconds to start, come up to
+  speed and pressure, and start delivering feedwater to the steam drum in the
+  boiler. If a running feedwater pump trips, the water inventory in the drum
+  is used to support continued operation of the boiler until the redundant
+  feedwater pump is able to supply the feedwater demand." The normal level
+  "is typically designated as high as possible (in the steam drum) to give
+  the required water inventory for the system to ride through a feedwater
+  pump trip". So the drum is sized for the standby's start: the delay is not
+  a number free of the drum. One figure for the pump itself, from a boiling
+  water reactor's motor-driven backup feedwater pump on a limited supply: "it
+  takes typically about 10 seconds for the backup feedwater pump and the
+  electric motor driving it to reach a minimum rotation speed from a halt
+  condition, and takes about 15 seconds to reach a rated rotation speed", and
+  "it takes a long time to reach a rated flow rate", so that "it is possible
+  that a water level of the reactor continues falling and the nuclear reactor
+  scrams" [S32, read twice: a search result's text and the patent's pages by
+  OCR]. A measured start time on a fossil or combined cycle unit, and an upper
+  end for the delay: not found (searched: runback test reports, operating
+  procedures, feed pump protection lists, POWER's article on automating HRSG
+  feedwater pumps, which gives no time, a plant operators' forum thread on a
+  feed pump runback, drum sizing notes, and seven patents' full text).
 - **Shrink versus swell.** The level drop on a load decrease "is typically much
   smaller" and "of shorter duration" than swell [S14]. Saturated water volume
   "can expand by as much as 30%" during start-up [S14].
@@ -199,6 +225,68 @@ marked otherwise. Numbers read off a figure are labelled "read from Fig. N".
   inventory [S11]. All boiler feed pumps off is a boiler trip; if the level
   falls out of sight on feedwater failure, the operator trips fuel at once
   [S9].
+- **Who holds pressure in a runback (added 2026-11-23 by the task review,
+  read twice).** "If you are in coordinated mode, the boiler should go to
+  manual control and turbine-following mode for the steam turbine" [S10,
+  "Runbacks and Rundowns"]. Of the 95 MW unit's ID fan runback: "notice how
+  the turbine pushes the throttle pressure back to the setpoint", and "Drum
+  level also dropped slightly before it recovered" [S10, Fig. 5 text]. The
+  article gives no pressure figure in psi for these tests.
+- **How common drum level trips are (added 2026-11-23, read twice).** "Drum
+  level trips are the most common cause of trips and disruptions in a power
+  station, especially from the Heat Recovery Steam Generator/Balance of
+  (power) Plant (HRSG/BOP) area" [S12, Background]. A patent's statement, with
+  no count. A count per unit-year, or a share of forced outages: not found
+  (searched NERC GADS cause codes, EPRI, Combined Cycle Journal).
+- **What a boiler's controls hold besides level and pressure (added
+  2026-11-23, read twice by OCR of the scan).** [S3]'s model "predicts process
+  response in terms of measurable outputs (drum pressure, drum water level,
+  and excess oxygen in flue gas) to the major controllable inputs (air/fuel
+  flow rates, feedwater flow rate)". The mixture of fuel and air "must meet
+  standards for safety, efficiency, and protection of the environment. This
+  is accomplished by maintaining a desired percentage of oxygen in the stack
+  in excess of that required for stoichiometric combustion", and a model for
+  control system testing "must contain at the very least these subsystems"
+  [S3, pp. 57 and 58]. The load is not measured: "a measurement of the load is
+  physically nonexistent", and "the changes in the unmeasurable load
+  disturbance, referred to as user steam demand, have a significant effect on
+  the operation of the system" [S3, pp. 60 and 62]. [S3]'s oxygen equation is
+  a first-order lag on the oxygen left by complete combustion, from the air
+  and fuel flows, with its coefficients in Table I.
+- **What excess air costs (added 2026-11-23, read in two copies).** "Inadequate
+  excess air results in unburned combustibles (fuel, soot, smoke, and carbon
+  monoxide) while too much results in heat lost due to the increased flue gas
+  flow". For natural gas, combustion efficiency at 2.0, 3.0, 5.0, 7.0 and
+  10.0 % oxygen (9.5, 15.0, 28.1, 44.9, 81.6 % excess air): 85.4, 85.2, 84.7,
+  84.1, 82.8 % with the flue gas 200 F above the combustion air; 83.1, 82.8,
+  82.1, 81.2, 79.3 % at 300 F; 80.8, 80.4, 79.5, 78.2, 75.6 % at 400 F. "On
+  well-designed natural gas-fired systems, an excess air level of 10% is
+  attainable", and "boiler efficiency can be increased by 1% for each 15%
+  reduction in excess air or 40°F reduction in stack gas temperature" [S25].
+- **The oxygen loop's numbers (added 2026-11-23; read twice unless said).**
+  Oxygen follows the air and fuel flows through a first-order lag, "TAIR =
+  6.492 s", and [S3]'s unit runs at 2.5 % oxygen [S3, pp. 61 and 63]. In the
+  control contest built on [S3]'s model the air flow alone has a rate limit,
+  "la limitación actual es de 1%/s", the steam demand is measured with an
+  unmeasured noisy part, and an unmeasured disturbance stands for "variaciones
+  en las características del combustible" [S26, read once]. An in situ
+  zirconia analyser: "Response of 90% within 5 seconds", repeatability
+  "± 0.5% Maximum value of set range" below a 0 to 25 % range [S27]. Typical
+  flue gas oxygen under automatic control on natural gas: 1.5 % wet (1.8 dry)
+  at least, 3.0 (3.6) at most; under positioning control 3.0 (3.6) to 7.0
+  (8.0); No. 2 oil 2.0 (2.2) to 3.0 (3.3) [S28]. With trim, "the O2 setpoint
+  should be set to 1.7%, which corresponds to 10% excess air" [S29]. One
+  analyser's low oxygen alarm is "Typically set at 2.0% oxygen, depending on
+  the burner", and its very low alarm, default 0.5 %, "can be used as a shut
+  down on a boiler as the normal operating level should never be this low"
+  [S30]: a vendor's defaults, not a code. Pipeline gas: "variations at nearly
+  all entry points are within 4 MJ/m3" of Wobbe index over two years, and
+  "only 2 points out of 29 registered changes greater than 3 MJ/m3 in a 15 min
+  period" [S31]; the index is near 50 MJ/m3.
+- Not found for the oxygen loop: carbon monoxide against oxygen as numbers; a
+  code's low-oxygen limit (NFPA 85, EN 12952-8 not retrieved); a measured
+  spread of flue oxygen under automatic control; the fan's stroke time; the
+  variation of a fast-changing fuel (biomass, refinery gas), not searched.
 - **Bad day, swell at low load.** "most trips occur due to high-level trip
   events", because fixed setpoints at low flow and pressure leave too little
   room for swell [S11]. Swell is larger at low load: "a given change in input
@@ -287,6 +375,18 @@ Sources for this section:
 - https://www.control.lth.se/fileadmin/control/Education/DoctorateProgram/PhysicalModeling/Lectures/Astrom-Bell.pdf
   (Astrom and Bell, Automatica 36, 2000; HTTP 404). The 1998 report S1 was used.
 - https://core.ac.uk/download/83772844.pdf (HTTP 403).
+- https://patents.google.com/patent/US10338576B2/en (General Electric,
+  "Intelligent management system for balance of plant"). A search result and
+  a summarised fetch both give this sentence from its description, which was
+  never read on the page itself (the page is longer than the reader takes,
+  and the patent office's copy dropped on eight fetches): "Typically, about
+  90 seconds may be allocated on the power plant for the transfer from a
+  primary feedwater pump to a backup feedwater pump." If it reads so, it is
+  the upper end the standby delay lacks.
+- https://rdne.edpsciences.org/articles/rdne/full_html/2026/01/rdne20250019/rdne20250019.html
+  (a simulation of a main feedwater pump trip on an HPR1000 unit, with and
+  without the standby pump starting, compared with commissioning data at 70 %
+  load; HTTP 403 to an automated fetch). It may give a measured start time.
 - https://www.controleng.com/articles/optimizing-strategy-for-boiler-drum-level-control/ (HTTP 403).
 - https://forbesmarshall.com/Knowledge/Energy-Conservation-Tips/Steam-Generation/Tip-Safety-Avoiding-low-water-level-condition-in-the-boiler (certificate error).
 - https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/326_360/341_a/_267?down=1
@@ -368,6 +468,38 @@ Sources for this section:
   steam units and $3.34/MW for small subcritical coal (2011 $); faster-ramp
   multipliers preliminary (footnote 5).
   https://docs.nlr.gov/docs/fy12osti/55433.pdf (fetched once, 2026-11-09).
+  Read again on 2026-11-23 from the OSTI copy,
+  https://www.osti.gov/servlets/purl/1046269: the load follow medians match.
+  The same table's hot start row, C&M cost per MW of capacity, median with the
+  25th to 75th centile: small subcritical coal $94 (79 to 131), large
+  subcritical coal $59 (39 to 68), gas-fired steam $36 (25 to 42).
+- [S25] US Department of Energy, "Improve Your Boiler's Combustion
+  Efficiency", Steam Tip Sheet #4. Two copies read on 2026-11-23:
+  https://docs.nlr.gov/docs/fy02osti/31496.pdf (2002) and
+  https://www.energy.gov/sites/prod/files/2014/05/f16/steam4_boiler_efficiency.pdf
+  (2012); the table and both sentences match.
+- [S26] F. Morilla (UNED), "Benchmark 2009-10", Grupo Temático de Ingeniería
+  de Control de CEA: the boiler control contest on [S3]'s model.
+  https://www.dia.uned.es/~fmorilla/benchmark09_10/BenchmarkIC2009_10.pdf
+  (read once, 2026-11-23).
+- [S27] Yokogawa, "Model ZR22G, ZR402G, and ZR202G Direct In Situ Zirconia
+  Oxygen Analyzers", General Specifications GS 11M12A01-01E.
+  https://yokogawa.com/pdf/provide/E/GW/GS/0000004611/0/GS11M12A01-01E.pdf
+- [S28] US EPA, "Boiler Tune-up Guide" (area source NESHAP), table "Typical
+  Flue Gas Oxygen Content Control Parameters".
+  https://www.epa.gov/sites/production/files/2016-09/documents/tune-up_guide.pdf
+- [S29] K. Carpenter, C. Schmidt, K. Kissock, "Common Boiler Excess Air
+  Trends and Strategies to Optimize Efficiency", ACEEE Summer Study 2008.
+  https://www.aceee.org/files/proceedings/2008/data/papers/3_349.pdf
+- [S30] Teledyne 9060 zirconia oxygen analyser manual, alarm settings.
+  https://www.manualslib.com/manual/527005/Teledyne-9060.html?page=67
+- [S31] ENTSOG, "WI and GCV values in European networks", INT1124-170918,
+  18 September 2017 (hourly data, 2015 and 2016).
+  https://www.entsog.eu/sites/default/files/entsog-migration/publications/Events/2017/INT1124-170918%20WI%20and%20GCV%20in%20European%20networks.rev%204.pdf
+- [S32] US 8467491 B2, "Feedwater controller, nuclear power plant and method
+  for controlling feedwater", Kabushiki Kaisha Toshiba (Background).
+  https://patents.google.com/patent/US8467491B2/en ; pages read from
+  https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/8467491
 - [S19] US 4353204 A, "Method of water level control for a combined cycle
   power plant", Hitachi Ltd., 1982. https://patents.google.com/patent/US4353204A/en
 

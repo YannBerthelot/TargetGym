@@ -204,6 +204,7 @@
       "turbulence_sigma": 0.564,
       "amended": true,
       "e_tol_heading": 0.17453292519943295,
+      "holding_bank": 0.4363323129985824,
       "economy_weight": 1.0,
       "heading_clearance_period": 150.0
     },
@@ -333,11 +334,14 @@
         0.0,
         1200.0
       ],
-      "assigned_speed_mode": 1
+      "assigned_speed_mode": 1,
+      "cost_index": 0.0,
+      "economy_weight": 1.0,
+      "economy_scale": 1.0
     },
     "tuned_gains_key": null,
     "gains_keys": [],
-    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's own legs, turns and speed, scored on the RVSM, AIM and ACS bands, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
+    "baselines_note": "No oracle ships until the 3D oracle is rebuilt for the Amendment 2 score (the holding pattern's bands and its fuel, plane3d/PHYSICS.md): the shipped model plans the earlier cost, so the room is not measured (charter rule 9).",
     "disturbance_fields": [
       "gust_x",
       "gust_y",
@@ -449,7 +453,9 @@
     "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": null,
-    "disturbance_fields": [],
+    "disturbance_fields": [
+      "gust_own"
+    ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -488,7 +494,9 @@
     "tuned_gains_key": null,
     "gains_keys": [],
     "baselines_note": "The PID is a lead-state estimator feeding the same formation hold the full-observation variant uses. Range with azimuth and elevation is a complete relative-position measurement, so the only unobservable quantity is the lead's heading, which the slot needs because it is expressed in the lead's frame; the estimator takes the lead's velocity as the filtered rate of its position, with the follower's own motion added back, and its heading from that track less the crab the follower flies in the same air. The MPC slot holds patrol's oracle reading the true state, so it is a full-state bound, not a range-and-bearing controller. On a task defined by what the observation withholds, its score measures information and control together: what the hidden lead state is worth plus what a policy leaves on the table. It never reads the observation, so its per-step costs equal patrol's seed for seed.",
-    "disturbance_fields": [],
+    "disturbance_fields": [
+      "gust_own"
+    ],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
     "expert_degraded": null,
@@ -500,7 +508,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 7,
+    "version": 8,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -516,15 +524,11 @@
       "target_gym.pc_gym.cstr.experts",
       "make_cstr_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.pc_gym.cstr.oracle",
-      "make_cstr_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {},
     "tuned_gains_key": "cstr",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "Version 8 (the reactor run for what it makes, owner's decision of 2026-11-24) ships no oracle: its planner model is not written for two moves and the production score, and the owner decided the same day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's (cstr/oracle.py).",
     "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},

@@ -46,6 +46,8 @@ from target_gym.patrol.env import (
     lead_cruise_speed,
     lead_leg,
     make_cruise_state,
+    station_distance,
+    wake_sink,
 )
 from target_gym.patrol.rendering import _render
 from target_gym.plane.dynamics import LATERAL, LONGITUDINAL, POSITION, instruments
@@ -128,6 +130,10 @@ class _PlanePatrolBase(
     # -- to be provided by subclasses --------------------------------------
     def _observe(self, state: PatrolState) -> jnp.ndarray:
         raise NotImplementedError
+
+    def station_height(self, drawn, lead, slot_back, params):
+        """The slot's height above the lead, in metres: the one drawn."""
+        return drawn
 
     @measured_obs
     def get_obs(self, state: PatrolState, params: PatrolParams = None) -> jnp.ndarray:
@@ -249,6 +255,7 @@ class _PlanePatrolBase(
             target_heading=lead_heading,
             **_loaded(lead_mass, params),
         )
+        slot_up = self.station_height(slot_up, lead, slot_back, params)
 
         # Provisional state to compute the world-frame slot position.
         provisional = PatrolState(
@@ -418,22 +425,37 @@ class PlanePatrolRangeBearing(_PlanePatrolBase):
         obs = super().get_obs(state, params)
         return obs.at[19].set(obs[10])
 
+    # ``true_obs`` reads the plant here. With no instrument in the way the two
+    # are one value already.
+    get_obs.__wrapped__ = PlanePatrol.get_obs.__wrapped__
+
 
 class WakeSurf(PlanePatrol):
     """``wake_surf``: wake-energy retrieval. An A320 follower holds a station
     3 km behind an A320 lead, in the lead's upwash, as Airbus's fello'fly did
-    with two A350s (plane3d/PHYSICS.md, wake surfing).
+    with two A350s (patrol/REALITY.md, patrol/PHYSICS.md).
 
-    The observation is the patrol's 26 values. The cost is the station box
-    and the follower's operator cost, fuel and time by the cost index: inside
-    the box, the less thrust the lead's upwash leaves the follower needing, the
-    less it pays. The vortex core lies a span inboard of the station, and a
-    vortex that rolls the follower past 60 deg is an upset, a trip.
+    The observation is the patrol's 26 values, the tracked one the distance to
+    the station across the wake. The cost is the station box across the wake,
+    the along-track tolerance and the follower's operator cost, fuel and time
+    by the cost index: inside the box, the less thrust the lead's upwash leaves
+    the follower needing, the less it pays. The upwash grows toward the vortex
+    core, 0.8 to 0.9 span inboard of the station, and a vortex that rolls the
+    follower past 60 deg is an upset, a trip.
 
     Action (3,): [throttle, pitch demand, bank demand], each in [-1, 1].
     """
 
     registry_name: str = "wake_surf"
+    tracked_names: tuple = ("distance across the wake (m)",)
+
+    def station_height(self, drawn, lead, slot_back, params):
+        """On the vortex plane: below the lead by its wake's sink."""
+        return -wake_sink(lead, slot_back, params)
+
+    def _observe(self, state: PatrolState) -> jnp.ndarray:
+        # The tracked distance is the one the box reads, across the wake.
+        return get_obs_full(state, xp=jnp).at[24].set(station_distance(state))
 
     @property
     def default_params(self) -> WakeSurfParams:

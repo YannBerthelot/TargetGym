@@ -48,6 +48,9 @@ read as page images where the source is a PDF.
   neutralization application note summary.
   https://yokogawa.com/solutions/products-and-services/measurement/analyzers/liquid-analyzers/ph-sensors/industrial-ph-orp-electrodes
   Checked twice.
+- [P11] US 40 CFR 133.102(c), secondary treatment, pH.
+  https://www.law.cornell.edu/cfr/text/40/133.102 Checked twice (Cornell LII and
+  the govinfo CFR 2023 edition, 2026-11-25; eCFR refused automated reads).
 
 ## The plant
 
@@ -118,7 +121,9 @@ volume of 250,000 m3 with one tank, 316 m3 with two, 40.7 m3 with three,
 - Discharge pH range under continuous monitoring: total time outside the
   permitted range at most 7 h 26 min per calendar month, and no single
   excursion over 60 minutes [P8]. This is a timed limit. The range itself is
-  set by the applicable guideline, not by this section [P8].
+  set by the applicable guideline, not by this section [P8]; the federal
+  secondary treatment standard sets 6.0 to 9.0 [P11], which the task's permit
+  takes (owner, 2026-11-25).
 - Discharge to a public sewer works: no discharge with pH lower than 5.0,
   unless the works is designed for it [P9]. This is a hard limit.
 - Field case: any tank discharge below the low environmental pH limit, however
@@ -190,6 +195,7 @@ adding acid or caustic [P5, p. 1], without overdosing reagent [P5, p. 2].
 |---|---|---|
 | [P8] 40 CFR 401.17 | Allowed excursion time | at most 7 h 26 min per month, at most 60 min per excursion |
 | [P9] 40 CFR 403.5(b)(2) | Hard floor to sewer | pH not lower than 5.0 |
+| [P11] 40 CFR 133.102(c) | Effluent pH, secondary treatment | within the limits of 6.0 to 9.0 |
 | [P4] p. 2 | Tank retention time for on/off control | above 10 minutes |
 | [P4] pp. 2-4 | Dead time classes | a few s (in-line), at least 1 min (trough, tank series), up to 8 min (two-mode with sample/hold) |
 | [P3] p. 3 | Static mixer dead time | 1 to 6 s |

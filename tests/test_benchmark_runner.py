@@ -223,10 +223,10 @@ def test_records_are_the_protocols():
 
 def test_a_task_the_policy_cannot_run_is_reported_not_run():
     res = B.run_policy_on_benchmark(
-        SingleInputOnly(), tasks=["cstr", "four_tank"], n_episodes=1, test_params=True,
-        verbose=False,
+        SingleInputOnly(), tasks=["first_order", "four_tank"], n_episodes=1,
+        test_params=True, verbose=False,
     )  # fmt: skip
-    assert "metrics" in res["cstr"]
+    assert "metrics" in res["first_order"]
     assert res["four_tank"] == {"unsupported": "2 actuators"}
 
 
@@ -354,8 +354,36 @@ def test_the_shipped_controller_runs_as_a_policy():
         B.shipped_policy("pid"), env, params, info, jax.random.PRNGKey(0), n_steps=3
     )
     a = r["action"]
-    assert a.shape == (2, 3, 1) and np.isfinite(a).all()
+    # Two episodes, three steps, cstr's two moves (version 8: water and feed).
+    assert a.shape == (2, 3, 2) and np.isfinite(a).all()
     assert (a >= info.action_low).all() and (a <= info.action_high).all()
+
+
+@pytest.mark.medium
+def test_the_shipped_oracle_bound_to_a_run_plans_on_its_params():
+    """The oracle is the problem definition (owner, 2026-11-23), so bound to a
+    run (``bind(env, params, seeds)``, as ``reference_ladder.run_suite`` binds
+    each scenario's) it plans on that run's params, not the registered task's.
+    hvac's cold snap holds the outdoor mean at -5 C against the registered 5 C:
+    the bound oracle's first move from the reset is the one an oracle built on
+    the cold snap's params makes, and not the registered one's."""
+    from target_gym.runners.runners import baseline_policy
+
+    spec = REGISTRY["hvac"]
+    env, run = spec.make_env(), spec.make_test_params(T_out_mean=-5.0)
+    info, key = B.task_info("hvac", env, run, 1), jax.random.PRNGKey(0)
+
+    def first_move(policy):
+        return B.run_policy(policy, env, run, info, key, n_steps=1)["action"][0, 0]
+
+    bound = B.shipped_policy("mpc")
+    bound.bind(env, run, (0,))
+    own = B.CallablePolicy(
+        lambda task: baseline_policy(spec, "mpc", run), "mpc", oracle=True
+    )
+    moved = first_move(bound)
+    np.testing.assert_allclose(moved, first_move(own), rtol=1e-6)
+    assert not np.allclose(moved, first_move(B.shipped_policy("mpc")), rtol=1e-3)
 
 
 def test_a_burn_in_per_episode_is_each_episodes_own():
@@ -459,3 +487,18 @@ def test_the_batched_oracle_runs_the_same_episodes():
         # episodes apart.
         np.testing.assert_allclose(r, rewards[s], rtol=1e-4)
         assert n_trips == trips[s]
+
+
+def test_a_trip_steps_terms_are_the_ones_its_reward_charged():
+    """docs/reward-shaping.md: the reward is minus the sum of its terms, on every
+    step. A trip restarts the plant inside the step, and the step's terms are
+    still the tripping state's, failure charge included, not the fresh plant's.
+    ``unstable_cstr`` at full initiator runs away and trips."""
+    spec = REGISTRY["unstable_cstr"]
+    params = spec.make_test_params()
+    ep = E.run_episode(spec, params, lambda obs: np.ones(1, np.float32), seed=0)
+    assert ep.failed.any(), "full initiator was meant to trip the reactor"
+    total = sum(ep.terms.values())
+    # float32 sums of a handful of terms: the reward contract's own tolerance.
+    np.testing.assert_allclose(total, ep.cost, rtol=1e-5, atol=1e-6)
+    assert (ep.terms["failure"][ep.failed] > 0).all()

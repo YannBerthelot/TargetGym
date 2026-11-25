@@ -1,5 +1,8 @@
 # Cement Kiln
 
+!!! note "Under review"
+    Cement Kiln is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/cement_kiln/pid_output.gif" width="480px"/></p>
 
 Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. Free lime answers a fuel change only as material travels the kiln, half of it after about one residence time; kiln speed moves that delay itself; and eight readings stand in for 64 dynamic states. Overheating the kiln or letting it go cold trips it.
@@ -17,6 +20,7 @@ env, params = tg.make("cement_kiln")
 | Tracked variable(s) | discharge free lime (%) |
 | Episode length | 700 steps of 30 s (5.83 h) |
 | Cite as | `cement_kiln-v5` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/cement_kiln/PHYSICS.md) |
 
 ## Action space
@@ -49,10 +53,12 @@ actuator range inside the environment.
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `running`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -70,14 +76,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 700-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1.275e+04 | 18.21 |
-| MPC | -406.2 | 0.5802 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

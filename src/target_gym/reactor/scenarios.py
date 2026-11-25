@@ -26,10 +26,10 @@ EACH_DAY = LOAD_FOLLOW / 5.0
 DAY_H = 24.0
 LOAD_FOLLOW_DWELL_H = DAY_H  # ours
 BASELOAD_DWELL_H = DAY_H  # ours: each day is a load-follow day at its share
-#: A stream refuels the core every 30 days, renewed at its cycle point (owner,
-#: 2026-11-11; 30 days ours: at 2.3 to 3.3 ppm a day of burnup it keeps the boron
-#: within about 100 ppm of the start of cycle the coefficients describe).
-RENEWAL_DAYS = 30.0
+#: A stream's core burns through its cycle and refuels at the end of its
+#: load-following range, renewed at the range's start (owner, 2026-11-11 and
+#: 2026-11-15; ``ReactorParams.refuels``). At 2.3 to 3.3 ppm a day the range's 90 %
+#: of 1690 ppm lasts 460 to 660 days.
 #: A stream starts with no ramp of its own window, nothing ahead and full load:
 #: only the stream plans days.
 _NO_WINDOW_DAY = {"ramp_down_range": (-1.0e7, -1.0e7)}
@@ -40,7 +40,7 @@ def _stream(dwell_h, events_per_h):
     return dict(
         dwell_h=dwell_h,
         events_per_h=events_per_h,
-        stream_overrides={**_NO_WINDOW_DAY, "renewal_days": RENEWAL_DAYS},
+        stream_overrides={**_NO_WINDOW_DAY, "refuels": True},
     )
 
 

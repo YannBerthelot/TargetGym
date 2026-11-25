@@ -1,12 +1,14 @@
 {
-  "member": "a Westinghouse-type PWR at the start of its fuel cycle (1690 ppm), load-following with rods and boron",
+  "member": "a Westinghouse-type PWR in the first 90 % of its fuel cycle (1690 ppm at the start, 0 at the end), load-following with rods, boron and the turbine's loading rate",
   "ranges": {
     "alpha_coolant": {"lo": -18e-5, "hi": -9e-5, "unit": "1/K", "why": "start-of-cycle MTC at hot full power, the physics review's judgment (finding 2); the owner narrowed it from 0 to -20 on 2026-11-10, after the sweep showed the weak end cannot carry the member's 5 %/min returns"},
     "boron_worth": {"lo": -10.9e-5, "hi": -6.7e-5, "unit": "1/ppm", "why": "BEAVRS hot zero power 10.8 to 10.9 pcm/ppm; NRC search summaries 6.7 and 8.2 at power"},
+    "alpha_coolant_end": {"lo": -75e-5, "hi": -45e-5, "unit": "1/K", "why": "the MTC at the end of the cycle, 0 ppm: ours, toward the negative end of the family's 0 to -80 pcm/K and short of the typical -80 specification limit (nuclear-power.com, opened); no end-of-cycle figure was opened"},
     "restart_steps": {"lo": 2880, "hi": 8400, "unit": "30 s steps", "why": "a scram's restart, 24 to 70 h (Doel-3; APR1400)"},
-    "floor_allowed": {"lo": 900.0, "hi": 1800.0, "unit": "s", "why": "time to restore Tavg above its floor, 15 to 30 min"}
+    "floor_allowed": {"lo": 900.0, "hi": 1800.0, "unit": "s", "why": "time to restore Tavg above its floor, 15 to 30 min"},
+    "loading_stop": {"lo": 5.5556, "hi": 11.1111, "unit": "K", "why": "the turbine's loading stop on a low Tavg (interlock C-16), 10 to 20 F under the program: 10 F is a training card's for a plant it does not name, 20 F is ours, and the range stands in for the plant document nobody has opened (PHYSICS.md D14; owner, 2026-11-23)"}
   },
   "coupled": [["alpha_coolant", "boron_worth"]],
   "coupled_why": "both follow the core's boron (ours, from the physics): more boron makes the MTC less negative and each ppm worth less, so the MTC's most negative end (-18) goes with the largest worth (-10.9), as BEAVRS measures 10.8 at lower boron",
-  "no_range": ["alpha_tilt", "rho_ext_min", "rod_step_price", "effluent_price", "imbalance_multiple", "carried_days_range"]
+  "no_range": ["alpha_tilt", "rho_ext_min", "rod_step_price", "effluent_price", "imbalance_multiple", "carried_days_range", "boron_worth_end"]
 }

@@ -1,5 +1,8 @@
 # First order
 
+!!! note "Test fixture"
+    First order is a sanity fixture, there to check that a training loop runs. It is never scored.
+
 <p align="center"><img src="../../videos/first_order/pid_output.gif" width="480px"/></p>
 
 Drive a single first-order lag to a target drawn at reset. It is the suite's sanity check, not a physical plant: linear, fully observed, with no disturbance and no way to trip, so it is the place to check a new algorithm or wrapper against a known answer before moving on.
@@ -17,6 +20,7 @@ env, params = tg.make("first_order")
 | Tracked variable(s) | x |
 | Episode length | 150 steps of 0.05 s (7.5 s) |
 | Cite as | `first_order-v5` |
+| Status | Test fixture, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space
@@ -42,10 +46,12 @@ actuator range inside the environment.
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -63,14 +69,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 150-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -4.14e+04 | 276 |
-| MPC | -4.111e+04 | 274.1 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 
@@ -101,4 +100,5 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `rho_floor_tracking` | 0 | reward |
 | `rho_floor` | 0 | reward |
 | `precision_floor` | 0.006 | - |
+| `start_on_target` | 0 | - |
 

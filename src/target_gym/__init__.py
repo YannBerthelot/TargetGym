@@ -7,11 +7,13 @@ from target_gym.api import (
     make_expert,
     make_gymnasium,
     make_oracle,
+    make_stream,
 )
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
 from target_gym.cement_kiln.env import CementKilnParams
 from target_gym.cement_kiln.env_jax import CementKiln
+from target_gym.charter import FLAGSHIP
 from target_gym.compressor_surge.env import CompressorSurgeParams
 from target_gym.compressor_surge.env_jax import CompressorSurge
 from target_gym.energy.battery.env import BatteryParams
@@ -88,8 +90,11 @@ __all__ = (
     "make_expert",
     "make_oracle",
     "make_gymnasium",
+    "make_stream",
     "list_envs",
     "score_policy",
+    # The scored suite: the five tasks the results and the headline cover
+    "FLAGSHIP",
     # Environment and parameter classes
     "Plane",
     "Airplane2D",  # the class's own name; Plane is the friendly alias

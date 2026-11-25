@@ -16,6 +16,10 @@ Everything on a page is read from the environment itself: spaces from
 ``obs_value_index``, rewards and termination from the docstrings of
 ``compute_reward`` and ``check_is_terminal``, arguments from the scored
 params, baseline scores from ``src/target_gym/data/baseline_returns/``.
+Numbers are printed for a scored task only (``charter.FLAGSHIP``): the charter's
+four lines from ``src/target_gym/data/charter/`` and the recorded baselines. A
+task outside the suite has its status at the top of its page and no number,
+since its records are not held current.
 The task paragraph and the observation meanings come from the task's
 ``### Task:`` block in its ``PHYSICS.md`` (see ``task_blocks``), which also
 supplies the one-line summaries in the table of ``docs/complexity.md``.
@@ -38,9 +42,14 @@ import numpy as np  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from generate_env_reference import BLOB, physics_path  # noqa: E402
+from generate_env_reference import BLOB, physics_path, status_label  # noqa: E402
 
-from target_gym.provenance import BASELINES_PATH, load_recorded_baselines  # noqa: E402
+from target_gym import charter, records  # noqa: E402
+from target_gym.provenance import (  # noqa: E402
+    BASELINES_PATH,
+    fingerprints,
+    load_recorded_baselines,
+)
 from target_gym.registry import GROUPS, REGISTRY, display_name  # noqa: E402
 from target_gym.units import param_units  # noqa: E402
 
@@ -147,7 +156,13 @@ def task_blocks(path: pathlib.Path) -> dict[str, dict]:
             body.append(line)
         entry = {"obs": _obs_rows(body)} if _obs_rows(body) else {}
         if m.group(1) == "Task":
-            entry["summary"] = _first_paragraph("\n".join(body))
+            # A link to a file beside PHYSICS.md (REALITY.md) leads nowhere from
+            # the site, so it keeps its text and loses its target.
+            entry["summary"] = re.sub(
+                r"\[([^\]]+)\]\((?!https?://)[^)]*\)",
+                r"\1",
+                _first_paragraph("\n".join(body)),
+            )
         for name in re.findall(r"`(\w+)`", m.group(2)):
             for key, value in entry.items():
                 if key in found.setdefault(name, {}):
@@ -272,7 +287,150 @@ def _params_table(params) -> str:
     return "\n".join(rows)
 
 
-def _baseline_section(spec, row: dict | None) -> str:
+def _status_note(name: str, title: str) -> list[str]:
+    """The note a page opens with when its task is not scored. The Extra note
+    carries the registry's reason; ``tests/test_docs.py`` holds its wording."""
+    status = charter.status(name)
+    if status == charter.EXTRA:
+        return [
+            '!!! note "Extra task"',
+            f"    {title} is kept in the repository but is not part of the "
+            "benchmark, so it is out of the headline and the capability claims. "
+            f"The reason: {REGISTRY[name].extra}.",
+            "",
+        ]
+    if status == charter.UNDER_REVIEW:
+        return [
+            '!!! note "Under review"',
+            f"    {title} is registered and runs like every other task, but it "
+            "is not scored in this release. It is under review, so its "
+            "reference, its ceiling and its room are not measured and no result "
+            "is published for it. It can join the scored suite in a later "
+            "release, once it passes the bar the scored tasks passed.",
+            "",
+        ]
+    if status == charter.FIXTURE:
+        return [
+            '!!! note "Test fixture"',
+            f"    {title} is a sanity fixture, there to check that a training "
+            "loop runs. It is never scored.",
+            "",
+        ]
+    return []
+
+
+_LINES = (
+    ("best_null", "Best null policy", "the cheapest of the simple policies"),
+    ("reference", "Reference", "the controller to beat"),
+    (
+        "mpc",
+        "MPC",
+        "plans with the true model and the schedules operators know, "
+        "without the disturbances ahead",
+    ),
+    (
+        "ceiling",
+        "Ceiling",
+        "the best cost found with the true model, the true state and the "
+        "future: a limit, not a target",
+    ),
+)
+
+
+def _listed(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+
+
+#: The record part each J3 line is read from.
+_PART = {"best_null": "nulls", "reference": "reference", "mpc": "mpc"}
+_PART["ceiling"] = "ceiling"
+
+
+def charter_section(record: dict, stale=(), reads=()) -> str:
+    """A scored task's four lines (charter J3) and its room, from its record.
+    A line the record lacks reads "not measured", with the record's reason
+    under the table: the MPC line may be missing in this release (owner,
+    2026-11-24), and the records tests hold the other three. A line whose part
+    is in ``stale`` (``charter.stale_parts``) reads "not current" and gives no
+    number until it is re-recorded (owner, 2026-11-25). ``reads`` names the
+    hidden facts the ceiling reads (``charter.CEILING_READS``, owner,
+    2026-11-25), said under the room."""
+    record = {k: v for k, v in record.items() if k not in set(stale)}
+    lines = charter.j3(record)
+    rows = ["| Line | What it is | Cost per step | Trips |", "|---|---|---|---|"]
+    reasons, old = [], []
+    for key, label, what in _LINES:
+        ln = lines[key]
+        if _PART[key] in stale:
+            rows.append(f"| {label} | {what} | not current | |")
+            old.append(label if label.isupper() else label.lower())
+            continue
+        if ln == charter.NOT_MEASURED:
+            rows.append(f"| {label} | {what} | not measured | |")
+            why = record.get(key, {}).get("why")
+            reasons += [f"The {label} line is not measured: {why}."] if why else []
+            continue
+        named = f" (`{ln['name']}`)" if key == "best_null" else ""
+        loose = " (not converged)" if ln.get("converged") is False else ""
+        rows.append(
+            f"| {label} | {what}{named} | {ln['J']:.4g}{loose} | {ln['trips']} |"
+        )
+    if old:
+        reasons.append(
+            f"Recorded on an earlier version of this task, so not shown: the "
+            f"{_listed(old)} line{'s' if len(old) > 1 else ''}, which show again "
+            "once re-recorded."
+        )
+    room = charter.room(lines["reference"], lines["ceiling"], record.get("weights", {}))
+    if room == charter.NOT_MEASURED and {"reference", "ceiling"} & set(stale):
+        said = "The room shows again with the reference and the ceiling."
+    elif room == charter.NOT_MEASURED:
+        said = "Room is not measured: it needs both the reference and the ceiling."
+    elif room["J"] == charter.UNBOUNDED:
+        said = "Room is unbounded: the ceiling costs nothing."
+    else:
+        said = (
+            f"Room, the reference's cost divided by the ceiling's, is "
+            f"{room['J']:.3g}."
+        )
+    return "\n".join(
+        [
+            "What an agent is measured against: the expected cost per step over "
+            "the task's weighted scenarios, on seeds 100 to 109, lower is better. "
+            "An agent's result is its saving over the reference, "
+            "`1 - cost_agent / cost_reference`.",
+            "",
+            *rows,
+            "",
+            " ".join([*reasons, said]),
+            *(
+                [
+                    "",
+                    f"The ceiling reads what the policy does not observe: "
+                    f"{'; '.join(reads)}. Part of the room may be out of reach "
+                    "of a policy that reads only the observations.",
+                ]
+                if reads
+                else []
+            ),
+        ]
+    )
+
+
+def _baseline_section(spec, row: dict | None, scored: bool, fps: dict) -> str:
+    """The recorded comparison, from ``row`` as far as it is current (``fps``,
+    owner's decision of 2026-11-25): a stale part is not shown."""
+    recorded, row = row, records.current_parts(row or {}, fps)
+    if not scored:
+        ships = "A PID and an MPC ship" if spec.has_mpc else "A PID ships"
+        ships = f"{ships} and run" if spec.has_pid else "No baseline ships"
+        lines = [
+            f"Not measured. {ships}, but this task is outside the scored suite, "
+            "so its recorded numbers are not kept current and none is shown."
+        ]
+        if spec.baselines_note:
+            lines.append(f"\n{spec.baselines_note}")
+        return "\n".join(lines + _degraded_notes(spec))
     if not spec.has_pid:
         return f"No baseline ships for this environment. {spec.baselines_note or ''}".strip()
     # A record of another episode length is a retired plant's (glass_furnace's
@@ -311,9 +469,22 @@ def _baseline_section(spec, row: dict | None) -> str:
                     " across them"
                 )
             lines.append(summary + ".")
+        elif recorded.get("mpc_returns"):
+            lines.append(
+                "\nThe MPC's numbers were recorded on an earlier version of its "
+                "oracle, so they are not shown; they show again once re-recorded."
+            )
         # A note on a task that ships both baselines says what one of them
         # is (patrol_range_bearing's MPC is a full-state bound), so it stays
         # beside the numbers it qualifies.
+        if spec.baselines_note:
+            lines.append(f"\n{spec.baselines_note}")
+    elif recorded and recorded.get("pid_returns"):
+        lines.append(
+            "The recorded comparison was measured on an earlier version of this "
+            "task, so it is not shown; it shows again once re-recorded."
+        )
+        # What a baseline is stays true without its numbers.
         if spec.baselines_note:
             lines.append(f"\n{spec.baselines_note}")
     elif spec.has_mpc:
@@ -329,12 +500,17 @@ def _baseline_section(spec, row: dict | None) -> str:
             "No MPC ships with this environment, so there is no recorded "
             f"comparison. {spec.baselines_note or 'A PID ships.'}"
         )
+    return "\n".join(lines + _degraded_notes(spec))
+
+
+def _degraded_notes(spec) -> list[str]:
     # Both degradation notes are surfaced, not just the MPC's. The homepage
     # promises that "where a baseline is weak, the docs say how weak", and a
     # weak *expert* is the case that misleads hardest: a reader who beats it
     # concludes they beat a tuned controller. Rendered in full rather than
     # truncated at the first period -- these notes carry the measured numbers
     # that make the gap checkable, and the first sentence alone drops them.
+    lines = []
     if spec.expert_degraded:
         lines.append(
             f'\n!!! warning "The shipped expert is weak here"\n'
@@ -345,22 +521,27 @@ def _baseline_section(spec, row: dict | None) -> str:
             f'\n!!! warning "The MPC is not an upper bound here"\n'
             f"    {spec.mpc_degraded.split('.')[0]}."
         )
-    return "\n".join(lines)
+    return lines
 
 
 def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     env = spec.make_env()
     params = spec.make_test_params()
-    # The Rewards and Episode end sections below describe the version-2
-    # reward. Refuse to put that text on a page whose environment scores
-    # differently, which is how "bounded in [0, 1]" outlived version 1.
-    if getattr(params, "reward_version", 2) != 2:
-        raise SystemExit(
-            f"{name}: reward_version {params.reward_version}, and the page "
-            "template describes version 2"
-        )
     key = jax.random.PRNGKey(0)
     obs, state = env.reset_env(key, params)
+    # The Rewards and Episode end sections below describe the cost contract
+    # every version from 2 on shares: named, non-negative terms, summed and
+    # negated. Refuse to put that text on a page whose environment scores
+    # differently, which is how "bounded in [0, 1]" outlived version 1. The
+    # version number alone says nothing: a task's own re-pricing raises it.
+    terms = env.reward_terms(state, params) if hasattr(env, "reward_terms") else None
+    if int(getattr(params, "reward_version", 2)) < 2 or not terms:
+        raise SystemExit(
+            f"{name}: reward_version {getattr(params, 'reward_version', None)} "
+            "has no cost terms, and the page template describes them"
+        )
+    if any(float(np.min(np.asarray(v))) < 0.0 for v in terms.values()):
+        raise SystemExit(f"{name}: a negative cost term, which the page says cannot be")
     module = _env_module(spec)
 
     obs_space = env.observation_space(params)
@@ -386,7 +567,10 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
     dt = control_step_seconds(env, params)
     episode = int(params.max_steps_in_episode)
 
-    out = [f"# {title}", ""]
+    scored = charter.status(name) == charter.SCORED
+    record = (charter.load(name) or {}) if scored else {}
+    current = charter.current(name) if scored else None
+    out = [f"# {title}", "", *_status_note(name, title)]
     if video:
         out += [
             # ``../../``, not ``../``.
@@ -418,6 +602,7 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         f"| Tracked variable(s) | {', '.join(labels) if labels else 'see below'} |",
         f"| Episode length | {episode} steps of {dt:g} s ({_duration(episode * dt)}) |",
         f"| Cite as | `{spec.versioned_name}` |",
+        f"| Status | {status_label(name)} |",
         f"| Physics | [contract]({BLOB}/{physics_path(env).as_posix()}) |",
         "",
         "## Action space",
@@ -451,10 +636,12 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         reward_doc or "See the environment's `compute_reward`.",
         "",
         "Every environment in this suite scores on one contract. The reward is",
-        "minus the sum of three non-negative costs,",
-        "`-(tracking_cost + running_cost + failure_cost)`. The running cost",
-        "charges consumption and the failure cost charges trips out of the",
-        "operating envelope. The reward is never positive, and its scale differs",
+        "minus the sum of non-negative costs: a tracking cost where the task",
+        "holds a target, a running cost for what the plant consumes or fails to",
+        "deliver, and a failure cost for trips out of the operating envelope.",
+        f"This task's terms are {', '.join(f'`{k}`' for k in terms)}, reported",
+        'each step in `info["reward_terms"]`.',
+        "The reward is never positive, and its scale differs",
         "by orders of magnitude between plants. Some plants are",
         "priced in dollars or euros and the rest are dimensionless; the",
         "[per-plant summary](../reward-shaping.md#per-plant-summary) says which.",
@@ -504,9 +691,23 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         "",
         f"**Truncation.** After {episode} steps.",
         "",
+        *(
+            [
+                "## Reference and ceiling",
+                "",
+                charter_section(
+                    record,
+                    charter.stale_parts(record, current),
+                    charter.CEILING_READS.get(name, ()),
+                ),
+                "",
+            ]
+            if scored
+            else []
+        ),
         "## Baselines",
         "",
-        _baseline_section(spec, recorded.get(name)),
+        _baseline_section(spec, recorded.get(name), scored, fingerprints(spec)),
         "",
         "## Arguments",
         "",
@@ -517,7 +718,7 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
         "",
     ]
     row = (
-        f"| [{title}](environments/{name}.md) | `{name}` | "
+        f"| [{title}](environments/{name}.md) | `{name}` | {status_label(name)} | "
         f"{_first_sentence(block['summary'])} | {n_obs} | "
         f"{int(np.prod(act_space.shape or (1,)))} | "
         f"{episode} steps, {_duration(episode * dt)} |"
@@ -543,8 +744,8 @@ def _chooser(rows: dict[str, str]) -> str:
             table += [
                 f"### {title}",
                 "",
-                "| Task | Name | What it asks | Obs | Act | Episode |",
-                "|---|---|---|---|---|---|",
+                "| Task | Name | Status | What it asks | Obs | Act | Episode |",
+                "|---|---|---|---|---|---|---|",
                 *(rows[n] for n in names),
                 "",
             ]

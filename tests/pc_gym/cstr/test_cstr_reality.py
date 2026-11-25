@@ -19,8 +19,27 @@ Contract, from the sources and the audit's tolerances, not from the code:
   2 C/min [S4] and Bayer's over 2 C/min [S3], with the audit's factor 4 on the
   top and 25 % below the slow end;
 - T7: it rises 25 K within 3 to 48 min [S2; S3];
-- T8: open loop, a cooling step's 95 % time is 1.6 to 6.4 residence times
-  [S1, Fig. 2];
+- T8: open loop, a cooling step settles in 1.6 to 6.4 residence times
+  [S1, Fig. 2]. S1's figure is a settling time after an overshoot (a peak near
+  60 min, settled after about 110), so the plant's is read the same way: the
+  time after which the response stays within 5 % of its final value;
+- the jacket outlet's reading is about 2 min late [S6]: with the noise off it
+  is the jacket's temperature 2 min earlier, not its temperature now;
+- the feed build-up is past what the cooling alone holds and inside what a feed
+  cut does: Bayer's cooler held its temperature only while the feed stayed
+  under a limit [S3, PDF pp. 36-37], and practice cuts the feed when the cooling
+  saturates [S13, p. 436]. At the middle feed temperature, holding the setpoint
+  under the scenario's rise needs more water than the valve has at the reset's
+  feed, and less than it has at the feed's floor;
+- a feed cut first heats the reactor, then cools it: the feed is colder than
+  the reactor [S1, Tables 3, 4], so less of it cools less at once, and brings
+  less to react afterwards (the balances);
+- the score is product [S13; owner, 2026-11-24]: per step, the nameplate's
+  production (the top feed fully converted) less what is made inside the band,
+  as a fraction of the nameplate; product made more than ``T_band`` from the
+  setpoint counts for nothing; a trip costs ``restart_steps`` steps of it;
+- a setpoint move is S1's 2 C [S1, Fig. 2], carried as a ramp over
+  ``setpoint_ramp`` minutes, the band moving with it;
 - the interlock cuts the feed on high temperature [S3], so a runaway trips;
 - the feed sits at room temperature, 23.1 and 24.9 C on S1's two days
   [S1, Tables 3, 4], so within an episode it drifts and never leaves that
@@ -45,7 +64,9 @@ from target_gym import scenarios
 from target_gym.pc_gym.cstr.env import (
     CSTRParams,
     compute_next_state,
+    compute_reward,
     events,
+    made,
     rate,
     steady_state,
 )
@@ -65,8 +86,13 @@ def rest(p, key=0):
     return s.replace(event_at=jnp.asarray(1e9))
 
 
+def held(s, p, water=0.0, feed=0.0):
+    """The raw commands holding both valves as the reset left them, moved."""
+    return ENV.initial_action(s, p) + jnp.array([water, feed])
+
+
 def hold(p, s, raw, steps):
-    """True states over ``steps`` at a constant raw water command, by
+    """True states over ``steps`` at constant raw commands (water, feed), by
     ``compute_next_state`` (no trip restarts)."""
     a = jnp.asarray(raw)
 
@@ -96,9 +122,8 @@ def test_the_rate_doubles_per_ten_kelvin():
 def test_a_loss_of_activity_cools_the_reactor():
     p = quiet()
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
     weak = p.replace(k0=0.6 * p.k0)
-    traj = hold(weak, s, raw, int(30 * 34 / p.delta_t))
+    traj = hold(weak, s, held(s, p), int(30 * 34 / p.delta_t))
     assert float(s.T) - traj[-1, 1] >= 1.7
 
 
@@ -128,8 +153,7 @@ def test_the_catalyst_loss_is_a_90_minute_decay_to_60_percent():
 def test_the_jacket_delays_a_cooling_move():
     p = quiet()
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
-    traj = hold(p, s, raw + 0.5, 2000)
+    traj = hold(p, s, held(s, p, water=-0.5), 2000)
     d = traj[:, 1] - float(s.T)
     first = np.argmax(np.abs(d) >= 0.1 * np.abs(d).max())
     assert (first + 1) * p.delta_t * 60.0 >= 60.0
@@ -166,8 +190,7 @@ def test_no_composition_is_observed():
 
 def _circulation_loss(p, minutes):
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
-    return s, hold(p.replace(UA=0.0), s, raw, int(minutes / p.delta_t))
+    return s, hold(p.replace(UA=0.0), s, held(s, p), int(minutes / p.delta_t))
 
 
 def test_loss_of_circulation_heats_at_the_familys_rate():
@@ -184,25 +207,112 @@ def test_loss_of_circulation_rises_25_kelvin_in_minutes():
     assert hit.size and 3.0 <= (hit[0] + 1) * p.delta_t <= 48.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="finding, kept (owner, 2026-11-12): open loop settles in 0.99 "
-    "residence times. The range is the audit's weak reading of PARSEX's closed "
-    "loop; the plant's thermal time follows from S1's V, q and UA (PHYSICS.md, "
-    "T8).",
-)
 def test_an_open_loop_cooling_step_settles_in_a_few_residence_times():
+    """T8. The plant overshoots open loop, as PARSEX's closed loop did [S1,
+    Fig. 2], so the first time the response reaches 95 % of its final value is a
+    rise time. Settled means it stays within 5 % of its final value from then on
+    (owner, 2026-11-23)."""
     # A step test on a still feed: the day's drift (cstr-v6) would move the end
-    # point the 95 % is read against.
+    # point the 5 % is read against.
     lo, hi = CSTRParams().feed_T_range
     p = quiet(feed_T_range=(0.5 * (lo + hi),) * 2)
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
-    traj = hold(p, s, raw - 0.1, 2000)
+    traj = hold(p, s, held(s, p, water=-0.1), 2000)
     d = traj[:, 1] - float(s.T)
-    t95 = (np.argmax(np.abs(d) >= 0.95 * abs(d[-1])) + 1) * p.delta_t
-    residence = p.V / p.q
-    assert 1.6 <= t95 / residence <= 6.4, t95 / residence
+    final = d[-1]
+    # The run is long enough to read the end point: its last tenth is at rest.
+    assert np.abs(d[-200:] - final).max() < 0.01 * abs(final)
+    outside = np.nonzero(np.abs(d - final) > 0.05 * abs(final))[0]
+    settled = (outside[-1] + 2) * p.delta_t
+    residence = p.V / float(s.q)  # at the feed the reset holds
+    assert 1.6 <= settled / residence <= 6.4, settled / residence
+
+
+def test_the_jacket_outlet_is_read_two_minutes_late():
+    """[S6]: a jacket temperature measured at the outlet "adds approximately two
+    minutes of dead time". After a water move, noise off, each reading is the
+    jacket's true temperature 2 min earlier."""
+    p = quiet()
+    s = rest(p)
+    raw = held(s, p, water=-0.5)
+    step = jax.jit(ENV.step_env)
+    late = round(2.0 / p.delta_t)
+    truth, readings = [float(s.T_j)], [float(ENV.get_obs(s, p)[1])]
+    for k in range(5 * late):
+        obs, s, *_ = step(jax.random.PRNGKey(k), s, raw, p)
+        truth.append(float(s.T_j))
+        readings.append(float(obs[1]))
+    truth, readings = np.array(truth), np.array(readings)
+    # float32 at 320 K resolves 3e-5 K.
+    np.testing.assert_allclose(readings[:late], truth[0], atol=1e-4)
+    np.testing.assert_allclose(readings[late:], truth[:-late], atol=1e-4)
+    # The jacket has moved meanwhile, so this is not the state read directly.
+    assert np.abs(readings[late:] - truth[late:]).max() > 0.1
+
+
+def test_the_feed_build_up_is_past_the_cooling_and_inside_a_feed_cut():
+    spec = REGISTRY["cstr"]
+    (build_up,) = [s for s in scenarios.suite(spec) if s.name == "feed_buildup"]
+    p = scenarios.params_for(spec, build_up).replace(sensor_noise_scale=0.0)
+    middle = 0.5 * (p.feed_T_range[0] + p.feed_T_range[1])
+    richer = p.replace(Caf=p.Caf * (1.0 + p.feed_rise))
+    still = rest(p.replace(feed_T_range=(middle, middle)))
+
+    def water(q):
+        return float(steady_state(p.T_setpoint, middle, richer, q)[2])
+
+    assert p.feed_rise > 0.0
+    assert water(float(still.q)) > p.Fw_max > water(p.q_min)
+
+
+def test_a_feed_cut_first_heats_the_reactor_then_cools_it():
+    lo, hi = CSTRParams().feed_T_range
+    p = quiet(feed_T_range=(0.5 * (lo + hi),) * 2)
+    s = rest(p)
+    T = hold(p, s, held(s, p, feed=-0.2), 2000)[:, 1]
+    two_minutes = round(2.0 / p.delta_t)
+    assert T[two_minutes] > float(s.T)
+    assert T[-1] < float(s.T)
+
+
+def test_the_score_is_the_production_lost_inside_the_band():
+    p = quiet()
+    s = rest(p)
+    nameplate = p.q_max * p.Caf
+    product = float(made(s, p)) / nameplate
+    # Inside the band: what the nameplate would make, less what is made.
+    assert 0.5 < product < 1.0
+    assert -float(compute_reward(s, p)) == pytest.approx(1.0 - product, rel=1e-5)
+    # Anywhere in the band costs the same; just past it the product is lost.
+    inside = s.replace(T=s.target_T + 0.9 * p.T_band)
+    assert -float(compute_reward(inside, p)) == pytest.approx(1.0 - product, rel=1e-5)
+    for side in (-1.0, 1.0):
+        outside = s.replace(T=s.target_T + side * 1.1 * p.T_band)
+        assert -float(compute_reward(outside, p)) == pytest.approx(1.0, rel=1e-5)
+    # A trip: the production of a restart.
+    tripped = s.replace(T=jnp.asarray(p.T_trip + 1.0))
+    assert -float(compute_reward(tripped, p)) == pytest.approx(p.restart_steps * 1.0)
+
+
+def test_a_setpoint_move_is_a_two_kelvin_ramp_the_band_follows():
+    spec = REGISTRY["cstr"]
+    (move,) = [s for s in scenarios.suite(spec) if s.name == "setpoint_move"]
+    p = scenarios.params_for(spec, move).replace(sensor_noise_scale=0.0)
+    at = 60.0
+    s = rest(p).replace(event_at=jnp.asarray(at))
+
+    def setpoint(minute):
+        return float(events(s, p, minute)[0])
+
+    assert setpoint(at - p.delta_t) == pytest.approx(p.T_setpoint)
+    assert setpoint(at + 0.5 * p.setpoint_ramp) == pytest.approx(p.T_setpoint + 1.0)
+    assert setpoint(at + p.setpoint_ramp) == pytest.approx(p.T_setpoint + 2.0)
+    assert setpoint(at + 3.0 * p.setpoint_ramp) == pytest.approx(p.T_setpoint + 2.0)
+    # The band is read on the setpoint as it stands: on-spec at the old value
+    # before the move, off-spec there once the ramp has carried it 2 K.
+    late = s.replace(time=jnp.asarray(round((at + p.setpoint_ramp) / p.delta_t)))
+    late = late.replace(target_T=jnp.asarray(setpoint(at + p.setpoint_ramp)))
+    assert -float(compute_reward(late, p)) == pytest.approx(1.0, rel=1e-5)
 
 
 def test_a_runaway_trips_the_interlock():
@@ -224,8 +334,7 @@ def test_a_runaway_trips_the_interlock():
 def test_an_episode_starts_at_rest_on_its_setpoint():
     p = quiet()
     s = rest(p)
-    raw = float(ENV.initial_action(s, p)[0])
-    traj = hold(p, s, raw, 40)
+    traj = hold(p, s, held(s, p), 40)
     assert float(s.T) == pytest.approx(p.T_setpoint, abs=1e-3)
     assert np.abs(traj[:, 1] - p.T_setpoint).max() < 0.05
 
@@ -235,7 +344,7 @@ def test_the_feed_drifts_inside_s1s_range_and_moves_a_held_reactor():
     lo, hi = p.feed_T_range
     for seed in range(10):
         s = rest(p, seed)
-        raw = jnp.asarray(ENV.initial_action(s, p)[0])
+        raw = ENV.initial_action(s, p)
 
         def body(s, _):
             s = compute_next_state(raw, s, p)[0]

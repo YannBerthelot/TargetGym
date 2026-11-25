@@ -112,7 +112,7 @@ understood.
 | # | change | measured or estimated effect | cost | touches |
 | --- | --- | --- | --- | --- |
 | 1 | Stage Hessian by reverse over forward, one `grad` of a JVP per input (prototyped) | measured: 3.0x per iteration on the whole day (31.4 to 10.3 s), 2.4x at 385 stages; peak RSS 17.3 to 11.7 GB; identical iterates (KKT error equal to 12 digits) | done: 6 lines in `shooting.py`, test oracle changed to central differences | every oracle and ceiling built on `Shooting` (14 tasks). Solver fingerprints move. Plans should be the same to rounding, but a borderline solve could flip. |
-| 2 | Cold start from simulated states (prototyped as `Shooting.solve(..., start=moves)` and `--start` in the script) | measured at 960 steps: the first rung converges in 241 to 271 iterations instead of capping at 300 | done for the ceiling script. For task oracles G8 says never start from an expert, so only the "held, simulated" start would be eligible there, and only for plants stable under held moves. | the reactor ceiling script. Oracles only if the owner amends G8. |
+| 2 | Cold start from simulated states (prototyped as `Shooting.solve(..., start=moves)` and `--start` in the script) | measured at 960 steps: the first rung converges in 241 to 271 iterations instead of capping at 300 | done for the ceiling script. For task oracles G8 says never start from an expert (a ceiling may, owner 2026-11-14), so only the "held, simulated" start would be eligible there, and only for plants stable under held moves. | the reactor ceiling script. Oracles only if the owner amends G8. |
 | 3 | Drop the repeated rung (done in the script) | saves one full rung per seed: 3.6 to 5.8 h at the old speed | none | the reactor ceiling script only |
 | 4 | Factorise the Riccati recursion once per shift and reuse it for every right-hand side (step, affine, centring, second-order corrections) (built, owner's decision) | measured, 10 iterations, same 8 cores side by side: warm (adaptive) solves 1.27x at 385 stages (2.28 to 1.79 s) and 1.52x on the whole day (20.8 to 13.7 s); cold solves no gain (12.8 against 13.0 s), since they take only two directions per iteration and each stage scan costs about the same with or without the matrix work; identical iterates (KKT error equal to every digit after 2, 5 and 12 iterations) | about 100 lines in `ipm.py`: `stage_kkt_factor` and `stage_kkt_solve_factored`, `NLP.factor` and `NLP.solve` | every oracle (fingerprints), landed with option 1 so they move once |
 | 5 | Skip structurally zero Hessian directions (the reactor's 30 queue states are a shift register: zero curvature except the arriving slot) | estimated 2x on the Hessian (49 to about 20 directions) | moderate: detect zero rows once per build, or a task hook | `shooting.py` (fingerprints) |
@@ -134,12 +134,26 @@ prints a trace, so never copy it back). Option 4 was not in this run.
 | 1 (0.0105, 0.1) | 300 iterations, capped, KKT 1.4, 4.25 h, planned cost 1 903.4 | **372 iterations, converged, KKT 9.9e-9**, 1.37 h, planned cost 1 896.2 |
 | 2 (0.00105, 0.01) | 300, capped, KKT 0.71, 4.6 h | 600, capped, KKT 2.2, 2.61 h, planned cost 1 796.5 (violation 1.1e-5) |
 
-Rung 3 never finished: the run was stopped at about 18:05 on 2026-11-12, when the
-owner cleared every job on bob for a clean start. So the full day still has no
-converged plan at the narrow rungs. Rung 1 converges now; rung 2 runs twice as
-many iterations in about half the old time, but stays capped with KKT 2.2. The
-narrow widths are the open problem, and a rerun of rungs 2 and 3 (with option 4)
-belongs on smithers or flanders, not on a shared bob.
+That run was stopped during rung 3 at about 18:05 on 2026-11-12, when the owner
+cleared every job on bob.
+
+### Rerun with options 1 to 4
+
+Same seed, start and cap, on smithers (CPU, 10 pinned cores, 2026-11-13 to 14),
+with the factorisation reuse (option 4) merged in #201. The times are not clean:
+for the last 18 h of rungs 2 and 3, other jobs of ours filled the machine's
+memory and it swapped. Read them as upper bounds.
+
+| rung (rod width, boron width) | options 1 to 4 |
+| --- | --- |
+| 1 (0.0105, 0.1) | 385 iterations, converged, KKT 4.3e-9, 2.5 h, planned cost 1 896.2 |
+| 2 (0.00105, 0.01) | 600, capped, KKT 1.5e-6, 10.3 h, planned cost 1 796.4 |
+| 3 (0.00105, 0.001) | **452 iterations, converged, KKT 7.4e-9**, 10.0 h, planned cost 1 789.2 |
+
+The full day now ends converged at the narrowest rung. Rung 2 still hits the
+cap, but at KKT 1.5e-6 rather than 2.2, and rung 3 converges from where it
+stops. Replayed on the plant, the plan costs 1 801.2 against the reference's
+4 701.1, with no trip.
 
 ## pH oracle (second job, from the owner)
 

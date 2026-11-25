@@ -9,11 +9,65 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Scaled observations and rewards (2026-11-25)
+
+- `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
+  each observation's documented range to [-1, 1] and divides the reward by one
+  fixed constant per task (`scaled.SCALES`, the five scored tasks). The raw
+  reward rides in `info["raw_reward"]`. The score never reads the wrapper, and
+  `scaled.raw_policy` hands `score_policy` a policy trained on scaled
+  observations.
+
+### Reactor curve book, cycle draw and limits (2026-11-25)
+
+- The reactor's expert reads a measured curve book: the recipe's physics tests at
+  power (a dilution bump, a calibrated rod bump) at both ends of the load-following
+  range replace the plant's own lines. Its turbine thresholds follow a rule on the
+  measured load wobble.
+- A reactor run's core is drawn so it never reaches the end of its load-following
+  range (reactor-v10, re-stamped in place: it never shipped). Scoring runs build
+  their stream's params with the run's length.
+- The reactor's DNB limit follows NUREG-1431 Rev. 5.0 (ML21259A155), LCO 3.4.1: 2 h
+  to restore, then the turbine unloads along a straight line to MODE 2's 5 % over
+  6 h, and the plant goes to hot standby after 8 h above the limit without a break,
+  where it went at 2 h (`dnb_restore`, `dnb_allowed`, `mode_2_load`).
+- The reactor's rod insertion limit follows NUREG-1431 Rev. 5.0, LCO 3.1.6
+  Conditions B and D: 2 h to restore, then the turbine unloads along a straight
+  line to no load over 6 h, and hot standby after 8 h past the limit
+  (`ril_restore`, `ril_allowed`).
+- The reactor's expert lets its Tavg loop go once Tavg is back inside its free
+  band. Holding the loop's output there kept moving boron for a Tavg nothing
+  charges, which made the expert fragile to its curve book late in the cycle.
+
 ### Upgrading from 0.7.0
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **Five tasks are scored, and the other twenty ship registered, not scored.**
+  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
+  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+  - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
+    all 25 names.
+  - Results are published for the scored suite only. The page of a task
+    outside it says where the task stands (under review, Extra or a test
+    fixture) and prints no recorded number. Its recorded rows stay in
+    `src/target_gym/data/` and are no longer kept current.
+  - `suite.run_suite` runs the scored tasks by default, and `suite.profile`
+    counts a task's tags only if it is scored. Name a task in `tasks` to run
+    it anyway.
+  - The capability profile page and its chart are left out of the docs for
+    this release. `target_gym.suite` still works, and the page returns when
+    the radar is rebuilt on the saving over the reference.
+  - The generated pages publish a recorded row only while its fingerprint or
+    version stamp matches the code. A stale row stays in `data/`; its task's
+    page says it was recorded on an earlier version and shows the numbers
+    again once it is re-recorded. `records.current_parts` gives the current
+    part of an old-format row.
+  - Each scored task's page names the hidden facts its ceiling reads (the
+    true surge line, the acid strength, the weather or load ahead), so part
+    of the room may be out of reach of a policy; the list is
+    `charter.CEILING_READS`.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and
@@ -42,6 +96,89 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`glass_furnace` charges the defects its tank blocks give off, reads them, and
+  has a new oracle without a seed.** `glass_furnace-v6` is unreleased and was
+  re-stamped in place. Upgrade notes:
+  - The plant carries the temperature of the blocks its glass touches. A block at or
+    above 1450 C gives off defects when its temperature rises, and fining still
+    running past the last port is reboil (REALITY.md section 10; the two rates and
+    the 1450 C are ours). On a step that keeps both marks, the reward's lost-glass
+    term charges the plates those defects reject. `PhysicalParams` gains
+    `block_lag`, `block_release_T`, `block_release` and `reboil_plate`, and the
+    plant's fields `block` and `defects`.
+  - The observation has 13 channels, not 12: the last is the defects per plate read
+    at the cold end, 0.3 h late.
+  - The oracle without a seed, which `make_oracle("glass_furnace")` and the runners
+    build, plans every 4 h and prices the chance of a lost step in place of a limit
+    on the fining share; the one it replaces lost a tenth of its steps on this
+    plant. `GlassOracle` takes `spread` and `paths` and no longer `replan_hours`,
+    and `oracle.solve` takes `fining_spread`. With a seed the oracle is unchanged.
+  - Every recorded row of the task predates this plant, except its ceiling
+    (`data/oracle_ceilings/glass_furnace.json`: reference 49.23, ceiling 46.96).
+- **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
+  the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
+  release shipped, keeps its number). Upgrade notes:
+  - The action is `[rod demand, boron flow, turbine loading rate]`: a policy with
+    two outputs must be rebuilt. With the third action at +1 the turbine follows
+    the dispatch's plan, as it always did before. The plan the turbine does not
+    take is charged as lost output at $80/MWh.
+  - The observation has 16 channels: the core's cycle point (13), the plan's load
+    now (14) and the offset's penalty time in hours (15) joined.
+  - The core sits at a point drawn evenly over the first 90 % of its cycle, with
+    that point's boron (1690 ppm at the start, 0 at the end), moderator
+    coefficient and boron worth. `ReactorParams(cycle_range=(0.0, 0.0))` is the
+    start-of-cycle core of before. `renewal_days` is gone: a stream's core burns
+    through the range and refuels at its end (`refuels`).
+  - The turbine takes no more load than its valves pass wide open on the steam
+    it has: 105 % of rated flow at rated steam, less on colder steam
+    (`valve_margin`, `steam_slope`, `env.turbine_capacity`). On Tavg's program it
+    never binds; with Tavg 3.5 K under it at full load the turbine falls under its
+    plan, and what it does not take is lost output.
+  - The turbine does not load while Tavg is 10 F (5.556 K) or more under its
+    program at the turbine's load, and loads again once Tavg is back
+    (`loading_stop`, the units' interlock C-16). It holds the load and unloads
+    nothing. What it does is Vogtle's safety report's; the setpoint is a training
+    card's, flagged in `REALITY.md`.
+  - The steam generators' safety valves relieve the steam over 1176 psig
+    (570.0 K; `relief_temperature`, `relief_accumulation`, `env.steam_relief`).
+    On Tavg's program they never lift. They bound how hot the primary can sit
+    at part load: 7.7 K over its program at half load, past which added
+    reactivity raises the power and blows steam.
+  - The offset's band is 5 % of rated delta I at every power (it was 5 % of
+    offset, so half as wide at half power). Penalty time counts in full at 50 %
+    of rated power and above, by half from 15 % to 50 % and not below; at 90 %
+    and above the flux difference must be back in its band within 30 min; from
+    50 % to 90 % it must stay inside the acceptable operation limits (NUREG-1431,
+    Bases B 3.2.3A).
+  - The expert is rebuilt for it: the same procedure, run from the curve book at
+    the day's cycle point, with the turbine loaded at the rate the boron line
+    carries. `ReferenceParams` lost `t_Kc`, `t_Ti`, `ff` and `dead_band` and
+    gained `theta`, `backoff` and `longest`; the helpers `curve_book`,
+    `ppm_per_load`, `tavg_per_ppm`, `tavg_spread`, `carried_rate` and
+    `turbine_demand` are new. `make_reactor_pid_controller(plant=..., wd_Kc=...,
+    wd_Ti=..., theta=...)` builds the expert on a family member's own curve book
+    and bump-test numbers; with no argument it is the shipped expert. Its boron
+    dead time `theta` is 600 s, the recipe's reading on this plant (it carried the
+    previous plant's 615 s).
+  - The oracle is rebuilt too: `make_oracle("reactor")` now plans the whole day
+    ahead on a 5 min knot model, with the turbine's load as one of its moves, and
+    solves again every half hour (`reactor/oracle.py`, `reactor/oracle_model.py`).
+    It replaces the five-minute plan of the rods and the boron, which kept the
+    turbine on its plan. Its first step of an episode solves for a minute or
+    two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
+    gone with the model it described.
+  - A trickle of boron flow now moves the boron it pays for (2026-11-23). The
+    mixing summed changes smaller than a single-precision boron can hold over a
+    sub-step, so 72 kg of water diluted as 130 kg and 36 kg as none. The sum now
+    carries its rounding (`ReactorState.boron_carry`); large flows are unchanged.
+  - The oracle's first solve of a day also solves from the plan that leaves the
+    rods parked, and keeps the cheaper of the two. From its first guess alone it
+    ended, on baseload days whose xenon dips, on a plan $13 dearer in its own
+    model, and lost those days to the expert.
+  - A reset holds the reactor's own starting move (`Reactor.initial_action`: rods
+    parked, no boron flow, the turbine on its plan). The action held after a reset
+    was the middle of the box, so the charter's "hold reset" null drove the rods
+    to half their stroke. No step, reward or observation changes.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
@@ -91,8 +228,29 @@ The next release is 0.8.0, because these changes break code written for
 - **`consumption_ratio` reads the quantity itself** on `glass_furnace`,
   `cement_kiln`, `boiler_drum`, `distillation`, `ph_neutralization` and
   `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
+- **The patrol family's lead engages in trim.** The scripted lead of `patrol`,
+  `patrol_range_bearing` and `wake_surf`, which is part of the plant, and
+  `formation`'s reference lead now start their TECS on the level trim they spawn
+  in, as the A320 tasks' autopilot does (owner, 2026-11-24). They used to start
+  on the airliner's trim constants and sink 11 to 22 m in their first seconds.
+  The versions keep their number (none shipped); the records are re-recorded.
 - **`first_order` has left the capability radar.** It is a sanity fixture, and
   `CAPABILITIES["first_order"]` is now empty.
+- **`boiler_drum` is Extra, as solved, and the radar has ten axes.** Its
+  classical reference costs nothing on normal days, so it leaves
+  `registry.benchmark_specs()` and the headline; its plant, expert and oracle
+  stay (`boiler_drum/PHYSICS.md`, Status). An Extra task now carries no
+  capability tag: `CAPABILITIES` is empty for `boiler_drum` and `four_tank`
+  too, and `"instability"` and `"inverse_response"` are gone from
+  `suite.AXES` and `suite.LABELS` until a core task is shown to carry them.
+- **Five aircraft tasks are Extra, and the radar has nine axes.** By the owner's
+  decisions on the aircraft five-task review (2026-11-24): `patrol` and
+  `patrol_range_bearing` as solved, `formation` as several agents (outside the
+  charter's one plant, one agent), `plane3d_circle` and `plane3d_figure8` as
+  solved with no airliner duty. They leave `registry.benchmark_specs()` and the
+  headline, carry no capability tag, and stay registered and usable (each
+  package's `PHYSICS.md`, Status). `"multi_agent"`, which only `formation`
+  carried, is gone from `suite.AXES` and `suite.LABELS`.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
@@ -369,6 +527,16 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `target_gym.scoring_runs`: a task scored on its stream pinned to each
+  scenario, from the reset, over a protocol's days, with twin scenarios folded
+  and a stop rule for seeds set before results. The reactor's protocol (owner,
+  2026-11-24): 7 days, baseload, edf_daily, fast_return and krsko_slow, 10 seeds
+  and 10 more where a scenario's room interval contains 1.
+- `tg.make_stream(name)`: the task as a continuing plant, the form an
+  average-reward algorithm trains on. It never ends, its scenarios take turns
+  by their weights, and the reset key fixes its world.
+  `tg.make_gymnasium(name, stream=True)` gives it behind the Gymnasium API.
+  See [Continuing tasks](docs/continuing-tasks.md).
 - **Sensor noise core.** A task declares `readings` of two kinds:
   `FieldReading`, on a measured copy of the state before `get_obs`, and
   `ChannelReading`, on its output. Each has a sigma, optional rounding and an
@@ -411,6 +579,47 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Fixed
 
+- `make_gymnasium` environments and `save_video` compile the task's step once.
+  They called it as plain Python, where a task's sub-step loops are compiled
+  again on every step and JAX keeps each program: 14 of the 25 tasks grew
+  with every step, the reactor by 22 to 50 MB, until the process ran out of
+  memory. `env.step` was never affected. Values agree with the uncompiled
+  step to float32 rounding.
+- **`score_policy` raised `KeyError: 'tracking'` on the tasks scored on their
+  job** (battery, boiler_drum, compressor_surge, distillation, hvac,
+  ph_neutralization, wind_turbine). It now returns their cost ratio, and the
+  numbers read against a tracking hold (`score`, `headroom`, `room_left`, the
+  holds, the settling ratio, `s_max`) are NaN there. `headroom` is NaN, not 0,
+  for an unknown ceiling.
+- **A seed where neither side cost anything counted against the policy.** The
+  ratio floored only the policy's cost, so 0 over 0 read as 0; both are floored
+  and it reads as 1.
+- **On a step that tripped, an episode's reward terms were the restarted
+  plant's**, with no failure charge, while its cost held the trip. Every
+  environment now reports the step's terms in `info["reward_terms"]`, on the
+  state the reward was computed on, and `run_policy` reads them. Rewards,
+  observations and states are unchanged.
+- **The aircraft's air above the tropopause was not the standard atmosphere.**
+  Density kept the troposphere's lapse above 11 000 m (2.9 % high at 12 000 m,
+  0.8 % at FL370), and the airspeed schedule held the tropopause's pressure
+  above it (17 % high at 12 000 m, 4.5 % at FL370), so a Mach 0.8 cruise at
+  12 000 m read 136 m/s of CAS where the tables give 126. One
+  `plane.dynamics.standard_atmosphere` now serves density, speed of sound, the
+  schedule, the CAS reading and the engine's lag. Below 11 000 m density moves
+  by a part in 100 000, from the pressure exponent's last figure.
+- **Four disturbances were wider than their stated spread.** hvac's weather,
+  the pH buffer flow, the kiln's raw-meal feed and the reactor's load wobble
+  took an Euler step whose stationary deviation is `1 / sqrt(1 - theta dt / 2)`
+  times the parameter: 0.5 %, 0.25 %, 0.6 % and 0.4 % too wide. The innovation is
+  now `std * sqrt(1 - decay ** 2)` (`utils.stationary_innovation`), and the
+  decay per step, which the oracles and hvac's forecast model, is unchanged.
+- **A reading's `interval` was counted in sub-steps on a plant whose step holds
+  several** (the reactor, 6): its noise would have been held 6 times too long.
+  No shipped reading was affected; the interval now counts control steps.
+- **`plane3d_heading` gave the same heading at every clearance to a caller that
+  kept one key** (the video writer, the planners' models). Each clearance is now
+  drawn from the key and the step. Scored runs draw other headings from the same
+  range; the version stays v9, which no release has shipped.
 - **The discount table in `docs/rl-protocol.md` had three stale rows.** `four_tank`
   runs 1200 steps, not 500, and `cstr` and `first_order` 150, not 100, so their
   `gamma` is 0.99917, 0.99333 and 0.99333. A test now reads the table against
@@ -428,6 +637,14 @@ The next release is 0.8.0, because these changes break code written for
 - **`env.state_space()` works on every task.** It raised an `AttributeError` on
   the 2D and 3D aircraft and returned a one-dimensional placeholder on patrol and
   formation.
+
+### Removed
+
+- **`target_gym.interpolator`, `target_gym.runners.utils`, and
+  `target_gym.utils.run_n_steps` and `compute_episode_returns_vectorized`.**
+  Nothing in the package called them, and they passed one key to the reset and
+  to every step, so a plant's noise was a single repeated draw. Use
+  `target_gym.benchmark.run_policy` or `target_gym.eval.run_episode`.
 
 ## [0.7.0] - 2026-11-02
 

@@ -16,6 +16,7 @@ order, and a pair episode in float32. The heuristic policies come from
 scripts/compressor_surge_numbers.py, which holds their only copy.
 """
 
+import dataclasses
 import functools
 import importlib.util
 import math
@@ -63,14 +64,23 @@ except ImportError:  # JAX 0.6; 0.10 removed the experimental name
     from jax.experimental import enable_x64
 
 
+class MapMachine(CompressorSurge):
+    """The map's own machine read by ideal transmitters. This file's numbers
+    are the map's, and its hand-built states carry no transmitter history; the
+    hidden line and the lags have their own tests
+    (test_compressor_surge_hidden_line.py)."""
+
+    readings = tuple(dataclasses.replace(r, lag=0.0) for r in CompressorSurge.readings)
+
+
 @pytest.fixture(scope="module")
 def env():
-    return CompressorSurge()
+    return MapMachine()
 
 
 @pytest.fixture(scope="module")
 def params():
-    return CompressorSurgeParams()
+    return CompressorSurgeParams(line_shift_max=0.0)
 
 
 @pytest.fixture(scope="module")
@@ -318,9 +328,11 @@ def test_observed_margin_matches_the_state(env, params):
     ps = pair_init(obs.T)
     np.testing.assert_allclose(ps.I_N, np.asarray(states.N_ramp, float), rtol=1e-6)
     np.testing.assert_allclose(ps.I_x, np.asarray(states.x, float), rtol=1e-6)
-    # The episode moved both actuators over their working range.
+    # The episode moved both actuators over their working range. From
+    # established operation the speed that holds a constant header moves
+    # little: more than 2 % of rated, two hundred of its reading's steps.
     assert np.ptp(np.asarray(states.x)) > 0.2
-    assert np.ptp(np.asarray(states.N)) > 0.05
+    assert np.ptp(np.asarray(states.N)) > 0.02
 
 
 def test_actuators_are_rate_limited_per_substep(params):
@@ -524,7 +536,8 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
     """Full travel low (70 %, recycle shut) trips. The step is charged
     ``restart_steps x failure_cost`` in version 2 and exactly
     ``-restart_steps`` in version 1, and the window continues from the plant
-    ``reset_env`` draws from the step's key, with ``time`` running on. The
+    ``restart_plant`` puts back from the step's key, in established operation
+    for the demand the world carries on with, with ``time`` running on. The
     outside world (``OUTSIDE_WORLD``: the schedule, its clock, the demand) and
     the surge record (``RECORDS``) run on as if no trip had happened
     (long-strata S2)."""
@@ -542,21 +555,25 @@ def test_a_trip_restarts_fresh_on_the_same_clock(env, params, step):
         pytest.fail("full travel low did not trip within 400 steps")
 
     assert not bool(terminated)
-    # Equal to float32 rounding: the step's copy of the reset is compiled
-    # inside the step, where XLA may fuse its arithmetic differently.
-    # The instruments stay through a restart, so the sensor key does too.
-    fresh = env.reset_env(restart_key(key, new.time), params)[1].replace(
-        time=new.time, sensor_key=new.sensor_key
-    )
     # The proposal the step made before the trip, whose outside world carries on.
     _, proposal, _, _, _ = step(key, state, low, params.replace(continuing=False))
+    # Equal to float32 rounding: the step's copy of the restart is compiled
+    # inside the step, where XLA may fuse its arithmetic differently.
+    # The instruments stay through a restart, so the sensor key does too.
+    fresh = env.restart_plant(restart_key(key, new.time), proposal, params).replace(
+        time=new.time, sensor_key=new.sensor_key
+    )
     for name in CompressorSurgeState.__dataclass_fields__:
         kept = name in env.OUTSIDE_WORLD or name in env.RECORDS
         source = proposal if kept else fresh
+        # ``atol``: the held raw speed command sits near 0 (the established
+        # speed is near the middle of the command range), where the action
+        # map's subtraction leaves float32's absolute rounding, 1.2e-7.
         np.testing.assert_allclose(
             np.asarray(getattr(new, name)),
             np.asarray(getattr(source, name)),
             rtol=1e-6,
+            atol=1e-6,
             err_msg=name,
         )
     assert int(new.time) == n
@@ -653,17 +670,23 @@ def test_v1_is_log_scaled_and_charges_downtime(params):
 
 @pytest.mark.large
 def test_v1_ranks_tripping_below_safe(env, params):
-    """The exploit version 1 is fixed against, on 32 seeds, with policies that
-    trip in most episodes: the recycle shut under a pressure PI on speed, a
-    fixed recycle of 0.10, and the margin-blind chaser at bias 0.2 (the
-    numbers script's policies, ``_policy``; PHYSICS.md, section 8). Under
-    the constant rollout key each restart replays the episode's own first
-    block, so a policy that trips early trips again and again. With 0 on the
-    tripped step the chaser outscores a fixed recycle of 0.30, which never
-    trips. With ``-restart_steps`` on the tripped step all three rank below
-    the fixed 0.30, zero action and the pair at ``DEFAULT_GAINS`` (the
-    tuner's starting point), which never trips and scores above the fixed
-    0.30."""
+    """Version 1 ranks every policy that trips below every one that does not,
+    on 32 seeds. Tripping: the recycle shut under a pressure PI on speed, a
+    fixed recycle of 0.10, and the margin-blind chaser at bias 0.1 (the
+    numbers script's policies, ``_policy``; PHYSICS.md, section 8). Under the
+    constant rollout key each restart replays the episode's own first block,
+    so a policy that trips early trips again and again. Not tripping: a fixed
+    recycle of 0.30, zero action and the pair at ``DEFAULT_GAINS``.
+
+    Re-measured on the current plant (2026-11-25, owner: keep the behaviour):
+    since surges are counted (three in the window trip) and episodes start on
+    the control line, the chaser at bias 0.2 no longer trips, so the tripping
+    chaser is the one at 0.1 (7867 trips, 25 of 32 episodes). Scores per step:
+    shut -5133, recycle 0.10 -3656, chaser 0.1 -1843; zero 0.15, the pair 0.54,
+    recycle 0.30 0.62. The pair now sits below the fixed 0.30 (it limit-cycles
+    under the valve's dead time), so only zero action is ordered below it. The
+    case that motivated version 1, a chaser that outscores the fixed 0.30 with
+    0 on its tripped steps, is gone: that chaser scores 0.40 against 0.62."""
     v1 = params.replace(reward_version=1)
     n = v1.max_steps_in_episode
     keys = jax.vmap(jax.random.PRNGKey)(jnp.arange(32))
@@ -674,7 +697,7 @@ def test_v1_ranks_tripping_below_safe(env, params):
 
     shut, shut_trips = scores("fixed", 0.0)
     tenth, tenth_trips = scores("fixed", 0.10)
-    chaser, chaser_trips = scores("chaser", 0.2)
+    chaser, chaser_trips = scores("chaser", 0.1)
     safe, safe_trips = scores("fixed", 0.30)
     zero, zero_trips = scores("zero")
     pair, pair_trips = scores("pair")
@@ -682,10 +705,9 @@ def test_v1_ranks_tripping_below_safe(env, params):
     assert not safe_trips.any() and not zero_trips.any() and not pair_trips.any()
     for trips in (shut_trips, tenth_trips, chaser_trips):
         assert trips.sum() >= 32
-    unfixed = chaser + v1.restart_steps * chaser_trips / n
-    assert unfixed.mean() > safe.mean()
     for tripping in (shut, tenth, chaser):
-        assert tripping.mean() < zero.mean() < safe.mean() < pair.mean()
+        assert tripping.mean() < zero.mean() < safe.mean()
+        assert tripping.mean() < pair.mean()
 
 
 # ---------------------------------------------------------------------------
@@ -714,14 +736,14 @@ def _travel(env, params, action, seeds, n=None):
 
 def test_zero_action_never_trips(env, params):
     """Raw 0 (87.5 % speed, recycle half open) over 20 schedules of 1200
-    steps: no trip, and the smallest phi_min is at least 0.55. Zero action's
-    lowest Phi is the reset's (derived: 0.581 at the lowest drawable first
-    opening, 0.29, and 0.568 for a drop from there to the clip floor 0.2);
-    its own equilibrium at opening 0.2 is 0.632. Measured here: 0.610
-    (scripts/compressor_surge_numbers.py --section reach prints all four)."""
+    steps: no trip, and the smallest phi_min is at least 0.547. Zero action's
+    lowest Phi is the reset's: established operation sits on the 10 % control
+    line, Phi 0.55, read through the soft minimum over substeps, which is
+    conservative by at most T ln 10 = 2.3e-3, as the drive speeds up over the
+    first step. Its own equilibrium at opening 0.2 is 0.632."""
     states, tripped = _travel(env, params, jnp.zeros(2), range(20))
     assert not tripped.any()
-    assert float(np.min(states.phi_min)) >= 0.55
+    assert float(np.min(states.phi_min)) >= 0.547
     # Why: the recycle alone carries the surge flow at any pressure from an
     # opening of 1 / (k_r sqrt(K)) = 0.454 (derived), under zero action's 0.5.
     x_alone = 1.0 / (params.k_r * math.sqrt(float(surge_constant(params))))
@@ -732,21 +754,28 @@ def test_zero_action_never_trips(env, params):
 def test_full_travel_low_trips(env, params):
     """Conformance check 8's fact: full travel low (70 %, recycle shut) trips
     the plant from the PRNGKey(0) reset at every demand level from 0.20 to
-    0.95 within 400 steps, sooner at lower demand (3 steps at 0.20, 117 at
-    0.95); at full opening it never does. Over 20 drawn schedules it trips in
-    every one, first between 14 and 153 steps (measured, both by
-    scripts/compressor_surge_numbers.py --section reach)."""
+    0.90 within 400 steps, sooner at lower demand; at 0.95 and at full
+    opening it never does. Over 20 drawn schedules it trips in every one.
+
+    Re-measured on the current plant (2026-11-25, owner: keep the behaviour):
+    first trips at 24, 25, 26, 28, 47 and 91 steps for 0.20 to 0.90, none at
+    0.95 or 1.0; over the 20 schedules first between 25 and 217 steps. Since
+    surges are counted, a trip takes three surges in the window [C5]: about
+    two deep-surge periods of 0.83 s (PHYSICS.md, test 1) after the first, so
+    no sooner than about 20 steps, where the instantaneous trip took 3."""
     low = jnp.array([-1.0, -1.0])
     first = []
-    for level in (0.20, 0.35, 0.50, 0.65, 0.80, 0.90, 0.95):
+    for level in (0.20, 0.35, 0.50, 0.65, 0.80, 0.90):
         p = params.replace(demand_range=(level, level))
         _, tripped = _travel(env, p, low, [0], 400)
         assert tripped.any(), level
         first.append(int(np.argmax(tripped[0])) + 1)
     assert first == sorted(first)
-    assert first[0] <= 5 and first[-1] <= 400
-    _, tripped = _travel(env, params.replace(demand_range=(1.0, 1.0)), low, [0], 400)
-    assert not tripped.any()
+    assert 17 <= first[0] <= 30 and first[-1] <= 400
+    for level in (0.95, 1.0):
+        p = params.replace(demand_range=(level, level))
+        _, tripped = _travel(env, p, low, [0], 400)
+        assert not tripped.any(), level
 
     _, tripped = _travel(env, params, low, range(20), 400)
     assert tripped.any(axis=1).all()
@@ -766,14 +795,18 @@ def test_full_travel_high_never_trips(env, params):
 @pytest.mark.large
 def test_setpoint_chasing_without_the_margin_trips(env, params):
     """The hardness claim on the env, 64 seeds: a pressure PI on speed with
-    the recycle shut trips in every episode, and the margin-blind chaser at
-    bias 0.25, which uses the recycle for pressure and ignores the margin,
-    trips in at least one. On 256 other seeds (1000 to 1255) the two trip in
-    100 % and 19.9 % of episodes (measured, PHYSICS.md section 6). Ramps took
-    the chaser this test first used, at bias 0.3, from 12.5 % to 0.8 %."""
+    the recycle shut trips in every episode, and the margin-blind chaser,
+    which uses the recycle for pressure and ignores the margin, trips in some.
+
+    Re-measured on the current plant (2026-11-25, owner: keep the behaviour):
+    the chaser at bias 0.25 no longer trips (0 of 64, 0 of 256 on seeds 1000
+    to 1255), since surges are counted and episodes start on the control line.
+    At bias 0.15 it trips in 15 of 64 and 61 of 256 (23.8 %); the recycle
+    shut trips in 64 of 64 and 256 of 256. Ramps took the chaser this test
+    first used, at bias 0.3, from 12.5 % to 0.8 %."""
     keys = jax.vmap(jax.random.PRNGKey)(jnp.arange(64))
     _, shut = _episodes(env, params, keys, "fixed", 0.0)
-    _, chaser = _episodes(env, params, keys, "chaser", 0.25)
+    _, chaser = _episodes(env, params, keys, "chaser", 0.15)
     assert shut.any(axis=1).all()
     assert chaser.any()
 
@@ -812,7 +845,7 @@ def test_integrator_is_converged(params):
 
     runs = {}
     for method in ("rk4_10", "rk4_40"):
-        env = CompressorSurge(integration_method=method)
+        env = MapMachine(integration_method=method)
         states, _, tripped = _rollout(env, p, state, action, key, 80)
         assert not np.asarray(tripped).any(), method
         runs[method] = states

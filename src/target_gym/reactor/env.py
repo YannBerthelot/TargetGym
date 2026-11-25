@@ -34,17 +34,25 @@ and from the moderator's temperature rise up the core (PHYSICS.md, section 1).
 
 Rods move at one speed, and the action is where to put them. Boron is a feed and
 bleed through the chemical and volumetric control system: the action opens a flow
-now, and the core sees it ``boron_delay`` steps later.
+now, and the core sees it ``boron_delay`` steps later. The turbine's load moves at
+the rate the third action asks for, never above the dispatch's plan, and the
+reactor's power follows it.
+
+The core sits at a point of its fuel cycle, drawn at reset (``cycle_point``), and
+its boron, moderator coefficient and boron worth are that point's (``core_at``).
 
 Observation (partially observable)
 ----------------------------------
 ``[n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron (20 min late),
-hours to the ramp down, hours to the ramp up, the power xenon is balanced with]``.
+hours to the ramp down, hours to the ramp up, the power xenon is balanced with,
+the day's ramp rate, the day's minimum load, the cycle point, the plan's load now,
+the offset's penalty time]``.
 
 Action
 ------
-``[rod demand, boron flow]`` in ``[-1, 1]``. Rod demand: -1 fully in, +1 fully out.
-Boron flow: -1 full dilution, +1 full boration.
+``[rod demand, boron flow, turbine loading rate]`` in ``[-1, 1]``. Rod demand: -1
+fully in, +1 fully out. Boron flow: -1 full dilution, +1 full boration. Turbine: -1
+unloads at its fastest rate, +1 loads at it, as far as the plan.
 """
 
 import math
@@ -58,7 +66,7 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import log_scaled_reward
+from target_gym.utils import log_scaled_reward, stationary_innovation
 
 # ---------------------------------------------------------------------------
 # Standard 6-group U-235 thermal delayed-neutron data (Keepin 1965).
@@ -103,7 +111,11 @@ _BURN = _SIGMA_X * _PHI_FULL * math.pi / 4.0  # 1/s, cosine flux on cosine xenon
 @struct.dataclass
 class ReactorParams(EnvParams):
     # ---- Kinetics ----
-    Lambda_gen: float = 1e-4  # s — effective mean neutron generation time
+    # The mean neutron generation time: ours, a thermal reactor's order. A PWR's
+    # is reported in tens of microseconds (Nuclear Technology, NT13-120), so this
+    # is a few times longer. The prompt jump it sets (Lambda / beta, about 15 ms)
+    # settles inside one 5 s sub-step either way.
+    Lambda_gen: float = 1e-4  # s
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
@@ -140,6 +152,58 @@ class ReactorParams(EnvParams):
     primary_mass: float = 2.5e5  # kg, ours, the same water as C_coolant + C_cold
     # 5 to 15 min, OAPS section 2.1, in 30 s control steps, drawn at reset.
     boron_delay_range: Tuple[int, int] = (10, 30)
+
+    # ---- The core's point in its fuel cycle (owner, 2026-11-15) ----
+    #: Where a day's core sits, as the fraction of its cycle burnt, drawn evenly at
+    #: reset: a core burns at a steady rate, and EDF's units keep their full
+    #: load-following range up to 90 % of the cycle (REALITY.md section 8, [S17]).
+    cycle_range: Tuple[float, float] = (0.0, 0.9)
+    #: One coordinate moves the core's boron, moderator coefficient and boron worth
+    #: together (``core_at``). ``boron_ref``, ``alpha_coolant`` and ``boron_worth``
+    #: above are the start of the cycle's; these are the end's, at 0 ppm, with
+    #: straight lines between. Ours: the family's moderator coefficient runs from 0
+    #: to -80 pcm/K, -80 being a typical specification limit, and BEAVRS measures
+    #: 10.8 to 10.9 pcm/ppm at lower boron (PHYSICS.md section 3).
+    alpha_coolant_end: float = -60.0e-5
+    boron_worth_end: float = -10.9e-5
+    #: A stream's core refuels when it reaches the end of ``cycle_range``, where
+    #: its load following ends: renewed at the range's start as at reset, uncharged,
+    #: the outside world carrying on (owner, 2026-11-11 and 2026-11-15). False, the
+    #: default: a window is one day of the cycle.
+    refuels: bool = False
+
+    # ---- The turbine (owner, 2026-11-15) ----
+    #: The turbine's fastest loading and unloading rate, the third action's full
+    #: scale: 5 % of rated load a minute, the EUR's fastest return (REALITY.md
+    #: section 6). It does not unload below ``restart_load``.
+    turbine_rate: float = 0.05 / 60.0  # 1/s
+    #: The turbine takes no more load than its valves pass wide open: 105 % of its
+    #: rated flow at its rated steam (Wolf Creek's valves-wide-open heat balance),
+    #: and in proportion to the steam's pressure over the square root of its
+    #: temperature off it (Stodola's cone law, a condensing turbine). The steam is
+    #: saturated at the steam generator's temperature, ``ln p = a - steam_slope /
+    #: T`` through the steam table's 5.503 MPa at 270 C and 8.588 MPa at 300 C
+    #: (REALITY.md section 3; the fit is ours). Rated steam is the full-load
+    #: program's.
+    valve_margin: float = 1.05
+    steam_slope: float = 4618.5  # K
+    #: The turbine's loading stops while Tavg is this far or further under its
+    #: program at the turbine's load (interlock C-16), and resumes when Tavg is back:
+    #: the stop for a return to power on the moderator alone, faster than the
+    #: dilution follows (Vogtle UFSAR 7.7.1.4.3 and 7.7.2.4). It stops the loading
+    #: only. 10 F, from a training card, not a plant document (REALITY.md section 4).
+    loading_stop: float = 10.0 / 1.8  # K
+    #: The steam generators' safety valves hold the steam at the saturation
+    #: temperature of the lowest one's set pressure: 1176 psig, 8.21 MPa, 570.0 K
+    #: on the steam curve above. They are the heat sink when the reactor makes more
+    #: heat than the turbine takes, so they bound how hot the primary can sit at
+    #: part load (NUREG-1431 Bases B 3.7.1; the set pressure is two plants', from
+    #: search summaries, REALITY.md section 4). They open in proportion to the
+    #: pressure over it and pass the full-power steam ``relief_accumulation`` over
+    #: it (3 %, the code's accumulation for steam safety valves, from the
+    #: reviewer's memory, not opened).
+    relief_temperature: float = 570.0  # K
+    relief_accumulation: float = 0.03
 
     # ---- Two-point core: Mastroianni (1979), Table III-1 ----
     sigma_x: float = _SIGMA_X  # cm2
@@ -197,10 +261,6 @@ class ReactorParams(EnvParams):
 
     # ---- Reward shaping ----
     rod_motion_weight: float = 0.02
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md. The reward
-    # has not been a Gaussian for some time; this is the planner's scale.
-    reward_band: float = 0.03  # relative flux (3% = tight)
 
     # ---- Load: a daily 100-50-100, plus a small frequency-control wobble ----
     # Ramps at 2 %/min, the top of OAPS's 1 to 2 %/min for Mode A early in a
@@ -208,12 +268,6 @@ class ReactorParams(EnvParams):
     load_min: float = 0.5
     load_ramp_rate: float = 0.02 / 60.0  # 1/s
     ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
-    #: A stream refuels the core every ``renewal_days`` plant days: renewed at its
-    #: cycle point as at reset, uncharged, the outside world carrying on (owner,
-    #: 2026-11-11; ours, 30 days in ``scenarios.py``, which keeps the boron within
-    #: about 100 ppm of the start of cycle the coefficients describe). 0, the
-    #: default, never: a window is one day of the cycle.
-    renewal_days: float = 0.0
     #: How far ahead the dispatch announces a load-follow day in a stream, where
     #: each day is an event (``Reactor.start_event``): the window's own notice. A
     #: stream sets ``ramp_down_range`` to the past, so it starts with no day.
@@ -224,11 +278,10 @@ class ReactorParams(EnvParams):
     demand_theta: float = 1.0 / 300.0
     demand_sigma: float = 4.08e-4
 
-    # ---- Revenue model (visualisation only — not in reward) ----
-    # 1 GWe plant at spot price. Imbalance penalty = factor × spot.
+    # ---- The plant's output and its price ----
+    # 1 GWe at spot, the prices the cost's terms are read in.
     P_electric_GW: float = 1.0
     spot_price_per_MWh: float = 80.0
-    imbalance_factor: float = 3.0
 
     # ---- Initial state ----
     #: Recent power level the xenon inventory is in equilibrium with at reset:
@@ -285,36 +338,67 @@ class ReactorParams(EnvParams):
     tracking_exponent: float = 1.0
     imbalance_multiple: float = 1.25 * 0.0023  # of spot, per K
     rod_step_price: float = 1.0  # $ per rod step, ours
-    # The band, EDF's: during load follow the axial offset stays within 0.05 of its
-    # reference (IAEA NP-T-3.23, annex II-4.3). The reference is the offset at full
-    # power, xenon balanced and rods out, which this core puts at 0 by construction
-    # (the tilts start at 0 and the coolant's tilt is measured from full power).
-    # Past it, each 1 % of rated delta I is priced as 1 % of rated output derated,
-    # $1000/h on 1 GWe at $100/MWh, ours.
+    # The offset's limits, as the standard specification states them for constant
+    # axial offset control (NUREG-1431 Rev. 3.0, Bases B 3.2.3A and its figure;
+    # REALITY.md section 4; owner, 2026-11-15). The flux difference is delta I, a
+    # fraction of rated power, and its target is ``ao_ref`` times the power: the
+    # offset at full power, xenon balanced and rods out, which this core puts at 0
+    # by construction. The target band is ``ao_band`` of rated delta I on either
+    # side of the target at every power (EDF's and Krsko's 5 %).
     ao_band: float = 0.05
     ao_ref: float = 0.0
-    # Time outside the band counts at every power during load follow (EDF's scope),
-    # and 1 h of it in 24 h is allowed (Westinghouse's allowance, D.C. Cook and RAOC
-    # specifications, pooled in since EDF's was not found). Past it the plant must
-    # derate to 50 %, priced as the derate's lost output at spot. The clock looks
-    # back 24 h in whole control hours (``roll_offset_clock``), so time outside a
-    # day ago stops counting; a window is one day and counts from 0.
+    # Outside the band, penalty deviation time accumulates: a second a second at
+    # ``ao_half_power`` and above, half a second a second down to ``ao_free_power``,
+    # none below. ``ao_allowed`` of it in the last 24 h is free; past it the unit
+    # must be under ``derate_to``, priced as that reduction's lost output at spot.
+    # The clock looks back 24 h in whole control hours (``roll_offset_clock``), so
+    # time outside a day ago stops counting; a window is one day and counts from 0.
     ao_allowed: float = 3600.0  # s in 24 h
+    ao_half_power: float = 0.5  # of rated power
+    ao_free_power: float = 0.15
     derate_to: float = 0.5  # of rated power
     derate_price_per_MWh: float = 80.0  # the derate's lost output, spot as for trips
+    # At ``ao_strict_power`` and above the flux difference must be inside the band:
+    # 15 min to restore it, then 15 min to be under that power (Required Actions
+    # A.1 and B.1), so ``ao_strict_allowed`` outside without a break, then the
+    # reduction's lost output.
+    ao_strict_power: float = 0.9
+    ao_strict_allowed: float = 1800.0  # s
+    # Between the two powers the flux difference must also stay inside the
+    # acceptable operation limits, a straight line from ``ao_limit_high`` of rated
+    # delta I at ``ao_strict_power`` to ``ao_limit_low`` at ``ao_half_power`` (the
+    # figure's (11, 90) and (31, 50)). Outside them for ``ao_limit_allowed``
+    # without a break (Required Action C.1's completion time), the unit must be
+    # under ``derate_to``.
+    ao_limit_high: float = 0.11
+    ao_limit_low: float = 0.31
+    ao_limit_allowed: float = 1800.0  # s
     # The rod insertion limit, the family's shape: a straight line in power, 22 %
-    # of the stroke in at full power to 78 % at half (KAIST's lead), 2 h to restore
-    # (STS 3.1.6), then hot standby.
+    # of the stroke in at full power to 78 % at half (KAIST's lead). The rods are the
+    # lead bank, so STS LCO 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0,
+    # ML21259A155, pages 3.1.6-1 and 3.1.6-2): 2 h to restore (``ril_restore``),
+    # then Condition D, MODE 2 with keff < 1.0 within 6 h: the turbine unloads along
+    # a straight line to no load, and the plant goes to hot standby at
+    # ``ril_allowed`` (owner, 2026-11-25; hot standby at 2 h until then).
     ril_full: float = 0.22
     ril_half: float = 0.78
-    ril_allowed: float = 7200.0  # s
-    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1: at or below the COLR's
-    # value, restored within 2 h, else MODE 2 within 6 h (hot standby here).
+    ril_restore: float = 7200.0  # s, Condition B
+    ril_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition D's end
+    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1 (NUREG-1431 Rev. 5.0):
+    # at or below the COLR's value, restored within 2 h (Condition A), else MODE 2
+    # within 6 h (Condition B), and a parameter restored before then ends the
+    # required action (LCO 3.0.2). The plant flies Condition B: past ``dnb_restore``
+    # its turbine unloads along a straight line to MODE 2's ``mode_2_load`` (Table
+    # 1.1-1: at most 5 % of rated power) at ``dnb_allowed``, where it goes to hot
+    # standby (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; it
+    # went to hot standby at 2 h until then).
     # Braidwood's COLR: nominal Tavg at rated power 588.0 F, limit 593.1 F, so 5.1 F
     # above the full-power program at every power (from a search summary; nrc.gov
     # blocks automated reads). The only plant found with both numbers.
     dnb_margin: float = 5.1 / 1.8  # K above the full-power program
-    dnb_allowed: float = 7200.0  # s
+    dnb_restore: float = 7200.0  # s, Condition A
+    dnb_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition B's end
+    mode_2_load: float = 0.05
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg
@@ -352,7 +436,11 @@ class ReactorParams(EnvParams):
 
 #: Units of the ReactorParams fields, for the generated environment pages.
 PARAM_UNITS = {
-    "renewal_days": "d",
+    "cycle_range": "-",
+    "alpha_coolant_end": "1/K",
+    "boron_worth_end": "1/ppm",
+    "refuels": "-",
+    "turbine_rate": "1/s",
     "Lambda_gen": "s",
     "alpha_fuel": "1/K",
     "alpha_coolant": "1/K",
@@ -383,13 +471,23 @@ PARAM_UNITS = {
     "ao_ref": "-",
     "floor_allowed": "s",
     "ao_allowed": "s",
+    "ao_half_power": "",
+    "ao_free_power": "",
+    "ao_strict_power": "",
+    "ao_strict_allowed": "s",
+    "ao_limit_high": "-",
+    "ao_limit_low": "-",
+    "ao_limit_allowed": "s",
     "derate_to": "",
     "derate_price_per_MWh": "$/MWh",
     "ril_full": "",
     "ril_half": "",
+    "ril_restore": "s",
     "ril_allowed": "s",
     "dnb_margin": "K",
+    "dnb_restore": "s",
     "dnb_allowed": "s",
+    "mode_2_load": "-",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
@@ -412,7 +510,6 @@ PARAM_UNITS = {
     "T_coolant_max": "K",
     "T_avg_min": "K",
     "rod_motion_weight": "-",
-    "reward_band": "-",
     "load_min": "-",
     "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
@@ -423,7 +520,6 @@ PARAM_UNITS = {
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
-    "imbalance_factor": "-",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -433,6 +529,11 @@ PARAM_UNITS = {
     "failure_cost": "reward",
     "restart_steps": "steps",
     "standby_steps": "steps",
+    "valve_margin": "fraction of rated steam flow",
+    "steam_slope": "K",
+    "loading_stop": "K",
+    "relief_temperature": "K",
+    "relief_accumulation": "fraction of the set pressure",
     "restart_load": "fraction of rated load",
     "reload_knee": "fraction of rated load",
     "reload_fast_rate": "1/s",
@@ -476,6 +577,9 @@ class ReactorState(EnvState):
     Xe_tilt: float = 0.0  # Xe-135, top half against the mean
     rod_in: float = 3.0 / 228.0  # how far in the rods are, a fraction of the stroke
     boron: float = 1690.0  # ppm in the core
+    #: What rounding has given ``boron`` beyond the exact sum of its changes, ppm:
+    #: taken off the next change, so a trickle is not lost or doubled.
+    boron_carry: float = 0.0
     delta_I: float = 0.0  # power difference, top minus bottom, a fraction of rated
     #: Boron flow commands on their way to the core, newest first.
     boron_queue: jax.Array = struct.field(
@@ -485,7 +589,7 @@ class ReactorState(EnvState):
     rod_moved: float = 0.0  # fraction of the stroke the rods travelled last sub-step
     effluent: float = 0.0  # kg/s the last sub-step's command injected
     below_floor: float = 0.0  # s Tavg has been under T_avg_min without a break
-    ao_outside: float = 0.0  # s the offset has spent outside its band today
+    ao_outside: float = 0.0  # s of penalty deviation time in the last 24 h
     ril_outside: float = 0.0  # s the rods have sat past their insertion limit
     above_dnb: float = 0.0  # s Tavg has sat above its DNB limit without a break
     xenon_power: float = 1.0  # the recent power the starting xenon is balanced with
@@ -496,7 +600,7 @@ class ReactorState(EnvState):
         default_factory=lambda: jnp.full(BORON_METER_STEPS + 1, 1690.0, jnp.float32)
     )
 
-    actuator_held: jax.Array = actuator_field(2)
+    actuator_held: jax.Array = actuator_field(3)
 
     #: The day's program carries its own rate (1/s) and depth (of rated load), so
     #: a load-follow day runs to its end whatever the params do meanwhile, and its
@@ -520,14 +624,27 @@ class ReactorState(EnvState):
     burn_t0: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((), jnp.int32), kw_only=True
     )
-    #: After a trip's restart the turbine reloads: the most it takes, a fraction of
-    #: rated load, rising at the conditioning ramps until it meets the plan
-    #: (``restart_load``). ``NOT_RELOADING`` otherwise, as in every window.
+    #: The turbine's load while it is under its plan, a fraction of rated load: it
+    #: moves at the rate the third action asks for, and after a trip's restart no
+    #: faster than the conditioning ramps (``restart_load``), until it meets the
+    #: plan. ``NOT_RELOADING`` while the turbine is on its plan.
     pickup: float = struct.field(default=1.0e9, kw_only=True)
+    #: 1 while the fuel's conditioning ramps cap the turbine's loading, from a
+    #: trip's restart until the turbine meets its plan; 0 otherwise.
+    conditioning: float = struct.field(default=0.0, kw_only=True)
+    #: The fraction of its cycle the core had burnt at reset or at its last
+    #: refuelling (``cycle_point`` adds the burnup since).
+    cycle0: float = struct.field(default=0.0, kw_only=True)
+    #: s the flux difference has sat outside its band at ``ao_strict_power`` or
+    #: above without a break, and outside the acceptable operation limits below it.
+    ao_strict: float = struct.field(default=0.0, kw_only=True)
+    ao_far: float = struct.field(default=0.0, kw_only=True)
 
 
-#: ``ReactorState.pickup`` when the turbine is not reloading.
+#: ``ReactorState.pickup`` when the turbine is on its plan.
 NOT_RELOADING = 1.0e9
+#: The turbine is on its plan when its load is within this of it, of rated load.
+ON_PLAN = 1.0e-6
 
 #: Hours the offset's allowance looks back over: "1 hour during the previous 24
 #: hours" (REALITY.md section 4).
@@ -657,6 +774,106 @@ def burnt(state, params: ReactorParams):
     return state.burn_rate * (state.physics_time - state.burn_t0) * params.delta_t
 
 
+def cycle_point(state, params: ReactorParams):
+    """The fraction of its cycle the core has burnt: where it stood at reset or at
+    its last refuelling, plus the burnup since. Boron falls in a straight line
+    through the cycle (BEAVRS, Table 24), so a ppm burnt is ``1 / boron_ref`` of
+    it. ``params`` are the task's, whose ``boron_ref`` is the start of the cycle's.
+    """
+    return state.cycle0 + burnt(state, params) / params.boron_ref
+
+
+def core_at(cycle, params: ReactorParams) -> ReactorParams:
+    """The task's parameters with the core's own at ``cycle``, the fraction of its
+    cycle burnt: one coordinate moves the boron that leaves it critical at full
+    power, the moderator coefficient and the boron worth together, in straight
+    lines from the start of the cycle's values to the end's (PHYSICS.md section 3).
+    Apply it to the task's parameters, never to its own result."""
+    p = params
+    c = jnp.clip(cycle, 0.0, 1.0)
+    return p.replace(
+        boron_ref=p.boron_ref * (1.0 - c),
+        alpha_coolant=p.alpha_coolant + (p.alpha_coolant_end - p.alpha_coolant) * c,
+        boron_worth=p.boron_worth + (p.boron_worth_end - p.boron_worth) * c,
+    )
+
+
+def penalty_rate(delta_I, n, params: ReactorParams, xp=jnp):
+    """Seconds of penalty deviation time a second at flux difference ``delta_I``
+    and power ``n``: none inside the target band, ``ao_band`` of rated delta I
+    either side of the target; outside it, 1 at ``ao_half_power`` and above, a half
+    down to ``ao_free_power``, none below (NUREG-1431, B 3.2.3A, Notes 2 and 3)."""
+    p = params
+    outside = xp.abs(delta_I - n * p.ao_ref) > p.ao_band
+    weight = xp.where(
+        n >= p.ao_half_power, 1.0, xp.where(n >= p.ao_free_power, 0.5, 0.0)
+    )
+    return xp.where(outside, weight, 0.0)
+
+
+def offset_limit(n, params: ReactorParams, xp=jnp):
+    """How far from its target the flux difference may sit at power ``n``, of rated
+    delta I: the band at ``ao_strict_power`` and above; below it the acceptable
+    operation limits, a straight line from ``ao_limit_high`` there to
+    ``ao_limit_low`` at ``ao_half_power``; no limit under that (NUREG-1431, Figure
+    B 3.2.3A-1)."""
+    p = params
+    slope = (p.ao_limit_low - p.ao_limit_high) / (p.ao_strict_power - p.ao_half_power)
+    line = p.ao_limit_high + slope * (p.ao_strict_power - n)
+    return xp.where(
+        n >= p.ao_strict_power,
+        p.ao_band,
+        xp.where(n >= p.ao_half_power, line, xp.inf),
+    )
+
+
+#: ``required_power`` when the offset's specification asks for no reduction.
+NO_REDUCTION = 1.0e9
+
+
+def required_power(state, params: ReactorParams, xp=jnp):
+    """The most power the offset's specification leaves the unit, of rated:
+    ``derate_to`` once the penalty time has passed its allowance or the flux
+    difference has sat outside the acceptable operation limits too long,
+    ``ao_strict_power`` once it has sat outside its band too long at that power or
+    above, the deeper of the two where both are due, else ``NO_REDUCTION``."""
+    p = params
+    to_half = xp.logical_or(
+        state.ao_outside >= p.ao_allowed, state.ao_far >= p.ao_limit_allowed
+    )
+    to_strict = state.ao_strict >= p.ao_strict_allowed
+    return xp.where(
+        to_half, p.derate_to, xp.where(to_strict, p.ao_strict_power, NO_REDUCTION)
+    )
+
+
+def steam_pressure(T_sg, params: ReactorParams, xp=jnp):
+    """The steam's pressure at steam generator temperature ``T_sg`` (K) against the
+    full-load program's: saturated steam, ``ln p = a - steam_slope / T``."""
+    rated = steady_state_temperatures(1.0, params)[3]
+    return xp.exp(params.steam_slope * (1.0 / rated - 1.0 / T_sg))
+
+
+def steam_relief(T_sg, params: ReactorParams, xp=jnp):
+    """The steam the safety valves relieve at steam generator temperature ``T_sg``,
+    of the full-power steam: none under their set pressure, and in proportion to
+    the pressure over it above (``ReactorParams.relief_temperature``)."""
+    over = steam_pressure(T_sg, params, xp) / steam_pressure(
+        params.relief_temperature, params, xp
+    )
+    return xp.maximum(over - 1.0, 0.0) / params.relief_accumulation
+
+
+def turbine_capacity(T_sg, params: ReactorParams, xp=jnp):
+    """The most load the turbine takes on steam at ``T_sg``, of rated load: its
+    valves wide open pass ``valve_margin`` of rated flow at rated steam, and flow
+    in proportion to the steam's pressure over the square root of its temperature
+    (``ReactorParams.valve_margin``)."""
+    rated = steady_state_temperatures(1.0, params)[3]
+    pressure = steam_pressure(T_sg, params, xp)
+    return params.valve_margin * pressure * xp.sqrt(rated / T_sg)
+
+
 def rod_worth(rod_in, params: ReactorParams):
     """The rods' worth with a fraction ``rod_in`` of the stroke in: the integral
     worth of a cosine flux, ``y - sin(2 pi y) / (2 pi)``, negative going in."""
@@ -737,6 +954,7 @@ def _slow_rates(slow, n, load, rod_eps, p: ReactorParams):
     to_coolant = p.UA * (T_f - T_h)
     around_loop = p.m_dot_cp * (T_h - T_c)
     to_steam = p.UA_sg * (0.5 * (T_h + T_c) - T_s)
+    relieved = steam_relief(T_s, p)
     lam_sum = LAMBDA_XENON + p.sigma_phi0
     feeds = lam_sum * (p.gamma_ratio * n + I_h) / (1.0 + p.gamma_ratio)
     eps = rod_eps + moderator_tilt(T_h, T_c, p)
@@ -747,7 +965,7 @@ def _slow_rates(slow, n, load, rod_eps, p: ReactorParams):
             (p.P_thermal_ref * n - to_coolant) / p.C_fuel,
             (to_coolant - around_loop) / p.C_coolant,
             (around_loop - to_steam) / p.C_cold,
-            (to_steam - p.P_thermal_ref * load) / p.C_sg,
+            (to_steam - p.P_thermal_ref * (load + relieved)) / p.C_sg,
             LAMBDA_IODINE * (n - I_h),
             feeds - (LAMBDA_XENON + p.sigma_phi0 * n * (1.0 + A * Xe_t / Xe)) * Xe,
             dI_t,
@@ -900,11 +1118,15 @@ def compute_next_state(
     integration_method: str = "tr_bdf2_4",
 ):
     """
-    ``action``: raw ``[rod demand, boron flow]`` in [-1, 1]. The rods move toward
-    the demand at their one speed, and the core feels the boron flow at the far
-    end of ``state.boron_queue`` (``Reactor.step_env`` feeds it).
+    ``action``: raw ``[rod demand, boron flow, turbine loading rate]`` in [-1, 1].
+    The rods move toward the demand at their one speed, the core feels the boron
+    flow at the far end of ``state.boron_queue`` (``Reactor.step_env`` feeds it),
+    and the turbine's load moves at the rate asked for, as far as the plan.
+    ``params`` are the task's; the core's own are its cycle point's.
     """
-    p = params
+    action = jnp.reshape(action, (3,))
+    task = params
+    p = core_at(cycle_point(state, task), task)
     # Rods: +1 asks for all the way out, -1 all the way in.
     wanted = 0.5 * (1.0 - action[0])
     most = p.rod_speed * p.delta_t
@@ -917,11 +1139,18 @@ def compute_next_state(
         arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow
     )
     feed = jnp.where(arriving < 0, 0.0, p.boric_acid_ppm)
-    closes = 1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t)
-    boron = state.boron + (feed - state.boron) * closes
+    closes = -jnp.expm1(-flow / p.primary_mass * p.delta_t)
+    # A trickle changes the boron by less over a sub-step than a single-precision
+    # number near 1690 ppm can hold (1.2e-4 ppm), so the sum carries its rounding
+    # (Kahan): without it 72 kg of water diluted as 130 kg and 36 kg as none.
+    change = (feed - state.boron) * closes - state.boron_carry
+    boron = state.boron + change
+    boron_carry = (boron - state.boron) - change
 
-    rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - p.boron_ref)
-    # Burnup since reset, as the boron it is worth (D9).
+    # Critical boron where the core stood at reset or its last refuelling, and the
+    # burnup since, as the boron it is worth (D9).
+    renewed_at = task.boron_ref * (1.0 - state.cycle0)
+    rho_ext = rods - rod_worth(p.rod_park, p) + p.boron_worth * (boron - renewed_at)
     rho_ext = rho_ext + p.boron_worth * burnt(state, p)
     rod_eps = rod_tilt(rod_in, p)
 
@@ -984,18 +1213,58 @@ def compute_next_state(
     # ── The load: the day's schedule, plus the OU wobble on top ──
     key_t = jax.random.fold_in(state.demand_key, new_physics_time)
     noise = jax.random.normal(key_t, dtype=jnp.float32)
-    wobble = (
-        state.load_wobble
-        - p.demand_theta * state.load_wobble * p.delta_t
-        + p.demand_sigma * jnp.sqrt(p.delta_t) * noise
-    )
+    # The innovation that keeps the wobble at its stated spread,
+    # ``demand_sigma / sqrt(2 demand_theta)`` (0.5 % of load).
+    decay = 1.0 - p.demand_theta * p.delta_t
+    spread = p.demand_sigma / jnp.sqrt(2.0 * p.demand_theta)
+    wobble = decay * state.load_wobble + stationary_innovation(spread, decay) * noise
     day = planned_load(plan_seconds(new_physics_time, state, p), state)
-    # After a restart the turbine takes at most ``pickup``, which climbs at the
-    # conditioning ramps until it meets the plan (``ReactorParams.restart_load``).
-    climb = jnp.where(state.pickup < p.reload_knee, p.reload_fast_rate, p.reload_rate)
-    pickup = state.pickup + climb * p.delta_t
-    pickup = jnp.where(pickup >= day, NOT_RELOADING, pickup)
+    # The turbine's load moves at the rate the third action asks for, from the
+    # plan's load if it was on its plan. After a trip's restart it loads no faster
+    # than the conditioning ramps (``ReactorParams.restart_load``), and it does not
+    # unload below the restart load, nor take more than its valves pass wide open
+    # on the steam it has, nor load while Tavg is its stop's setpoint under its
+    # program (``ReactorParams.loading_stop``). The plan is the most it takes: once
+    # it meets the plan it is on it, and the conditioning is over.
+    on_plan = state.pickup > 0.5 * NOT_RELOADING
+    held = jnp.where(
+        on_plan, planned_load(plan_seconds(state.physics_time, state, p), state),
+        state.pickup,
+    )  # fmt: skip
+    climb = jnp.where(held < p.reload_knee, p.reload_fast_rate, p.reload_rate)
+    most = jnp.where(state.conditioning > 0.5, climb, p.turbine_rate)
+    T_avg = 0.5 * (state.T_coolant + state.T_cold)
+    most = jnp.where(state.T_ref - T_avg >= p.loading_stop, 0.0, most)
+    rate = jnp.clip(action[2] * p.turbine_rate, -p.turbine_rate, most)
+    pickup = jnp.maximum(held + rate * p.delta_t, jnp.minimum(held, p.restart_load))
+    pickup = jnp.minimum(pickup, turbine_capacity(state.T_sg, p))
+
+    # LCO 3.4.1 Condition B: past its 2 h to restore Tavg the unit shuts down to
+    # MODE 2 within 6 h, along a straight line (``ReactorParams.dnb_restore``);
+    # LCO 3.1.6 Condition D likewise past the rods' 2 h, to no load (keff < 1).
+    def shutdown(clock, restore, allowed, floor):
+        into = (clock - restore) / (allowed - restore)
+        return into > 0.0, 1.0 - (1.0 - floor) * jnp.clip(into, 0.0, 1.0)
+
+    dnb_on, dnb = shutdown(state.above_dnb, p.dnb_restore, p.dnb_allowed, p.mode_2_load)
+    ril_on, ril = shutdown(state.ril_outside, p.ril_restore, p.ril_allowed, 0.0)
+    line = jnp.minimum(jnp.where(dnb_on, dnb, 1e9), jnp.where(ril_on, ril, 1e9))
+    pickup = jnp.where(
+        dnb_on | ril_on, jnp.minimum(jnp.minimum(day, pickup), line), pickup
+    )
+    meets = pickup >= day - ON_PLAN
+    pickup = jnp.where(meets, NOT_RELOADING, pickup)
+    conditioning = jnp.where(meets, 0.0, state.conditioning)
     new_load = jnp.minimum(day, pickup) + wobble
+
+    # The offset's three clocks (``penalty_rate``, ``offset_limit``).
+    off = jnp.abs(delta_I - new_n * p.ao_ref)
+    strict = (new_n >= p.ao_strict_power) & (off > p.ao_band)
+    far = (
+        (new_n >= p.ao_half_power)
+        & (new_n < p.ao_strict_power)
+        & (off > offset_limit(new_n, p))
+    )
 
     return (
         state.replace(
@@ -1011,6 +1280,7 @@ def compute_next_state(
             Xe_tilt=Xe_tilt,
             delta_I=delta_I,
             boron=boron,
+            boron_carry=boron_carry,
             target_n=new_load,
             T_ref=tavg_program(new_load, p),
             load_wobble=wobble,
@@ -1022,8 +1292,9 @@ def compute_next_state(
             below_floor=jnp.where(
                 0.5 * (T_hot + T_cold) < p.T_avg_min, state.below_floor + p.delta_t, 0.0
             ),
-            ao_outside=state.ao_outside
-            + p.delta_t * (jnp.abs(delta_I - new_n * p.ao_ref) > p.ao_band * new_n),
+            ao_outside=state.ao_outside + p.delta_t * penalty_rate(delta_I, new_n, p),
+            ao_strict=jnp.where(strict, state.ao_strict + p.delta_t, 0.0),
+            ao_far=jnp.where(far, state.ao_far + p.delta_t, 0.0),
             above_dnb=jnp.where(
                 0.5 * (T_hot + T_cold) > tavg_dnb_limit(p),
                 state.above_dnb + p.delta_t,
@@ -1036,6 +1307,7 @@ def compute_next_state(
             ),
             physics_time=new_physics_time,
             pickup=pickup,
+            conditioning=conditioning,
         ),
         metrics,
     )
@@ -1052,11 +1324,16 @@ def get_obs(state: ReactorState, params: ReactorParams):
     Partially observable: the agent sees only measurable quantities.
 
     ``obs = [n, T_hot, rod position, load, T_avg, T_ref, delta_I, boron, to_down,
-    to_up, xenon's power, ramp rate, minimum load]``, the rod position in [-1, 1]
-    with +1 fully out, as the demand is. ``to_down`` and ``to_up`` are the hours
-    until the planned ramps start, 0 once they have, and the day's ramp rate (% of
-    rated load a minute) and minimum load are its program's: the dispatch an
-    operator gets in advance (OAPS, section 1), so boron can lead its delay.
+    to_up, xenon's power, ramp rate, minimum load, cycle point, plan's load,
+    penalty time]``, the rod position in [-1, 1] with +1 fully out, as the demand
+    is. ``to_down`` and ``to_up`` are the hours until the planned ramps start, 0
+    once they have, and the day's ramp rate (% of rated load a minute) and minimum
+    load are its program's: the dispatch an operator gets in advance (OAPS,
+    section 1), so boron can lead its delay. The cycle point is the fraction of the
+    cycle the core has burnt, which the operator's curve book is indexed by; the
+    plan's load is the dispatch's now, which the turbine's load (``load``) may sit
+    under; the penalty time is the offset's, in hours over the last 24 h, as the
+    process computer keeps it (NUREG-1431, B 3.2.3A).
 
     Hidden: C_i, T_fuel, T_sg, iodine, xenon, and the boron on its way.
     """
@@ -1077,6 +1354,9 @@ def get_obs(state: ReactorState, params: ReactorParams):
             state.xenon_power,
             state.plan_rate * 6000.0,
             1.0 - state.plan_depth,
+            cycle_point(state, params),
+            planned_load(now, state),
+            state.ao_outside / 3600.0,
         ]
     )
 
@@ -1135,16 +1415,15 @@ def compute_reward_terms(
         * p.e_floor
         * R.tracking_cost(error, p.e_floor, p.e_tol, p.tracking_exponent, xp)
     )
-    # Past the offset's allowed hour, the derate's lost output.
+    # Where the offset's specification asks for a power reduction, its lost output.
     per_GW_s = p.P_electric_GW * 1000.0 * p.derate_price_per_MWh / 3600.0
-    derated = xp.where(
-        state.ao_outside >= p.ao_allowed, xp.maximum(state.n - p.derate_to, 0.0), 0.0
-    )
+    derated = xp.maximum(state.n - required_power(state, p, xp), 0.0)
     tracking = tracking + per_GW_s * derated * p.delta_t
-    # While the turbine reloads after a restart, the plan it does not take is lost
-    # output, priced as the derate's and the trip's are. The trip's lump prices only
-    # the dead time before the restart (long-strata R8), so the reload the dynamics
-    # play out is paid here, once. 0 before any trip, as the plan is the load.
+    # The plan the turbine does not take is lost output, priced as the derate's and
+    # the trip's are, whether the operator holds the turbine back or it reloads
+    # after a restart. The trip's lump prices only the dead time before the restart
+    # (long-strata R8), so the reload the dynamics play out is paid here, once. 0
+    # while the turbine is on its plan.
     plan = planned_load(plan_seconds(state.physics_time, state, p), state, xp)
     short = xp.maximum(plan - state.pickup, 0.0)
     tracking = tracking + per_GW_s * short * p.delta_t
@@ -1167,7 +1446,7 @@ def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):
     error is worth the same increment, from the plant's operating envelope down
     to ``precision_floor``, the finest error an ex-core detector can resolve.
 
-    This replaced a Gaussian on ``reward_band``, which was effectively zero --
+    This replaced a Gaussian on a 3 % flux band, which was effectively zero --
     no gradient at all -- beyond about 10% error, and which stopped
     discriminating just where a good controller operates. See
     docs/reward-shaping.md.
@@ -1209,27 +1488,3 @@ def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
         R.total(compute_reward_terms(state, params, xp), xp),
         xp,
     )
-
-
-def compute_revenue_rate(state: ReactorState, params: ReactorParams):
-    """
-    Instantaneous revenue rate in k$/hour (for visualisation only).
-
-    revenue  = delivered_power × spot_price
-    penalty  = |deviation| × imbalance_price
-    net_rate = revenue - penalty
-
-    At perfect tracking with n=target=1.0 and 1 GWe @ $80/MWh:
-    revenue = $80k/h.  A 5% error costs an extra $12k/h in imbalance fees.
-    """
-    P_MW = params.P_electric_GW * 1000.0 * state.n
-    revenue = P_MW * params.spot_price_per_MWh  # $/h
-    imbalance_price = params.spot_price_per_MWh * params.imbalance_factor
-    penalty = (
-        jnp.abs(state.n - state.target_n)
-        * params.P_electric_GW
-        * 1000.0
-        * imbalance_price
-    )
-    net = revenue - penalty
-    return net / 1000.0  # k$/h

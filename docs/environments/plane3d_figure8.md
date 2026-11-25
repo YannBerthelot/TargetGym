@@ -1,5 +1,8 @@
 # 3D figure-8
 
+!!! note "Extra task"
+    3D figure-8 is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: no airliner duty and solved (2026-11-24, owner's decision, aircraft five-task review): no transport duty and no sourced manoeuvre stand behind the pattern, 84 % of the reference's cost is its wings-level start, and after it the reference is 1 m from the curve (plane3d/PHYSICS.md, Status).
+
 <p align="center"><img src="../../videos/plane3d_figure8/pid_output.gif" width="480px"/></p>
 
 Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The bank has to reverse through wings level at every crossover, and the observation gives the vector to the nearest point of the path and the path's heading there, but not its curvature. The half-width is 34 to 36 km, so the tips, of radius a / 3, take 25 deg of bank at 230 m/s and less at the speed flown. They used to be 2.7 to 4 km, 46 to 57 deg at 200 m/s. A lap is 183 km, so 1000 steps reach both tips at the slowest speed the schedule flies.
@@ -17,6 +20,7 @@ env, params = tg.make("plane3d_figure8")
 | Tracked variable(s) | distance to path (m) |
 | Episode length | 1000 steps of 1 s (16.7 min) |
 | Cite as | `plane3d_figure8-v7` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -52,10 +56,12 @@ actuator range inside the environment.
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -63,7 +69,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 33 fields.
+`reset` samples the initial condition and the target; state has 42 fields.
 
 ## Episode end
 
@@ -73,7 +79,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 
@@ -106,6 +112,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `surface_rate_limit` | 0.523599 | rad/s |
 | `load_factor_max` | 2.5 | g |
 | `load_factor_min` | -1 | g |
+| `ap_load_increment` | 0.2 | g |
 | `vmo_eas` | 180.056 | m/s |
 | `mmo` | 0.82 | - |
 | `buffet_mach` | 0.3 | - |
@@ -113,11 +120,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `bank_limit` | 1.0472 | rad |
 | `aspect_ratio` | 9.48 | - |
 | `aileron_effectiveness` | 0.4 | - |
-| `cl_alpha` | 0.08786 | 1/deg |
+| `cl_alpha` | 0.08378 | 1/deg |
+| `sweep_half_chord` | 0.38186 | rad |
 | `cl0` | 0.2 | - |
 | `cd0` | 0.02 | - |
 | `k` | 0.045 | - |
-| `aoa_stall` | 15 | deg |
+| `aoa_stall` | 15.5 | deg |
 | `CL_max` | 1.5 | - |
 | `CL_min` | -1 | - |
 | `aoa_stall_width` | 3 | deg |
@@ -125,12 +133,21 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `k_shock_stall` | 4 | - |
 | `shock_stall_floor` | 0.25 | - |
 | `k_drag` | 5 | - |
-| `I` | 9000000 | kg.m^2 |
-| `I_x` | 2500000 | kg.m^2 |
-| `moment_arm_stabilizer` | 15 | m |
-| `moment_arm_wings` | 1.5 | m |
-| `stabilizer_surface` | 27 | m^2 |
-| `elevator_surface` | 10 | m^2 |
+| `pitch_gyration_radius` | 8.666 | m |
+| `roll_gyration_radius` | 5.039 | m |
+| `moment_arm_stabilizer` | 13.36 | m |
+| `moment_arm_wings` | 0.822 | m |
+| `stabilizer_surface` | 31 | m^2 |
+| `tail_cl_alpha` | 0.07021 | 1/deg |
+| `tail_aspect_ratio` | 5 | - |
+| `tail_sweep_half_chord` | 0.411 | rad |
+| `tail_k` | 0.0796 | - |
+| `tail_CL_max` | 1 | - |
+| `tail_aoa_stall` | 15 | deg |
+| `tail_efficiency` | 0.9 | - |
+| `elevator_effectiveness` | 0.5 | - |
+| `downwash_ratio` | 1 | - |
+| `stabilizer_setting` | 0.02417 | rad |
 | `wingspan` | 35.8 | m |
 | `aileron_surface` | 6 | m^2 |
 | `moment_arm_aileron` | 14 | m |
@@ -165,11 +182,32 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wind_x` | 0 | m/s |
 | `wind_y` | 0 | m/s |
 | `wind_z` | 0 | m/s |
-| `turbulence_sigma` | 1.2 | m/s |
+| `turbulence_sigma` | 0.564 | m/s |
 | `turbulence_theta` | 0.2 | 1/s |
 | `turbulence_scale_length` | 533.4 | m |
 | `gust_roll_rate` | 0 | rad/s |
 | `wind_shear_x` | 0 | 1/s |
 | `wind_shear_y` | 0 | 1/s |
 | `shear_ref_alt` | 0 | m |
+| `target_cas` | 149.189 | m/s |
+| `target_mach` | 0.78 | - |
+| `speed_band` | 5.14444 | m/s |
+| `mach_band` | 0.02 | - |
+| `e_tol_heading` | 0 | rad |
+| `e_tol_path` | 0 | m |
+| `assigned_speed_mode` | 0 | - |
+| `holding_rate` | 0.0523599 | rad/s |
+| `holding_bank` | 0.523599 | rad |
+| `hold_design_bank` | 0.436332 | rad |
+| `cost_index` | 30 | kg/min |
+| `economy_weight` | 0 | - |
+| `economy_scale` | 1.242 | kg/s |
+| `heading_clearance_period` | 0 | s |
+| `protected_bank` | 0.523599 | rad |
+| `holding_split_altitude` | 4267.2 | m |
+| `holding_leg_low` | 60 | s |
+| `holding_leg_high` | 90 | s |
+| `holding_cap_low` | 118.322 | m/s |
+| `holding_cap_high` | 136.328 | m/s |
+| `wind_tau` | 2010 | s |
 

@@ -15,6 +15,24 @@ Status: ✅ validated · ⚠️ defensible but approximate · ❌ known deviatio
 
 ---
 
+## Status: `plane3d_circle` and `plane3d_figure8` are Extra, 2026-11-24
+
+The owner's decision on the aircraft five-task review: the circle and the
+figure-8 leave the core pool, solved and with no airliner duty behind them.
+`plane3d_heading` and `plane3d_racetrack` are not affected. Both stay
+registered with their plant, expert, oracle and tests; in code each is
+`EnvSpec.extra`, so `registry.benchmark_specs()` leaves it out, and their
+capability tags are empty. The reasons, measured on seeds 100 to 109:
+
+- **No duty.** No source makes a constant-radius orbit a transport duty, and
+  the figure-8 is neither eights on pylons nor a documented loiter
+  (`plane/EXTRA.md`). The airliner's holding duty is `plane3d_racetrack`.
+- **Solved after the start.** 87 % (circle) and 84 % (figure-8) of the
+  reference's cost falls in the first minute, which starts wings level on a
+  curve. After it the circle's reference holds 0.76 m of height and 0.60 m
+  of path, and the figure-8's is 0.96 m from the curve, RMS: any band a
+  source could give leaves it at 0.
+
 ## 1. What the third dimension adds
 
 Three things, and nothing else:
@@ -150,7 +168,8 @@ Fly a holding pattern, two straight legs joined by half circles, at a target
 altitude with the 3D airliner. The observation gives the signed cross-track
 error, the tangent heading and the curvature at the nearest point of the
 pattern, so the work is in the transitions between straight and turning
-flight.
+flight. What the hold costs is the fuel it burns, at whatever speed the
+aircraft flies under the maximum holding airspeed.
 
 | obs | meaning |
 |---|---|
@@ -167,7 +186,7 @@ flight.
 | 19 | heading of the pattern at the nearest point (rad) |
 | 20 | signed curvature at the nearest point, 0 on the legs (1/m) |
 | 21 | the hold's half leg (m) |
-| 22 | assigned speed, as a true airspeed (m/s) |
+| 22 | the speed the aircraft holds at, green dot for its mass, as a true airspeed (m/s) |
 | 23 | airspeed, against the wind and gust (m/s) |
 | 24 | normal load factor (g) |
 
@@ -479,7 +498,9 @@ right turns.
 **Score (rule 15).** Squared excess past each band, in band widths, per second.
 Altitude +-65 ft [RVSM]. Speed +-10 kt [AIM 4-4-12]: the cruise schedule on the
 heading task, 10 kt under the holding cap on the racetrack, 230 KIAS to 14 000 ft
-and 265 above [IFH ch. 10]. Heading +-10 deg [ACS IR.III.B.S4]: on the heading
+and 265 above [IFH ch. 10] (since 2026-11-23 the hold is assigned green dot and only the
+cap is priced, and the heading band travels at a 25 deg turn's rate: the end of
+this page). Heading +-10 deg [ACS IR.III.B.S4]: on the heading
 task about a heading that turns toward the target at a holding turn's rate from
 the clearance (the band travels with that turn), so a turn at that rate or faster
 costs nothing (F3: the
@@ -493,7 +514,7 @@ terminal CDI scale, 1 389 m [ACS IR.III.B.S4, AIM 1-1-17].
 | CDI scale | terminal +-1 NM, not en route +-5 NM | ours: the tighter of the two the AIM gives |
 | holding turn | 3 deg/s or 30 deg, the lesser | cited: IFH ch. 10 |
 | inbound leg | 60 s to 14 000 ft, 90 s above | cited: IFH ch. 10 |
-| holding speed | the cap less 10 kt; caps 230 and 265 KIAS | caps cited (IFH ch. 10); the 10 kt under is ours, so the band's edge is the cap |
+| holding speed | green dot for the mass, under the cap; caps 230 and 265 KIAS (until 2026-11-23: the cap less 10 kt, ours) | caps cited (IFH ch. 10); green dot cited [SF24] and derived on the plant |
 | heading-change size | uniform in +-180 deg | ours: ATC vectors of any size; no source for a distribution |
 | episodes | 600 s heading, 1 200 s racetrack | ours: the longest turn then a held heading; three laps of the slowest hold |
 | `turbulence_sigma`, zone | 0.55 m/s, 3 to 30 min | as the 2D aircraft (derived; BEA447) |
@@ -570,7 +591,7 @@ hold (1.5 min legs, 265 KIAS cap) [IFH ch. 10].
 | heading-change size | uniform over the compass | ours: vectors of any size |
 | steady winds | 30, 50, 67 kt | ours, family range calm to the holding area's design wind 2h + 47 kt (secondary, REALITY.md) |
 | worst zone | 1.375 m/s | derived: 2.5 x 0.55 m/s, the load linear in the gust |
-| scenario weights | heading: normal 0.35, calm 0.30, worst 0.05, 30 kt 0.20, 50 kt 0.10, long zone 0.05; racetrack: normal 0.35, calm 0.30, worst 0.05, 30 kt 0.20, low hold 50 kt 0.07, design wind 0.02, high hold 50 kt 0.08 (shares of operating time, normalised) | ours, family ranges in `plane3d/scenarios.py`; no source gives how often a wind aloft is met |
+| scenario weights | heading: normal 0.51, calm 0.44, worst 0.05, long zone 0.05, no steady wind since 2026-11-23 (it was normal 0.35, calm 0.30, 30 kt 0.20, 50 kt 0.10); racetrack: normal 0.35, calm 0.30, worst 0.05, 30 kt 0.20, low hold 50 kt 0.07, design wind 0.02, high hold 50 kt 0.08 (shares of operating time, normalised) | ours, family ranges in `plane3d/scenarios.py`; no source gives how often a wind aloft is met |
 
 **What the reference does on it**, whole-episode cost on seeds 0 to 4:
 
@@ -585,6 +606,10 @@ hold (1.5 min legs, 265 KIAS cap) [IFH ch. 10].
 | low hold, 50 kt | | 400 to 834 |
 | low hold, 67 kt | | 1 130 to 2 203 |
 | high hold, 50 kt | | 166 to 665 |
+
+**The racetrack column is out of date.** It was measured before Amendment 4 sized the
+hold's turns for its wind; since then the reference costs 0 in every wind too (the
+review of 2026-11-23, at the end of this page).
 
 The racetrack's figures are on v8 (+-100 ft); on v7's +-65 ft they were the same to
 within 2 % (seed 104 of the low holds 576 and 1 113), since the reference's
@@ -641,8 +666,9 @@ radius is `(TAS + wind)^2 / (g tan 25 deg)` (`hold_design_bank`). Test:
 `test_the_holds_downwind_turn_is_flyable_in_its_wind`.
 
 **What the operator pays.** `plane3d_heading` charges `economy` as `plane` does (fuel
-and time by the cost index per air distance, plane/PHYSICS.md); the racetrack does
-not (a hold's time is ATC's).
+and time by the cost index per air distance, plane/PHYSICS.md); the racetrack
+charged nothing until 2026-11-23 and now charges its fuel per second (a hold's
+time is ATC's, so nothing per distance).
 
 **Scenarios.** The light sigma is re-derived at 5 500 m on the airplane's own lift
 slope, 6.23 /rad at M 0.61: dn/dw = 0.0714 g per m/s, so 0.564 m/s (was 0.55), the
@@ -865,3 +891,189 @@ intensity. Sources and searches: plane/REALITY.md, "The stream". What differs:
   their paths never run out.
 
 In a window nothing changes (PR description: bit-identical, traced and constant).
+
+## Review of 2026-11-23: what the reference pays, and what is left
+
+Measured on the tasks as they stand on `int/amendment3`, noise scale 1, with
+`scripts/plane3d_review.py` (one process, a few seconds a table). Sources:
+[REALITY.md](REALITY.md) and [plane/REALITY.md](../plane/REALITY.md). Nothing in
+this section changes a task: the proposals at its end wait for the owner.
+
+**Both references pay nothing they could avoid.** Whole-window cost on seeds 0 to 4:
+
+| Scenario | `plane3d_heading`: bands | fuel and time (`economy`) | `plane3d_racetrack`: bands | fuel burned, kg |
+|---|---|---|---|---|
+| normal | 0 | 655 to 668 | 0 | 933 to 975 |
+| calm | 0 | 654 to 671 | 0 | 935 to 976 |
+| worst zone | 0 to 0.19 | 656 to 668 | 0 | 929 to 973 |
+| 30 kt wind | 0 | 655 to 668 | 0 | 927 to 965 |
+| 50 kt wind | 0 | 655 to 668 | | |
+| zone over the window | 0 | 654 to 669 | | |
+| severe zone (share 1e-4) | 449 to 5 493, speed 76 to 105 | 635 to 674 | | |
+| low hold, 50 kt | | | 0 | 930 to 937 |
+| low hold, 67 kt | | | 0 to 0.22 | 926 to 934 |
+| high hold, 50 kt | | | 0 | 923 to 950 |
+
+The racetrack costs 0.001 per window over its weighted suite, against the 123 of
+Amendment 3's table: the hold's turns are now sized for its wind, and the largest
+path error is 173 m of the 1 389 m band, in the 67 kt wind. Under the charter both
+tasks are solved (J5). The heading task's cost is its `economy`, 1.09 to 1.12 a second,
+and the racetrack charges none.
+
+**A steady wind does nothing on the heading task.** A vector is a heading flown at an
+airspeed and a level, and a uniform steady wind leaves the motion through the air
+unchanged. Seed by seed the 30 kt and 50 kt scenarios cost within 0.02 of `normal`
+(654.772, 654.774 and 654.776 on seed 0), the difference being sensor noise on the
+ground velocities. The two wind scenarios hold 0.29 of the suite's weight and repeat
+`normal`.
+
+**The heading band travels at the plant's own limit.** The band moves toward the
+target at the rate of a 30 deg turn, and 30 deg is also `protected_bank`. So only one
+bank is free of charge. A reference limited to 28 deg saves 0.12 % of `economy` and
+gains 0.03 % in all; at 25 deg, the AIM's bank with a flight director [AIM538] and
+the lower end of the family range this page gives for the A320, it pays 827 a window
+against 663 (8 paired seeds, `normal`). The task charges a quarter more for a turn
+inside the family's range.
+
+**There is nothing to gain on speed on the heading task.** Its `economy` is flat in
+speed: 8 kt fast, still inside the +-10 kt band, costs 0.09 % less; 10 kt slow costs
+0.35 % more. Turning takes 41 % of the window and burns 0.908 kg/s against 0.849
+level, so turns are 2.8 % of the fuel, set by the size of ATC's vectors and by the
+band above. What a ceiling could find is of the order of 0.1 %.
+
+**The hold is assigned a speed its aircraft would not hold at.** An A320 holds at
+green dot, about its best lift-to-drag speed, "computed to minimize drag and thus,
+the fuel consumption" in the hold, from its weight and level [SF24]. The plant's
+least fuel flow, wings level (`polar`): 220 kt at 73.5 t (2 640 to 2 720 kg/h, L/D
+17), 195 to 200 kt at 60 t, 225 kt at 78 t. The task assigns 10 kt under the cap:
+220 KIAS up to 14 000 ft, which is the plant's green dot at 73.5 t, and 255 KIAS
+above, 35 kt over it. On the high hold, flying 232 KIAS burns 6.2 % less than the
+assigned 255 (8 paired seeds, standard error 0.07), and the score charges 1 942 a
+window for it, since it prices both sides of the assigned speed. The sources give
+a maximum holding airspeed, not an assigned one [AIM538, IFH ch. 10]; no lower limit
+was found besides the aircraft's protection.
+
+**With fuel as the hold's cost, a small saving is left, beyond seed noise.**
+Unregistered prototype: the high hold assigned 220 KIAS (`--set
+holding_cap_high=118.32`), 73.5 t, 10 paired seeds, the reference's guidance read on
+a pattern a few hundred metres wider inside the 1 389 m path band, so its turns need
+less bank.
+
+| Move | Still air | 50 kt wind |
+|---|---|---|
+| turns 300 m wider | -0.29 % (se 0.05; -0.49 to -0.09) | -0.09 % (se 0.02; -0.20 to +0.02) |
+| turns 600 m wider | -0.59 % (se 0.07; -0.92 to -0.29) | -0.19 % (se 0.03; -0.32 to -0.03) |
+| 5 kt under green dot | | -0.46 % (se 0.02; -0.56 to -0.38) |
+
+In the hold the aircraft turns 58 to 65 % of the time and burns 0.80 kg/s in a
+25 deg turn against 0.73 level. These moves are a floor on the room, not a ceiling's
+measure: an oracle on the 3D plant is still to build (the registry's note).
+
+**What the saving is worth (ours, on [NATS-HOLDS]).** 10 000 flights a month at 7.5
+min are 15 000 h a year in one airport's holds. NATS pairs "more than 3,000 hours"
+with "more than 11,000 tonnes of fuel", 3.7 t an hour over Heathrow's fleet (the
+plant's A320 burns 2.8 to 2.9 t/h in its hold), so about 55 000 t of fuel a year. One percent is
+550 t of fuel and 1 750 t of CO2 a year at one airport; the 0.3 to 0.6 % shown
+above, 165 to 330 t. Were every hold there flown 35 kt over green dot, the 4 to 6 %
+would be 2 200 to 3 300 t, which is why the aircraft holds at green dot.
+
+**Smaller findings.**
+- In a crosswind the hold starts with the nose, not the track, on the inbound leg:
+  up to 13 deg off the leg in the 67 kt wind, 0.22 of cost on its first seconds.
+- The roll loop passes the protected 30 deg by 4 to 6 deg at every turn entry (34 to
+  36 deg on both tasks). It is the plant's inner loop (`plane/dynamics.py`).
+- The hold's entry [AIM538] is not in the task; it starts established, as B5 asks.
+  Its legs are a fixed distance, the airspeed's minute, as an RNAV hold's are
+  [AIM538], so in wind the inbound leg does not take a minute.
+
+**Proposed to the owner, who chose both on 2026-11-23:** the next section.
+
+## The hold's fuel and the vector's band (2026-11-23)
+
+The owner's decisions on the review above. Tests:
+`tests/plane3d/test_plane3d_hold.py`, `tests/plane3d/test_plane3d_reality.py`,
+`tests/plane/test_aircraft_scenarios.py`. Both versions are unreleased, so they keep
+their numbers and are stamped again in place (`plane3d_racetrack-v10`,
+`plane3d_heading-v9`); their baselines are out of date until the next re-record.
+
+**`plane3d_racetrack`: the hold costs its fuel** (`plane3d/hold.py`).
+- *Cost.* `economy` is the engine's fuel flow, in kg a second: the time in a hold
+  is ATC's, so nothing is charged per distance and there is no cost index. The
+  bands are as they were (level, path, the pattern's direction).
+- *Assigned speed.* Green dot for the aircraft's mass, or the maximum holding
+  airspeed where that is less [SF24, AIM538]. The observation's assigned speed and
+  the pattern's size (its turns at 25 deg, its leg the speed's minute) follow it.
+- *Speed limit.* Only the maximum holding airspeed is priced: past it, the squared
+  excess in 10 kt widths a second. Under it nothing is charged: the sources give no
+  minimum, and the aircraft's protection holds the low side.
+
+| Number | Value | Status |
+|---|---|---|
+| `GREEN_DOT_CAS` | 219.5 kt at 73.5 t, as the square root of the mass | derived: the plant's level-flight thrust is least at 218.1 to 222.2 kt between 3 000 and 8 000 m at 73.5 t, 196.8 to 199.9 at 60 t, 224.7 to 229.3 at 78 t (`scripts/plane3d_review.py polar`); cited as the holding speed [SF24] |
+| maximum holding airspeed | 230 KIAS to 14 000 ft, 265 above | cited [AIM538, IFH ch. 10]; never reached by green dot between 60 and 78 t |
+| price past the cap | (excess / 10 kt)^2 a second | ours, as every band's price; the width is AIM 4-4-12's |
+| `economy_scale`, `cost_index` | 1 kg/s, 0 | the unit is the kilogram; no cost of time [NATS-HOLDS: the hold's length is ATC's] |
+
+**`plane3d_heading`: the band and the suite.**
+- The heading band travels at the rate of a 25 deg turn (`holding_bank`), the AIM's
+  bank with a flight director and the bottom of the family's 25 to 30 deg
+  [AIM538], so a turn anywhere in that range is inside it. At its top level the
+  band of a 180 deg vector now takes 150 s to arrive, the clearances' spacing.
+- No steady-wind scenario: their 0.3 of the weight went back to `normal` and
+  `calm` in proportion (0.51 and 0.44).
+- It stays listed as solved (charter J5), outside the flagship.
+
+**What the reference does on it**, whole-window cost on seeds 0 to 4:
+
+| Scenario | `plane3d_heading` (bands; `economy`) | `plane3d_racetrack` (bands; fuel, kg) |
+|---|---|---|
+| normal | 0; 655 to 668 | 0; 910 to 937 |
+| calm | 0; 654 to 671 | 0; 913 to 940 |
+| worst zone | 0 to 0.21; 656 to 668 | 0; 909 to 935 |
+| zone over the window | 0; 654 to 669 | |
+| severe zone (share 1e-4) | 438 to 5 202 | |
+| 30 kt wind | | 0; 899 to 927 |
+| low hold, 50 kt | | 0; 928 to 936 |
+| low hold, 67 kt | | 0 to 0.22; 924 to 932 |
+| high hold, 50 kt | | 0; 894 to 914 |
+
+Weighted over its suite the racetrack's reference costs 921.9 a window, 0.768 kg a
+second, all of it fuel; the heading task's 662.4, as before. The high hold burns
+3.3 % less than at the 255 KIAS it was assigned.
+
+**A floor on the racetrack's room**, the same two moves on the task as built (10
+paired seeds; the cost is the task's own, bands included):
+
+| Move | Calm | 30 kt wind | High hold, 50 kt |
+|---|---|---|---|
+| 5 kt under green dot | -0.44 % (se 0.04) | -0.53 % (se 0.04) | -0.40 % (se 0.02) |
+| and turns 300 m wider | -0.70 % | -0.63 % | -0.45 % |
+
+Every seed gains from the slower speed (-0.66 to -0.30 %): the pattern is a fixed
+track, so flying it slower takes less bank, and the hold turns 59 to 64 % of the
+time. Wider than 300 m the path and direction bands start to charge. So the room is
+at least 1.005 to 1.007 and beyond seed noise, the nearly saturated kind; its
+measure waits for the 3D oracle.
+
+**Known deviations.** Windows fly 73.5 t, so green dot moves with the mass only in
+a stream (60 to 78 t a hold). Green dot is fixed at each mass over the task's
+levels, where the plant's least-thrust speed moves by 4 kt. The crosswind start and
+the roll loop's overshoot of the protected bank, above, are unchanged. `env.py`
+still carries the earlier holding speed (`assigned_speed_mode` 1 in
+`assigned_cas_3d`), unused by the racetrack: `env.py` is in the patrol family's
+fingerprints, so it was left for the tidy-up.
+
+**What rests on the plant's thrust margin (2026-11-23).** The 2D aircraft's review
+found the shared plant's thrust margin about 3.3 times Airbus's published one, with a
+scale of 0.795 on maximum thrust proposed to the owner (plane/PHYSICS.md once
+decided). Rerun with that scale (`--set thrust_output_at_sea_level=190800`), nothing
+in this section moves: fuel follows the thrust delivered, which in steady flight is
+the drag. The racetrack's reference costs 921.93 a window against 921.94, its bands
+0, the two moves save the same 0.40 to 0.76 %; the heading task's costs 662.2
+against 662.4, bands 0, the same flat speed lever; the least-thrust speed at 73.5 t
+is 219.7 kt at both scales, on a lever of 0.43 in place of 0.34. Only the heading
+task's severe zone (share 1e-4) changes seed by seed, where the throttle's reach
+matters. A fix that moved the drag rise or the polar instead, to land Airbus's
+max-range Mach, would move the least-thrust speed and every fuel figure:
+`GREEN_DOT_CAS` is then derived again, and
+`test_the_assigned_speed_is_the_plants_least_fuel_speed` fails until it is.

@@ -1,8 +1,11 @@
 # Wake surfing - A320 in trail
 
+!!! note "Under review"
+    Wake surfing - A320 in trail is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/wake_surf/pid_output.gif" width="480px"/></p>
 
-Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The station sits 0.87 of a span outboard and below by the vortex's sink; inside a 30 m box about it only the economy counts, so the cost falls where the follower finds the upwash, and the vortex core a span inboard can roll it past 60 deg, an upset (plane3d/PHYSICS.md, Amendment 4, wake surfing).
+Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. The station sits 1.2 to 1.3 spans from the lead's centreline, where the extended-formation trials flew, and on the vortex plane, below the lead by the pair's sink. Inside a 30 m box across the wake and 250 ft along it only the economy counts, so the cost falls where the follower finds the upwash. The upwash grows toward the vortex core, 0.8 to 0.9 span inboard, where a vortex can roll the follower past 60 deg, an upset (REALITY.md).
 
 ```python
 import target_gym as tg
@@ -14,9 +17,10 @@ env, params = tg.make("wake_surf")
 |---|---|
 | Action space | `Box((3,))`, all actions in [-1, 1] |
 | Observation space | `Box((26,))` |
-| Tracked variable(s) | slot error (m) |
+| Tracked variable(s) | distance across the wake (m) |
 | Episode length | 1800 steps of 1 s (30 min) |
 | Cite as | `wake_surf-v3` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
@@ -45,7 +49,7 @@ actuator range inside the environment.
 | 21 | throttle, 0 to 1 |
 | 22 | elevator deflection (rad) |
 | 23 | aileron deflection (rad) |
-| 24 | distance to the station (m) |
+| 24 | distance to the station across the wake (m) |
 | 25 | target distance, always 0 |
 
 ## Rewards
@@ -53,10 +57,12 @@ actuator range inside the environment.
 See the environment's `compute_reward`.
 
 Every environment in this suite scores on one contract. The reward is
-minus the sum of three non-negative costs,
-`-(tracking_cost + running_cost + failure_cost)`. The running cost
-charges consumption and the failure cost charges trips out of the
-operating envelope. The reward is never positive, and its scale differs
+minus the sum of non-negative costs: a tracking cost where the task
+holds a target, a running cost for what the plant consumes or fails to
+deliver, and a failure cost for trips out of the operating envelope.
+This task's terms are `tracking`, `economy`, `failure`, reported
+each step in `info["reward_terms"]`.
+The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
 priced in dollars or euros and the rest are dimensionless; the
 [per-plant summary](../reward-shaping.md#per-plant-summary) says which.
@@ -74,7 +80,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No MPC ships yet: the patrol's twin-autopilot oracle plans the slot, not the station's economy, and the shared solver is not wired to this task (owner, 2026-11-10).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No MPC ships yet: the patrol's twin-autopilot oracle plans the slot, not the station's economy, and the shared solver is not wired to this task (owner, 2026-11-10).
 
 ## Arguments
 
@@ -204,6 +212,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `holding_leg_high` | 90 | s |
 | `holding_cap_low` | 118.322 | m/s |
 | `holding_cap_high` | 136.328 | m/s |
+| `wind_tau` | 2010 | s |
 | `slot_tolerance` | 30 | m |
 | `heading_tolerance` | 0.5236 | rad |
 | `min_separation` | 40 | m |
@@ -215,6 +224,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `wake_strength` | 1 | - |
 | `wake_core_ratio` | 0.0582 | - |
 | `wake_decay_rate` | 0.2 | - |
-| `follower_spawn_noise` | 10 | m |
+| `follower_spawn_noise` | 2 | m |
 | `upset_bank` | 1.0472 | rad |
+| `spacing_tolerance` | 76.2 | m |
 

@@ -34,7 +34,7 @@ GAIN_NAMES: dict[str, tuple[str, ...]] = {
     "boiler_drum": ("Kp_level", "Ki_level", "Kp_pressure", "Ki_pressure"),
     "cement_kiln": ("Kp_inner", "Ki_inner"),
     "compressor_surge": ("kp_speed", "ki_speed", "kp_surge", "ki_surge"),
-    "cstr": ("Kp", "Ti"),
+    "cstr": ("Kp", "Ti", "Kv", "Tiv"),
     "distillation": ("Kp_T", "Ti_T", "Kp_D", "Ti_D", "Kp_B", "Ti_B"),
     "four_tank": ("Kp_1", "Ti_1", "Kp_2", "Ti_2"),
     "glass_furnace": ("Kp", "Ki"),

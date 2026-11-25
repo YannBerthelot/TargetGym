@@ -43,6 +43,8 @@ import numpy as np
 
 from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import (
+    core_at,
+    cycle_point,
     moderator_tilt,
     rod_balance,
     rod_insertion_limit,
@@ -67,6 +69,8 @@ from target_gym.reactor.experts import (
 SEEDS = tuple(range(100, 110))
 DT = 30.0
 PARK = 1.0 - 2.0 * 3.0 / 228.0  # the rod position at 225 steps, on the action's scale
+#: The third action: the turbine loads as fast as it may, so it follows its plan.
+TURBINE = jnp.asarray(1.0)
 DEAD_BAND = 1.6  # K, IAEA NP-T-3.23 annex II-5.1
 BAND_OVERRIDE = 0.04  # of offset, inside the 0.05 band
 STEPS_PER_MOVE = DT * 72.0 / 60.0 / 228.0 * 2.0  # the rods' reach in a step
@@ -137,6 +141,7 @@ def point(env, p, seed, load):
     their tilt cancels the coolant's so the offset sits at 0, boron critical."""
     q = p.replace(initial_xenon_power_range=(load, load))
     _, s = env.reset_env(jax.random.PRNGKey(seed), q)
+    core = core_at(cycle_point(s, q), q)  # the core where the reset drew it
     d, far = s.n.dtype, jnp.asarray(1e8, s.n.dtype)
     T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, q)
     lo, hi = 3.0 / 228.0, 0.5
@@ -145,14 +150,14 @@ def point(env, p, seed, load):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if rod_tilt(mid, q) < target else (lo, mid)
     y = max(0.5 * (lo + hi), q.rod_park)
-    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, q)
+    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, core)
     needed = needed - (rod_worth(y, q) - rod_worth(q.rod_park, q))
     level = jnp.asarray(load, d)
     return q, s.replace(
         n=level, C=steady_state_precursors(level, q), T_fuel=jnp.asarray(T_fuel, d),
         T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
         T_sg=jnp.asarray(T_sg, d), target_n=level, T_ref=jnp.asarray(tavg_program(level, q), d),
-        boron=jnp.asarray(q.boron_ref + needed / q.boron_worth, d),
+        boron=jnp.asarray(core.boron_ref + needed / core.boron_worth, d),
         rod_in=jnp.asarray(y, d), ramp_up_at=far,
         # Below full load the ramp down is long past, so the turbine sits at load_min.
         ramp_down_at=jnp.where(load < 1.0, -far, far),
@@ -248,7 +253,7 @@ def make_policy(tune, rung, p):
         # Every rung: the operator's xenon tool, with its play.
         xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = out + xenon
-        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
+        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0), TURBINE])
         return a, (u, b, target, e, ao, r, clock + DT, down, up, bt, I_x, Xe_x, debt)
 
     zero = jnp.asarray(0.0)
@@ -297,7 +302,7 @@ def procedure(p, tune):
         b = jnp.clip(b + tune.t_Kc * ((e - last_e) + DT / tune.t_Ti * e), -1.0, 1.0)
         xenon, I_x, Xe_x, debt = xenon_tool(I_x, Xe_x, debt, n, obs, clock, p)
         out = b + tune.ff * planned_step(clock, down, up) + xenon
-        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0)])
+        a = jnp.stack([u, jnp.clip(out, -1.0, 1.0), TURBINE])
         return a, (u, b, ao, e, clock + DT, down, up, I_x, Xe_x, debt, rc)
 
     zero = jnp.asarray(0.0)
@@ -330,7 +335,7 @@ def program_with(p, tune, rung):
         state, bm = memory
         a, state = rod_control_step(rc, state, obs[:6])
         b, bm = boron_act(bm, obs)
-        return jnp.stack([a[0], b[1]]), (state, bm)
+        return jnp.stack([a[0], b[1], TURBINE]), (state, bm)
 
     zero = jnp.asarray(0.0)
     return act, (RodControlState(zero, zero, zero), boron_memory)
@@ -397,14 +402,24 @@ def tavg_bump(q, s):
     """The dilution step for the Tavg bump, sized from the curve book (owner,
     2026-11-10): an operator knows the boron worth and the MTC, and steps so that
     the predicted rise over the hour after the line's delay ends at the DNB limit,
-    never more than ``BORON_BUMP``. A ppm moves Tavg ``-boron_worth / (alpha_coolant
-    + alpha_fuel)`` K; a unit of dilution takes ``dilution_flow * boron /
-    primary_mass`` ppm a second."""
+    never more than ``BORON_BUMP``. Since the plant has its safety valves
+    (2026-11-17) the step also keeps the steam under their set temperature, which
+    at part load comes first: a bump that lifts the valves reads the valves. That
+    room is counted from the line's shortest delay, so it holds on any day's
+    draw. A ppm moves Tavg ``-boron_worth / (alpha_coolant + alpha_fuel)`` K; a
+    unit of dilution takes ``dilution_flow * boron / primary_mass`` ppm a second."""
     per_ppm = -q.boron_worth / (q.alpha_coolant + q.alpha_fuel)
     per_unit = per_ppm * q.dilution_flow * float(s.boron) / q.primary_mass  # K/s
-    room = float(tavg_dnb_limit(q)) - float(tavg(s))
+    now = float(tavg(s))
     hour = (BUMP_STEPS - LEAD_STEPS) * DT
-    return -min(abs(BORON_BUMP), room / (abs(per_unit) * hour))
+    longest = (BUMP_STEPS - q.boron_delay_range[0]) * DT
+    relief = q.relief_temperature + q.P_thermal_ref * float(s.n) / q.UA_sg - now
+    dnb = float(tavg_dnb_limit(q)) - now
+    return -min(
+        abs(BORON_BUMP),
+        dnb / (abs(per_unit) * hour),
+        relief / (abs(per_unit) * longest),
+    )
 
 
 def boron_on_tavg(env, q, s):
@@ -416,12 +431,12 @@ def boron_on_tavg(env, q, s):
         env,
         q,
         s,
-        lambda m, o: (jnp.array([rods, 0.0]), m),
+        lambda m, o: (jnp.array([rods, 0.0, 1.0]), m),
         jnp.asarray(0.0),
         BUMP_STEPS,
     )
     step = tavg_bump(q, s)
-    a = jnp.array([rods, step])
+    a = jnp.array([rods, step, 1.0])
     tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
     slope, delay = integrator(tavg(tr) - tavg(still))
     return slope / step, max(delay, float(s.boron_delay) * DT)
@@ -454,7 +469,7 @@ def bumps(env, params):
     # Rods on Tavg: ROD_BUMP steps in from where the rods sit, an hour, open loop.
     def rods(q, s):
         du = -2.0 * ROD_BUMP / 228.0
-        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0])
+        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0, 1.0])
         tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
         k, lag, delay = fopdt(tavg(tr), float(tavg(s)))
         return k / du, lag, delay
@@ -507,7 +522,7 @@ def bumps(env, params):
     # The procedure's rods: ROD_BUMP steps in, boron held, an hour, on the offset.
     def rods_on_offset(q, s):
         du = -2.0 * ROD_BUMP / 228.0
-        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0])
+        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0, 1.0])
         tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
         k, lag, delay = fopdt(offset(tr), float(s.delta_I / s.n))
         return k / du, lag, delay
@@ -533,13 +548,112 @@ def bumps(env, params):
 
 
 # ---------------------------------------------------------------------------
+# The curve book and the turbine's thresholds, measured (owner, 2026-11-25)
+# ---------------------------------------------------------------------------
+
+#: The rule for the turbine's thresholds, set before the run, in standard deviations
+#: of the load's reading off its plan on a calm day: on its plan within two (a
+#: two-sided 95 %), reloading past ten (a turbine on its plan never leaves it), and
+#: a restart a fall of the turbine's fastest step plus three.
+ON_PLAN_SD, RELOAD_SD, RESTART_SD = 2.0, 10.0, 3.0
+
+
+def book_at(env, q, s):
+    """The physics tests at power at one point (the kind ANSI/ANS-19.6.1 sets for a
+    reload's startup), the rods as the reactivity yardstick: their worth curve is
+    the plant's calibration. A dilution bump at fixed rods reads K of Tavg per ppm;
+    ``ROD_BUMP`` steps in at fixed boron, read an hour on against a paired run,
+    reads the feedback, ``-drho / dT``, since at a fixed power the fuel follows the
+    coolant. Then the worth is ``-K x feedback``, and the moderator coefficient the
+    feedback less the fuel's Doppler coefficient, which is the core's design value.
+
+    A turbine swing at fixed rods was tried first and read the moderator
+    coefficient 25 % too negative: the swing moves the axial tilt's reactivity too
+    (``alpha_tilt``), which its balance leaves out."""
+    per_action, _ = boron_on_tavg(env, q, s)
+    k = per_action / (q.dilution_flow / q.primary_mass * float(s.boron))  # K/ppm
+    rods = 1.0 - 2.0 * s.rod_in
+    still = closed(
+        env, q, s, lambda m, o: (jnp.array([rods, 0.0, 1.0]), m), jnp.asarray(0.0),
+        BUMP_STEPS,
+    )  # fmt: skip
+    a = jnp.array([rods - 2.0 * ROD_BUMP / 228.0, 0.0, 1.0])
+    tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
+    dT = float(tavg(tr)[-1] - tavg(still)[-1])
+    moved = float(np.asarray(tr.rod_in)[-1])
+    drho = float(rod_worth(moved, q) - rod_worth(float(s.rod_in), q))
+    feedback = -drho / dT
+    return feedback - q.alpha_fuel, -k * feedback
+
+
+def load_wobble(env, params, seeds=SEEDS):
+    """The standard deviation of the turbine's load read off its plan (obs 3 less
+    obs 14) on a calm day, the plant held lined out at full power, as scored."""
+    hold = jnp.array([PARK, 0.0, 1.0])
+    sds = []
+    for seed in seeds:
+        q, s = point(env, params, seed, 1.0)
+        keys = jax.random.split(jax.random.PRNGKey(seed + 1), q.max_steps_in_episode)
+
+        def step(s, k):
+            o, s, _, _, _ = env.step_env(k, s, hold, q)
+            return s, o[3] - o[14]
+
+        off = jax.lax.scan(step, s, keys)[1]
+        sds.append(float(np.std(np.asarray(off))))
+    return float(np.median(sds))
+
+
+def measured_book(env, params):
+    """The curve book at the two ends of the load-following range, the median over
+    seeds of noise-free tests, and the turbine's thresholds by the rule."""
+    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
+    start, end = params.cycle_range
+    ends = []
+    for c in (start, end):
+        q = p.replace(cycle_range=(c, c))
+        fits = [book_at(env, *point(env, q, seed, 1.0)) for seed in SEEDS]
+        ends.append([float(np.median([f[i] for f in fits])) for i in (0, 1)])
+    sd = load_wobble(env, params)
+    return {
+        "book_alpha_coolant": ends[0][0], "book_alpha_coolant_end": ends[1][0],
+        "book_boron_worth": ends[0][1], "book_boron_worth_end": ends[1][1],
+        "book_cycle_end": float(end),
+        "on_plan": ON_PLAN_SD * sd, "reload_band": RELOAD_SD * sd,
+        "restart_drop": float(params.turbine_rate) * DT + RESTART_SD * sd,
+        "wobble_sd": sd,
+    }  # fmt: skip
+
+
+# ---------------------------------------------------------------------------
 # Scoring the rungs
 # ---------------------------------------------------------------------------
 
 
+def owed(state, params):
+    """What it takes to put the plant back on its feet where a day leaves it, in
+    dollars: the rods back at their park at their price a step, and the boron
+    moved by what then closes Tavg's error, at the effluent's price. The task's
+    score charges none of it; the family sweep does (owner, 2026-11-23)."""
+    q = core_at(cycle_point(state, params), params)
+    cold = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
+    back = rod_worth(q.rod_park, q) - rod_worth(state.rod_in, q)
+    # The ppm to add: Tavg's error is linear in the boron, as in the bump tests.
+    ppm = (-(q.alpha_coolant + q.alpha_fuel) * cold - back) / q.boron_worth
+    water = jnp.log(state.boron / (state.boron + jnp.minimum(ppm, 0.0)))
+    gap = q.boric_acid_ppm - state.boron
+    acid = jnp.log(gap / (gap - jnp.maximum(ppm, 0.0)))
+    travel = jnp.abs(state.rod_in - q.rod_park) * q.rod_stroke_steps
+    return (
+        q.effluent_price * q.primary_mass * (water + acid) + q.rod_step_price * travel
+    )
+
+
 def episode(env, p, seed, act, memory):
-    """One whole episode under ``act``; the true cost, the split and any trip."""
+    """One whole episode under ``act``; the true cost, the split, any trip, and
+    what the day adds to what the plant owes at its end (``owed``)."""
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+    owed_at_reset = owed(s, p)
 
     def step(carry, key):
         s, obs, memory = carry
@@ -553,12 +667,12 @@ def episode(env, p, seed, act, memory):
         )  # fmt: skip
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
-    _, (c, tr, ru, trip, ao, rod, boron, e, ril) = jax.lax.scan(
+    (last, _, _), (c, tr, ru, trip, ao, rod, boron, e, ril) = jax.lax.scan(
         step, (s, obs, memory), keys
     )
     return {
         "cost": jnp.sum(c), "tracking": jnp.sum(tr), "running": jnp.sum(ru),
-        "trips": jnp.sum(trip),
+        "trips": jnp.sum(trip), "owed": owed(last, p) - owed_at_reset,
         "past_band_steps": jnp.sum(jnp.abs(ao - p.ao_ref) > p.ao_band),
         "max_abs_offset": jnp.max(jnp.abs(ao - p.ao_ref)),
         "past_dead_band_steps": jnp.sum(jnp.abs(e) > p.e_tol),
@@ -574,6 +688,7 @@ def rows(env, p, act, memory):
     return {
         "cost_mean": float(out["cost"].mean()),
         "cost_by_seed": [round(float(x), 1) for x in out["cost"]],
+        "owed_by_seed": [round(float(x), 1) for x in out["owed"]],
         "tracking": float(out["tracking"].mean()),
         "running": float(out["running"].mean()),
         "seeds_tripped": int(np.sum(out["trips"] > 0)),
@@ -600,7 +715,7 @@ def main():
     table[PUBLISHED] = rows(env, p, act, memory)
     act, memory = procedure(p, tune)
     table[PROCEDURE] = rows(env, p, act, memory)
-    hold = lambda m, o: (jnp.array([PARK, 0.0]), m)  # noqa: E731
+    hold = lambda m, o: (jnp.array([PARK, 0.0, 1.0]), m)  # noqa: E731
     table["null: rods parked, no boron"] = rows(env, p, hold, jnp.asarray(0.0))
     rung_names = [k for k in table if k.startswith("rung")]
     clean = [k for k in rung_names if table[k]["seeds_tripped"] == 0]
@@ -632,4 +747,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if sys.argv[1:] == ["--book"]:
+        print(json.dumps(measured_book(Reactor(), ReactorParams()), indent=1))
+    else:
+        main()

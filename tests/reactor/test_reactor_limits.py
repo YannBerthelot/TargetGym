@@ -2,16 +2,22 @@
 
 Contracts, from the family's sources, written before the code:
 
-- Offset band as a penalty clock (EDF scope, Westinghouse allowance): time with the
-  axial offset outside +-0.05 of its reference counts at every power during load
-  follow. 1 h in 24 h is allowed (D.C. Cook and RAOC technical specifications)
-  and costs nothing. Past it the plant must derate to 50 % (the same
-  specifications), priced as that derate's lost output: the power above 50 % at
-  the spot price, $80/MWh on 1 GWe. At 50 % or below there is nothing to give up.
+- Offset band as a penalty clock: 1 h of penalty time in 24 h is allowed and costs
+  nothing. Past it the plant must derate to 50 %, priced as that derate's lost
+  output: the power above 50 % at the spot price, $80/MWh on 1 GWe. At 50 % or
+  below there is nothing to give up. How the time counts, the band's width and
+  the outer limits are the standard specification's since 2026-11-15, in
+  test_reactor_offset.py; until then time outside +-0.05 of offset counted in
+  full at every power.
 - Rod insertion limit (family shape, KAIST's lead): a straight line in power, 22 %
   of the stroke in at full power, 78 % at half. Time deeper than the limit counts,
-  resets once the rods are back above it, and 2 h of it (STS 3.1.6) ends the run
-  in hot standby.
+  and resets once the rods are back above it. The rods are the lead bank (bank D),
+  so STS 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0, ML21259A155, pages 3.1.6-1
+  and 3.1.6-2; Condition A covers only banks A, B and C): 2 h to restore; then
+  Condition D, MODE 2 with keff < 1.0 within 6 h, so the turbine unloads along a
+  straight line to no load over those 6 h, and the plant goes to hot standby at
+  2 h + 6 h (owner, 2026-11-25; until then hot standby at 2 h). By hand, 3 h into
+  the shutdown the turbine may carry 1 - 3 / 6 = 0.5 of rated load.
 - Trips are lost production at the spot price on 1 GWe: a scram's restart takes
   48 h (ours, family 24 to 70 h: Doel-3's 6 h shutdown then 18 h at reduced power,
   INIS 1ypr9-dk595; APR1400 restart windows of 22 to 70 h, KNS 20A-065); hot
@@ -22,6 +28,15 @@ Contracts, from the family's sources, written before the code:
   reversing Amendment 3 decision 7): both cited procedures keep a two-sided band
   (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), and at part power the hot side is
   bounded by the steam side, not by DNB.
+- Tavg above its DNB limit (Westinghouse STS, NUREG-1431 Rev. 5.0, LCO 3.4.1): the
+  parameter is restored within 2 h (Condition A), else the unit is in MODE 2 within
+  6 h (Condition B), and a parameter restored before then ends the required action
+  (LCO 3.0.2). The plant flies Condition B: past 2 h its turbine unloads along a
+  straight line to MODE 2's 5 % of rated power (NUREG-1431 Table 1.1-1) at 2 h + 6 h,
+  and the plant is lost to hot standby only after 28,800 s above the limit without a
+  break (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; until then
+  hot standby at 2 h). By hand, 3 h into the shutdown the turbine may carry
+  1 - 0.95 x 3 / 6 = 0.525 of rated load.
 - The operator reads the recent power history the starting xenon is balanced with,
   and the core boron only through a boronmeter 20 min late (Areva, US 8,489,338).
 
@@ -56,7 +71,7 @@ def at(s, **values):
 
 
 def step(env, p, s):
-    hold = np.array([1.0 - 2.0 * float(s.rod_in), 0.0])
+    hold = np.array([1.0 - 2.0 * float(s.rod_in), 0.0, 1.0])
     s1, _ = compute_next_state(hold, s, p, integration_method=env.integration_method)
     return s1
 
@@ -64,19 +79,10 @@ def step(env, p, s):
 # --- the offset's penalty clock ---
 
 
-@pytest.mark.parametrize("n", [1.0, 0.5])
-def test_time_outside_the_offset_band_counts_at_every_power(n):
-    env, p, obs, s = reset()
-    s = at(s, n=n, ao_outside=100.0)
-    s1 = step(env, p, s.replace(Xe_tilt=s.Xe_tilt * 0 - 0.2))
-    assert abs(float(s1.delta_I) / float(s1.n)) > p.ao_band
-    assert float(s1.ao_outside) == pytest.approx(100.0 + p.delta_t)
-
-
-def test_time_inside_the_band_does_not_count():
-    env, p, obs, s = reset()
-    s1 = step(env, p, at(s, ao_outside=100.0))
-    assert float(s1.ao_outside) == pytest.approx(100.0)
+# test_time_outside_the_offset_band_counts_at_every_power and
+# test_time_inside_the_band_does_not_count moved to test_reactor_offset.py with the
+# standard specification's counting (owner, 2026-11-15): by the power, on a band in
+# delta I.
 
 
 @pytest.mark.parametrize(
@@ -116,8 +122,20 @@ def test_time_past_the_insertion_limit_counts_and_resets():
     assert float(step(env, p, shallow).ril_outside) == 0.0
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_past_the_insertion_limit_ends_the_run(seconds, ends):
+@pytest.mark.parametrize(
+    "seconds, load", [(7000.0, 1.0), (7200.0 + 3 * 3600.0, 0.5), (28795.0, 5.0 / 21600)]
+)
+def test_past_two_hours_past_the_insertion_limit_the_turbine_unloads(seconds, load):
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    extra = float(rod_worth(0.3, p) - rod_worth(float(s.rod_in), p))
+    deep = at(
+        s, rod_in=0.3, ril_outside=seconds, boron=float(s.boron) - extra / p.boron_worth
+    )
+    assert float(step(env, p, deep).target_n) == pytest.approx(load, abs=2e-3)
+
+
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_past_the_insertion_limit_end_the_run(seconds, ends):
     env, p, obs, s = reset()
     terminated, _ = check_is_terminal(at(s, ril_outside=seconds), p)
     assert bool(terminated) is ends
@@ -133,7 +151,7 @@ def test_a_scram_costs_two_days_of_output():
 
 
 @pytest.mark.parametrize(
-    "field, value", [("below_floor", 900.0), ("ril_outside", 7200.0)]
+    "field, value", [("below_floor", 900.0), ("ril_outside", 28800.0)]
 )
 def test_a_timed_limits_overrun_costs_hot_standby(field, value):
     env, p, obs, s = reset()
@@ -166,7 +184,7 @@ def test_tavg_above_its_program_is_charged_past_the_band(hot, expected):
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_the_observation_carries_the_power_the_xenon_is_balanced_with(seed):
     env, p, obs, s = reset(seed)
-    assert obs.shape == (13,)
+    assert obs.shape == (16,)
     lo, hi = p.initial_xenon_power_range
     assert lo <= float(obs[10]) <= hi
     assert float(obs[10]) == pytest.approx(float(s.xenon_power))
@@ -177,9 +195,10 @@ def test_the_boron_reading_is_twenty_minutes_late():
     start = float(obs[7])
     rods = 1.0 - 2.0 * float(s.rod_in)
     readings, core = [], []
+    step = jax.jit(env.step_env)  # compiled once, not rebuilt on each of 70 steps
     for k in range(70):
-        dilute = np.array([rods, -1.0 if k < 4 else 0.0], np.float32)  # 2 min
-        obs, s, _, _, _ = env.step_env(jax.random.PRNGKey(0), s, dilute, p)
+        dilute = np.array([rods, -1.0 if k < 4 else 0.0, 1.0], np.float32)  # 2 min
+        obs, s, _, _, _ = step(jax.random.PRNGKey(0), s, dilute, p)
         readings.append(float(obs[7]))
         core.append(float(s.boron))
     core, readings = np.array(core), np.array(readings)
@@ -220,8 +239,30 @@ def test_the_dnb_limit_is_the_full_power_programs_at_every_power():
     )
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
+@pytest.mark.parametrize(
+    "seconds, load",
+    [
+        (7000.0, 1.0),
+        (7200.0 + 3 * 3600.0, 0.525),
+        (28795.0, 1.0 - 0.95 * 21595 / 21600),
+    ],
+)
+def test_past_two_hours_above_the_dnb_limit_the_turbine_ramps_to_mode_2(seconds, load):
+    """A plant on its plan at full load, Tavg above its DNB limit for ``seconds``:
+    the turbine takes no more than the shutdown's straight line allows."""
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    limit = float(tavg_program(1.0, p)) + HOT_MARGIN
+    tavg = float(0.5 * (s.T_coolant + s.T_cold))
+    hot = s.replace(
+        T_coolant=s.T_coolant + 2 * (limit + 0.5 - tavg),
+        T_cold=s.T_cold + 2 * (limit + 0.5 - tavg),
+    )
+    after = step(env, p, at(hot, above_dnb=seconds))
+    assert float(after.target_n) == pytest.approx(load, abs=2e-3)
+
+
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_above_the_dnb_limit_cost_hot_standby(seconds, ends):
     env, p, obs, s = reset()
     s = at(s, above_dnb=seconds)
     terminated, _ = check_is_terminal(s, p)
@@ -248,7 +289,7 @@ def test_a_plant_at_rest_needs_nothing_for_a_day():
         carried_days_range=(0.0, 0.0),
         sensor_noise_scale=0.0,
     )
-    null = jax.numpy.array([1.0 - 2.0 * p.rod_park, 0.0])
+    null = jax.numpy.array([1.0 - 2.0 * p.rod_park, 0.0, 1.0])
     keys = jax.random.split(jax.random.PRNGKey(1), p.max_steps_in_episode)
 
     def step(s, k):

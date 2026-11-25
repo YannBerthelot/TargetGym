@@ -19,8 +19,10 @@ the consumers' valve against their static head and through the recycle valve
 back to suction. The drive follows a rate-limited speed setpoint through a
 first-order lag; the recycle valve is rate limited, faster opening than
 closing. The consumers' opening follows a hidden schedule plus an
-Ornstein-Uhlenbeck deviation. The plant trips when Phi falls below the
-episode's surge line, a hidden offset right of the characteristic's peak.
+Ornstein-Uhlenbeck deviation. Each episode's machine has its true surge line a
+hidden fraction off the map (``line_shift``). A surge is a flow reversal; the plant trips on
+the third within ``surge_window`` (version 4). It starts, and restarts after a
+trip, in established operation (``established_point``).
 
 State (three ODEs, two actuator positions, the disturbance, the trip variable
 and the schedule)
@@ -41,8 +43,9 @@ and the schedule)
 
 As a continuing plant the schedule renews when its six demand blocks have run
 (``renew_schedule``): five fresh blocks from the level it holds, the clock five
-blocks back. The valve's and the counter's times count on ``block_clock``, so no
-clock in the plant grows without bound (long-strata draft 4, S1).
+blocks back. The counter's times count on ``block_clock`` and the valve's dead
+time counts substeps since each command, so no clock in the plant grows without
+bound (long-strata draft 4, S1).
 """
 
 from typing import Tuple
@@ -116,8 +119,8 @@ class CompressorSurgeParams(EnvParams):
     drive_rate: float = 0.03  # of rated per s
     #: Speed lag behind the rate-limited drive setpoint (ours).
     tau_N: float = 1.0  # s
-    #: Full open in 2 s, dead time included (read-consistent: Mirsky et al.
-    #: p.23; Wilson and Sheldon Table 1).
+    #: Full stroke in 2 s once the valve moves, after ``valve_lag``
+    #: (read-consistent: Mirsky et al. p.23; Wilson and Sheldon Table 1).
     valve_open_rate: float = 0.5  # per s
     #: The positioner and actuator lag ahead of the stroke, "within 150-300
     #: ms" [C7]: a dead time before the valve moves. Ours, the family's lower
@@ -159,9 +162,32 @@ class CompressorSurgeParams(EnvParams):
     surge_window: float = 15.0  # s
 
     # ---- Reset (ours) ----
+    #: Established operation (charter B5): the plant starts, and restarts
+    #: after a trip, on a control line this far right of the surge line, in
+    #: flow at speed, at the header setpoint (``established_point``). Ours, the
+    #: family's low end: about 10 % [C6], 10 to 15 % [C1].
+    reset_margin: float = 0.10
+    #: The machine's true surge line against the map the controller reads
+    #: (``surge_flow_per_speed``): each episode's machine has its line a hidden
+    #: fraction left or right of the map's, drawn uniformly within this at the
+    #: reset. Field and shop curves differ, the line drifts with the machine's
+    #: condition [C1; C10], and invariant coordinates leave 2.6 to 7 % at low
+    #: suction pressure [C14]. Ours, inside that range. The machine differs
+    #: from its map only between its true line and the map's control line
+    #: (``on_the_map``), so it must stay under ``reset_margin``.
+    line_shift_max: float = 0.05
+    #: Which tenth of that range the machine comes from: -1 draws it over the
+    #: whole range, as a user's or a training run's reset does; 0 to 9 draws it
+    #: inside tenth k, from -max up. The evaluation protocol sets it from the
+    #: seed (``CompressorSurge.params_for_seed``), so any ten consecutive seeds
+    #: hold one machine per tenth and every evaluation has machines on both
+    #: sides of the map (owner, picker 2026-11-24, ruling F).
+    machine_stratum: int = -1
+    #: Version 2's reset point (rated speed, recycle 0.35), which the reset no
+    #: longer reads: with it a normal day's demand started the plant below its
+    #: header zone at top speed, a capture. Kept for section 2's check of the
+    #: equilibrium solver and for the numbers script.
     N_reset: float = 1.0  # of rated
-    #: Surge-safe for every opening 0.2 to 1.0 (PHYSICS.md, reset). The speed
-    #: is then the one that holds the header setpoint (established operation).
     x_reset: float = 0.35
     #: Newton iterations of the reset equilibrium. Static: it is a Python loop
     #: count, so it must not be traced. A different value simply retraces.
@@ -231,6 +257,9 @@ PARAM_UNITS = {
     "demand_sigma": "-",
     "demand_theta": "1/s",
     "demand_dev_reset_clip": "-",
+    "reset_margin": "-",
+    "line_shift_max": "-",
+    "machine_stratum": "-",
     "N_reset": "-",
     "x_reset": "-",
     "reset_newton_iters": "-",
@@ -269,17 +298,14 @@ class CompressorSurgeState(EnvState):
     setpoint_levels: jnp.ndarray
     #: The six consumer-opening levels. Hidden.
     demand_levels: jnp.ndarray
-    #: Steps since the schedule started. Hidden. The clock the valve's and the
-    #: surge counter's times count on, so it is ``time`` in a window; a renewal
+    #: Steps since the schedule started. Hidden. The clock the surge counter's
+    #: times count on, so it is ``time`` in a window; a renewal
     #: (``renew_schedule``) moves it and them back together.
     block_clock: int
     #: The valve command through the positioner's dead time [C7]: the recent
-    #: commands with the time (s) each was issued, newest first.
+    #: commands, newest first, one issued per step.
     valve_cmds: jax.Array = struct.field(
         default_factory=lambda: jnp.zeros((VALVE_HISTORY,)), kw_only=True
-    )
-    valve_cmd_times: jax.Array = struct.field(
-        default_factory=lambda: jnp.full((VALVE_HISTORY,), -1.0e9), kw_only=True
     )
     #: The times (s) of the last ``surge_trip_count`` surges, newest first; a
     #: long-past time for none. The surge counter operators read [C5].
@@ -295,6 +321,11 @@ class CompressorSurgeState(EnvState):
     #: ``demand_ramp_s``, so a ramp in progress at a switch keeps its rate. A
     #: state built by hand has none and reads the params'.
     demand_ramp: float = struct.field(default=-1.0, kw_only=True)
+
+    #: The machine: its true surge line sits at Phi = 2W (1 + ``line_shift``).
+    #: Hidden, drawn at the reset, kept through a trip's restart. 0 on a state
+    #: built by hand: the map's own machine.
+    line_shift: float = struct.field(default=0.0, kw_only=True)
 
     actuator_held: jax.Array = actuator_field(2)
 
@@ -350,10 +381,36 @@ def surge_constant(params: CompressorSurgeParams):
 # ---------------------------------------------------------------------------
 
 
-def characteristic(phi, params: CompressorSurgeParams, xp=jnp):
+def on_the_map(phi, params: CompressorSurgeParams, xp=jnp, shift=0.0):
+    """Where on the map a machine at flow coefficient ``phi`` reads its head.
+
+    The machine's true surge line sits at Phi = 2W (1 + shift), and it cannot
+    be found from normal operation: a plant cannot measure where its line has
+    drifted [C10]. So the difference from the map is local to the line. From
+    the map's control line on, ``reset_margin`` right of the map's surge line
+    (the line the plant is established on and holds [C6; C1]), the machine is
+    its map. At and left of its true line it is the map moved by 2W shift.
+    Between the two the move fades by a smoothstep, whose slope is zero at
+    both ends, so the head has no jump in slope and stays one-humped while the
+    shift is smaller than the margin. At ``shift`` 0 it is ``phi`` itself.
+    """
+    line = 2.0 * params.W
+    start = line * (1.0 + shift)
+    end = line * (1.0 + params.reset_margin)
+    t = xp.clip((phi - start) / (end - start), 0.0, 1.0)
+    return phi - line * shift * (1.0 - 3.0 * t**2 + 2.0 * t**3)
+
+
+def characteristic(phi, params: CompressorSurgeParams, xp=jnp, shift=0.0):
     """Psi_c(Phi): the Moore-Greitzer cubic for Phi <= ``phi_join``, and its
     tangent line beyond, so the head keeps falling past the reachable range
-    without the cubic's turn."""
+    without the cubic's turn.
+
+    ``shift`` is the machine's (``state.line_shift``): near its surge line its
+    head is the map's read at ``on_the_map``, so it peaks, and its surge line
+    sits, at Phi = 2W (1 + shift), at the map's peak head. At 0 it is the map.
+    """
+    phi = on_the_map(phi, params, xp, shift)
     y = phi / params.W - 1.0
     cubic = params.psi_c0 + params.H * (1.0 + 1.5 * y - 0.5 * y**3)
     y_j = params.phi_join / params.W - 1.0
@@ -473,8 +530,8 @@ def renew_schedule(state: CompressorSurgeState, params, key, clock=None):
     """The schedule renewed (long-strata draft 4, S1): from the opening and the
     header setpoint it holds at ``clock`` (its own, by default), five fresh
     demand blocks drawn in ``demand_range`` at ``demand_ramp_s``, the clock at
-    the start of the first of them. The valve's and the counter's times move
-    back with the clock, so the dynamics see no change."""
+    the start of the first of them. The counter's times move back with the
+    clock, so the dynamics see no change."""
     p = params
     clock = state.block_clock if clock is None else clock
     tau = clock * p.delta_t
@@ -490,7 +547,6 @@ def renew_schedule(state: CompressorSurgeState, params, key, clock=None):
         setpoint_lead=jnp.zeros_like(state.setpoint_lead),
         demand_ramp=jnp.asarray(p.demand_ramp_s, jnp.float32),
         block_clock=start,
-        valve_cmd_times=state.valve_cmd_times - back,
         surge_times=state.surge_times - back,
     )
 
@@ -513,7 +569,7 @@ def draw_schedule(key, params: CompressorSurgeParams):
 
 
 def compute_velocity(
-    position, action, N_ramp, x, dev, demand_levels, params, ramp=None
+    position, action, N_ramp, x, dev, demand_levels, params, ramp=None, shift=0.0
 ):
     """d/dt of ``[m_c, dp, N, tau]``.
 
@@ -530,7 +586,7 @@ def compute_velocity(
     rho = suction_density(params)
     U = N * params.U_r
     phi = m_c / (rho * params.A_c * U)
-    dp_c = rho * U**2 * characteristic(phi, params)
+    dp_c = rho * U**2 * characteristic(phi, params, shift=shift)
     opening = demand_opening(demand_levels, tau, dev, params, ramp=ramp)
     outflow = consumer_flow(dp, opening, params) + recycle_flow(dp, x, params)
     return (
@@ -558,7 +614,9 @@ def _substeps(integration_method: str) -> int:
     return int(n)
 
 
-def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp):
+def equilibrium_phi(
+    N, x, opening, params: CompressorSurgeParams, iters, xp=jnp, shift=0.0
+):
     """The right-branch equilibrium flow coefficient at speed ``N``, recycle
     ``x`` and consumer opening ``opening``, by ``iters`` Newton steps from Phi
     0.70 on rho01 A_c U Phi - m_d(dp) - m_r(dp) with dp = rho01 U^2 Psi_c(Phi).
@@ -571,7 +629,7 @@ def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp)
     U = N * params.U_r
 
     def residual(phi):
-        dp = rho * U**2 * characteristic(phi, params)
+        dp = rho * U**2 * characteristic(phi, params, shift=shift)
         return (
             rho * params.A_c * U * phi
             - consumer_flow(dp, opening, params)
@@ -585,6 +643,51 @@ def equilibrium_phi(N, x, opening, params: CompressorSurgeParams, iters, xp=jnp)
         f, df = jax.jvp(residual, (phi,), (jnp.ones_like(phi),))
         phi = phi - f / df
     return np.asarray(phi) if xp is np else phi
+
+
+def established_point(opening, params: CompressorSurgeParams, shift=0.0):
+    """Established operation (charter B5) for the consumers' ``opening``:
+    ``(m_c, dp, N, x, Phi)`` at rest at the header setpoint.
+
+    The recycle stands where a control line ``reset_margin`` right of the
+    surge line needs it: that line's flow at the setpoint, less what the
+    consumers take there, through the valve; shut where they take more, as on
+    a normal day [C3, p. 2]. The speed is then the one that holds the
+    setpoint, by bisection on the equilibrium's pressure, which rises with
+    speed. With the valve on the line the bisection lands on the line's own
+    speed; with it shut, the plant sits right of the line.
+
+    The line is the map's, the one the plant's control system knows; the
+    equilibrium is the machine's own (``shift``), so a machine whose true line
+    is right of its map starts closer to it than its controller reads.
+    """
+    p = params
+    rho, sp = suction_density(p), p.header_setpoint
+    phi_line = 2.0 * p.W * (1.0 + p.reset_margin)
+    N_line = jnp.sqrt(sp / (rho * p.U_r**2 * characteristic(phi_line, p)))
+    m_line = rho * p.A_c * p.U_r * N_line * phi_line
+    x = jnp.clip(
+        (m_line - consumer_flow(sp, opening, p)) / recycle_flow(sp, 1.0, p), 0.0, 1.0
+    )
+
+    def header_at(N):
+        phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters, shift=shift)
+        return rho * (N * p.U_r) ** 2 * characteristic(phi, p, shift=shift)
+
+    def bisect(bounds, _):
+        lo, hi = bounds
+        mid = 0.5 * (lo + hi)
+        low = header_at(mid) < sp
+        return (jnp.where(low, mid, lo), jnp.where(low, hi, mid)), None
+
+    (lo, hi), _ = jax.lax.scan(
+        bisect, (jnp.asarray(p.N_min), jnp.asarray(p.N_max)), None, length=24
+    )
+    N = 0.5 * (lo + hi)
+    phi = equilibrium_phi(N, x, opening, p, p.reset_newton_iters, shift=shift)
+    U = N * p.U_r
+    dp = rho * U**2 * characteristic(phi, p, shift=shift)
+    return rho * p.A_c * U * phi, dp, N, x, phi
 
 
 @partial(jax.jit, static_argnames=["integration_method"])
@@ -619,14 +722,19 @@ def compute_next_state(
     rho = suction_density(params)
     tau_0 = state.block_clock * params.delta_t
 
-    t0 = state.block_clock * params.delta_t
     cmds = jnp.concatenate([jnp.reshape(x_cmd, (1,)), state.valve_cmds[:-1]])
-    issued = jnp.concatenate([jnp.reshape(t0, (1,)), state.valve_cmd_times[:-1]])
+    # The dead time is counted in whole substeps, not read off the clock: the
+    # command at queue position i was issued i steps before this one. At 0.15 s
+    # and 0.01 s substeps a comparison of times sat on float32's rounding edge,
+    # and the valve moved a substep early on four steps in five.
+    age = jnp.arange(VALVE_HISTORY) * n_sub
+    lag = params.valve_lag / h - 0.5
 
-    def delayed(tau):
-        """The command the positioner passes at ``tau``: the newest issued at
-        least ``valve_lag`` before, or the oldest kept."""
-        ready = issued <= tau - params.valve_lag
+    def delayed(j):
+        """The command the positioner passes over substep ``j``: the newest
+        issued at least ``valve_lag`` before the substep starts, or the
+        oldest kept."""
+        ready = age + j >= lag
         k = jnp.where(jnp.any(ready), jnp.argmax(ready), VALVE_HISTORY - 1)
         return cmds[k]
 
@@ -638,7 +746,7 @@ def compute_next_state(
             N_cmd - N_ramp, -params.drive_rate * h, params.drive_rate * h
         )
         x = x + jnp.clip(
-            delayed(t0 + (j + 1) * h) - x,
+            delayed(j) - x,
             -params.valve_close_rate * h,
             params.valve_open_rate * h,
         )
@@ -653,6 +761,7 @@ def compute_next_state(
             demand_levels=state.demand_levels,
             params=params,
             ramp=ramp,
+            shift=state.line_shift,
         )
         new, _ = integrate_dynamics(
             positions=jnp.stack([m_c, dp, N, tau_0 + j * h]),
@@ -705,7 +814,6 @@ def compute_next_state(
             phi_min=phi_min,
             block_clock=state.block_clock + 1,
             valve_cmds=cmds,
-            valve_cmd_times=issued,
             surge_times=surge_times,
             surges=surged.astype(m_c.dtype),
             time=state.time + 1,
@@ -722,7 +830,7 @@ def compute_next_state(
 # already jit ``step_env``, which traces this inline.
 def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
     """``[dp (kPa), m_c (kg/s), m_d (kg/s), N (%), N_ramp (%), x (%), live
-    setpoint (kPa)]``.
+    setpoint (kPa), surge count]``.
 
     ``m_d`` is the consumers' flow at the state's clock with the deviation the
     coming step integrates with, so the total opening can be inferred; its

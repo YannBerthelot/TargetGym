@@ -176,7 +176,8 @@ def test_old_expert_forms_warn_and_still_work():
 
 
 def test_make_oracle_plans_on_the_scored_params():
-    oracle = tg.make_oracle("cstr")
+    # hvac since cstr-v8, which ships no planner (owner, 2026-11-24).
+    oracle = tg.make_oracle("hvac")
     assert hasattr(oracle, "step") and hasattr(oracle, "reset")
 
 

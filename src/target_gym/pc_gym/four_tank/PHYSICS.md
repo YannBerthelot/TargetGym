@@ -4,10 +4,11 @@
 
 The owner's decision: a lab rig with no industrial job. Johansson's teaching
 process tracks levels to 1 mm, and no plant family stands behind a right
-half-plane zero made by a flow split; inverse response is carried by
-`boiler_drum` and strong interaction by `distillation`. In code it is
-`EnvSpec.extra` on the registry entry, so `registry.benchmark_specs()` leaves
-it out. It keeps its plant, expert and tests: the decoupled expert was re-run
+half-plane zero made by a flow split; strong interaction is carried by
+`distillation`, and inverse response by no core task since `boiler_drum`
+became Extra on 2026-11-24. In code it is `EnvSpec.extra` on the registry
+entry, so `registry.benchmark_specs()` leaves it out, and since that day its
+capability tags are empty, as every Extra task's are (`suite.CAPABILITIES`). It keeps its plant, expert and tests: the decoupled expert was re-run
 on this rig by its recipe (`scripts/tune_process_experts.py --envs four_tank`),
 and `test_four_tank_decoupler.py` passes on it.
 
@@ -97,6 +98,24 @@ so the task never restarts.
 The four levels and the two setpoints: `[h1, h2, h3, h4, target_h1,
 target_h2]`. The Lund interface shows all four levels [S2, Fig. 11]; the KTH
 rig wires only the lower two and reads the upper ones by eye [S4, pp. 6, 12].
+
+### Task: `four_tank`
+
+Hold the levels of the two lower tanks of a four-tank rig at their setpoints
+with two pump voltages. Each pump fills the far upper tank more than its own
+lower one, so a level first moves the wrong way. The policy reads all four
+levels and both setpoints. Each step is charged the sum of the two squared
+level errors, counted in units of 1 mm. Nothing trips: an empty tank stops
+draining and a full one overflows.
+
+| obs | meaning |
+|---|---|
+| 0 | `h1`, level of lower tank 1 (m), controlled |
+| 1 | `h2`, level of lower tank 2 (m), controlled |
+| 2 | `h3`, level of upper tank 3 (m) |
+| 3 | `h4`, level of upper tank 4 (m) |
+| 4 | setpoint for `h1` (m) |
+| 5 | setpoint for `h2` (m) |
 
 ---
 

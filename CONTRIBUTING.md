@@ -17,16 +17,18 @@ uv run pre-commit install    # optional: runs the CI checks on each commit
 
 ```bash
 make ci          # everything CI runs: ruff, black --check, docs, small and medium tests
-make test        # small tests only, in parallel (the same as a plain `pytest`)
+make test        # small tests only, on 2 processes (`make test WORKERS=8` for more)
 make test-all    # every tier, including the large closed-loop controller checks
 make mypy        # type-check the enforced modules
 make coverage    # tests with the coverage threshold
 ```
 
-The suite runs under [pytest-xdist](https://pytest-xdist.readthedocs.io/).
-`tests/conftest.py` holds each worker to one compute thread so they do not
-compete for cores, and forces a headless SDL and matplotlib backend. Pass
-`-n0` when you want readable output from a single test, or `--pdb`.
+A plain `pytest` runs in one process. Each worker of
+[pytest-xdist](https://pytest-xdist.readthedocs.io/) is a JAX process of
+several GB, so ask for them by number (`-n 2`) and keep `-n auto` for a
+machine with the memory: CI passes it. `tests/conftest.py` holds each worker
+to one compute thread so they do not compete for cores, and forces a headless
+SDL and matplotlib backend.
 
 Note that `--durations` under `-n auto` reports wall time inflated by worker
 contention. Profile with `-n0` before concluding a test is slow.
@@ -234,6 +236,12 @@ Each record has two parts, the expert's rows (the PID's returns and protocol
 scores) and the oracle's (the MPC's), and each part has a fingerprint of its
 own, so retuning an expert re-records only the PIDs, in minutes, and
 rebuilding an oracle only the MPCs.
+
+Only the scored suite's records are held current: the five tasks of
+`target_gym.charter.FLAGSHIP`. The rows of a task outside it stay in the
+repository, no page prints them, and neither the `records` check nor the
+`re-record` label touches them. Name such a task with `--envs` to record it
+by hand.
 
 The easy way is to let CI do it. Add the `re-record` label to your pull
 request: one job per stale environment records its stale parts on GitHub's

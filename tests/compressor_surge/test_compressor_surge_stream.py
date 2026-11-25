@@ -81,7 +81,7 @@ def _openings(state, action, params):
 
 
 def test_the_demand_keeps_moving_past_the_schedule_s_six_blocks():
-    p = _params("load_swings")
+    p = _params("normal")  # load_swings dropped (ruling E, 2026-11-24); same 5 s ramps
     _, s = ENV.reset_env(jax.random.PRNGKey(0), p)
     block = int(p.demand_block_steps)  # 200 steps, 20 s
     end = 6 * block  # the schedule's six blocks
@@ -132,8 +132,12 @@ def test_a_trip_restarts_the_plant_and_keeps_the_surge_record():
         if bool(info["tripped"]):
             break
     assert bool(info["tripped"])
-    # The plant restarts at its reset recycle; the counter keeps its surges.
-    assert float(s.x) == float(jnp.float32(p.x_reset))
+    # The plant restarts in established operation for the demand it meets; the
+    # counter keeps its surges. By hand: the 10 % line passes 11.711 kg/s at
+    # 24 kPa, the consumers at opening 0.2 take 0.12 x 0.2 x sqrt(14000) =
+    # 2.840 kg/s, and the full-open recycle passes 0.15 x sqrt(24000) =
+    # 23.238 kg/s, so the recycle stands at (11.711 - 2.840) / 23.238 = 0.3818.
+    np.testing.assert_allclose(float(s.x), 0.3818, atol=1e-3)
     assert float(obs[7]) >= float(p.surge_trip_count)
 
 

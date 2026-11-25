@@ -16,8 +16,12 @@ hide:
 </p>
 
 **25 environments**: 11 aircraft, 6 process control, 6 industrial / energy, 2 renewable energy. Every one of them is in the
-[gallery](environments.md) with its own page and clip, and its recorded baseline
-numbers are in [Baseline results](baseline-results.md).
+[gallery](environments.md) with its own page and clip.
+
+**Five of them are scored:** `reactor`, `hvac`, `cstr`, `compressor_surge` and
+`ph_neutralization`. Each has a measured reference to beat and a ceiling, and
+their numbers are in [Baseline results](baseline-results.md). The other twenty
+run the same way and are not scored yet: each one's page says where it stands.
 
 ---
 
@@ -51,7 +55,7 @@ for t in range(200):
         break
 ```
 
-[Browse the twenty-four environments →](environments.md){ .md-button .md-button--primary }
+[Browse the 25 environments →](environments.md){ .md-button .md-button--primary }
 [Getting started →](getting-started.md){ .md-button }
 
 ---
@@ -68,13 +72,12 @@ these are the failure modes that come with it:
 | **Non-minimum phase** | Drum level rises as mass *leaves*; the four-tank's obvious loop pairing is unstable |
 | **Transport delay** | Half the kiln's response to a fuel change takes a full 25-minute residence time |
 | **Multi-timescale** | Millisecond neutronics against hour-long xenon; sub-second flame gas against 30 h glass residence |
-| **Finite budgets** | A battery whose charge limits trip the pack, though exact dispatch tracking stays inside them for a 30-minute episode, so tracking costs wear rather than later tracking |
-| **Open-loop instability** | A stirred-tank reactor held on its unstable middle steady state, where an uncontrolled error grows e-fold every 19 to 43 s (derived, `scripts/unstable_cstr_numbers.py --section targets`) |
 | **A trip the reward does not track** | A compressor trips when its flow margin to surge runs out. No reward term reads that margin, and the recycle valve that protects it has no tracked output of its own |
 
-Every environment ships a tuned PID and an MPC (on `patrol_range_bearing` the MPC
-reads the true state, a full-state bound), so a learned policy has something real
-to beat. And **where a baseline is weak, the docs say how weak**.
+Every environment ships a tuned PID, and 20 of the 25 ship an MPC (on
+`patrol_range_bearing` it reads the true state, a full-state bound), so a learned
+policy has something real to beat. The five without one, `plane`, `plane_energy`,
+`plane3d_heading`, `plane3d_racetrack` and `wake_surf`, say why on their pages. And **where a baseline is weak, the docs say how weak**.
 
 ## Documentation
 

@@ -258,6 +258,29 @@ def episode_keys(key, n: int, n_steps: int):
     return jax.random.split(k_reset, n), steps
 
 
+def seed_params(env, params, seed: int):
+    """The parameters seed ``seed`` runs on: ``params``, or what the plant's
+    ``params_for_seed`` makes of them where its protocol places something by
+    the seed (the compressor's machine, one per tenth of its range over ten
+    seeds). Every protocol run that resets a seed goes through here, so a seed
+    names the same episode in ``run_policy``, the ceiling and the scripts."""
+    hook = getattr(env, "params_for_seed", None)
+    return params if hook is None else hook(params, seed)
+
+
+def _per_seed(env, params, seeds, batched: bool):
+    """``seed_params`` for each seed, stacked on a leading episode axis;
+    ``batched`` params already have that axis."""
+    import jax
+    import jax.numpy as jnp
+
+    rows = [
+        seed_params(env, jax.tree.map(lambda x: x[i], params) if batched else params, s)
+        for i, s in enumerate(seeds)
+    ]
+    return jax.tree.map(lambda *xs: jnp.stack([jnp.asarray(x) for x in xs]), *rows)
+
+
 @functools.lru_cache(maxsize=None)
 def _batched(env, per_episode_params: bool):
     """The vmapped, jitted reset, step and reward terms of ``env``, built once
@@ -339,6 +362,9 @@ def run_policy(
 
     n = task.n_episodes
     T = int(task.max_steps.max()) if n_steps is None else int(n_steps)
+    if seeds is not None and hasattr(env, "params_for_seed"):
+        params = _per_seed(env, params, seeds, per_episode_params)
+        per_episode_params = True
     pa = 0 if per_episode_params else None
     if seeds is None:
         reset_keys, step_keys = episode_keys(key, n, T)
@@ -600,20 +626,37 @@ def shipped_policy(kind: str = "pid", test_params: bool = True) -> CallablePolic
     ``"mpc"``, ``runners.baseline_policy``) as a :class:`Policy`; a task
     without one, or not registered here, is :class:`Unsupported`. The MPC
     plans on the task's parameters, so ``test_params`` must match the run's
-    (:func:`run_policy_on_benchmark`: the registered task by default)."""
+    (:func:`run_policy_on_benchmark`: the registered task by default).
+
+    ``bind(env, params, seeds)`` sets the run's own params, as
+    ``reference_ladder.run_suite`` binds each scenario's: the oracle is the
+    problem definition, so it then plans on the scenario's values, those the
+    state does not carry included (owner, 2026-11-23). The expert reads only
+    its observations, so binding leaves it as it is."""
     from target_gym.registry import REGISTRY
     from target_gym.runners.runners import baseline_policy
+
+    bound = {}
 
     def make(task: TaskInfo):
         spec = REGISTRY.get(task.name)
         if spec is None:  # not one of this library's tasks: nothing is shipped for it
             return None
-        params = (
-            spec.make_test_params() if test_params else spec.make_env().default_params
-        )
+        if "params" in bound:
+            params = bound["params"]
+        elif test_params:
+            params = spec.make_test_params()
+        else:
+            params = spec.make_env().default_params
         return baseline_policy(spec, kind, params)
 
-    return CallablePolicy(make, name=kind, oracle=(kind == "mpc"))
+    def bind(env, params, seeds):
+        del env, seeds
+        bound["params"] = params
+
+    policy = CallablePolicy(make, name=kind, oracle=(kind == "mpc"))
+    policy.bind = bind
+    return policy
 
 
 __all__ = [

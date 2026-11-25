@@ -1,5 +1,40 @@
 # Grid battery: model, sources, limits and deviations
 
+## Status: Extra (charter rule 5, D4), 2026-11-15
+
+The owner's decision: battery leaves the core pool for 0.8.0. It is out of the
+headline (J4) and the capability claims; its plant, expert, oracle and tests
+stay. In code it is `EnvSpec.extra` on the registry entry, so
+`registry.benchmark_specs()` leaves it out, and its capability tags are empty
+(`suite.CAPABILITIES`), so it moves no spoke. The reasons, all measured on the
+v6 plant during the re-record pass (docs/proposals/re-record-pass.md, step 5):
+
+- **J2 rejected.** Constant 0.5 and hold reset beat the reference (the ladder's
+  PI) on 16 of 30 hash seeds, more than half; the family sweep (B7) held on 0 of
+  8 draws. Per scenario the nulls won on negative price 5 of 5, wrong estimate
+  4, long deviation with wrong estimate 3, price spike 2, normal 1 and long
+  deviation 1.
+- **Trading is the whole cost on the price scenarios, and the PI does no
+  better there than holding 0.5.** On seeds 100 to 109, in GBP 1e-4 per step:
+  price spike, reference 331 (trade 328), nulls 344, ceiling 249; negative
+  price, reference 119 (trade 116), nulls 116 (trade 112), ceiling 83. B7 fails
+  in all 8 draws on both.
+- **On the other four scenarios the cost is losses alone** (no trade term),
+  reference 3.2 to 3.7, nulls about 4.1, ceiling 2.3 to 2.5. The reference cuts
+  only part of the losses the ceiling shows are movable, and its lead over a
+  null is smaller than the spread between seeds.
+- **A wrong charge estimate costs nothing on most seeds.** The policy reads only
+  the reported charge, and losses and trade depend only on delivered power, so
+  the hidden error shows only when the true charge reaches empty or full inside
+  the block. On seeds 100 to 109 none does, and wrong estimate costs exactly what
+  normal costs for every policy.
+- **The oracle loses 8 of 60 seeds to the expert** (long deviation 101 and 103,
+  normal 101 and 107, wrong estimate 101 and 107, and the same pair with both),
+  against the oracle rule.
+
+A future frequency-response task could start from this plant: a service whose
+cost charges the delivered response, not the energy traded around it.
+
 Version 5, 2026-11-08, under charter Amendments 1 to 3. The plant record is
 `REALITY.md`, its cold review `COLD_REVIEW.md`. Source tags (NESO-ST, ARX-LFP,
 EMAPS-GB, ...) are REALITY.md's. The task represents a family (rule 19): grid
@@ -25,6 +60,39 @@ Realism kept: the state of charge is hidden. The BMS reports the truth plus an
 initial error, an Ah-counting drift and a temperature shift of the OCV curve
 (ARX-LFP, MPS-ACCURE). The market checks the report (NESO-SOE p. 4, 6); the
 plant delivers from the true charge.
+
+### Task: `battery`
+
+Run a grid battery that sells a frequency service: keep its reported stored
+energy inside the window the market requires at the start of each 30 min
+period, at the least cost of energy. The only lever is the declared baseline
+power, and a change reaches the meter 60 to 90 min after it is made. The
+policy reads the BMS's reported state of charge, cell voltage and temperature,
+the meter, the required power, the three locked baselines, the period's energy
+requirements and the day-ahead prices; the true state of charge is hidden.
+Each step is charged, in GBP, the availability payment of a lost period, the
+energy the unit loses, and the energy's cost against the base price. Nothing
+trips.
+
+| obs | meaning |
+|---|---|
+| 0 | state of charge as the BMS reports it |
+| 1 | cell terminal voltage (V) |
+| 2 | cell temperature (degC) |
+| 3 | power delivered at the meter (MW), positive when discharging |
+| 4 | power required now: baseline plus contracted response (MW) |
+| 5 | contracted response now, as a fraction of the contracted power |
+| 6 | baseline of the current period (MW) |
+| 7 | baseline of the next period (MW) |
+| 8 | baseline of the period after next (MW) |
+| 9 | this period's export energy requirement (MWh) |
+| 10 | this period's import energy requirement (MWh) |
+| 11 | seconds to the next period |
+| 12 | 1 once this period is lost, else 0 |
+| 13 | day-ahead price of the current period (GBP/MWh) |
+| 14 | day-ahead price of the next period (GBP/MWh) |
+| 15 | day-ahead price of the period after next (GBP/MWh) |
+| 16 | day-ahead price of the third period ahead (GBP/MWh) |
 
 ## 2. Model
 

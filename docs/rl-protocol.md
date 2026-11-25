@@ -57,8 +57,8 @@ observed — the glass furnace hides 6 of 9 dynamic states, the reactor 7 of 11,
 the kiln 64 behind 8 measurements — so on those the MPC is solving a materially
 easier problem than the one the agent faces.
 
-Therefore: **the PID is the learned policy's peer, and the MPC is an upper bound
-with more information.** Beating the PID is the result. Approaching the MPC is
+Therefore: **the PID is the learned policy's peer, and the MPC is the best known
+plan, with more information.** Beating the PID is the result. Approaching the MPC is
 interesting. Beating the MPC would be a claim requiring explanation, not a
 victory lap, and the first hypothesis should be a simulator exploit rather than
 superior control.
@@ -126,9 +126,10 @@ neither, so a trip adds no move of its own. `first_order` and `cstr`,
 whose expert already holds within the resolution, are scored on reaching.
 `settling_ratio` says how much sooner the policy's tracking cost enters the
 plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is
-shown as the best known, for information. [The capability
-profile](capability-profile.md) puts both kinds of score on a radar per
-capability.
+shown as the best known, for information. The capability profile, a radar of
+both kinds of score per kind of difficulty, is not published in this release:
+it was drawn from the tracking score, which the scored tasks priced in money
+do not have. It returns when it is rebuilt on the saving over the reference.
 
 **One number per training seed: `seed_scores`.** A test that compares trained
 agents, such as AdaStop, needs one number per seed, defined on every task. This
@@ -159,6 +160,18 @@ on the median, winning 1 seed in 10. A mean alone would have published the
 opposite of what happened.
 
 ## 5. Algorithms
+
+!!! warning "Sections 5 and 6 predate the continuing tasks"
+    From 0.8.0 a task is a plant that runs without end, scored on its average
+    cost per step, so there is no episode length `N` and the rule
+    `gamma = 1 - 1/N` below is retired (decided 2026-11-10). Its replacement:
+    SAC and PPO use `gamma = 1 - 1/(c T)` with `c = 10`, where `T` is the
+    longer of the task's slowest mode and the longest preview in its
+    observation; `gamma` is never searched; `c = 5` and `c = 20` are reported
+    as a check; and one average-reward agent (APO) runs in the same table, on
+    the same budget and scoring. Each task's `T` comes with its charter
+    record, which is not published yet. Until these sections are rewritten,
+    read the table below as each plant's open-loop response time only.
 
 **Headline: SAC and PPO.** One off-policy and one on-policy, so that a poor
 result cannot be pinned on the quirks of a single family. Both are standard,
@@ -225,7 +238,7 @@ added `wake_surf`, whose tau has not been measured.
 | --- | --- | --- | --- | --- |
 | cstr | 960 | 5 | 25 | 0.99896 |
 | first_order | 150 | 10 | 50 | 0.99333 |
-| hvac | 1344 | not remeasured | not remeasured | 0.99926 |
+| hvac | 1152 | not remeasured | not remeasured | 0.99913 |
 | plane | 1800 | 23 | 115 | 0.99944 |
 | plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |
@@ -447,7 +460,7 @@ rather than floating:
 | row | what it establishes |
 | --- | --- |
 | **PID** | **the peer** |
-| MPC | the model-based, full-state upper bound |
+| MPC | the model-based, full-state best known plan |
 
 These are what `src/target_gym/data/baseline_returns/` records, ten episode seeds each, and
 they are what a learned policy is compared against.

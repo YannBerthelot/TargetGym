@@ -37,7 +37,7 @@ def reset(seed=0):
 
 def test_the_observation_carries_the_hours_to_each_ramp():
     env, p, obs, s = reset()
-    assert obs.shape == (13,)
+    assert obs.shape == (16,)
     np.testing.assert_allclose(obs[8], float(s.ramp_down_at) / 3600.0, rtol=1e-6)
     np.testing.assert_allclose(obs[9], float(s.ramp_up_at) / 3600.0, rtol=1e-6)
 
@@ -74,7 +74,7 @@ def test_the_criticality_floor_ends_the_run_only_after_its_allowed_time(seconds,
 
 def test_the_time_under_the_floor_counts_up_and_resets():
     env, p, obs, s = reset()
-    hold = np.array([1.0 - 2.0 * p.rod_park, 0.0])
+    hold = np.array([1.0 - 2.0 * p.rod_park, 0.0, 1.0])
     # 40 K cold, with boron trimmed so the core stays critical there: the fuel
     # dumps about 8 K of heat into colder water within the step, and at the
     # start-of-cycle MTC an untrimmed cold core heats itself back further.
