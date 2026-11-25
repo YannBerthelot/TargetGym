@@ -52,7 +52,7 @@ def _params(run, scales, scenario):
 @pytest.mark.parametrize(
     "scenario, acid, flow",
     # Shipped sizes 0.2 where the scenario runs the upset, 0 where it does not.
-    [("normal", 0.0, 0.0), ("acid_strength", 0.3, 0.0), ("bad_day", 0.3, 0.3)],
+    [("normal", 0.0, 0.0), ("bad_day", 0.3, 0.3), ("buffer_loss", 0.0, 0.0)],
 )
 def test_a_member_scales_an_upset_where_the_scenario_runs_it(run, scenario, acid, flow):
     p = _params(run, {"acid_upset_size": 1.5, "flow_swing": 1.5}, scenario)

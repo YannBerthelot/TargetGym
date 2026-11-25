@@ -38,6 +38,13 @@ def _params(name):
     return STREAM.scenario_params(STREAM.default_params, NAMES.index(name))
 
 
+def _one_kind(field):
+    """The bad day's upsets with only ``field``'s kind moving: the suite folded the
+    acid-only and flow-only windows into the bad day (owner, 2026-11-24)."""
+    other = {"acid_upset_size": "flow_swing", "flow_swing": "acid_upset_size"}[field]
+    return _params("bad_day").replace(**{other: 0.0})
+
+
 def _run(state, params, n):
     """``n`` steps on ``params`` at the reset's valves: the acid and flow scales
     each step runs on."""
@@ -51,13 +58,10 @@ def _run(state, params, n):
 
 
 @pytest.mark.parametrize(
-    "name, channel, size_field",
-    [("acid_strength", 0, "acid_upset_size"), ("flow_swing", 1, "flow_swing")],
+    "channel, size_field", [(0, "acid_upset_size"), (1, "flow_swing")]
 )
-def test_an_upset_holds_its_level_through_a_switch_then_ramps_back(
-    name, channel, size_field
-):
-    upset = _params(name).replace(event_hold=HOLD_S)
+def test_an_upset_holds_its_level_through_a_switch_then_ramps_back(channel, size_field):
+    upset = _one_kind(size_field).replace(event_hold=HOLD_S)
     normal = _params("normal")
     _, s = ENV.reset_env(jax.random.PRNGKey(0), normal)
     s = ENV.start_event(s, jax.random.PRNGKey(1), upset)
@@ -76,7 +80,7 @@ def test_an_upset_holds_its_level_through_a_switch_then_ramps_back(
 
 def test_an_acid_upset_does_not_end_a_flow_swing_in_progress():
     both = _params("bad_day").replace(event_hold=HOLD_S)
-    acid = _params("acid_strength").replace(event_hold=HOLD_S)
+    acid = _one_kind("acid_upset_size").replace(event_hold=HOLD_S)
     normal = _params("normal")
     _, s = ENV.reset_env(jax.random.PRNGKey(0), normal)
     s = ENV.start_event(s, jax.random.PRNGKey(1), both)
@@ -91,7 +95,7 @@ def test_an_acid_upset_does_not_end_a_flow_swing_in_progress():
 
 
 def test_an_upset_keeps_its_shape_however_long_the_plant_has_run():
-    upset = _params("acid_strength").replace(event_hold=HOLD_S)
+    upset = _one_kind("acid_upset_size").replace(event_hold=HOLD_S)
     normal = _params("normal")
     _, s = ENV.reset_env(jax.random.PRNGKey(0), normal)
     half = int(0.5 * upset.acid_upset_ramp / upset.delta_t)  # half the ramp
