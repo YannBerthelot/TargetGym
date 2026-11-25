@@ -1,8 +1,8 @@
 """The pH task's reference, placed by the exit rule on the real plant.
 
-Contract (charter J1, owner, 2026-11-23): the permit is pH 6 to 8, cheap side low, and
+Contract (charter J1, owner, 2026-11-23): the permit is pH 6 to 9, cheap side low, and
 the score charges every step outside it as an excursion, the price of a violation.
-Each rung holds the first tenth of a pH above 6 at which it leaves the permit on none
+Each rung holds the first grid step above 6 at which it leaves the permit on none
 of the ladder's seeds in any scenario, each candidate run from episodes started on it,
 and the ladder keeps the cheapest rung that trips none and holds every seed it can.
 The plant starts where the kept rung holds (rule 17): the scored configuration's own
@@ -43,7 +43,7 @@ def test_the_ph_reference_holds_the_lowest_setpoint_that_never_leaves_the_permit
     name, loop = "ph_neutralization", "pH on trim"
     row = ladder.ROWS[name]()
     rungs = ladder.build(name, row)
-    grid = zone_grid(6.0, 8.0, "low")
+    grid = zone_grid(6.0, 9.0, "low")  # the permit, 40 CFR 133.102(c) [P11]
     # Each rung on its own: its candidates run from the permit's low edge, in order,
     # and stop at the one it keeps; every one before it left the permit on some
     # seed; none of its seeds is left out as unheld.

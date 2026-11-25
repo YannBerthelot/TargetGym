@@ -1,5 +1,5 @@
 {
-  "fingerprint": "a6da76c916176ad0",
-  "note": "Unreleased version, re-stamped in place (2026-11-24): the scored suite is cut to normal 0.80, bad_day 0.15, buffer_loss 0.05 (owner); the acid-only and flow-only windows are folded into the bad day. Earlier: Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass. Stamped again on the merge with int/amendment3 (the review fixes, PR 242): Unreleased versions keep their number (owner, 2026-11-14). ph_neutralization: the episode starts on the reference's set point, pH 6.5 instead of 7 (charter J1 on a zone priced as a violation, owner, 2026-11-23): setpoint_pH and with it the reset state and observation 2. Also carries PR 203's change, which moves no step, reward or observation of a shipped task: a reading's interval counts control steps, and utils.py lost two unused rollout helpers. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-24T12:54:16+00:00"
+  "fingerprint": "7172caac547e040a",
+  "note": "2026-11-25, owner: the permit is 6 to 9 (40 CFR 133.102(c)), the observation's target channel shows the permit's centre instead of the set point, the KPI band is the permit's half-width, and the set point is 6.45, where the reference ladder's rule places it on the 6 to 9 grid (J1, rule 17). A behaviour change on a version no release shipped, so re-stamped in place (unreleased-versions rule).",
+  "stamped": "2026-11-25T08:35:59+00:00"
 }

@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/ph_neutralization/pid_output.gif" width="480px"/></p>
 
-Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. The policy reads both stages' pH probes, its two valves, the influent flow, the time spent outside the permit and the diversion basin's level. The buffer flow and the acid strength are hidden. Each step is charged, in litres of reagent, the reagent used, the time outside the permit, and the effluent diverted while the discharge is below pH 5. One excursion longer than 60 min, or an overrun basin, is a violation and is charged as a restart.
+Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. The policy reads both stages' pH probes, its two valves, the influent flow, the time spent outside the permit and the diversion basin's level. The buffer flow and the acid strength are hidden. Each step is charged, in litres of reagent, the reagent used, the time outside the permit, and the effluent diverted while the discharge is below pH 5. One excursion longer than 60 min, or an overrun basin, is a violation and is charged as a restart.
 
 ```python
 import target_gym as tg
@@ -38,7 +38,7 @@ actuator range inside the environment.
 |---|---|
 | 0 | discharge pH, stage 2's probe |
 | 1 | stage-1 reagent valve, percent of its range |
-| 2 | pH set point |
+| 2 | the permit's centre, pH 7.5 |
 | 3 | minutes outside the permit in this excursion |
 | 4 | stage-1 pH, its probe |
 | 5 | stage-2 trim valve, percent of its maximum |
@@ -128,7 +128,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `window_upsets` | 1 | - |
 | `event_hold` | 1e+09 | s |
 | `permit_low` | 6 | pH |
-| `permit_high` | 8 | pH |
+| `permit_high` | 9 | pH |
 | `excursion_limit` | 3600 | s |
 | `sewer_floor` | 5 | pH |
 | `basin_volume` | 236.16 | L |
@@ -137,12 +137,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `precision_floor` | 0.01 | pH |
 | `pH_max` | 12 | pH |
 | `reagent_cost_weight` | 0 | - |
-| `setpoint_pH` | 6.5 | pH |
+| `setpoint_pH` | 6.45 | pH |
 | `reward_version` | 4 | - |
 | `reagent_price` | 1 | L/L |
 | `excursion_price` | 1.66667 | L/s |
 | `diversion_price` | 2 | L/L |
 | `failure_cost` | 9 | L |
 | `restart_steps` | 720 | steps |
-| `e_floor` | 1 | pH |
+| `e_floor` | 1.5 | pH |
 
