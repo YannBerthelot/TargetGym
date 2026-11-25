@@ -4,14 +4,15 @@ Contract (owner, 2026-11-23, "lowest with no exit", each rung on its own):
 leaving the comfort band, 21 to 26 C, in office hours is charged as lost work
 (``PHYSICS.md`` sec. 4 and 5). So each rung of the ladder holds the lowest
 candidate of the zone's grid at which it leaves the band on none of the
-ladder's seeds, in any scenario. The grid is set from the zone alone: the cheap
+ladder's seeds, in any scenario, on the days an evaluation scores (4 to 10,
+owner, 2026-11-24: the burn-in and the ceiling's tail are read by no line). The grid is set from the zone alone: the cheap
 edge, 21 C, and ten equal steps to the centre, 23.5 C, so 0.25 K apart.
 
 Checked here without the ladder's own count of exits: each rung is run over
 the suite at its own set point and the score's ``comfort`` term read directly.
 
-One ladder build on the scored plant (bump tests, then ten seeds of five
-fortnights per candidate and per rung) and one suite per rung.
+One ladder build on the scored plant (bump tests, then ten seeds of three
+twelve-day runs per candidate and per rung) and one suite per rung.
 """
 
 import importlib.util
@@ -21,7 +22,7 @@ import sys
 import numpy as np
 import pytest
 
-from target_gym import scenarios
+from target_gym import evaluation, scenarios
 from target_gym.benchmark import run_policy, task_info
 from target_gym.registry import REGISTRY
 
@@ -69,7 +70,8 @@ def test_each_rung_is_charged_no_lost_work_on_any_seed(built, rung):
         )
         task = task_info("hvac", env, params, len(ladder.SEEDS))
         rollout = run_policy(policy, env, params, task, seeds=ladder.SEEDS)
-        charged = np.asarray(rollout["terms"]["comfort"]) > 0.0
+        charged = np.asarray(rollout["terms"]["comfort"]) > 0.0  # (seeds, steps)
+        charged = charged[:, evaluation.scored_window(spec, charged.shape[1])]
         assert not charged.any(), (scenario.name, int(charged.any(axis=1).sum()))
 
 

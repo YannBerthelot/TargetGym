@@ -632,3 +632,81 @@ def test_distillations_bottoms_setpoint_fits_the_flow_box(ladder, step):
 
     assert float(p.L_min) < L * feed / float(p.F) < float(p.L_max)
     assert float(p.V_min) < V * feed / float(p.F) < float(p.V_max)
+
+
+# The evaluation window (owner, 2026-11-24; tests/test_scenarios.py has the contract):
+# a rung's cost and a zone's exits read only the steps a task's evaluation scores.
+
+
+class Pulse:
+    """A raw action of 0.9 for the first ``steps`` steps, then 0.5: x leaves the
+    band around 1.0 (2 per raw action, so 1.8) and comes back to rest on 1.0."""
+
+    name, oracle = "pulse", False
+
+    def __init__(self, steps):
+        self.steps = steps
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t):
+        import numpy as np
+
+        return np.full((len(obs), 1), 0.9 if t < self.steps else 0.5), carry
+
+
+def _windowed(unscored, scored):
+    import dataclasses
+
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    return dataclasses.replace(
+        REGISTRY["first_order"],
+        evaluation=lambda: evaluation.Evaluation(
+            unscored_steps=unscored, scored_steps=scored
+        ),
+    )
+
+
+def test_a_rungs_cost_is_the_mean_over_the_scored_window_alone(ladder):
+    import dataclasses
+
+    import numpy as np
+
+    from target_gym import scenarios
+    from target_gym.benchmark import episodes_of, run_policy, task_info
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    spec = _windowed(60, 60)  # steps 60 to 119 of 150
+    got = ladder.run_suite("first_order", row, Pulse(20), spec=spec)
+    # The same episodes run straight through the benchmark: the window's mean.
+    env = spec.make_env()
+    (normal,) = scenarios.suite(spec)
+    params = scenarios.params_for(
+        spec, normal, **{"sensor_noise_scale": ladder.NOISE, **row.score}
+    )
+    task = task_info("first_order", env, params, len(ladder.SEEDS))
+    eps = episodes_of(run_policy(Pulse(20), env, params, task, seeds=ladder.SEEDS))
+    expected = [float(e.cost[60:120].mean()) for e in eps]
+    np.testing.assert_allclose(got["costs"], expected, rtol=1e-6)
+    whole = [float(e.cost.mean()) for e in eps]
+    assert not np.allclose(expected, whole)
+
+
+def test_a_zone_left_only_before_the_scored_window_is_not_left(ladder):
+    import dataclasses
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    # Out of the band for the first 20 steps on every seed, back within ten time
+    # constants' worth of steps (tau is 10 steps), so a window from step 60 sees
+    # none of it, and a window from the reset sees all of it.
+    late = ladder.zone_exits(
+        "first_order", row, Pulse(20), ("tracking",), spec=_windowed(60, 90)
+    )
+    early = ladder.zone_exits(
+        "first_order", row, Pulse(20), ("tracking",), spec=_windowed(0, 150)
+    )
+    assert late == ()
+    assert early == tuple(("normal", s) for s in range(100, 110))

@@ -15,7 +15,7 @@ env, params = tg.make("hvac")
 | Action space | `Box((1,))`, all actions in [-1, 1] |
 | Observation space | `Box((12,))` |
 | Tracked variable(s) | zone air temperature (deg C) |
-| Episode length | 1344 steps of 900 s (14 days) |
+| Episode length | 1152 steps of 900 s (12 days) |
 | Cite as | `hvac-v6` |
 | Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/hvac/PHYSICS.md) |
@@ -72,7 +72,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Termination.** None: nothing trips this plant. See [Reward shaping](../reward-shaping.md#failure).
 
-**Truncation.** After 1344 steps.
+**Truncation.** After 1152 steps.
 
 ## Reference and ceiling
 
@@ -98,7 +98,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | parameter | value | unit |
 |---|---|---|
 | `delta_t` | 900 | s |
-| `max_steps_in_episode` | 1344 | steps |
+| `max_steps_in_episode` | 1152 | steps |
 | `sensor_noise_scale` | 1 | - |
 | `actuator_dead_band` | 0 | fraction of span |
 | `actuator_stiction` | 0 | fraction of span |

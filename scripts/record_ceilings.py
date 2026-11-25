@@ -3,11 +3,17 @@ plant and write ``data/oracle_ceilings/<task>.json`` stamped with that plant.
 
     python scripts/record_ceilings.py solve TASK SCENARIO SEED OUT_DIR [--start mpc[+expert]]
     python scripts/record_ceilings.py write TASK OUT_DIR
+    python scripts/record_ceilings.py owed TASK OUT_DIR
 
 ``solve`` plans one episode with the true model, the true state and the episode's
 future, on the seed's own keys (``benchmark.episode_keys``), and replays the plan
 through ``benchmark.run_policy`` at sensor noise 1 with the ladder row's score
-parameters, as the J3 lines are scored. Only the replayed cost is reported.
+parameters, as the J3 lines are scored. Only the replayed cost is reported, read over
+the task's scored window (``evaluation.Evaluation``): a plan charges the whole
+episode, its burn-in and its tail included, and a line reads the window alone.
+``owed`` prints, per scenario, the seeds still to solve under the seed rule
+(``evaluation.line_seeds``): the evaluation seeds first, then the extra seeds where
+the kept reference's saving over the solved ceilings has an interval that touches 0.
 ``write`` gathers every solved seed into the ceilings file, which
 ``scripts/record_charter.py --parts ceiling`` then reads. The glass furnace has its
 own script, ``scripts/glass_slow_oracle.py``.
@@ -69,7 +75,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from target_gym import charter, scenarios  # noqa: E402
+from target_gym import charter, evaluation, scenarios  # noqa: E402
 from target_gym.benchmark import (  # noqa: E402
     episode_keys,
     episodes_of,
@@ -115,7 +121,10 @@ def replay(task, env, params, seed, policy) -> dict:
     (ep,) = episodes_of(
         run_policy(policy, env, params, task_info(task, env, params, 1), seeds=[seed])
     )
-    return {"cost": float(ep.cost.mean()), "trips": int(np.sum(ep.failed))}
+    return {
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
+        "trips": int(np.sum(ep.failed)),
+    }
 
 
 class StatePlan:
@@ -152,7 +161,7 @@ def oracle_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": float(ep.cost.mean()),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -173,7 +182,7 @@ def expert_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": float(ep.cost.mean()),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -551,6 +560,36 @@ def write(task, out_dir):
     print(f"{task}: J_ceiling {data['J_ceiling']:.6g}, wrote {p}")
 
 
+def owed(task, out_dir) -> dict:
+    """``{scenario: seeds}`` still to solve in ``out_dir`` under the seed rule, the
+    kept reference read from the task's charter record."""
+    import reference_ladder as L
+
+    spec = REGISTRY[task]
+    ev = evaluation.of(spec)
+    got: dict = {}
+    for f in pathlib.Path(out_dir).glob(f"{task}__*.json"):
+        r = json.loads(f.read_text())
+        got.setdefault(r["scenario"], {})[r["seed"]] = r["cost"]
+    names = list(scenarios.weights(spec))
+    out = {s: [x for x in ev.seeds if x not in got.get(s, {})] for s in names}
+    ready = [s for s in names if not out[s] and ev.extra_seeds]
+    if ready:
+        kept = ((charter.load(task) or {}).get("reference") or {}).get("kept")
+        if not kept:
+            raise SystemExit(f"{task}: record the reference before the extra seeds")
+        row = L.ROWS[task]()
+        policy = L.Reference(kept, L.build(task, row)[kept])
+        ref = L.run_suite(task, row, policy, seeds={s: ev.seeds for s in names})
+        for s in ready:
+            costs = ref["scenarios"][s]["costs"]
+            saving = [c - got[s][x] for c, x in zip(costs, ev.seeds)]
+            want = evaluation.line_seeds(spec, saving)
+            out[s] = [x for x in want if x not in got[s]]
+    print(json.dumps(out))
+    return out
+
+
 def _stop_rule(weights, got) -> dict:
     """The stop rule's verdict where the task has one (rows carry ``floor``):
     each start's J (its planned cost, weighted as the suite), the balance
@@ -591,5 +630,7 @@ if __name__ == "__main__":
         solve(sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], start)
     elif sys.argv[1] == "write":
         write(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "owed":
+        owed(sys.argv[2], sys.argv[3])
     else:
         raise SystemExit(__doc__)
