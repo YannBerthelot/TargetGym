@@ -14,7 +14,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from target_gym import eval as E
 from target_gym.compressor_surge.env import (
     live_target,
 )
@@ -51,21 +50,48 @@ def test_the_largest_ramp_is_inside_what_the_drive_can_follow():
     assert speed[1] - speed[0] < P.drive_rate * P.setpoint_ramp_s
 
 
+def _zone_after_a_move(q, seed, to):
+    """The shipped expert's zone cost over the block after the setpoint moves
+    from 24 kPa to ``to`` (Pa), on seed ``seed``: the move is built into the
+    schedule, as the task's own setpoint is constant [C3, p. 4]."""
+    key = jax.random.PRNGKey(seed)
+    _, s = ENV.reset_env(key, q)
+    s = s.replace(setpoint_levels=jnp.asarray([24e3, to, to, to], jnp.float32))
+    obs, policy, step = ENV.get_obs(s, q), baseline_policy(SPEC, "pid", q), _STEP
+    block, zone = int(q.setpoint_block_steps), 0.0
+    for t in range(2 * block):
+        action = jnp.asarray(policy(np.asarray(obs)), jnp.float32)
+        obs, s, _, _, _ = step(jax.random.fold_in(key, t), s, action, q)
+        if t >= block:
+            zone += float(ENV.reward_terms(s, q)["zone"])
+    return zone
+
+
+_STEP = jax.jit(ENV.step_env)
+
+
 @pytest.mark.large
 def test_ramps_take_the_cost_out_of_the_setpoint_moves():
     """97-99 % of the expert's cost fell in the 10 s after a step (review), so
-    the ranking read the slew. Past the opening, the same schedules ramped cost
-    under a tenth."""
-    cost = [
-        sum(
-            E.run_episode(SPEC, q, baseline_policy(SPEC, "pid", q), seed=s)
-            .terms["tracking"][150:]
-            .sum()
-            for s in (200, 201)
-        )
-        for q in (P.replace(setpoint_ramp_s=0.1), P)
-    ]
-    assert cost[1] < 0.1 * cost[0]
+    the ranking read the slew; ramps were added for that.
+
+    Re-measured on the current plant (2026-11-25, owner: keep the behaviour).
+    The task's setpoint is constant now, so the move is built here: 24 to 28
+    and 24 to 20 kPa at the second block, seeds 200 and 201, the shipped
+    expert, the setpoint's cost being the ``zone`` term (it was
+    ``tracking``). Stepped, the moves cost 5600, 3600, 2300 and 3300; ramped
+    over 10 s, 1700, 1400, 0 and 0: a fifth in all (21 %). Down, the ramped
+    move never leaves the zone. Up it still does, since the drive's 3 %/s
+    takes longer than the ramp to reach the higher speed."""
+    stepped = P.replace(setpoint_ramp_s=0.1)
+    cost = {
+        (to, ramped): sum(_zone_after_a_move(q, s, to) for s in (200, 201))
+        for to in (28e3, 20e3)
+        for ramped, q in ((False, stepped), (True, P))
+    }
+    total = {r: cost[(28e3, r)] + cost[(20e3, r)] for r in (False, True)}
+    assert total[True] < 0.25 * total[False]
+    assert cost[(20e3, True)] == 0.0 < cost[(20e3, False)]
 
 
 def test_the_applied_action_is_where_the_actuators_went():
