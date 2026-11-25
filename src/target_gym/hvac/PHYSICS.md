@@ -267,21 +267,21 @@ rerun:
 
 | Test | Source | Result |
 |---|---|---|
-| 1. Slab time constant 145 to 462 min, on a step the source can follow (+1 K) | [10], [6] | Pass, 150 min |
-| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 480 min: the source's size cuts the step |
-| 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.76 |
+| 1. Slab time constant 145 to 462 min, on a step the source can follow (+1 K) | [10], [6] | **Fails, 135 min** since the 2026-11-25 storey and light mass (open finding, sent to the owner) |
+| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 390 min: the source's size cuts the step |
+| 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.79 |
 | 4. Slab output falls when gains rise | [7], [9] | Pass |
-| 5. Setback recovery 1 h or more | [15] | Pass, 16.5 h: 8 h with the water off cools the room to 20.2 C, and the source at 1.2 times the design load brings it back slowly |
-| 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 26.0 C |
+| 5. Setback recovery 1 h or more | [15] | Pass, 7.75 h: 8 h with the water off cools the room, and the source at 1.39 times the design load brings it back slowly |
+| 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 25.0 C |
 | 7. Heating limit 8 to 15 C | [11], [9] | Pass |
-| 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.2 C and 27.7 C |
+| 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.0 C and 26.6 C |
 | 9. Morning overshoot after reduced mode | [12] | Pass |
-| 10. Design supply never recovers a setback | [15] | Pass, 20.44 C after 15 h (limit 20.5) |
+| 10. Design supply never recovers a setback | [15] | **Fails, 20.55 C after 15 h** (limit 20.5) since the 2026-11-25 storey and light mass (open finding, sent to the owner) |
 | 11. ASHRAE 55 drift under the curve | [4] | Pass: at most 0.24 K in 15 min and 0.43 K in 1 h |
 
 Test 5 failed (45 min) while the source had no size: full heat was 39 kW into
 a zone whose design load is 4.9 kW. With Muenster's 38 W/m^2 [13] the plant
-recovers in 16.5 h, beyond [15]'s 1.0 to 6.9 h, which are for baseboard homes
+recovered in 16.5 h (7.75 h on the 2026-11-25 middle storey), beyond [15]'s 1.0 to 6.9 h, which are for baseboard homes
 with boilers at twice the design load; [15] says of a source sized to the load
 that it "may never recover". The fix was a missing piece of the plant (charter
 B6), not a number moved until the test passed.
