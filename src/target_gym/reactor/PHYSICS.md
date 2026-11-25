@@ -355,8 +355,8 @@ tool starts from.
 | flux difference outside its band, 5 % of rated delta I either side of a target that scales with power | penalty clock | penalty time counts a second a second at 50 % of rated power and above, half a second a second from 15 % to 50 %, not below; 1 h in 24 h is free; past it, the lost output of a reduction to 50 % | NUREG-1431 Rev. 3.0, Bases B 3.2.3A, Notes 2 and 3 and Required Action C.1; the band's 5 % is EDF's and Krsko's |
 | the same, at 90 % of rated power and above | timed | 30 min outside without a break (15 to restore, 15 to reduce), then the lost output of a reduction to 90 % | the same bases, Required Actions A.1 and B.1 |
 | flux difference outside the acceptable operation limits, from 11 % of rated delta I at 90 % power to 31 % at 50 %, between those powers | timed | 30 min outside without a break, then the lost output of a reduction to 50 % | the same bases, Figure B 3.2.3A-1 ("for illustration only": a plant's core report gives its own) and C.1's completion time |
-| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, so hot standby | STS LCO 3.4.1 (US EPR GTS and AP1000 bases, from search summaries); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
-| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
+| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore; then the turbine unloads along a straight line to MODE 2's 5 % of rated power over 6 h, and hot standby after 8 h above the limit without a break; a parameter restored before then ends the shutdown (hot standby at 2 h until 2026-11-25) | Westinghouse STS, NUREG-1431 Rev. 5.0 (ML21259A155), page 3.4.1-1, LCO 3.4.1 Conditions A and B, LCO 3.0.2, Table 1.1-1 (opened, saved by the owner); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
+| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; the rods are the lead bank, so 2 h to restore (Condition B), then MODE 2 with keff < 1.0 within 6 h (Condition D): the turbine unloads along a straight line to no load, and hot standby after 8 h past the limit without a break (hot standby at 2 h until 2026-11-25) | KAIST's lead for the points; the family's shape; Westinghouse STS, NUREG-1431 Rev. 5.0 (ML21259A155), pages 3.1.6-1 and 3.1.6-2 (Condition A covers only banks A, B and C) |
 
 The offset's clock looks back 24 h, in whole control hours: at the start of each
 hour the hour just done is filed and the hour filed a day ago leaves the count, so
@@ -545,9 +545,59 @@ Tavg, fed forward from the day's plan and from the operator's tool for xenon and
 fuel's burnup. The turbine loads at the rate the boron line carries. The owner
 adopted the procedure on 2026-11-08, on condition it keeps the insertion limit.
 
-**From the curve book (2026-11-15).** The reference reads the core's cycle point
-(observation 13) and takes that point's boron worth and moderator coefficient
-(`experts.curve_book`, the plant's own lines of section 1). What it works out for
+**From the curve book (2026-11-15; measured since 2026-11-25).** The reference reads
+the core's cycle point (observation 13) and takes that point's boron worth and
+moderator coefficient off its curve book (`experts.curve_book`). Until 2026-11-25 the
+book was the plant's own lines of section 1, exact core knowledge no operator has.
+Since then the recipe measures it (owner, after the package review), as a reload's
+startup physics tests do (ANSI/ANS-19.6.1), at power at the two ends of the
+load-following range (0 and 90 % of the cycle). A dilution bump at fixed rods reads K
+of Tavg per ppm. A 30-step rod bump at fixed boron, read against the rods' calibrated
+worth curve, reads the feedback `alpha_coolant + alpha_fuel`, since at a fixed power
+the fuel follows the coolant. The worth is `-K x feedback`, and the moderator
+coefficient is the feedback less the fuel's Doppler coefficient, a design value. The
+book is the straight lines through the two ends (`experts.measured`). On the shipped
+plant it reads -11.90 and -55.10 pcm/K (the plant's -12.0 and -55.2) and -7.99 and
+-10.38 pcm/ppm (-8.00 and -10.61). A turbine swing at fixed rods was tried first for
+the moderator coefficient and read it 25 % too negative, because the swing also
+moves the axial tilt's reactivity, which its balance left out.
+
+**Rods on Tavg past its dead band: tried, set aside (2026-11-25).** The package
+review traced a stored trip (fast_return seed 104 on the 2026-11-12 plant) to the
+expert. After a fast return Tavg sat 3 to 5 K above its program for two hours, past
+the DNB margin, with the rods parked on the offset loop and boron alone correcting,
+until the timed limit sent the plant to hot standby. On the current plant it no
+longer trips (4,200 plant-days of 7-day runs), but Tavg still overshoots 3 to 4 K at
+the end of a third of the load-follow days' ramps up. The owner chose rods on Tavg
+past its 1.6 K dead band, and no feedforward boration while the rods carry a ramp
+down. Built and measured on 20 seeds, it lost the offset. On every load-follow day the
+offset spent over an hour outside its band, where the expert kept it inside, because
+the rods are the procedure's only actuator on the offset. Engaging the rods only near
+the limits (the DNB margin, the loading stop) and the ladder's published structure
+(rods always on Tavg, boron on the offset) lost it too, and each tripped a fast
+return. Deferring the boration alone made fast returns run hotter. So none of these
+ships, and the owner decides the next step.
+
+**The turbine's thresholds, by a rule (owner, 2026-11-25).** `on_plan`, `reload_band`
+and `restart_drop` were ours. They are now set by a rule fixed before the recipe's
+run, in standard deviations of the turbine's load read off its plan on a calm day,
+which the recipe measures (0.005025): on its plan within 2, reloading past 10, and a
+restart a fall of the turbine's fastest step (2.5 %) plus 3. That gives 0.0100,
+0.0502 and 0.0401, where they were 0.01, 0.05 and 0.04.
+
+**Where each piece comes from.** From a written procedure: the rod program on Tavg
+(HRTD 8.1 and 5.0); rods on the offset and boron on Tavg (Krsko, NENE 2022; KNS
+18A-534). From the recipe's tests: the two loop gains (bump tests, SIMC), the curve
+book and the turbine's thresholds. Structural, from the family's practice, each
+added after a failure: the rods on Tavg down a fast ramp (2026-11-10, after hot-leg
+trips; Westinghouse automatic rod control, EDF's grey rods), the day's dispatch read
+as it comes and the reloading turbine's feedforward (2026-11-11 and 2026-11-12, after
+trips).
+Ours: the action band on the offset (half the target band, the owner's, fixed before
+any rerun), the back-off of 2 standard deviations (charter J1), the xenon tool's play
+(the rule that a controller acts only on what is charged, no new number, added after
+the null beat the reference on baseload), and the line's lead and longest delay
+(600 s and 900 s, the middle and end of its documented 10 to 30 steps). What it works out for
 boron is in ppm, turned into a flow by the pumps' rates at the boron read, so its
 loops have the same gain diluting and borating, at any point of the cycle. Until
 then its gains and its feedforward were fitted at the start of the cycle.
@@ -719,7 +769,7 @@ which is what the recorded baselines use.
 | `ao_strict_power`, `ao_strict_allowed` | 0.9, 1800 s | at 90 % and above the flux difference must be in its band: 15 min to restore it and 15 min to be under 90 %, then that reduction's lost output (the same bases, Required Actions A.1 and B.1) |
 | `ao_limit_high`, `ao_limit_low`, `ao_limit_allowed` | 0.11, 0.31, 1800 s | the acceptable operation limits between 50 and 90 %: 11 % of rated delta I at 90 % power to 31 % at 50 %, read off Figure B 3.2.3A-1, which is "for illustration only"; outside them 30 min without a break, then a reduction to 50 % (C.1's completion time) |
 | `turbine_rate` | 5 %/min | the third action's full scale; the plan the turbine does not take is lost output at `derate_price_per_MWh`, $666.67 per step per unit of rated load, the trip's own price |
-| `ril_full`, `ril_half`, `ril_allowed` | 0.22, 0.78, 7200 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore (STS 3.1.6) |
+| `ril_full`, `ril_half`, `ril_restore`, `ril_allowed` | 0.22, 0.78, 7200 s, 28800 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore, then 6 h to shut down (STS 3.1.6 Conditions B and D, ML21259A155) |
 | `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
 | `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
 | `restart_steps` | 5760 (48 h) | a scram's dead time, **ours,** inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the restart (KNS 20A-065). The reload after it is played out and charged in tracking |

@@ -336,11 +336,17 @@ class Reactor(
         I_tilt0 = jnp.where(follow, tilts[row, 0], 0.0)
         Xe_tilt0 = jnp.where(follow, tilts[row, 1], 0.0)
         # Where the core sits in its cycle, drawn evenly, and its boron, moderator
-        # coefficient and boron worth there.
+        # coefficient and boron worth there. A run never reaches the end of the
+        # load-following range (owner, 2026-11-25): the range is cut by what the
+        # run burns at this core's rate, ``max_steps_in_episode`` steps at full
+        # power, a ppm being ``1 / boron_ref`` of the cycle.
+        start, end = params.cycle_range
+        seconds = params.max_steps_in_episode * CONTROL_PERIOD * params.delta_t
+        run = rate * seconds / 86400.0 / params.boron_ref
         cycle0 = jax.random.uniform(
             jax.random.fold_in(key, _CYCLE),
-            minval=params.cycle_range[0],
-            maxval=params.cycle_range[1],
+            minval=start,
+            maxval=jnp.maximum(end - run, start),
         )
         core = core_at(cycle0, params)
         # K: at a fixed power the fuel cools with the coolant, so both feedbacks.

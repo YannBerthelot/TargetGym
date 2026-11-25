@@ -142,3 +142,18 @@ def test_the_compiled_runner_scores_the_same_runs_as_the_policy_runner():
     assert fast["seeds"] == slow["seeds"] and fast["trips"] == slow["trips"]
     # Float32, one jit against a step at a time: 1e-4 of the cost.
     assert fast["costs"] == pytest.approx(slow["costs"], rel=1e-4)
+
+
+def test_a_runs_core_never_reaches_the_end_of_its_range():
+    """The owner's cut (2026-11-25): a 7-day run's core starts at most what 7 days
+    burn short of the range's end, at the core's own rate; at the range's fastest
+    rate that is 0.9 - 7 x 3.3 / 1690 = 0.886331 of the cycle."""
+    import jax
+    import numpy as np
+
+    stream, params = S.stream("reactor", "baseload")
+    keys = jax.random.split(jax.random.PRNGKey(5), 400)
+    _, state = jax.vmap(stream.reset, in_axes=(0, None))(keys, params)
+    env = state.env
+    run = np.asarray(env.burn_rate) * 7 * 86400.0 / 1690.0
+    assert np.all(np.asarray(env.cycle0) + run <= 0.9 + 1e-6)

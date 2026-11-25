@@ -374,18 +374,31 @@ class ReactorParams(EnvParams):
     ao_limit_low: float = 0.31
     ao_limit_allowed: float = 1800.0  # s
     # The rod insertion limit, the family's shape: a straight line in power, 22 %
-    # of the stroke in at full power to 78 % at half (KAIST's lead), 2 h to restore
-    # (STS 3.1.6), then hot standby.
+    # of the stroke in at full power to 78 % at half (KAIST's lead). The rods are the
+    # lead bank, so STS LCO 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0,
+    # ML21259A155, pages 3.1.6-1 and 3.1.6-2): 2 h to restore (``ril_restore``),
+    # then Condition D, MODE 2 with keff < 1.0 within 6 h: the turbine unloads along
+    # a straight line to no load, and the plant goes to hot standby at
+    # ``ril_allowed`` (owner, 2026-11-25; hot standby at 2 h until then).
     ril_full: float = 0.22
     ril_half: float = 0.78
-    ril_allowed: float = 7200.0  # s
-    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1: at or below the COLR's
-    # value, restored within 2 h, else MODE 2 within 6 h (hot standby here).
+    ril_restore: float = 7200.0  # s, Condition B
+    ril_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition D's end
+    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1 (NUREG-1431 Rev. 5.0):
+    # at or below the COLR's value, restored within 2 h (Condition A), else MODE 2
+    # within 6 h (Condition B), and a parameter restored before then ends the
+    # required action (LCO 3.0.2). The plant flies Condition B: past ``dnb_restore``
+    # its turbine unloads along a straight line to MODE 2's ``mode_2_load`` (Table
+    # 1.1-1: at most 5 % of rated power) at ``dnb_allowed``, where it goes to hot
+    # standby (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; it
+    # went to hot standby at 2 h until then).
     # Braidwood's COLR: nominal Tavg at rated power 588.0 F, limit 593.1 F, so 5.1 F
     # above the full-power program at every power (from a search summary; nrc.gov
     # blocks automated reads). The only plant found with both numbers.
     dnb_margin: float = 5.1 / 1.8  # K above the full-power program
-    dnb_allowed: float = 7200.0  # s
+    dnb_restore: float = 7200.0  # s, Condition A
+    dnb_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition B's end
+    mode_2_load: float = 0.05
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg
@@ -469,9 +482,12 @@ PARAM_UNITS = {
     "derate_price_per_MWh": "$/MWh",
     "ril_full": "",
     "ril_half": "",
+    "ril_restore": "s",
     "ril_allowed": "s",
     "dnb_margin": "K",
+    "dnb_restore": "s",
     "dnb_allowed": "s",
+    "mode_2_load": "-",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
@@ -1222,6 +1238,20 @@ def compute_next_state(
     rate = jnp.clip(action[2] * p.turbine_rate, -p.turbine_rate, most)
     pickup = jnp.maximum(held + rate * p.delta_t, jnp.minimum(held, p.restart_load))
     pickup = jnp.minimum(pickup, turbine_capacity(state.T_sg, p))
+
+    # LCO 3.4.1 Condition B: past its 2 h to restore Tavg the unit shuts down to
+    # MODE 2 within 6 h, along a straight line (``ReactorParams.dnb_restore``);
+    # LCO 3.1.6 Condition D likewise past the rods' 2 h, to no load (keff < 1).
+    def shutdown(clock, restore, allowed, floor):
+        into = (clock - restore) / (allowed - restore)
+        return into > 0.0, 1.0 - (1.0 - floor) * jnp.clip(into, 0.0, 1.0)
+
+    dnb_on, dnb = shutdown(state.above_dnb, p.dnb_restore, p.dnb_allowed, p.mode_2_load)
+    ril_on, ril = shutdown(state.ril_outside, p.ril_restore, p.ril_allowed, 0.0)
+    line = jnp.minimum(jnp.where(dnb_on, dnb, 1e9), jnp.where(ril_on, ril, 1e9))
+    pickup = jnp.where(
+        dnb_on | ril_on, jnp.minimum(jnp.minimum(day, pickup), line), pickup
+    )
     meets = pickup >= day - ON_PLAN
     pickup = jnp.where(meets, NOT_RELOADING, pickup)
     conditioning = jnp.where(meets, 0.0, state.conditioning)
