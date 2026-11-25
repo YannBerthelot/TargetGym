@@ -87,6 +87,8 @@ The ceiling reads what the policy does not observe: the composition in the react
 
 The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
+Version 8 (the reactor run for what it makes, owner's decision of 2026-11-24) ships no oracle: its planner model is not written for two moves and the production score, and the owner decided the same day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's (cstr/oracle.py).
+
 ## Arguments
 
 The scored configuration, which `tg.make` returns. A keyword argument changes one field, as in `tg.make("cstr", max_steps_in_episode=...)`.

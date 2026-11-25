@@ -1361,6 +1361,17 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
         oracle_data=_shared_oracle("compressor_surge"),
+        # Owner, 2026-11-25: shipped as a documented finding until a later update.
+        baselines_note=(
+            "The shipped expert fails its own stability check. It is a PI pair "
+            "(speed holds the pressure, the recycle valve holds the surge margin) "
+            "with a backup line and rate action, tuned by its recipe. With the "
+            "valve's 0.15 s dead time the two loops together grow instead of "
+            "settling, so the valve swings open and shut in a limit cycle. It "
+            "keeps its surge margin and does not trip the plant, but it spends "
+            "recycle energy a settled controller would not: read it as a weak "
+            "expert, not a tuned one (compressor_surge/PHYSICS.md, section 7)."
+        ),
         # The OU deviation of the consumers' opening, zero-mean;
         # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
