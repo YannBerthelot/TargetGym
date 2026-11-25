@@ -323,20 +323,20 @@ def test_near_the_heating_limit_the_room_opens_at_or_above_the_band(env):
 
 
 def test_the_episode_is_three_days_burned_in_seven_scored_and_a_two_day_tail(env):
-    from target_gym import scenarios
+    from target_gym import evaluation
     from target_gym.registry import REGISTRY
 
     day = int(86400.0 / PARAMS.delta_t)
     spec = REGISTRY["hvac"]
     assert PARAMS.max_steps_in_episode == 12 * day
-    assert scenarios.scored_window(spec, 12 * day) == slice(3 * day, 10 * day)
+    assert evaluation.scored_window(spec, 12 * day) == slice(3 * day, 10 * day)
 
 
 def test_lines_run_five_seeds_and_five_more_where_the_saving_is_unclear():
-    from target_gym import scenarios
+    from target_gym import evaluation
     from target_gym.registry import REGISTRY
 
-    ev = scenarios.evaluation(REGISTRY["hvac"])
+    ev = evaluation.of(REGISTRY["hvac"])
     assert ev.seeds == tuple(range(100, 105))
     assert ev.extra_seeds == tuple(range(105, 110))
 

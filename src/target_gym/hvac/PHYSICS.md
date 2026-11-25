@@ -198,7 +198,7 @@ reference against the ceiling, 14-day episodes):
   12), which no line reads.
 - Seeds: every line runs on seeds 100 to 104, and 105 to 109 too in a scenario
   whose paired saving of the reference over the ceiling has a 95 % Student t
-  interval that touches 0 (`target_gym.scenarios.line_seeds`, written before any
+  interval that touches 0 (`target_gym.evaluation.line_seeds`, written before any
   result). The placement of the set point keeps the ladder's ten seeds.
 
 **The stream** (docs/proposals/long-strata.md, S1). As a continuing plant

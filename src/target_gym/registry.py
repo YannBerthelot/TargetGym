@@ -170,7 +170,7 @@ class EnvSpec:
         fingerprints cover it. ``None`` is one ``normal`` scenario.
     evaluation:
         Zero-argument callable returning what an evaluation reads of the
-        task's episodes (``scenarios.Evaluation``: the scored window and the
+        task's episodes (``evaluation.Evaluation``: the scored window and the
         seed rule), kept in the task's own package like ``scenarios``.
         ``None`` scores every step on the ladder's seeds.
     extra:
@@ -218,7 +218,7 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
-    #: What an evaluation reads (``scenarios.Evaluation``): the scored window and
+    #: What an evaluation reads (``evaluation.Evaluation``): the scored window and
     #: the seed rule. None scores every step on the ladder's seeds.
     evaluation: Callable[[], Any] | None = None
     extra: str | None = None
@@ -450,8 +450,8 @@ def _hvac_scenarios():
 
 
 def _hvac_evaluation():
+    from target_gym.evaluation import Evaluation
     from target_gym.hvac.scenarios import hvac_evaluation
-    from target_gym.scenarios import Evaluation
 
     return Evaluation(**hvac_evaluation())
 

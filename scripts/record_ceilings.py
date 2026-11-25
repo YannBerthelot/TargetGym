@@ -9,10 +9,10 @@ plant and write ``data/oracle_ceilings/<task>.json`` stamped with that plant.
 future, on the seed's own keys (``benchmark.episode_keys``), and replays the plan
 through ``benchmark.run_policy`` at sensor noise 1 with the ladder row's score
 parameters, as the J3 lines are scored. Only the replayed cost is reported, read over
-the task's scored window (``scenarios.Evaluation``): a plan charges the whole
+the task's scored window (``evaluation.Evaluation``): a plan charges the whole
 episode, its burn-in and its tail included, and a line reads the window alone.
 ``owed`` prints, per scenario, the seeds still to solve under the seed rule
-(``scenarios.line_seeds``): the evaluation seeds first, then the extra seeds where
+(``evaluation.line_seeds``): the evaluation seeds first, then the extra seeds where
 the kept reference's saving over the solved ceilings has an interval that touches 0.
 ``write`` gathers every solved seed into the ceilings file, which
 ``scripts/record_charter.py --parts ceiling`` then reads. The glass furnace has its
@@ -71,7 +71,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from target_gym import charter, scenarios  # noqa: E402
+from target_gym import charter, evaluation, scenarios  # noqa: E402
 from target_gym.benchmark import (  # noqa: E402
     episode_keys,
     episodes_of,
@@ -117,7 +117,7 @@ def replay(task, env, params, seed, policy) -> dict:
         run_policy(policy, env, params, task_info(task, env, params, 1), seeds=[seed])
     )
     return {
-        "cost": scenarios.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -156,7 +156,7 @@ def oracle_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": scenarios.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -177,7 +177,7 @@ def expert_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": scenarios.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -554,7 +554,7 @@ def owed(task, out_dir) -> dict:
     import reference_ladder as L
 
     spec = REGISTRY[task]
-    ev = scenarios.evaluation(spec)
+    ev = evaluation.of(spec)
     got: dict = {}
     for f in pathlib.Path(out_dir).glob(f"{task}__*.json"):
         r = json.loads(f.read_text())
@@ -572,7 +572,7 @@ def owed(task, out_dir) -> dict:
         for s in ready:
             costs = ref["scenarios"][s]["costs"]
             saving = [c - got[s][x] for c, x in zip(costs, ev.seeds)]
-            want = scenarios.line_seeds(spec, saving)
+            want = evaluation.line_seeds(spec, saving)
             out[s] = [x for x in want if x not in got[s]]
     print(json.dumps(out))
     return out

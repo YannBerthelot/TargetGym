@@ -15,7 +15,7 @@ scoring seeds). J3's lines run on the ladder seeds 100 to 109, as the ceilings d
 ``nulls``, ``j2`` and ``anchor`` read the recorded reference.
 
 The J3 lines (reference, nulls, mpc) run on ``charter.line_seeds``: the task's
-evaluation seeds (``scenarios.Evaluation``), plus the extra seeds of a scenario whose
+evaluation seeds (``evaluation.Evaluation``), plus the extra seeds of a scenario whose
 ceiling solved them. On a task that declares an evaluation, record its ceilings
 first (``scripts/record_ceilings.py``, ``owed`` lists the seeds the seed rule asks
 for), then these lines, so every line is paired with the ceiling seed by seed.

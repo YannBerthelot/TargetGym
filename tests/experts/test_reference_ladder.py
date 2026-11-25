@@ -659,12 +659,12 @@ class Pulse:
 def _windowed(unscored, scored):
     import dataclasses
 
-    from target_gym import scenarios
+    from target_gym import evaluation
     from target_gym.registry import REGISTRY
 
     return dataclasses.replace(
         REGISTRY["first_order"],
-        evaluation=lambda: scenarios.Evaluation(
+        evaluation=lambda: evaluation.Evaluation(
             unscored_steps=unscored, scored_steps=scored
         ),
     )

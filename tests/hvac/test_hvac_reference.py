@@ -22,7 +22,7 @@ import sys
 import numpy as np
 import pytest
 
-from target_gym import scenarios
+from target_gym import evaluation, scenarios
 from target_gym.benchmark import run_policy, task_info
 from target_gym.registry import REGISTRY
 
@@ -71,7 +71,7 @@ def test_each_rung_is_charged_no_lost_work_on_any_seed(built, rung):
         task = task_info("hvac", env, params, len(ladder.SEEDS))
         rollout = run_policy(policy, env, params, task, seeds=ladder.SEEDS)
         charged = np.asarray(rollout["terms"]["comfort"]) > 0.0  # (seeds, steps)
-        charged = charged[:, scenarios.scored_window(spec, charged.shape[1])]
+        charged = charged[:, evaluation.scored_window(spec, charged.shape[1])]
         assert not charged.any(), (scenario.name, int(charged.any(axis=1).sum()))
 
 

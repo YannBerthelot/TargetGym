@@ -163,13 +163,13 @@ def sweep_result(draws):
 
 def line_seeds(spec, weights: dict, stored: dict | None) -> dict:
     """``{scenario: seeds}`` the J3 lines run on: the task's evaluation seeds
-    (``scenarios.Evaluation``), and its extra seeds in a scenario where the ceilings
-    file ``stored`` solved them. The seed rule (``scenarios.line_seeds``) is applied
+    (``evaluation.Evaluation``), and its extra seeds in a scenario where the ceilings
+    file ``stored`` solved them. The seed rule (``evaluation.line_seeds``) is applied
     where the ceiling is solved (``scripts/record_ceilings.py owed``), so every line
     is paired with the ceiling seed by seed."""
-    from target_gym import scenarios
+    from target_gym import evaluation
 
-    ev = scenarios.evaluation(spec)
+    ev = evaluation.of(spec)
     out = {}
     for s in weights:
         row = ((stored or {}).get("scenarios") or {}).get(s) or {}

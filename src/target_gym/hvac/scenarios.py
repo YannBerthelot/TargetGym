@@ -73,7 +73,7 @@ _DAY = 96
 
 
 def hvac_evaluation() -> dict:
-    """What an evaluation reads (``target_gym.scenarios.Evaluation``; owner,
+    """What an evaluation reads (``target_gym.evaluation.Evaluation``; owner,
     2026-11-24). Days 1 to 3 burn the slab in: the cost gap between the reference
     and the ceiling is gone after day 3, where day 1 alone held 46 % of the
     fortnight's (hvac review, 2026-11-24). Days 4 to 10 are scored, seven of the two
