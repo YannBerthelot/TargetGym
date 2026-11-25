@@ -27,9 +27,10 @@ hours at the least electricity cost. The slab takes hours to respond, so the
 policy has to act ahead: it reads the room, slab and water temperatures, the
 outdoor temperature with its last-24 h mean and next-24 h forecast, the clock,
 and the tariff with the hours to its next change. Each step is charged, in
-euros, the heat pump's electricity at the tariff, and each occupied
-kelvin-hour of room outside the band or of floor above its limit. Nothing
-trips.
+euros, the heat pump's electricity at the tariff, each occupied
+kelvin-hour of room outside the band or of floor above its limit, and the heat
+it draws from the building's store at the cheapest price heat can be stored
+at. Nothing trips.
 
 | obs | meaning |
 |---|---|
@@ -92,7 +93,7 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `c_water` | 4186 | J/(kg K) | Water |
 | `T_supply_max` | 49 | C | The TABS family's documented maximum, Madrid's [14, Table 1]; Muenster runs 16 to 30 C [13]; screed floors are cut at 55 C [17] |
 | `T_supply_min` | 15 | C | Ours: the valve's lowest setting, which is off |
-| `source_capacity` | 38 | W/m^2 | [13]: Muenster's reversible heat pumps give 530 kW of heat for 14 000 m^2, 37.9 W/m^2. Here 5.7 kW, 1.2 times the design load of 4.9 kW (159.4 W/K over 31 K) |
+| `source_capacity` | 38 | W/m^2 | [13]: Muenster's reversible heat pumps give 530 kW of heat for 14 000 m^2, 37.9 W/m^2. Here 5.7 kW, 1.39 times the design load of 4.1 kW (132.4 W/K over 31 K) |
 | `cop_carnot_fraction` | 0.52 | - | Ours, family range 0.50 to 0.57: brine heat pump datasheets give COP 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at B0/W55 [18]; the model gives 4.58 and 3.10 |
 | `T_brine` | 0 | C | Ours, family range -5 to 5 C: the EN 14511 rating point B0 [18] |
 | `price_valle`, `price_llano`, `price_punta` | 0.139, 0.184, 0.263 | EUR/kWh | [19]: one Spanish 2.0TD offer, valle 00 to 08 h, punta 10 to 14 and 18 to 22 h; Madrid charges its slabs on the night tariff [14] |
@@ -106,14 +107,18 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `comfort_tolerance` | 2.5 | K | Half the band, read only by the time-in-band KPI tables |
 | `precision_floor` | 0.1 | K | The BMS step, ours (Readings) |
 | `max_steps_in_episode` | 1152 | steps | Twelve days: three burned in, seven scored of the two weeks a curve change is judged over [11, p. 1], two of the ceiling's tail (section 5) |
-| `comfort_price` | 9.54 | EUR/(K h) | `productivity_per_K` x 15 occupants x `labour_cost`: the work an occupied kelvin-hour outside the band loses |
+| `comfort_price` | 9.54 | EUR/(K h) | Derived: `productivity_per_K` x `occupants_per_m2` x `A_floor` x `labour_cost`, 0.02 x 15 occupants x 31.8: the work an occupied kelvin-hour outside the band loses |
+| `T_out_design` | -10 | C | The curve's design point [12, p. 7], where the stored heat's price is read |
 | `restart_steps`, `failure_cost` | 0, 0.0 | - | No limit trips this plant |
 | `delta_t` | 900 | s | Ours: the standard building-simulation step |
 
 The building around the slab keeps its ISO 13790 envelope: 150 m^2 floor,
-`lambda_at` 4.5, "medium" class mass 165 kJ/(K m^2), `h_is` 3.45, `h_ms` 9.1,
-U-values 0.28 / 0.18 / 1.30 W/(m^2 K), 0.5 air changes per hour; H = 159.4
-W/K. These, the weather (5 C mean, 5 K daily half swing, 3 K OU deviation
+`lambda_at` 4.5, "light" class mass 110 kJ/(K m^2), `h_is` 3.45, `h_ms` 9.1,
+wall and window U-values 0.28 and 1.30 W/(m^2 K), 0.5 air changes per hour; H
+= 132.4 W/K. The zone is one storey of a stack of like storeys, so it has no
+roof, and the slab is a node of its own, so the 5R1C mass beside it is the
+"light" class, whose figure counts no massive floor (owner, 2026-11-25, the
+review's finding 5; before, a 150 m^2 roof at 0.18 and the "medium" class). These, the weather (5 C mean, 5 K daily half swing, 3 K OU deviation
 with a 12 h correlation), the solar peak (175 W/m^2, a PVGIS heating-season
 mean over four facades) and the internal gains (8 and 2 W/m^2, over the
 office day of [6]) are **ours**: REALITY.md has no weather statistics.
@@ -222,8 +227,16 @@ what it was.
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
-work it loses. Night charging pays twice: the night tariff is 0.53 of the
-peak's, and the slab carries the heat into the day. Inside the band being
+work it loses; and the heat the step draws from the store, `C_m T_mass +
+C_slab T_core`, at the valle tariff over the COP of the design supply
+(`env.stored_heat_price`), credited for heat put in. Over the scored days that
+charge is the store they start with less the store they leave, so heat bought
+in the unscored burn-in, or run down on the last scored evening, is paid for
+at what storing it costs (owner, 2026-11-25, the review's finding 1: a policy
+at full supply on the last unscored evening and off on the last scored one had
+cut the reference's scored cost 7 to 53 % at no loss of comfort). Night
+charging pays twice: the night tariff is 0.53 of the peak's, and the slab
+carries the heat into the day. Inside the band being
 nearer its middle earns nothing (rule 15; [20]'s loss inside 21 to 26 C is
 small and is not counted). The floor of the score, in closed form: a room held
 in the band costs only its electricity.
@@ -285,8 +298,9 @@ B6), not a number moved until the test passed.
 - One retailer's tariff [19] stands for the family's day-night prices.
 - The forecast is the weather model's own conditional mean; real day-ahead
   forecasts carry their own error, not modelled.
-- The 5R1C "medium" mass is kept beside the slab, which a TABS building would
-  count in its class.
+- The slab gives all its heat, the radiant share included, to the air node;
+  in a room about half of a floor's or a ceiling's exchange is radiant, to the
+  surfaces (the owner kept this, 2026-11-25).
 - One size for the heat source, whatever the water it makes; a heat pump's
   capacity moves with its supply and brine temperatures, not modelled.
 - The COP below W35. The ceiling's plan heats with supply water at 24 to 31 C
@@ -315,16 +329,24 @@ B6), not a number moved until the test passed.
   balance (hvac/experts.py), read on the 24 h mean or the forecast (channel 9).
 - The cascade rung has measured inner variables: the slab core (channel 3) or
   the return water (channel 4) [7, 12].
+- The night-charging rung (owner, 2026-11-25, the review's P2): Madrid charges
+  its floors at night on the cheap tariff and lets them release heat by day
+  [14, p. 14]. The water runs only from 00:00 to 07:00, at a lift above the
+  core that puts the day's balance heat in those 7 hours, and the lift is
+  trimmed each day on the last day's occupied room mean, 1 K per K [11, p. 2],
+  held to 5 K [9, part 2]. It is placed by the exit rule like the PI rungs.
 - Cost in euros of electricity at the tariff and occupied lost work, read on
   the scored days 4 to 10 alone, so the reset's warm-up does not enter it.
 
 ## 9. What the oracle needs
 
 - `oracle.py` plans the v5 score (COP, tariff, occupied hinges at the
-  work-loss price). Its ceiling was first recorded on 2026-11-08
-  (`data/oracle_ceilings/hvac.json`): one plan over the episode, with the
-  episode's own weather. The plan charges all twelve days, the burn-in and the
-  two-day tail included; the line reads days 4 to 10.
+  work-loss price, the stored heat). Its ceiling was first recorded on
+  2026-11-08 (`data/oracle_ceilings/hvac.json`): one plan over the episode,
+  with the episode's own weather. Since 2026-11-25 the plan, and the receding
+  oracle's, charges the scored days 4 to 10 alone, as the lines are read
+  (`oracle.scored_window`): the stored heat prices the store at both edges, so
+  the ceiling bounds what any line can score there.
 - Its horizon must reach across a night to the next occupied day, at least 24
   h (96 steps), for night charging to show; the slab's time constant (150 min
   for its flux) sets how far ahead a supply move pays.
@@ -341,7 +363,7 @@ B6), not a number moved until the test passed.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 1152 | 900 | 288.0 h | 1 in [-1, 1] | 12 | 110 |
+| `hvac` | 1152 | 900 | 288.0 h | 1 in [-1, 1] | 12 | 111 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

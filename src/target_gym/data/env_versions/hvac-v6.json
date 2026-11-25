@@ -1,5 +1,5 @@
 {
-  "fingerprint": "751b85d828178adc",
-  "note": "2026-11-25 review fix: comfort_price derived from productivity_per_K, occupants_per_m2, A_floor and labour_cost instead of a literal with 150 m^2; the member's price is unchanged (9.54). v6 has never shipped (0.7.0 carried v3).",
-  "stamped": "2026-11-25T01:15:45+00:00"
+  "fingerprint": "f1dee6d492fd006e",
+  "note": "2026-11-25 owner (hvac review P1, P3): stored heat charged at the valle price over the design COP (reward v5), no roof (a middle storey), ISO 13790 light mass beside the slab. v6 has never shipped (0.7.0 carried v3), so it keeps its number.",
+  "stamped": "2026-11-25T01:32:07+00:00"
 }
