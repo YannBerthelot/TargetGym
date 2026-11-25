@@ -17,6 +17,7 @@ env, params = tg.make("reactor")
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
 | Cite as | `reactor-v10` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -78,6 +79,19 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 2880 steps.
+
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies (`rod integrator`) | 86.62 | 49 |
+| Reference | the controller to beat | 1.034 | 1 |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not measured | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not measured | |
+
+Room is not measured: it needs both the reference and the ceiling.
 
 ## Baselines
 
@@ -153,14 +167,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_avg_min` | 556 | K |
 | `floor_allowed` | 900 | s |
 | `rod_motion_weight` | 0.02 | - |
-| `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
-| `imbalance_factor` | 3 | - |
 | `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |

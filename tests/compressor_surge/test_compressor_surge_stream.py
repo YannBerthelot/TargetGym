@@ -81,7 +81,7 @@ def _openings(state, action, params):
 
 
 def test_the_demand_keeps_moving_past_the_schedule_s_six_blocks():
-    p = _params("load_swings")
+    p = _params("normal")  # load_swings dropped (ruling E, 2026-11-24); same 5 s ramps
     _, s = ENV.reset_env(jax.random.PRNGKey(0), p)
     block = int(p.demand_block_steps)  # 200 steps, 20 s
     end = 6 * block  # the schedule's six blocks

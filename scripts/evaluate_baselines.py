@@ -38,6 +38,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from target_gym import records  # noqa: E402
+from target_gym.charter import FLAGSHIP  # noqa: E402
 from target_gym.eval import evaluate_controller, fixed_settle  # noqa: E402
 from target_gym.provenance import fingerprints  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
@@ -105,6 +106,12 @@ def table(rows: dict) -> str:
     return "\n".join(lines)
 
 
+def default_envs() -> list[str]:
+    """What a run without ``--envs`` scores: the scored suite's tasks with a
+    PID. A task outside the suite is scored only when named."""
+    return [n for n in FLAGSHIP if REGISTRY[n].has_pid]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--envs", nargs="*", default=None)
@@ -124,7 +131,7 @@ def main() -> int:
         print(table(rows))
         return 0
     kinds = {"expert": ("pid",), "oracle": ("mpc",), None: ("pid", "mpc")}[args.part]
-    names = args.envs or [n for n, s in REGISTRY.items() if s.has_pid]
+    names = args.envs or default_envs()
     for name in names:
         spec = REGISTRY[name]
         p = spec.make_test_params()

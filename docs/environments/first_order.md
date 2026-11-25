@@ -1,5 +1,8 @@
 # First order
 
+!!! note "Test fixture"
+    First order is a sanity fixture, there to check that a training loop runs. It is never scored.
+
 <p align="center"><img src="../../videos/first_order/pid_output.gif" width="480px"/></p>
 
 Drive a single first-order lag to a target drawn at reset. It is the suite's sanity check, not a physical plant: linear, fully observed, with no disturbance and no way to trip, so it is the place to check a new algorithm or wrapper against a known answer before moving on.
@@ -17,6 +20,7 @@ env, params = tg.make("first_order")
 | Tracked variable(s) | x |
 | Episode length | 150 steps of 0.05 s (7.5 s) |
 | Cite as | `first_order-v5` |
+| Status | Test fixture, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 
 ## Action space
@@ -65,14 +69,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 150-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -4.14e+04 | 276 |
-| MPC | -4.111e+04 | 274.1 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

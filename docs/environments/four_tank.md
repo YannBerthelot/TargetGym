@@ -20,6 +20,7 @@ env, params = tg.make("four_tank")
 | Tracked variable(s) | h1 (m), h2 (m) |
 | Episode length | 3300 steps of 1 s (55 min) |
 | Cite as | `four_tank-v7` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 
 ## Action space
@@ -73,14 +74,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 3300-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -4.357e+05 | 132 |
-| MPC | -1.047e+05 | 31.73 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

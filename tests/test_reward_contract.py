@@ -23,6 +23,7 @@ import pytest
 from target_gym import records
 from target_gym import reward as R
 from target_gym.base import restart_key
+from target_gym.charter import FLAGSHIP
 from target_gym.provenance import BASELINES_PATH
 from target_gym.registry import REGISTRY
 
@@ -31,6 +32,9 @@ SRC = ROOT / "src" / "target_gym"
 
 SPECS = list(REGISTRY.values())
 IDS = [s.name for s in SPECS]
+#: The tasks whose recorded rows are held current: the scored suite (owner,
+#: 2026-11-24). A row outside it is kept in the repository and not checked.
+SCORED = pytest.mark.parametrize("spec", [REGISTRY[n] for n in FLAGSHIP], ids=FLAGSHIP)
 
 # Parameters the reward reads, whose value must be traceable in PHYSICS.md.
 REWARD_PARAM_PREFIXES = ("e_floor", "e_tol", "c_hold", "rho_floor")
@@ -327,8 +331,9 @@ def _recorded_protocol_row(spec, parts=("expert", "oracle")) -> dict:
 
 
 @pytest.mark.records
+@SCORED
 def test_recorded_protocol_row_still_describes_this_tree(spec):
-    """Every shipped PID has a protocol row taken against this tree, whether
+    """Every scored task's PID has a protocol row taken against this tree, whether
     or not its floor is measured. The floor check below skips the three
     documented minima, so without this their fingerprints would go
     unchecked."""
@@ -355,6 +360,7 @@ def _sampling_slack(spec, row) -> float:
 
 
 @pytest.mark.records
+@SCORED
 def test_mpc_does_not_beat_a_measured_floor(spec):
     """Floor sanity: where ``e_floor`` is a measured or certified floor (not a
     documented minimum on a deterministic plant), the shipped MPC's long-run

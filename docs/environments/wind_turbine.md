@@ -1,5 +1,8 @@
 # Wind Turbine
 
+!!! note "Under review"
+    Wind Turbine is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/wind_turbine/pid_output.gif" width="480px"/></p>
 
 Run a 5 MW wind turbine above rated wind with blade pitch and generator torque: deliver the power the wind makes available, up to the rating, while sparing the tower and the pitch system. Pitching to hold speed changes the thrust, which swings the tower. The policy reads rotor speed, pitch, torque, power, the current rating, the nacelle's fore-aft acceleration and the nacelle wind speed. Each step is charged, in dollars, the production lost against the available power, the tower's fatigue damage and the pitch travel. Overspeed at 1.20 times rated speed trips the turbine, which is charged as a restart.
@@ -17,6 +20,7 @@ env, params = tg.make("wind_turbine")
 | Tracked variable(s) | electrical power (MW) |
 | Episode length | 2400 steps of 0.25 s (10 min) |
 | Cite as | `wind_turbine-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/energy/wind_turbine/PHYSICS.md) |
 
 ## Action space
@@ -71,7 +75,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

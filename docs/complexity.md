@@ -39,46 +39,46 @@ are the observation and action lengths, and the episode is the scored one.
 
 ### Aircraft
 
-| Task | Name | What it asks | Obs | Act | Episode |
-|---|---|---|---|---|---|
-| [Altitude hold](environments/plane.md) | `plane` | Cruise an A320-class airliner at its assigned level and speed for 30 min, through one zone of light turbulence, with throttle and a pitch demand. | 12 | 2 | 1800 steps, 30 min |
-| [Altitude and airspeed](environments/plane_energy.md) | `plane_energy` | Fly ATC's level and speed clearances with the same airliner as `plane`: TECS's job, altitude changes with the speed held and speed changes at a constant level [TECS]. | 12 | 2 | 1800 steps, 30 min |
-| [Altitude - sinusoid](environments/plane_sine.md) | `plane_sine` | Track an altitude that moves as a sinusoid, with the same airliner, throttle and pitch demand as `plane`. | 12 | 2 | 480 steps, 8 min |
-| [3D heading](environments/plane3d_heading.md) | `plane3d_heading` | Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. | 19 | 3 | 600 steps, 10 min |
-| [3D circle](environments/plane3d_circle.md) | `plane3d_circle` | Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. | 17 | 3 | 600 steps, 10 min |
-| [3D holding pattern](environments/plane3d_racetrack.md) | `plane3d_racetrack` | Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. | 25 | 3 | 1200 steps, 20 min |
-| [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 21 | 3 | 1000 steps, 16.7 min |
-| [Patrol - wingman](environments/patrol.md) | `patrol` | Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. | 26 | 3 | 200 steps, 3.33 min |
-| [Patrol - wingman, range and bearing](environments/patrol_range_bearing.md) | `patrol_range_bearing` | The `patrol` task flown by sight and a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
-| [Formation](environments/formation.md) | `formation` | Fly a lead and two wingmen in a V, every aircraft controlled by the policy. | 74 | 9 | 200 steps, 3.33 min |
-| [Wake surfing - A320 in trail](environments/wake_surf.md) | `wake_surf` | Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. | 26 | 3 | 1800 steps, 30 min |
+| Task | Name | Status | What it asks | Obs | Act | Episode |
+|---|---|---|---|---|---|---|
+| [Altitude hold](environments/plane.md) | `plane` | Under review, not scored | Cruise an A320-class airliner at its assigned level and speed for 30 min, through one zone of light turbulence, with throttle and a pitch demand. | 12 | 2 | 1800 steps, 30 min |
+| [Altitude and airspeed](environments/plane_energy.md) | `plane_energy` | Under review, not scored | Fly ATC's level and speed clearances with the same airliner as `plane`: TECS's job, altitude changes with the speed held and speed changes at a constant level [TECS]. | 12 | 2 | 1800 steps, 30 min |
+| [Altitude - sinusoid](environments/plane_sine.md) | `plane_sine` | Under review, not scored | Track an altitude that moves as a sinusoid, with the same airliner, throttle and pitch demand as `plane`. | 12 | 2 | 480 steps, 8 min |
+| [3D heading](environments/plane3d_heading.md) | `plane3d_heading` | Under review, not scored | Hold a target altitude and turn onto and hold a target heading with the 3D airliner, using throttle, elevator and aileron. | 19 | 3 | 600 steps, 10 min |
+| [3D circle](environments/plane3d_circle.md) | `plane3d_circle` | Extra, never scored | Hold altitude while orbiting a fixed circle kilometres across with the 3D airliner. | 17 | 3 | 600 steps, 10 min |
+| [3D holding pattern](environments/plane3d_racetrack.md) | `plane3d_racetrack` | Under review, not scored | Fly a holding pattern, two straight legs joined by half circles, at a target altitude with the 3D airliner. | 25 | 3 | 1200 steps, 20 min |
+| [3D figure-8](environments/plane3d_figure8.md) | `plane3d_figure8` | Extra, never scored | Follow a twisted figure-8 that climbs and descends, with the 3D airliner. | 21 | 3 | 1000 steps, 16.7 min |
+| [Patrol - wingman](environments/patrol.md) | `patrol` | Extra, never scored | Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. | 26 | 3 | 200 steps, 3.33 min |
+| [Patrol - wingman, range and bearing](environments/patrol_range_bearing.md) | `patrol_range_bearing` | Extra, never scored | The `patrol` task flown by sight and a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. | 21 | 3 | 200 steps, 3.33 min |
+| [Formation](environments/formation.md) | `formation` | Extra, never scored | Fly a lead and two wingmen in a V, every aircraft controlled by the policy. | 74 | 9 | 200 steps, 3.33 min |
+| [Wake surfing - A320 in trail](environments/wake_surf.md) | `wake_surf` | Under review, not scored | Surf a lead airliner's wake: hold an A320 at a station 3 km behind another, where the lead's upwash lifts it, and pay for fuel and time as an operator does. | 26 | 3 | 1800 steps, 30 min |
 
 ### Process Control
 
-| Task | Name | What it asks | Obs | Act | Episode |
-|---|---|---|---|---|---|
-| [CSTR](environments/cstr.md) | `cstr` | Hold the temperature of a jacketed exothermic reactor at its setpoint with the cooling water flow. | 4 | 1 | 960 steps, 4 h |
-| [First order](environments/first_order.md) | `first_order` | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
-| [Four-tank](environments/four_tank.md) | `four_tank` | Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. | 6 | 2 | 3300 steps, 55 min |
-| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
-| [Distillation](environments/distillation.md) | `distillation` | Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. | 8 | 2 | 400 steps, 6.67 h |
-| [Unstable CSTR](environments/unstable_cstr.md) | `unstable_cstr` | Hold the temperature of an LDPE autoclave at its setpoint with the initiator feed, at an operating point that is unstable without control. | 3 | 1 | 1800 steps, 30 min |
+| Task | Name | Status | What it asks | Obs | Act | Episode |
+|---|---|---|---|---|---|---|
+| [CSTR](environments/cstr.md) | `cstr` | Scored | Hold the temperature of a jacketed exothermic reactor at its setpoint with the cooling water flow. | 4 | 1 | 960 steps, 4 h |
+| [First order](environments/first_order.md) | `first_order` | Test fixture, never scored | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
+| [Four-tank](environments/four_tank.md) | `four_tank` | Extra, never scored | Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. | 6 | 2 | 3300 steps, 55 min |
+| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Scored | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
+| [Distillation](environments/distillation.md) | `distillation` | Under review, not scored | Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. | 8 | 2 | 400 steps, 6.67 h |
+| [Unstable CSTR](environments/unstable_cstr.md) | `unstable_cstr` | Extra, never scored | Hold the temperature of an LDPE autoclave at its setpoint with the initiator feed, at an operating point that is unstable without control. | 3 | 1 | 1800 steps, 30 min |
 
 ### Industrial / Energy
 
-| Task | Name | What it asks | Obs | Act | Episode |
-|---|---|---|---|---|---|
-| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. | 13 | 1 | 5040 steps, 7 days |
-| [Reactor](environments/reactor.md) | `reactor` | Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. | 16 | 3 | 2880 steps, 24 h |
-| [Building HVAC](environments/hvac.md) | `hvac` | Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. | 12 | 1 | 1344 steps, 14 days |
-| [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
-| [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. | 12 | 2 | 1800 steps, 60 min |
-| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 8 | 2 | 1200 steps, 2 min |
+| Task | Name | Status | What it asks | Obs | Act | Episode |
+|---|---|---|---|---|---|---|
+| [Glass Furnace](environments/glass_furnace.md) | `glass_furnace` | Under review, not scored | Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. | 13 | 1 | 5040 steps, 7 days |
+| [Reactor](environments/reactor.md) | `reactor` | Scored | Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. | 16 | 3 | 2880 steps, 24 h |
+| [Building HVAC](environments/hvac.md) | `hvac` | Scored | Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. | 12 | 1 | 1344 steps, 14 days |
+| [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Under review, not scored | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
+| [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Extra, never scored | Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. | 12 | 2 | 1800 steps, 60 min |
+| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Scored | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 8 | 2 | 1200 steps, 2 min |
 
 ### Renewable Energy
 
-| Task | Name | What it asks | Obs | Act | Episode |
-|---|---|---|---|---|---|
-| [Wind Turbine](environments/wind_turbine.md) | `wind_turbine` | Run a 5 MW wind turbine above rated wind with blade pitch and generator torque: deliver the power the wind makes available, up to the rating, while sparing the tower and the pitch system. | 7 | 2 | 2400 steps, 10 min |
-| [Battery](environments/battery.md) | `battery` | Run a grid battery that sells a frequency service: keep its reported stored energy inside the window the market requires at the start of each 30 min period, at the least cost of energy. | 17 | 1 | 14400 steps, 4 h |
+| Task | Name | Status | What it asks | Obs | Act | Episode |
+|---|---|---|---|---|---|---|
+| [Wind Turbine](environments/wind_turbine.md) | `wind_turbine` | Under review, not scored | Run a 5 MW wind turbine above rated wind with blade pitch and generator torque: deliver the power the wind makes available, up to the rating, while sparing the tower and the pitch system. | 7 | 2 | 2400 steps, 10 min |
+| [Battery](environments/battery.md) | `battery` | Extra, never scored | Run a grid battery that sells a frequency service: keep its reported stored energy inside the window the market requires at the start of each 30 min period, at the least cost of energy. | 17 | 1 | 14400 steps, 4 h |
 <!-- END generated table -->
