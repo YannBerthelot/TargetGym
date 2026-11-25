@@ -290,7 +290,18 @@ def test_field_noise_does_not_depend_on_the_plant():
     so this is checked on the fields behind it."""
     env, params, state = _reset("compressor_surge")
     state = state.replace(time=7)
-    other = state.replace(dp=state.dp + 1000.0, m_c=state.m_c + 1.0)
+    offset = {"dp": 1000.0, "m_c": 1.0}
+    # The pressure and flow transmitters lag (first order, version 5): their
+    # readings come from the state's sensor history, one row per late reading
+    # in the order the env declares them. The other plant has been there long
+    # enough that its readings carry the same offsets.
+    late = [r for r in env.readings if r.lag > 0 or r.dead_time > 0 or r.sampled]
+    moved = jnp.asarray([offset.get(r.field, 0.0) for r in late], jnp.float32)
+    other = state.replace(
+        dp=state.dp + offset["dp"],
+        m_c=state.m_c + offset["m_c"],
+        sensor_history=state.sensor_history + moved[:, None],
+    )
     a, b = measured_state(env, state, params), measured_state(env, other, params)
     # Four float32 steps of a value near 3e4 Pa, the subtraction's rounding.
     assert float(a.dp - state.dp) == pytest.approx(float(b.dp - other.dp), abs=0.016)
