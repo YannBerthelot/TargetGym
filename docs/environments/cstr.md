@@ -81,6 +81,8 @@ What an agent is measured against: the expected cost per step over the task's we
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
+The ceiling reads what the policy does not observe: the composition in the reactor; the feed's temperature; when the scenario's event comes (the setpoint move, the catalyst's loss, the richer feed or the cooling water's failure). Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
 The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.

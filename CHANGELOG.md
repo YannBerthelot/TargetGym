@@ -55,6 +55,10 @@ The next release is 0.8.0, because these changes break code written for
     page says it was recorded on an earlier version and shows the numbers
     again once it is re-recorded. `records.current_parts` gives the current
     part of an old-format row.
+  - Each scored task's page names the hidden facts its ceiling reads (the
+    true surge line, the acid strength, the weather or load ahead), so part
+    of the room may be out of reach of a policy; the list is
+    `charter.CEILING_READS`.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and
