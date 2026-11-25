@@ -830,7 +830,7 @@ def compute_next_state(
 # already jit ``step_env``, which traces this inline.
 def get_obs(state: CompressorSurgeState, params: CompressorSurgeParams):
     """``[dp (kPa), m_c (kg/s), m_d (kg/s), N (%), N_ramp (%), x (%), live
-    setpoint (kPa)]``.
+    setpoint (kPa), surge count]``.
 
     ``m_d`` is the consumers' flow at the state's clock with the deviation the
     coming step integrates with, so the total opening can be inferred; its

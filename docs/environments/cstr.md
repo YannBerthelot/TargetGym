@@ -72,23 +72,16 @@ What an agent is measured against: the expected cost per step over the task's we
 
 | Line | What it is | Cost per step | Trips |
 |---|---|---|---|
-| Best null policy | the cheapest of the simple policies (`hold reset`) | 1722 | 0 |
-| Reference | the controller to beat | 98.37 | 0 |
-| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | 70.64 | 0 |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | 65.28 | 0 |
+| Best null policy | the cheapest of the simple policies | not current | |
+| Reference | the controller to beat | not current | |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
 
-Room, the reference's cost divided by the ceiling's, is 1.51.
+Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
 ## Baselines
 
-Recorded over 10 seeds of the 960-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -5038 | 5.247 |
-| MPC | 0 | -0 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
 ## Arguments
 

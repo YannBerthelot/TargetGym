@@ -273,7 +273,8 @@ class CompressorSurgePair:
 
     Observation layout (``env.get_obs``)::
 
-        [dp (kPa), m_c (kg/s), m_d (kg/s), N (%), N_ramp (%), x (%), setpoint (kPa)]
+        [dp (kPa), m_c (kg/s), m_d (kg/s), N (%), N_ramp (%), x (%), setpoint (kPa),
+         surge count]
 
     The action is raw in [-1, 1] on both actuators. The memory persists
     through a trip (the suite's convention). ``track`` is what a supervising
