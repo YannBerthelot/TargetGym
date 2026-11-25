@@ -1,5 +1,5 @@
 {
-  "fingerprint": "2005c07ce06eaa81",
-  "note": "Version 8 (owner, 2026-11-24): the reactor run for what it makes. The feed is a second move, the score is lost nameplate production with product off-spec outside 1 K of the setpoint, windows start with the water valve at 95 %, a setpoint move is a one-hour ramp, and the feed build-up is 10 % again. Registered plant first: no expert or oracle yet, and no record taken on it. Re-stamped the same day: the reset's feed is the same root of its balance, written in the form that loses fewer float32 digits.",
-  "stamped": "2026-11-24T01:28:59+00:00"
+  "fingerprint": "b3bc96544085fbd1",
+  "note": "Version 8 (owner, 2026-11-24): the reactor run for what it makes. The feed is a second move, the score is lost nameplate production with product off-spec outside 1 K of the setpoint, windows start with the water valve at 95 %, a setpoint move is a one-hour ramp, and the feed build-up is 10 % again. Registered plant first: no expert or oracle yet, and no record taken on it. Re-stamped the same day: the reset's feed is the same root of its balance, written in the form that loses fewer float32 digits. Re-stamped 2026-11-25: the shared utils.py gained stationary_innovation (c22751c3, merged from int), which cstr does not call; cstr's own sources and parameter values are unchanged.",
+  "stamped": "2026-11-25T01:19:21+00:00"
 }
