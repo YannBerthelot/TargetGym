@@ -18,6 +18,12 @@
    "hi": 0.15,
    "unit": "of surge flow at speed",
    "why": "ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1]; 0.10 is the lower end (compressor_surge/env.py, established_point; PHYSICS.md, version 4, Episode)"
+  },
+  "line_shift_max": {
+   "lo": 0.026,
+   "hi": 0.07,
+   "unit": "of the map's surge flow",
+   "why": "ours, family: how far a machine's true surge line may sit from the map its controller reads, drawn either side each episode; invariant coordinates leave 2.6 % (one change of inlet condition) to 7 % (combined) at low suction pressure [C14]; field and shop curves can differ by more [C1] (compressor_surge/env.py, line_shift_max; PHYSICS.md, version 4, the hidden line)"
   }
  },
  "coupled": [],

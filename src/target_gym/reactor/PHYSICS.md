@@ -227,7 +227,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | Symbol | Value | Unit | Source | Status |
 |---|---|---|---|---|
 | `beta_i`, `lambda_i` | 6-group | | Keepin (1965) | earlier |
-| `Lambda_gen` | 1e-4 | s | PWR range | earlier |
+| `Lambda_gen` | 1e-4 | s | A thermal reactor's order, a few times a PWR's tens of microseconds (Nuclear Technology, NT13-120); the prompt jump it sets, about 15 ms, settles inside one 5 s sub-step either way. It was labelled "PWR range" until the package review (2026-11-25) | ours |
 | `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | earlier |
 | `alpha_coolant` | -12e-5 | 1/K | The start-of-cycle MTC (1690 ppm, OAPS's start-of-cycle ramps). It is near zero there and grows more negative as boron falls (NRC GFE PWR 192004, nuclear-power.com): BEAVRS measures the isothermal coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power and 975 and 1405 ppm, and specifications keep it at or below 0 above 50 % power. No hot-full-power start-of-cycle figure was found; the reviewer's judgment is -9 to -18 pcm/K (physics review, finding 2). The range was 0 to -20 until the family sweep (2026-11-10): at -2.9 to -7 the rods cannot carry a 5 %/min return, so the owner took the reviewer's range. The sweep draws it with `boron_worth`, the most negative MTC with the largest worth | ours, range -9 to -18 pcm/K |
 | `alpha_tilt` | -30e-5 | 1/K | The part-power axial shift's lumped coefficient (moderator and Doppler redistribution), kept at the value that reproduces Krsko's +5 % delta I at half power when the MTC moved | ours |
@@ -355,7 +355,7 @@ tool starts from.
 | flux difference outside its band, 5 % of rated delta I either side of a target that scales with power | penalty clock | penalty time counts a second a second at 50 % of rated power and above, half a second a second from 15 % to 50 %, not below; 1 h in 24 h is free; past it, the lost output of a reduction to 50 % | NUREG-1431 Rev. 3.0, Bases B 3.2.3A, Notes 2 and 3 and Required Action C.1; the band's 5 % is EDF's and Krsko's |
 | the same, at 90 % of rated power and above | timed | 30 min outside without a break (15 to restore, 15 to reduce), then the lost output of a reduction to 90 % | the same bases, Required Actions A.1 and B.1 |
 | flux difference outside the acceptable operation limits, from 11 % of rated delta I at 90 % power to 31 % at 50 %, between those powers | timed | 30 min outside without a break, then the lost output of a reduction to 50 % | the same bases, Figure B 3.2.3A-1 ("for illustration only": a plant's core report gives its own) and C.1's completion time |
-| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, and a parameter restored before then ends the required action, so hot standby after 8 h above the limit without a break (2 h until 2026-11-25) | Westinghouse STS, NUREG-1431 Rev. 5.0, LCO 3.4.1 Conditions A and B and LCO 3.0.2 (opened, saved by the owner); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
+| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore; then the turbine unloads along a straight line to MODE 2's 5 % of rated power over 6 h, and hot standby after 8 h above the limit without a break; a parameter restored before then ends the shutdown (hot standby at 2 h until 2026-11-25) | Westinghouse STS, NUREG-1431 Rev. 5.0 (ML21259A155), page 3.4.1-1, LCO 3.4.1 Conditions A and B, LCO 3.0.2, Table 1.1-1 (opened, saved by the owner); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
 | rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
 
 The offset's clock looks back 24 h, in whole control hours: at the start of each
@@ -828,7 +828,10 @@ so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg chann
   documents on power-range accuracy could not be read.
 
 The expert reads these values, and so does every tuner. The oracle plans and acts
-on the true state, so it stays a full-state bound. `reward`, trips and the score
+on the true state. Its plan is the best one found, with its limits backed off and a
+few solver settings set by hand (`oracle.py`), so its cost is the best known with the
+true state and the future, an achieved cost and not a bound below which no controller
+can go (package review, 2026-11-25). `reward`, trips and the score
 read the true state. `step_env` sums `info["measured_reward"]` over the six
 sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per

@@ -13,6 +13,7 @@ Everything here runs the env's own functions: the closed forms with
 ``enable_x64`` unless a test says float32.
 """
 
+import dataclasses
 import functools
 import math
 
@@ -55,9 +56,18 @@ ISA_DENSITY = 1.2250  # kg/m^3
 ISA_SOUND_SPEED = 340.294  # m/s
 
 
+class MapMachine(CompressorSurge):
+    """The map's own machine read by ideal transmitters. This file's numbers
+    are the map's, and its hand-built states carry no transmitter history; the
+    hidden line and the lags have their own tests
+    (test_compressor_surge_hidden_line.py)."""
+
+    readings = tuple(dataclasses.replace(r, lag=0.0) for r in CompressorSurge.readings)
+
+
 @pytest.fixture(scope="module")
 def params():
-    return CompressorSurgeParams()
+    return CompressorSurgeParams(line_shift_max=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -588,7 +598,7 @@ def test_rk4_is_stable_on_the_reachable_set(params):
     branch, puts h |lambda| at 1.94 at the 10 ms substep, under RK4's
     real-axis limit of 2.785; every eigenvalue's RK4 amplification is below
     1 (float32 rollout, float64 Jacobians)."""
-    env = CompressorSurge()
+    env = MapMachine()
     action = jnp.array([1.0, 1.0])
 
     def episode(key):
@@ -759,9 +769,7 @@ def test_a_short_excursion_does_not_trip(params):
     states = _run(p, kicked, action, period_steps)
     if not (np.asarray(states.m_c)[-1] / _flow_scale(p) > 2.0 * p.W):
         pytest.fail("the excursion lasted longer than a Helmholtz period")
-    _, _, _, _, info = CompressorSurge().step_env(
-        jax.random.PRNGKey(0), kicked, action, p
-    )
+    _, _, _, _, info = MapMachine().step_env(jax.random.PRNGKey(0), kicked, action, p)
     assert not bool(info["tripped"])
 
 

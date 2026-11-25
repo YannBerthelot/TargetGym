@@ -1,6 +1,6 @@
 # Learned-policy results
 
-Every environment ships a tuned PID and an MPC upper bound so that a learned
+Every environment ships a tuned PID and an MPC best known plan so that a learned
 policy has something real to beat. This page is the other half of that
 comparison, and the honest state of it is: **the harness is in place and no
 results are published yet.**

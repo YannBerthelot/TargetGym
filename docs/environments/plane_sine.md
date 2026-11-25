@@ -1,5 +1,8 @@
 # Altitude - sinusoid
 
+!!! note "Under review"
+    Altitude - sinusoid is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane_sine/pid_output.gif" width="480px"/></p>
 
 Track an altitude that moves as a sinusoid, with the same airliner, throttle and pitch demand as `plane`. A moving reference tests how well a controller follows a frequency, not only how well it holds a level.
@@ -17,6 +20,7 @@ env, params = tg.make("plane_sine")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 480 steps of 1 s (8 min) |
 | Cite as | `plane_sine-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space
@@ -76,14 +80,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 480-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1.076e+06 | 2241 |
-| MPC | -1.858e+05 | 387.1 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

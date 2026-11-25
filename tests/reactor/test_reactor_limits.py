@@ -26,9 +26,12 @@ Contracts, from the family's sources, written before the code:
 - Tavg above its DNB limit (Westinghouse STS, NUREG-1431 Rev. 5.0, LCO 3.4.1): the
   parameter is restored within 2 h (Condition A), else the unit is in MODE 2 within
   6 h (Condition B), and a parameter restored before then ends the required action
-  (LCO 3.0.2). So the plant is lost to hot standby only after 2 h + 6 h = 28,800 s
-  above the limit without a break (owner, 2026-11-25, from the document; until then
-  2 h).
+  (LCO 3.0.2). The plant flies Condition B: past 2 h its turbine unloads along a
+  straight line to MODE 2's 5 % of rated power (NUREG-1431 Table 1.1-1) at 2 h + 6 h,
+  and the plant is lost to hot standby only after 28,800 s above the limit without a
+  break (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; until then
+  hot standby at 2 h). By hand, 3 h into the shutdown the turbine may carry
+  1 - 0.95 x 3 / 6 = 0.525 of rated load.
 - The operator reads the recent power history the starting xenon is balanced with,
   and the core boron only through a boronmeter 20 min late (Areva, US 8,489,338).
 
@@ -217,6 +220,28 @@ def test_the_dnb_limit_is_the_full_power_programs_at_every_power():
     assert float(tavg_dnb_limit(p)) == pytest.approx(
         float(tavg_program(1.0, p)) + HOT_MARGIN, abs=1e-3
     )
+
+
+@pytest.mark.parametrize(
+    "seconds, load",
+    [
+        (7000.0, 1.0),
+        (7200.0 + 3 * 3600.0, 0.525),
+        (28795.0, 1.0 - 0.95 * 21595 / 21600),
+    ],
+)
+def test_past_two_hours_above_the_dnb_limit_the_turbine_ramps_to_mode_2(seconds, load):
+    """A plant on its plan at full load, Tavg above its DNB limit for ``seconds``:
+    the turbine takes no more than the shutdown's straight line allows."""
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    limit = float(tavg_program(1.0, p)) + HOT_MARGIN
+    tavg = float(0.5 * (s.T_coolant + s.T_cold))
+    hot = s.replace(
+        T_coolant=s.T_coolant + 2 * (limit + 0.5 - tavg),
+        T_cold=s.T_cold + 2 * (limit + 0.5 - tavg),
+    )
+    after = step(env, p, at(hot, above_dnb=seconds))
+    assert float(after.target_n) == pytest.approx(load, abs=2e-3)
 
 
 @pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])

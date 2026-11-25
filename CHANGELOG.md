@@ -18,15 +18,36 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 - A reactor run's core is drawn so it never reaches the end of its load-following
   range (reactor-v10, re-stamped in place: it never shipped). Scoring runs build
   their stream's params with the run's length.
-- The reactor's DNB limit follows NUREG-1431 Rev. 5.0, LCO 3.4.1: 2 h to restore,
-  then 6 h to reach MODE 2, so the plant goes to hot standby after 8 h above the
-  limit without a break, where it went at 2 h (`dnb_allowed` 28,800 s).
+- The reactor's DNB limit follows NUREG-1431 Rev. 5.0 (ML21259A155), LCO 3.4.1: 2 h
+  to restore, then the turbine unloads along a straight line to MODE 2's 5 % over
+  6 h, and the plant goes to hot standby after 8 h above the limit without a break,
+  where it went at 2 h (`dnb_restore`, `dnb_allowed`, `mode_2_load`).
 
 ### Upgrading from 0.7.0
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **Five tasks are scored, and the other twenty ship registered, not scored.**
+  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
+  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+  - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
+    all 25 names.
+  - Results are published for the scored suite only. The page of a task
+    outside it says where the task stands (under review, Extra or a test
+    fixture) and prints no recorded number. Its recorded rows stay in
+    `src/target_gym/data/` and are no longer kept current.
+  - `suite.run_suite` runs the scored tasks by default, and `suite.profile`
+    counts a task's tags only if it is scored. Name a task in `tasks` to run
+    it anyway.
+  - The capability profile page and its chart are left out of the docs for
+    this release. `target_gym.suite` still works, and the page returns when
+    the radar is rebuilt on the saving over the reference.
+  - The generated pages publish a recorded row only while its fingerprint or
+    version stamp matches the code. A stale row stays in `data/`; its task's
+    page says it was recorded on an earlier version and shows the numbers
+    again once it is re-recorded. `records.current_parts` gives the current
+    part of an old-format row.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and

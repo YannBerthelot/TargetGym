@@ -1,5 +1,12 @@
 # Capability profile
 
+!!! note "Not published in this release"
+    This page is kept in the repository but left out of the site. The radar
+    is drawn from the tracking score, which the scored tasks priced in money
+    do not have, so with the five scored tasks it would show few spokes or
+    none. It returns when it is rebuilt on the saving over the reference. The
+    code below still runs.
+
 One score per task says how a policy compares with the expert. A profile says
 where it is strong and where it is weak: every task is tagged with the
 difficulties it poses (an unstable plant, a transport delay, a hidden state),
@@ -21,22 +28,17 @@ fig = plot_profile({**references(), "mine": out["profile"]})
 fig.savefig("profile.png")
 ```
 
-Leave out `tasks` to run all 25, and use 10 seeds for a result you report.
+Leave out `tasks` to run the five scored tasks, and use 10 seeds for a result
+you report. Any registered task can be named, but only a scored one moves a
+spoke: the tags of the others say what they will probe when they join.
 `references()` gives the expert and the oracle profiles from the recorded
 results, so they cost nothing to draw.
 
 ## Read the two radars
 
-Each spoke is a capability, and its point is the mean over the tasks that
-probe it. These are the expert and the oracle, drawn from the recorded
-results and redrawn whenever they are re-recorded:
-
-<!-- ``../``: this page is served at /capability-profile/, and MkDocs does
-     not rewrite paths inside raw HTML. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../images/capability-profile-dark.svg">
-  <img alt="The expert and the oracle on each capability, hold and reach" src="../images/capability-profile.svg" width="680">
-</picture>
+Each spoke is a capability, and its point is the mean over the scored tasks
+that probe it. `references()` gives the expert's and the oracle's profiles
+from the recorded results; their chart is not built in this release.
 
 - **The dashed ring at 0.5 is the expert.** Outside it the policy is better
   than the shipped controller; inside it, worse.

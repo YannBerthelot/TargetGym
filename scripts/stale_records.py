@@ -13,7 +13,9 @@ each environment and its job re-records those alone (``--part expert`` or
 ``--part oracle`` to record_baselines.py and evaluate_baselines.py, neither
 when both are stale). ``list`` also prints each charter record's stale parts
 (``target_gym.charter``) to stderr as ``{"charter": {task: parts}}``, so stdout
-stays the jobs; a task with no record lists every part.
+stays the jobs; a task with no record lists every part. Both cover the scored
+suite only (``charter.FLAGSHIP``): the rows of a task outside it are kept in
+the repository and not held current, so a re-record leaves them alone.
 
 ``merge`` writes only the tasks whose rows moved beyond the tolerance
 (``target_gym.records.same``), and only their files, so a weekly run that
@@ -81,10 +83,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.cmd in ("list", "migrate"):
+        from target_gym.charter import FLAGSHIP
         from target_gym.provenance import fingerprints
         from target_gym.registry import REGISTRY
 
-        current = {n: fingerprints(s) for n, s in REGISTRY.items() if s.has_pid}
+        # ``migrate`` rewrote every row there was; ``list`` plans a re-record.
+        held = REGISTRY if args.cmd == "migrate" else FLAGSHIP
+        current = {n: fingerprints(REGISTRY[n]) for n in held if REGISTRY[n].has_pid}
     if args.cmd == "list":
         pairs = (
             [(n, part) for n, parts in current.items() for part in parts]

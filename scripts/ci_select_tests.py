@@ -33,6 +33,8 @@ CROSS_TASK = (
     "tests/test_fingerprint_parts.py",
     "tests/test_scoring.py",
     "tests/test_env_conformance.py",
+    "tests/test_flagship.py",
+    "tests/test_current_rows.py",
 )
 DOCS = ("tests/test_docs.py", "tests/test_docs_redirects.py")
 LADDER = ("tests/experts/test_ladder.py", "tests/experts/test_reference_ladder.py")

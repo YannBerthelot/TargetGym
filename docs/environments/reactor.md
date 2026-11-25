@@ -17,6 +17,7 @@ env, params = tg.make("reactor")
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
 | Cite as | `reactor-v10` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -79,9 +80,22 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Truncation.** After 2880 steps.
 
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies | not current | |
+| Reference | the controller to beat | not current | |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+
+Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
+
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
 ## Arguments
 
@@ -153,14 +167,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_avg_min` | 556 | K |
 | `floor_allowed` | 900 | s |
 | `rod_motion_weight` | 0.02 | - |
-| `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
-| `imbalance_factor` | 3 | - |
 | `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |
@@ -184,7 +196,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ril_half` | 0.78 |  |
 | `ril_allowed` | 7200 | s |
 | `dnb_margin` | 2.83333 | K |
+| `dnb_restore` | 7200 | s |
 | `dnb_allowed` | 28800 | s |
+| `mode_2_load` | 0.05 | - |
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |
