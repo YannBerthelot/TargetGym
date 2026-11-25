@@ -141,6 +141,7 @@ def point(env, p, seed, load):
     their tilt cancels the coolant's so the offset sits at 0, boron critical."""
     q = p.replace(initial_xenon_power_range=(load, load))
     _, s = env.reset_env(jax.random.PRNGKey(seed), q)
+    core = core_at(cycle_point(s, q), q)  # the core where the reset drew it
     d, far = s.n.dtype, jnp.asarray(1e8, s.n.dtype)
     T_fuel, T_hot, T_cold, T_sg = steady_state_temperatures(load, q)
     lo, hi = 3.0 / 228.0, 0.5
@@ -149,14 +150,14 @@ def point(env, p, seed, load):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if rod_tilt(mid, q) < target else (lo, mid)
     y = max(0.5 * (lo + hi), q.rod_park)
-    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, q)
+    needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), s.Xe_hat, core)
     needed = needed - (rod_worth(y, q) - rod_worth(q.rod_park, q))
     level = jnp.asarray(load, d)
     return q, s.replace(
         n=level, C=steady_state_precursors(level, q), T_fuel=jnp.asarray(T_fuel, d),
         T_coolant=jnp.asarray(T_hot, d), T_cold=jnp.asarray(T_cold, d),
         T_sg=jnp.asarray(T_sg, d), target_n=level, T_ref=jnp.asarray(tavg_program(level, q), d),
-        boron=jnp.asarray(q.boron_ref + needed / q.boron_worth, d),
+        boron=jnp.asarray(core.boron_ref + needed / core.boron_worth, d),
         rod_in=jnp.asarray(y, d), ramp_up_at=far,
         # Below full load the ramp down is long past, so the turbine sits at load_min.
         ramp_down_at=jnp.where(load < 1.0, -far, far),
@@ -547,6 +548,84 @@ def bumps(env, params):
 
 
 # ---------------------------------------------------------------------------
+# The curve book and the turbine's thresholds, measured (owner, 2026-11-25)
+# ---------------------------------------------------------------------------
+
+#: The rule for the turbine's thresholds, set before the run, in standard deviations
+#: of the load's reading off its plan on a calm day: on its plan within two (a
+#: two-sided 95 %), reloading past ten (a turbine on its plan never leaves it), and
+#: a restart a fall of the turbine's fastest step plus three.
+ON_PLAN_SD, RELOAD_SD, RESTART_SD = 2.0, 10.0, 3.0
+
+
+def book_at(env, q, s):
+    """The physics tests at power at one point (the kind ANSI/ANS-19.6.1 sets for a
+    reload's startup), the rods as the reactivity yardstick: their worth curve is
+    the plant's calibration. A dilution bump at fixed rods reads K of Tavg per ppm;
+    ``ROD_BUMP`` steps in at fixed boron, read an hour on against a paired run,
+    reads the feedback, ``-drho / dT``, since at a fixed power the fuel follows the
+    coolant. Then the worth is ``-K x feedback``, and the moderator coefficient the
+    feedback less the fuel's Doppler coefficient, which is the core's design value.
+
+    A turbine swing at fixed rods was tried first and read the moderator
+    coefficient 25 % too negative: the swing moves the axial tilt's reactivity too
+    (``alpha_tilt``), which its balance leaves out."""
+    per_action, _ = boron_on_tavg(env, q, s)
+    k = per_action / (q.dilution_flow / q.primary_mass * float(s.boron))  # K/ppm
+    rods = 1.0 - 2.0 * s.rod_in
+    still = closed(
+        env, q, s, lambda m, o: (jnp.array([rods, 0.0, 1.0]), m), jnp.asarray(0.0),
+        BUMP_STEPS,
+    )  # fmt: skip
+    a = jnp.array([rods - 2.0 * ROD_BUMP / 228.0, 0.0, 1.0])
+    tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
+    dT = float(tavg(tr)[-1] - tavg(still)[-1])
+    moved = float(np.asarray(tr.rod_in)[-1])
+    drho = float(rod_worth(moved, q) - rod_worth(float(s.rod_in), q))
+    feedback = -drho / dT
+    return feedback - q.alpha_fuel, -k * feedback
+
+
+def load_wobble(env, params, seeds=SEEDS):
+    """The standard deviation of the turbine's load read off its plan (obs 3 less
+    obs 14) on a calm day, the plant held lined out at full power, as scored."""
+    hold = jnp.array([PARK, 0.0, 1.0])
+    sds = []
+    for seed in seeds:
+        q, s = point(env, params, seed, 1.0)
+        keys = jax.random.split(jax.random.PRNGKey(seed + 1), q.max_steps_in_episode)
+
+        def step(s, k):
+            o, s, _, _, _ = env.step_env(k, s, hold, q)
+            return s, o[3] - o[14]
+
+        off = jax.lax.scan(step, s, keys)[1]
+        sds.append(float(np.std(np.asarray(off))))
+    return float(np.median(sds))
+
+
+def measured_book(env, params):
+    """The curve book at the two ends of the load-following range, the median over
+    seeds of noise-free tests, and the turbine's thresholds by the rule."""
+    p = params.replace(demand_sigma=0.0, sensor_noise_scale=0.0)
+    start, end = params.cycle_range
+    ends = []
+    for c in (start, end):
+        q = p.replace(cycle_range=(c, c))
+        fits = [book_at(env, *point(env, q, seed, 1.0)) for seed in SEEDS]
+        ends.append([float(np.median([f[i] for f in fits])) for i in (0, 1)])
+    sd = load_wobble(env, params)
+    return {
+        "book_alpha_coolant": ends[0][0], "book_alpha_coolant_end": ends[1][0],
+        "book_boron_worth": ends[0][1], "book_boron_worth_end": ends[1][1],
+        "book_cycle_end": float(end),
+        "on_plan": ON_PLAN_SD * sd, "reload_band": RELOAD_SD * sd,
+        "restart_drop": float(params.turbine_rate) * DT + RESTART_SD * sd,
+        "wobble_sd": sd,
+    }  # fmt: skip
+
+
+# ---------------------------------------------------------------------------
 # Scoring the rungs
 # ---------------------------------------------------------------------------
 
@@ -668,4 +747,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if sys.argv[1:] == ["--book"]:
+        print(json.dumps(measured_book(Reactor(), ReactorParams()), indent=1))
+    else:
+        main()

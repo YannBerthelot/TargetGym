@@ -202,6 +202,9 @@ def reactor(table):
                "at_rest_trips": rest_trips, "scenarios": {}}  # fmt: skip
         try:
             tune, _ = L.bumps(env, p.replace(cycle_range=(0.0, 0.0)))
+            # The member's own curve book and turbine thresholds, measured by the
+            # recipe's physics tests (owner, 2026-11-25).
+            book = L.measured_book(env, p)
         except L.TrippedDuringTest as e:
             # The recipe cannot be run on this member: the property fails here.
             row.update(holds=False, tune_refused=str(e))
@@ -213,6 +216,7 @@ def reactor(table):
             "wd_Ti": float(tune.wd_Ti),
             "theta": float(tune.t_Ti) / 8.0,
         }
+        read.update({k: v for k, v in book.items() if k != "wobble_sd"})
         expert = make_reactor_pid_controller(plant=p, **read)
         act = lambda m, o, e=expert: e.step(e.params, m, o)  # noqa: E731
         row["tune"] = read
