@@ -111,7 +111,11 @@ _BURN = _SIGMA_X * _PHI_FULL * math.pi / 4.0  # 1/s, cosine flux on cosine xenon
 @struct.dataclass
 class ReactorParams(EnvParams):
     # ---- Kinetics ----
-    Lambda_gen: float = 1e-4  # s — effective mean neutron generation time
+    # The mean neutron generation time: ours, a thermal reactor's order. A PWR's
+    # is reported in tens of microseconds (Nuclear Technology, NT13-120), so this
+    # is a few times longer. The prompt jump it sets (Lambda / beta, about 15 ms)
+    # settles inside one 5 s sub-step either way.
+    Lambda_gen: float = 1e-4  # s
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
@@ -257,10 +261,6 @@ class ReactorParams(EnvParams):
 
     # ---- Reward shaping ----
     rod_motion_weight: float = 0.02
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md. The reward
-    # has not been a Gaussian for some time; this is the planner's scale.
-    reward_band: float = 0.03  # relative flux (3% = tight)
 
     # ---- Load: a daily 100-50-100, plus a small frequency-control wobble ----
     # Ramps at 2 %/min, the top of OAPS's 1 to 2 %/min for Mode A early in a
@@ -278,11 +278,10 @@ class ReactorParams(EnvParams):
     demand_theta: float = 1.0 / 300.0
     demand_sigma: float = 4.08e-4
 
-    # ---- Revenue model (visualisation only — not in reward) ----
-    # 1 GWe plant at spot price. Imbalance penalty = factor × spot.
+    # ---- The plant's output and its price ----
+    # 1 GWe at spot, the prices the cost's terms are read in.
     P_electric_GW: float = 1.0
     spot_price_per_MWh: float = 80.0
-    imbalance_factor: float = 3.0
 
     # ---- Initial state ----
     #: Recent power level the xenon inventory is in equilibrium with at reset:
@@ -495,7 +494,6 @@ PARAM_UNITS = {
     "T_coolant_max": "K",
     "T_avg_min": "K",
     "rod_motion_weight": "-",
-    "reward_band": "-",
     "load_min": "-",
     "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
@@ -506,7 +504,6 @@ PARAM_UNITS = {
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
-    "imbalance_factor": "-",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -1419,7 +1416,7 @@ def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):
     error is worth the same increment, from the plant's operating envelope down
     to ``precision_floor``, the finest error an ex-core detector can resolve.
 
-    This replaced a Gaussian on ``reward_band``, which was effectively zero --
+    This replaced a Gaussian on a 3 % flux band, which was effectively zero --
     no gradient at all -- beyond about 10% error, and which stopped
     discriminating just where a good controller operates. See
     docs/reward-shaping.md.
@@ -1461,27 +1458,3 @@ def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
         R.total(compute_reward_terms(state, params, xp), xp),
         xp,
     )
-
-
-def compute_revenue_rate(state: ReactorState, params: ReactorParams):
-    """
-    Instantaneous revenue rate in k$/hour (for visualisation only).
-
-    revenue  = delivered_power × spot_price
-    penalty  = |deviation| × imbalance_price
-    net_rate = revenue - penalty
-
-    At perfect tracking with n=target=1.0 and 1 GWe @ $80/MWh:
-    revenue = $80k/h.  A 5% error costs an extra $12k/h in imbalance fees.
-    """
-    P_MW = params.P_electric_GW * 1000.0 * state.n
-    revenue = P_MW * params.spot_price_per_MWh  # $/h
-    imbalance_price = params.spot_price_per_MWh * params.imbalance_factor
-    penalty = (
-        jnp.abs(state.n - state.target_n)
-        * params.P_electric_GW
-        * 1000.0
-        * imbalance_price
-    )
-    net = revenue - penalty
-    return net / 1000.0  # k$/h

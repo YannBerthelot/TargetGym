@@ -20,6 +20,7 @@ env, params = tg.make("plane3d_circle")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 600 steps of 1 s (10 min) |
 | Cite as | `plane3d_circle-v6` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space
@@ -76,7 +77,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

@@ -12,6 +12,7 @@ the MPC's hold. The oracle, on the shared solver, has its own tests
 The env is built directly from its class.
 """
 
+import dataclasses
 import json
 import pathlib
 
@@ -76,14 +77,23 @@ REFUSED = {
 }
 
 
+class MapMachine(CompressorSurge):
+    """The map's own machine read by ideal transmitters. This file's numbers
+    are the map's, and its hand-built states carry no transmitter history; the
+    hidden line and the lags have their own tests
+    (test_compressor_surge_hidden_line.py)."""
+
+    readings = tuple(dataclasses.replace(r, lag=0.0) for r in CompressorSurge.readings)
+
+
 @pytest.fixture(scope="module")
 def env():
-    return CompressorSurge()
+    return MapMachine()
 
 
 @pytest.fixture(scope="module")
 def params():
-    return CompressorSurgeParams()
+    return CompressorSurgeParams(line_shift_max=0.0)
 
 
 @pytest.fixture(scope="module")
@@ -166,8 +176,10 @@ def test_gains_are_read_under_the_task_key(monkeypatch, params):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="finding, a report since D2: the recipe's line is 0.10, so the battery "
-    "reaches 0.070 against a GUARD_MIN_MARGIN frozen for a line of 0.15",
+    reason="finding, a report since D2: the shipped pair (control line 0.15) "
+    "fails the decay check first: the linearised loop grows at 7.2 to 7.5 /s at "
+    "the five guard points, from the speed loop (SIMC on a near-integrating fit, "
+    "kp_speed 2.09); the battery also misses GUARD_MIN_MARGIN (measured 2026-11-25)",
 )
 def test_shipped_gains_pass_the_guard():
     """The shipped pair's closed loop decays at ``GUARD_MIN_DECAY`` or faster at

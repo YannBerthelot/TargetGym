@@ -7,6 +7,13 @@ size inside it are drawn by the seed. Sources are the tags of this folder's
 Weights (charter J4) are shares of operating time. No source says how often
 each window occurs, so each is ours: the normal day in the family range 0.5 to
 0.9, the rest split among the upsets.
+
+The evaluation cut (owner, 2026-11-24): a scenario stays only if removing it would
+hide a named behaviour or change which controller looks better. The acid-only and
+flow-only windows repeated the bad day (the reference's cost over the ceiling's
+1.138 and 1.139 against its 1.139; every exit that set the reference's back-off
+was the bad day's or the acid's on the same seeds) and are folded into it, each
+keeping its share of time: normal 0.80, bad day 0.15, buffer loss 0.05.
 """
 
 
@@ -47,24 +54,19 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             dict(_QUIET),
             source="[P5, p. 1]; [P2]",
             description="waste flows in, buffering drifts, reagent holds the pH",
-            weight=0.7,
+            weight=0.8,
             dwell_h=_DAY_H,
             stream_overrides=_NO_WINDOW_UPSETS,
         ),
         _row(
-            "acid_strength",
-            {**_QUIET, "acid_upset_size": 0.2},
-            source="[P3, p. 4]",
-            description="unknown changes in the influent's strong acid",
-            weight=0.1,
-            **_upset(),
-        ),
-        _row(
-            "flow_swing",
-            {**_QUIET, "flow_swing": 0.2},
-            source="[P3, Figure 2]; charter Amendment 3",
-            description="the influent flow swings, metered",
-            weight=0.1,
+            "bad_day",
+            {"acid_upset_size": 0.2, "flow_swing": 0.2},
+            source="[P3, p. 8]; acid [P3, p. 4]; flow [P3, Figure 2]",
+            description="calm to rocking and reeling: acid and flow both move",
+            # The acid-only and flow-only windows repeated this one and are folded
+            # into it (owner, 2026-11-24): each disturbance keeps its former share
+            # of time, 0.10 + 0.05.
+            weight=0.15,
             **_upset(),
         ),
         _row(
@@ -74,13 +76,5 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             description="buffering falls away and the curve steepens",
             weight=0.05,
             **_upset(events=False),
-        ),
-        _row(
-            "bad_day",
-            {"acid_upset_size": 0.2, "flow_swing": 0.2},
-            source="[P3, p. 8]",
-            description="calm to rocking and reeling: acid and flow both move",
-            weight=0.05,
-            **_upset(),
         ),
     )

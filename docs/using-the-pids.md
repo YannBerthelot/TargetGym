@@ -41,7 +41,7 @@ The same `step` runs in a Python loop, under `jit` and inside `lax.scan`, on
 CPU or GPU. It returns the action in the environment's own units, already
 clipped to its bounds. It reads the observation only, never the hidden state,
 which is what makes the PID a fair peer for a learned policy. (The MPC reads
-the true state, so it is an upper bound, not a peer.)
+the true state, so it is the best known plan, not a peer.)
 
 Two rules keep the memory right:
 
