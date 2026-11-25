@@ -244,6 +244,12 @@ day is a feed at the edge of the cooling, not past it. What practice does past
 it is cut the feed (version 7 had no such handle). Version 8 has it, so its
 build-up is the 10 % again and the scenario is one a feed cut could
 hold; the reference does not (owner, 2026-11-24: reported unheld).
+A 2026-11-25 trial of S13's high-temperature override on the feed (a low
+select 0.1 K under the band's top, tuned by a bump test and SIMC) held none of
+the three upsets: all 30 upset episodes still left the band at every set point.
+It cost about 5 % less in this build-up and 43 % more in cooling loss, so the
+ladder kept the PI. A feed cut first heats the reactor, as less cold feed
+comes in, and acts too slowly for a 1 K band.
 
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the
