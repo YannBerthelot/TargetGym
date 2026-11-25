@@ -101,6 +101,8 @@ To pick one by what you want to test, see
 
 > `glass_furnace` -- The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The oracle plans the valve on the env's own step and reward, with the episode's walks foreseen when given its seed, by SLSQP, which does not converge on this plant: its plans bound the ceiling from above (glass_furnace/oracle.py).
 
+> `compressor_surge` -- The shipped expert fails its own stability check. It is a PI pair (speed holds the pressure, the recycle valve holds the surge margin) with a backup line and rate action, tuned by its recipe. With the valve's 0.15 s dead time the two loops together grow instead of settling, so the valve swings open and shut in a limit cycle. It keeps its surge margin and does not trip the plant, but it spends recycle energy a settled controller would not: read it as a weak expert, not a tuned one (compressor_surge/PHYSICS.md, section 7).
+
 ## Renewable Energy
 
 <p align="center"><img src="../videos/mosaic_energy.webp" width="100%"/></p>

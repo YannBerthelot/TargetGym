@@ -177,7 +177,8 @@ def test_a_longer_video_builds_no_more_programs_than_a_short_one(tmp_path):
 
     def built(steps):
         env, params = tg.make("reactor", max_steps_in_episode=steps)
-        policy = lambda obs: np.zeros(2, np.float32)  # noqa: E731
+        zero = np.zeros(env.action_space(params).shape, np.float32)
+        policy = lambda obs: zero  # noqa: E731
         run = lambda: env.save_video(policy, 0, params, folder=tmp_path)  # noqa: E731
         return len(_programs_built(run))
 

@@ -87,6 +87,8 @@ What an agent is measured against: the expected cost per step over the task's we
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
+The ceiling reads what the policy does not observe: the outdoor temperature ahead, hour by hour, past its 24 h mean. Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
 The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.

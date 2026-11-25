@@ -16,7 +16,7 @@ env, params = tg.make("first_order")
 | You want to test | Start with | Then |
 |---|---|---|
 | That a training loop runs at all | [`first_order`](environments/first_order.md) | [`cstr`](environments/cstr.md) |
-| A nonlinear plant with one input | [`cstr`](environments/cstr.md) | [`ph_neutralization`](environments/ph_neutralization.md), [`unstable_cstr`](environments/unstable_cstr.md) |
+| A nonlinear plant with two inputs | [`cstr`](environments/cstr.md) | [`ph_neutralization`](environments/ph_neutralization.md) |
 | An open-loop unstable plant | [`unstable_cstr`](environments/unstable_cstr.md) | |
 | Two inputs acting on coupled outputs | [`four_tank`](environments/four_tank.md) | [`distillation`](environments/distillation.md), [`boiler_drum`](environments/boiler_drum.md) |
 | A response that first moves the wrong way (non-minimum phase) | [`boiler_drum`](environments/boiler_drum.md) | [`four_tank`](environments/four_tank.md) |
@@ -60,7 +60,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [CSTR](environments/cstr.md) | `cstr` | Scored | Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. | 5 | 2 | 960 steps, 4 h |
 | [First order](environments/first_order.md) | `first_order` | Test fixture, never scored | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
 | [Four-tank](environments/four_tank.md) | `four_tank` | Extra, never scored | Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. | 6 | 2 | 3300 steps, 55 min |
-| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Scored | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
+| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Scored | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
 | [Distillation](environments/distillation.md) | `distillation` | Under review, not scored | Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. | 8 | 2 | 400 steps, 6.67 h |
 | [Unstable CSTR](environments/unstable_cstr.md) | `unstable_cstr` | Extra, never scored | Hold the temperature of an LDPE autoclave at its setpoint with the initiator feed, at an operating point that is unstable without control. | 3 | 1 | 1800 steps, 30 min |
 

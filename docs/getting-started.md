@@ -84,6 +84,44 @@ returns = jax.jit(jax.vmap(episode_return))(keys)
 print(returns.mean())
 ```
 
+## Scaled observations and rewards
+
+Observations come in the plant's own units and rewards in its own money or
+product, orders of magnitude apart between tasks. For training, the optional
+`ScaledEnv` maps each observation's documented range to [-1, 1] and divides
+the reward by one fixed constant per task: one step of the task's main loss
+at its own price. It is a gymnax wrapper, so it jits and vmaps like the env.
+It covers the five scored tasks; `scaled.SCALES` gives each range and
+constant, with its source.
+
+```python
+import jax
+import target_gym as tg
+from target_gym import scaled
+
+env, params = tg.make("cstr")
+train_env = scaled.ScaledEnv(env, "cstr")
+obs, state = train_env.reset(jax.random.PRNGKey(0), params)
+action = env.action_space(params).sample(jax.random.PRNGKey(1))
+obs, state, reward, terminated, truncated, info = train_env.step(
+    jax.random.PRNGKey(2), state, action, params
+)
+info["raw_reward"]  # the env's own reward, the one the score reads
+```
+
+The score never reads the wrapper. `score_policy` and the recorded results run
+the raw env, so scaling changes no number. To score a policy trained on scaled
+observations, hand `score_policy` the policy on the plant's own observations:
+
+```python
+import jax.numpy as jnp
+import target_gym as tg
+from target_gym import scaled
+
+policy = lambda z: jnp.zeros(2)  # your trained policy, on scaled observations
+tg.score_policy("cstr", scaled.raw_policy("cstr", policy), seeds=1)
+```
+
 ## The Gymnasium interface
 
 For libraries that expect the classic API, any task comes wrapped, on its

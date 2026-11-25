@@ -123,11 +123,22 @@ def test_region_3_holds_rated_speed_and_power_with_the_published_controller(v):
 
 # 4. Closed-loop speed response, restated for the family. Published pitch loops
 # are placed at 0.2 rad/s (ROSCO's floating example [S2 Sect. 6.2]) to 0.6 rad/s
-# (S1 pp. 22-25), damping 0.7: peak times pi / (w sqrt(1 - 0.49)) of 7.33 s to
-# 22.0 s. Range, written before the rerun: S1's gains on the plant give a peak
-# 5.5 s (7.33 less the audit's 25 %) to 22 s after a 1 m/s wind step at 15 m/s,
-# and an overshoot under 15 %, read as the opposite excursion after the peak
-# over the peak excursion.
+# (S1 pp. 22-25), damping 0.7. A wind step is a step in aerodynamic torque, a
+# disturbance, not a step in the speed's set point: the loop's speed error is
+# (dT / J) e^(-zeta w t) sin(w_d t) / w_d with w_d = w sqrt(1 - zeta^2), which
+# peaks at t = arccos(zeta) / w_d = 1.114 / w, so 1.86 s at 0.6 rad/s to 5.57 s
+# at 0.2 rad/s. (The first version of this test used pi / w_d, the peak time of
+# a set-point step, 7.33 s to 22 s, and never passed: corrected 2026-11-25.)
+# Range: S1's gains on the plant give a peak 1.39 s (1.86 less the audit's 25 %)
+# to 5.57 s after a 1 m/s wind step at 15 m/s, and an overshoot under 15 %
+# (zeta 0.7 gives e^(-zeta pi / sqrt(1 - zeta^2)) = 4.6 %), read as the opposite
+# excursion after the peak over the peak excursion.
+PEAK_TIME_RANGE_S = (
+    0.75 * math.acos(0.7) / (0.6 * math.sqrt(0.51)),
+    math.acos(0.7) / (0.2 * math.sqrt(0.51)),
+)
+
+
 @pytest.mark.medium
 def test_a_wind_step_is_regulated_at_the_published_bandwidth():
     p = _quiet(15.0)
@@ -138,7 +149,8 @@ def test_a_wind_step_is_regulated_at_the_published_bandwidth():
     k_peak = int(after.argmax())
     peak_time = (k_peak + 1) * DT
     overshoot = -after[k_peak:].min() / after[k_peak]
-    assert 5.5 <= peak_time <= 22.0, peak_time
+    lo, hi = PEAK_TIME_RANGE_S
+    assert lo <= peak_time <= hi, peak_time
     assert overshoot < 0.15
 
 

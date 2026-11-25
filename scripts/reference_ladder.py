@@ -714,8 +714,19 @@ def build(name: str, row: Row, spec=None) -> dict:
             out = most_sensitive(designs)
             print(f"    {v.name}: {out}", flush=True)
             held.append(ValvePosition(v.read, v.setpoint, v.mv, out["Kc"], out["Ti"]))
+        # A row's overrides ride on its valve position rung too, selecting against
+        # the valve position loop's MV: Shinskey's high-temperature override on the
+        # feed [S13, p. 436].
         rungs["valve position"] = make(
-            Rung("valve position", tuple(pis), mix, (), (), tuple(held)), bias
+            Rung(
+                "valve position",
+                tuple(pis),
+                mix,
+                (),
+                tuple(over) if row.limits else (),
+                tuple(held),
+            ),
+            bias,
         )
     _show(row, "pi")
     return rungs

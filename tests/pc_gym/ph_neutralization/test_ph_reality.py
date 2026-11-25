@@ -19,6 +19,9 @@ the code:
   at least five times the cost of a perfect hold, and it trips (the review's
   finding, Amendment 3);
 - influent flow swings, and its meter reads it [P3, Figure 2].
+- the permit is pH 6.0 to 9.0 [40 CFR 133.102(c)]; the observation shows its
+  centre, not the operator's set point, which the score never reads, and the
+  time-in-band KPI's band is the permit (owner, 2026-11-25).
 Tolerances are the audit's, or stated where ours, fixed before any run.
 """
 
@@ -37,8 +40,9 @@ from target_gym.pc_gym.ph_neutralization.env_jax import PHNeutralization
 STEP_S = 5.0
 #: [P8]: no single excursion over 60 minutes.
 EXCURSION_LIMIT_S = 3600.0
-#: [P7, p. 2]: the example product spec, pH 7 plus or minus 1.
-BAND = (6.0, 8.0)
+#: 40 CFR 133.102(c): "within the limits of 6.0 to 9.0" (owner, 2026-11-25, in
+#: place of [P7]'s example product spec, pH 7 plus or minus 1).
+BAND = (6.0, 9.0)
 
 
 def quiet(**kw):
@@ -280,3 +284,31 @@ def test_influent_flow_swings_are_metered_and_move_the_plant(env, step):
         pHs.append(float(s.pH))
     assert flows[-1] == pytest.approx(1.2 * p.q1, rel=1e-3)
     assert abs(pHs[-1] - 7.0) > 0.1
+
+
+@pytest.mark.parametrize(
+    "pH, outside", [(5.9, True), (6.1, False), (8.9, False), (9.1, True)]
+)
+def test_the_permit_is_6_to_9(env, pH, outside):
+    """40 CFR 133.102(c): pH within 6.0 to 9.0; only a step outside is charged
+    the excursion."""
+    from target_gym.pc_gym.ph_neutralization.env import compute_reward_terms
+
+    p = quiet()
+    _, s = env.reset_env(jax.random.PRNGKey(0), p)
+    terms = compute_reward_terms(s.replace(pH=pH, excursion=0.0), p)
+    assert (float(terms["excursion"]) > 0.0) is outside
+
+
+@pytest.mark.parametrize("setpoint", [6.5, 7.2])
+def test_the_observation_shows_the_permits_centre_and_the_kpi_band_is_the_permit(
+    env, setpoint
+):
+    """The score never reads the operator's set point, so the observation's
+    target channel is the permit's centre whatever the set point, and the
+    time-in-band KPI (``|pH - target| <= e_floor``) is exactly the permit."""
+    p = quiet(setpoint_pH=setpoint)
+    obs, _ = env.reset_env(jax.random.PRNGKey(0), p)
+    centre, half = 0.5 * (BAND[0] + BAND[1]), 0.5 * (BAND[1] - BAND[0])
+    assert float(obs[env.obs_target_index]) == pytest.approx(centre)
+    assert float(p.e_floor) == pytest.approx(half)

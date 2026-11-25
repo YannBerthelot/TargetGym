@@ -386,13 +386,16 @@ def tune_ph_neutralization() -> dict:
     span = float(p.q3_max - p.q3_min)
 
     def rest(o, xp):
-        # Stage 1 at the lab's demand for the set point, the stage-2 trim shut.
-        base = 2 * (reagent_demand(o[2], lab, xp) - p.q3_min) / span - 1
+        # Stage 1 at the lab's demand for the operator's set point (the
+        # observation shows the permit's centre, not it), at the metered
+        # influent, the stage-2 trim shut.
+        sp = xp.asarray(float(p.setpoint_pH))
+        base = 2 * (reagent_demand(sp, lab, xp, o[6]) - p.q3_min) / span - 1
         return xp.stack([base, -xp.ones_like(base)])
 
     def demand(o, s, q):
         # The stage-1 probe, which the expert's base valve reads.
-        return reagent_demand(o[4], curve, jnp)
+        return reagent_demand(o[4], curve, jnp, o[6])
 
     plant = Plant(spec, p, [demand], [(None, None)], controller=manual(rest))
     inst = Instrument.of(env, p, "pH_s1")
