@@ -79,7 +79,7 @@ family's documented range, or ours with a reason.
 | `flow_swing` | 0.2 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found |
 | `event_hold` | 2 | h (stream) | ours: how long an influent upset holds before it ramps back, until the producing unit's batch ends; no source gives it; a window never sets it, so its upsets never return |
 | `window_upsets` | 1, 0 | - | the window's own upsets on (1), or off in a stream (0), which starts its own |
-| `permit_low`, `permit_high` | 6, 8 | pH | cited: the example spec pH 7 +- 1 [P7, p. 2] |
+| `permit_low`, `permit_high` | 6, 9 | pH | cited: secondary treatment, "within the limits of 6.0 to 9.0" [P11] (owner, 2026-11-25; was [P7]'s example product spec, pH 7 +- 1) |
 | `excursion_limit` | 3600 | s | cited: no single excursion over 60 min [P8] |
 | `sewer_floor` | 5.0 | pH | cited [P9] |
 | `basin_volume` | 236.2 | L | ours, family "hours of flow" (Amendment 3): 2 h of nominal discharge |
@@ -91,7 +91,7 @@ family's documented range, or ours with a reason.
 | `diversion_price` | 2 | L/L | ours: above reagent (Amendment 3): a diverted litre is pumped back and treated again, about 1 L of this dilute base per litre, plus the pumping |
 | `failure_cost` | 9.0 | L | ours: above the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L) |
 | `restart_steps` | 720 | steps | ours: a violation is charged another hour; no fine found |
-| `e_floor` | 1.0 | pH | cited: the permit half-width [P7, p. 2]; read by the time-in-band KPI only |
+| `e_floor` | 1.5 | pH | cited: the permit's half-width [P11], around its centre, which the observation shows; read by the time-in-band KPI only |
 | `precision_floor`, `pH_min`, `pH_max`, `reagent_cost_weight` | 0.01, 2, 12, 0 | - | the retired version-1 reward only |
 
 ---
@@ -100,7 +100,7 @@ family's documented range, or ours with a reason.
 
 | Limit | Kind | Model | Source |
 |---|---|---|---|
-| Discharge outside pH 6 to 8 | Zone, timed | Priced per second outside; one excursion past 60 min is a violation, the trip. The clock runs whether or not the effluent is diverted (Amendment 3) | [P8]; range [P7] |
+| Discharge outside pH 6 to 9 | Zone, timed | Priced per second outside; one excursion past 60 min is a violation, the trip. The clock runs whether or not the effluent is diverted (Amendment 3) | [P8]; range [P11] |
 | Discharge below pH 5.0 | Protected | Diverted into a finite basin, priced per litre at 2 L of reagent, pumped back to stage 1 when the discharge recovers; an overrun basin is a violation | [P9]; diversion [P3, pp. 4-5]; basin Amendment 3 |
 | Reagent valves | Hardware | 0 to 22 and 0 to 2.2 mL/s, clipped | ours (section 2) |
 | Level | Not modelled | Continuous overflow tanks | [P4, p. 1] is a batch interlock |
@@ -118,7 +118,7 @@ and the plant runs on (D5).
 |---|---|---|
 | 0 | discharge pH, stage 2's probe (section Readings) | [P5, p. 1; P6] |
 | 1 | stage-1 reagent valve, percent | the operator's own |
-| 2 | set point, pH 7 | the operator's own |
+| 2 | the permit's centre, pH 7.5 | the permit [P11]; the operator's set point is the expert's own and the score never reads it, so the observation does not carry it (owner, 2026-11-25) |
 | 3 | minutes outside the permit in this excursion | the monitor [P5, p. 2; P8] |
 | 4 | stage-1 pH, its probe | a transmitter per stage [P3, pp. 4-5] |
 | 5 | stage-2 trim valve, percent | the operator's own |
@@ -131,7 +131,7 @@ shows them measured.
 ### Task: `ph_neutralization`
 
 Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6
-to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without
+to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without
 overdosing. The policy reads both stages' pH probes, its two valves, the
 influent flow, the time spent outside the permit and the diversion basin's
 level. The buffer flow and the acid strength are hidden. Each step is charged,
@@ -143,7 +143,7 @@ effluent diverted while the discharge is below pH 5. One excursion longer than
 |---|---|
 | 0 | discharge pH, stage 2's probe |
 | 1 | stage-1 reagent valve, percent of its range |
-| 2 | pH set point |
+| 2 | the permit's centre, pH 7.5 |
 | 3 | minutes outside the permit in this excursion |
 | 4 | stage-1 pH, its probe |
 | 5 | stage-2 trim valve, percent of its maximum |
@@ -200,7 +200,7 @@ without overdosing [P5, p. 2]. Per step, in litres of reagent:
 ```
 reward    = -(reagent + excursion + diversion + failure)
 reagent   = (q3 + q3_trim) dt / 1000
-excursion = 1.667 dt                       while the discharge is outside 6 to 8
+excursion = 1.667 dt                       while the discharge is outside 6 to 9
 diversion = 2 (q1 + q2 + q3 + q3_trim) dt / 1000   while it is below 5.0
 failure   = 720 x 9.0                      on a violation (60 min, or basin overrun)
 ```
@@ -295,7 +295,7 @@ is the bicarbonate a hold on the edge uses that a reference held higher pays for
 
 ## 10. What the reference ladder row needs
 
-- Zone: the discharge pH in 6 to 8 [P7]; the cheap side is low (pH 6), since
+- Zone: the discharge pH in 6 to 9 [P11]; the cheap side is low (pH 6), since
   less base holds a lower pH (19 % less at pH 6 than at 7 at nominal buffer).
   The score charges every step outside the permit at the price of a violation
   (section 7), so the reference is not placed 2 sigma inside the edge: each rung
@@ -312,16 +312,20 @@ is the bicarbonate a hold on the edge uses that a reference held higher pays for
   placement and would be listed; here every seed is held at 6.5, so none is.
   Stage 1 has no zone and follows the same
   setpoint.
-- Scenarios: the five of section 6.
+- Scenarios: the three of section 6.
 - Two valves: stage 1 coarse, stage 2 trim. Bump tests on the steady state at
-  the permit's centre, pH 7, with `acid_upset_size`, `flow_swing` and
+  the permit's centre, pH 7.5, with `acid_upset_size`, `flow_swing` and
   `q2_noise_std` at 0: between the cheap edge and the centre the titration curve
   is steepest at the centre, so the most sensitive point is there whatever set
   point is placed, and the gains do not depend on the set point they place.
 - Feedforward is now available from the metered influent flow (obs 6), through
   the steady balance (`steady_base_flow`), as the field case names [P3, p. 3].
 - The expert (`experts.py`) runs the linearised PI on stage 1 and a trim PI on
-  the discharge with the same gains, tuned on the two-stage plant at its steepest
+  the discharge with the same gains, to the operator's set point `setpoint_pH`,
+  which it holds in its own parameters (owner, 2026-11-25). Its demand is fed
+  forward from the metered influent (obs 6): the bias and both readings are
+  linearised at the flow the meter reads, as a loop on a metered stream is
+  (owner, 2026-11-25). The gains are tuned on the two-stage plant at its steepest
   point, the buffer off (`scripts/tune_process_experts.py`).
 
 ## 11. The oracle

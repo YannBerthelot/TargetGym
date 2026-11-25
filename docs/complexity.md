@@ -60,7 +60,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [CSTR](environments/cstr.md) | `cstr` | Hold the temperature of a jacketed exothermic reactor at its setpoint with the cooling water flow. | 4 | 1 | 960 steps, 4 h |
 | [First order](environments/first_order.md) | `first_order` | Drive a single first-order lag to a target drawn at reset. | 2 | 1 | 150 steps, 7.5 s |
 | [Four-tank](environments/four_tank.md) | `four_tank` | Hold the levels of the two lower tanks of a four-tank rig at their setpoints with two pump voltages. | 6 | 2 | 3300 steps, 55 min |
-| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 8, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
+| [pH neutralisation](environments/ph_neutralization.md) | `ph_neutralization` | Keep the discharge of a two-stage acid neutralisation inside its permit, pH 6 to 9, with a reagent valve on stage 1 and a trim valve on stage 2, without overdosing. | 8 | 2 | 1440 steps, 2 h |
 | [Distillation](environments/distillation.md) | `distillation` | Keep both products of a 40-tray binary column on spec with the reflux and the boilup, using as little boilup as possible. | 8 | 2 | 400 steps, 6.67 h |
 | [Unstable CSTR](environments/unstable_cstr.md) | `unstable_cstr` | Hold the temperature of an LDPE autoclave at its setpoint with the initiator feed, at an operating point that is unstable without control. | 3 | 1 | 1800 steps, 30 min |
 

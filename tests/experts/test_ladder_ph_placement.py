@@ -1,6 +1,6 @@
 """The pH task's reference, placed by the exit rule on the real plant.
 
-Contract (charter J1, owner, 2026-11-23): the permit is pH 6 to 8, cheap side low, and
+Contract (charter J1, owner, 2026-11-23): the permit is pH 6 to 9, cheap side low, and
 the score charges every step outside it as an excursion, the price of a violation.
 Each rung holds the first tenth of a pH above 6 at which it leaves the permit on none
 of the ladder's seeds in any scenario, each candidate run from episodes started on it,

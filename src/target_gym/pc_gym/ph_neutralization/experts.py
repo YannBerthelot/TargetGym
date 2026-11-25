@@ -46,8 +46,9 @@ class TitrationCurve:
         )
 
 
-def reagent_demand(pH, curve: TitrationCurve, xp=jnp):
-    """The steady base flow q3 (mL/s) that leaves the effluent at ``pH``.
+def reagent_demand(pH, curve: TitrationCurve, xp=jnp, q1=None):
+    """The steady base flow q3 (mL/s) that leaves the effluent at ``pH``, at the
+    influent flow ``q1`` (mL/s; the curve's nominal by default).
 
     At steady state the invariants are the flow-weighted means of the
     streams', and the charge balance (``env.titration_residual``) is then
@@ -66,14 +67,16 @@ def reagent_demand(pH, curve: TitrationCurve, xp=jnp):
     r1 = curve.Wa1 + f + curve.Wb1 * c
     r2 = curve.Wa2 + f + curve.Wb2 * c
     r3 = curve.Wa3 + f + curve.Wb3 * c
-    return -(curve.q1 * r1 + curve.q2 * r2) / r3
+    q1 = curve.q1 if q1 is None else q1
+    return -(q1 * r1 + curve.q2 * r2) / r3
 
 
 @struct.dataclass
 class LinearisedPIParams:
     """The PI on reagent demand: ``Kp`` in mL/s per mL/s, ``Ti`` and ``dt`` in
-    s, ``alpha`` how far the reading's filter moves per step, and the base
-    valve's range in mL/s."""
+    s, ``alpha`` how far the reading's filter moves per step, the base valve's
+    range in mL/s, and ``setpoint``, the pH the operator holds (the
+    observation does not carry it)."""
 
     Kp: float
     Ti: float
@@ -81,6 +84,7 @@ class LinearisedPIParams:
     dt: float
     q3_min: float
     q3_max: float
+    setpoint: float
     curve: TitrationCurve
     #: The trim valve's top (mL/s), on stage 2.
     trim_max: float = 2.2
@@ -96,9 +100,14 @@ class LinearisedPIState:
 
 
 def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
-    """One update on ``obs = [pH, q3_pct, target_pH, excursion_min, pH_s1,
+    """One update on ``obs = [pH, q3_pct, permit_centre, excursion_min, pH_s1,
     trim_pct, q1, basin_pct]``: the stage-1 valve from the stage-1 probe, and
-    the stage-2 trim from the discharge probe.
+    the stage-2 trim from the discharge probe, both to the operator's
+    ``params.setpoint``.
+
+    The demand is fed forward from the metered influent (obs 6): the bias and
+    both readings are linearised at the flow the meter reads, so a swing in the
+    influent moves the base valve before it moves the pH.
 
     Stage 1 is the loop below; stage 2 trims what stage 1 leaves, with the same
     gains on the discharge's reagent demand and no bias, so it rests shut when
@@ -110,8 +119,9 @@ def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
     valve is saturated. The filter runs on the linearised reading, which starts
     it at the first.
     """
-    demand_sp = reagent_demand(obs[2], params.curve, xp)
-    read = xp.clip(reagent_demand(obs[4], params.curve, xp), 0.0, 2 * params.q3_max)
+    q1 = obs[6]
+    demand_sp = reagent_demand(params.setpoint, params.curve, xp, q1)
+    read = xp.clip(reagent_demand(obs[4], params.curve, xp, q1), 0.0, 2 * params.q3_max)
     demand = xp.where(
         state.started > 0, state.demand + params.alpha * (read - state.demand), read
     )
@@ -122,7 +132,9 @@ def linearised_pi_step(params: LinearisedPIParams, state, obs, xp=jnp):
     u_clipped = xp.clip(u, -1.0, 1.0)
 
     # Stage 2: the discharge's shortfall in reagent demand, trimmed in.
-    read_2 = xp.clip(reagent_demand(obs[0], params.curve, xp), 0.0, 2 * params.q3_max)
+    read_2 = xp.clip(
+        reagent_demand(obs[0], params.curve, xp, q1), 0.0, 2 * params.q3_max
+    )
     e_2 = demand_sp - read_2
     trim_integral = state.trim_integral + e_2 * params.dt
     trim = params.Kp * (e_2 + trim_integral / params.Ti)
@@ -154,6 +166,7 @@ def ph_linearised_pi(Kp: float, Ti: float, params=None, Tf: float = 0.0):
             dt=dt,
             q3_min=float(p.q3_min),
             q3_max=float(p.q3_max),
+            setpoint=float(p.setpoint_pH),
             curve=TitrationCurve.of(p),
             trim_max=float(p.q3_trim_max),
         ),
