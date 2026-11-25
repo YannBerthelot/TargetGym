@@ -299,6 +299,20 @@ def ladder_controller(
             base = base + trim
         asked = base + xp.asarray(rung.mix) @ xp.stack(out)
         u = [v for v in xp.clip(asked, -1.0, 1.0)]
+        # Valve position loops set their MVs first, so that an override on the same
+        # MV selects against what the loop asks (Shinskey's high-temperature
+        # override on the feed [S13, p. 436]).
+        vp_i, vp_b, vp_wanted = [], [], []
+        for n, v in enumerate(rung.valve_positions):
+            took = start(obs, xp)[v.mv] if start is not None else u[v.mv]
+            base_v = xp.where(first, m.vp_base[n], took)
+            e_v = v.setpoint - v.read(obs, xp)
+            i_v = m.vp_integral[n] + e_v * dt
+            wanted = base_v + v.kc * (e_v + i_v / v.ti)
+            u[v.mv] = xp.clip(xp.minimum(wanted, v.top), -1.0, 1.0)
+            vp_i.append(i_v)
+            vp_b.append(base_v)
+            vp_wanted.append(wanted)
         resets = []
         for n, o in enumerate(rung.overrides):
             r = xp.where(first, m.reset[n], u[o.mv])
@@ -310,16 +324,12 @@ def ladder_controller(
                 1.0,
             )
             resets.append(r + dt / o.ti * (u[o.mv] - r))
-        vp_i, vp_b = [], []
-        for n, v in enumerate(rung.valve_positions):
-            took = start(obs, xp)[v.mv] if start is not None else u[v.mv]
-            base_v = xp.where(first, m.vp_base[n], took)
-            e_v = v.setpoint - v.read(obs, xp)
-            i_v = m.vp_integral[n] + e_v * dt
-            wanted = base_v + v.kc * (e_v + i_v / v.ti)
-            u[v.mv] = xp.clip(xp.minimum(wanted, v.top), -1.0, 1.0)
-            vp_i.append(xp.where(u[v.mv] == wanted, i_v, m.vp_integral[n]))
-            vp_b.append(base_v)
+        # A valve position loop's integral holds while anything else limits its MV:
+        # its top, the actuator's range, or an override.
+        vp_i = [
+            xp.where(u[v.mv] == vp_wanted[n], vp_i[n], m.vp_integral[n])
+            for n, v in enumerate(rung.valve_positions)
+        ]
         action = xp.stack(u)
 
         moved = xp.abs(action - asked) > 0

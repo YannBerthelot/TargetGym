@@ -86,8 +86,8 @@ class CSTRParams(EnvParams):
     #: The normal day's reactor temperature, 58 C [S1, Tables 3, 4].
     T_setpoint: float = 331.15  # K
     #: Product made more than this from the setpoint is off-spec. Ours: no
-    #: tolerance was found (REALITY.md, third search); flat inside, by the
-    #: owner's decision of 2026-11-24.
+    #: tolerance was found (REALITY.md, third and fourth searches); flat inside,
+    #: by the owner's decision of 2026-11-24.
     T_band: float = 1.0  # K
     #: Minutes a setpoint move takes. Derived: S1's closed loop took about an
     #: hour to carry its 2 C move to its peak [S1, Fig. 2], and a band that

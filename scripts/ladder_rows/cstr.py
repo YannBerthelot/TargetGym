@@ -12,6 +12,7 @@ import math
 
 from reference_ladder import (  # noqa: E402
     Cv,
+    Limit,
     Row,
     Valve,
 )
@@ -55,6 +56,20 @@ def row() -> Row:
     # span (0.9 raw) [S13, p. 438, Fig. 7]. It answers the feed through the closed
     # temperature loop over about an hour, so its test runs three hours.
     valve = Valve("valve by feed", lambda o, xp: o[2] / 50.0 - 1.0, 0.9, 1, 0.1, 720)
+    # Shinskey's high-temperature override on the feed [S13, p. 436]: a low select
+    # lets the temperature cut the feed past the band's top, backed off the probe's
+    # resolution (ours, the ceiling's margin). Read on the feed with the water held,
+    # the case it is for, over the temperature loop's window (owner, 2026-11-25).
+    hot = Limit(
+        "T high on feed",
+        lambda o, xp: o[0] - o[4],
+        band - float(p.e_floor),
+        False,
+        1,
+        "T",
+        0.1,
+        window,
+    )
     # Bump tests from a reset with both valves in mid-range (the water at 80 % of its
     # span), at the middle and at both ends of the feed's temperature range [S1,
     # Tables 3, 4]. The catalyst-lost and richer-feed corners have no rest inside the
@@ -70,6 +85,7 @@ def row() -> Row:
         (T,),
         test={"valve_rest": 0.8},
         points=({"feed_T_range": (lo, lo)}, {"feed_T_range": (hi, hi)}),
+        limits=(hot,),
         valves=(valve,),
         # The reset stands on the steady state of the day's feed temperature, which
         # is hidden: every rung takes over from the valves as the reset left them
@@ -79,7 +95,5 @@ def row() -> Row:
             "feedforward": measured,
             "cascade": measured,
             "decoupler": "one loop and one valve position loop",
-            "override": "a feed cut first heats the reactor, so a second "
-            "temperature loop on the feed swings it (measured 2026-11-23, 4acda1c)",
         },
     )
