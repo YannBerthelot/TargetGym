@@ -84,9 +84,13 @@ What an agent is measured against: the expected cost per step over the task's we
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
+The ceiling reads what the policy does not observe: the machine's true surge line, up to 5 % off its map; the consumers' demand levels ahead and their random part. Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
 The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
+
+The shipped expert fails its own stability check. It is a PI pair (speed holds the pressure, the recycle valve holds the surge margin) with a backup line and rate action, tuned by its recipe. With the valve's 0.15 s dead time the two loops together grow instead of settling, so the valve swings open and shut in a limit cycle. It keeps its surge margin and does not trip the plant, but it spends recycle energy a settled controller would not: read it as a weak expert, not a tuned one (compressor_surge/PHYSICS.md, section 7).
 
 ## Arguments
 

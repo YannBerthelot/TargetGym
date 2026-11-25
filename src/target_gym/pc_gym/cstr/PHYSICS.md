@@ -59,7 +59,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4]; the feed at room temperature swings across it |
 | `feed_T_period` | 1440 | min | ours: room temperature cycles once a day; the phase is drawn per episode, so an episode sees up to about 0.9 K of drift |
 | `T_setpoint` | 331.15 | K | cited: 58 C [S1, Tables 3, 4] |
-| `T_band` | 1 | K | ours: product made further from the setpoint is off-spec; no tolerance found (REALITY.md, third search); flat inside by the owner's decision (2026-11-24); the sweep draws it from 0.5 to 2 |
+| `T_band` | 1 | K | ours: product made further from the setpoint is off-spec; no tolerance found (REALITY.md, third and fourth searches); flat inside by the owner's decision (2026-11-24); the sweep draws it from 0.5 to 2 |
 | `setpoint_ramp` | 60 | min | derived: S1's closed loop took about an hour to carry its 2 C move to its peak [S1, Fig. 2] |
 | `valve_rest` | 0.95 | of span | cited: where [S13]'s example holds the cooling valve, short of its limit [S13, pp. 436, 438] |
 | `T_trip` | 348.15 | K | ours: 75 C, 17 K over the setpoint and short of the 81 C adiabatic rise, so a runaway trips; the interlock is cited [S3], its setting for this chemistry is not found |
@@ -157,7 +157,7 @@ inside the band (owner, 2026-11-24).
 
 | parameter | value | source |
 | --- | --- | --- |
-| `T_band` | 1 K | ours: no tolerance found (REALITY.md, third search) |
+| `T_band` | 1 K | ours: no tolerance found (REALITY.md, third and fourth searches) |
 | `e_floor` | 0.1 K | ours: a reactor probe's resolution, what the band's edge is read to |
 | `failure_cost` | 1 | a step of nameplate production |
 | `restart_steps` | 960 | ours: 4 h of lost production, seven residence times; no restart time found |
@@ -244,6 +244,28 @@ day is a feed at the edge of the cooling, not past it. What practice does past
 it is cut the feed (version 7 had no such handle). Version 8 has it, so its
 build-up is the 10 % again and the scenario is one a feed cut could
 hold; the reference does not (owner, 2026-11-24: reported unheld).
+A 2026-11-25 trial of S13's high-temperature override on the feed (a low
+select 0.1 K under the band's top, tuned by a bump test and SIMC) held none of
+the three upsets: all 30 upset episodes still left the band at every set point.
+It cost about 5 % less in this build-up and 43 % more in cooling loss, so the
+ladder kept the PI. A feed cut first heats the reactor, as less cold feed
+comes in, and acts too slowly for a 1 K band.
+
+The upsets are not past what the plant can ride. On a quick check
+(`scripts/prototypes/cstr_ceiling_upsets.py`, seeds 100 to 102, two solves per
+start, not recorded), the foresight ceiling never leaves the band in any of the
+three upsets. Its hottest point is 58.9 C. The shipped expert leaves the band
+48 to 67 % of the time:
+
+| scenario | reference off-band, J | ceiling off-band, J | ceiling's mean feed against the reference's |
+|---|---|---|---|
+| catalyst loss | 58 %, 0.700 | 0 %, 0.296 | about the same |
+| feed build-up | 67 %, 0.758 | 0 %, 0.331 | 7 to 21 % lower |
+| cooling loss | 48 %, 0.623 | 0 %, 0.251 | about the same |
+
+Except in the build-up, the ceiling holds the band by timing its moves ahead of
+the upset, not by running less feed. That is foresight no feedback structure
+on the ladder has, so the room in the upsets is a gap in anticipation.
 
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the

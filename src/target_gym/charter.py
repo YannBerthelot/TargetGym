@@ -82,6 +82,50 @@ _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 #: plant, reference and tests merged.
 FLAGSHIP = ("reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization")
 
+#: What each scored task's ceiling reads that its policy does not observe (owner,
+#: picker 2026-11-25, "Report foresight, name it plainly"): the ceiling stays the
+#: room's top, and its page says so in these words. Each list is taken from the
+#: ceiling's code: ``pc_gym.foresight`` plans on the seed's own keys from the
+#: true state, so it knows every draw ahead; hvac's ``ceiling_data`` reads the
+#: weather's path off the episode's keys; the reactor's ceiling
+#: (``scripts/reactor_ipopt.py``, ``reactor.oracle`` with a seed) starts from the
+#: simulated state and reads the load's wobble the key draws. What is hidden is
+#: the env's state and draws against its observation table. Kept here, outside
+#: every fingerprint, so a wording change stales no record.
+CEILING_READS = {
+    # reactor/env.py: Xe_hat, I_hat and their tilts in the state, boron in the
+    # core (obs 7 is the boronmeter, 20 min late), load_wobble keyed on demand_key.
+    "reactor": (
+        "the core's xenon and iodine, top and bottom",
+        "the boron in the core now, where the policy reads it 20 min late",
+        "the load's frequency-control wobble ahead",
+    ),
+    # hvac/env.py: weather_dev, an OU draw per step; the policy reads the
+    # outdoor temperature now and its next-24 h mean.
+    "hvac": ("the outdoor temperature ahead, hour by hour, past its 24 h mean",),
+    # cstr/env_jax.py: C_a, T_feed on a drawn phase, event_at drawn in its window,
+    # the scenario's event sizes.
+    "cstr": (
+        "the composition in the reactor",
+        "the feed's temperature",
+        "when the scenario's event comes (the setpoint move, the catalyst's loss, "
+        "the richer feed or the cooling water's failure)",
+    ),
+    # compressor_surge/env.py: line_shift (the machine's surge line off the map),
+    # demand_levels drawn per block, demand_dev an OU draw per step.
+    "compressor_surge": (
+        "the machine's true surge line, up to 5 % off its map",
+        "the consumers' demand levels ahead and their random part",
+    ),
+    # ph_neutralization/env.py: q2, an OU draw per step; acid_scale and the
+    # influent upsets drawn by start_upset (the flow now is metered, obs 6).
+    "ph_neutralization": (
+        "the acid strength",
+        "the buffer flow",
+        "when the influent's acid and flow upsets come and how large",
+    ),
+}
+
 SCORED, UNDER_REVIEW, EXTRA, FIXTURE = "scored", "under review", "extra", "fixture"
 
 

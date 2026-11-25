@@ -314,6 +314,28 @@ below was fetched twice and the two fetches agree.
 - G. McMillan's article on maximising a liquid reactor's production rate
   (automation.com) refused both fetches (HTTP 403) and is not used.
 
+### The temperature band, fourth search (2026-11-25)
+
+The owner asked for one more search for how closely such a reactor's temperature
+must be held, and to keep the 1 K band as ours if none was found. Four queries:
+on CSTR temperature tolerances for product quality, on tolerances of 0.5 C or 1 C
+with side reactions and selectivity, on McMillan's reactor articles, and on
+polymerisation reactors held within a degree for molecular weight.
+
+- **Found, not used.** A University of Michigan teaching module (Process Dynamics
+  and Control, Safety Module 1, on the T2 Laboratories explosion; safeche.engin.
+  umich.edu) sets, as an exercise's controller design specification for a CSTR
+  model of T2's first step, "Offsets, if any, must be less than half a degree K".
+  Both fetches returned the same file (same SHA-1). It is a homework
+  specification on the steady offset, written for that exercise and given no
+  source, not a plant's tolerance on how far the temperature may stray, so it
+  does not set this task's band.
+- **Not found.** Every other hit says only that running hot costs selectivity
+  through side reactions, with no figure in degrees (a Control Global batch
+  reactor checklist, ethylene oxide and polyisobutylene patents).
+
+The band stays ours (owner, 2026-11-24 and 2026-11-25).
+
 - [S13] A. Reyes-Lua, C. Zotica, S. Skogestad, "Optimal Operation with Changing
   Active Constraint Regions using Classical Advanced Control", Preprints, 10th
   IFAC International Symposium on Advanced Control of Chemical Processes,

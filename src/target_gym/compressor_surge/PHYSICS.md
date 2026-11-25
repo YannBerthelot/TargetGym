@@ -155,9 +155,9 @@ failed and pass now.
 - The valve's lag had to be a dead time: a first-order lag of 0.2 s still let
   the rate-limited stroke move at once, against C7's "lag" read as time to
   visible motion. 0.15 s is the family range's lower end.
-- The stored anti-surge pair, tuned before the dead time, limit-cycles with
-  it; `test_functional_core_matches_the_class` now runs without the dead time.
-  The ladder re-tunes it.
+- The anti-surge pair limit-cycles with the dead time, before and after its
+  recipe was re-run (section 7, "Status");
+  `test_functional_core_matches_the_class` runs without the dead time.
 
 ### What the reference ladder row needs
 
@@ -734,6 +734,23 @@ therefore calls for tuning and validating the pair again.
 Both controllers live in `experts.py`, outside the version stamp; the env
 reaches them only inside `make_pid` and `make_mpc`.
 
+### Status: the pair fails its stability check (owner, 2026-11-25)
+
+The shipped pair does not settle. With the recycle valve's 0.15 s dead time,
+the pressure loop on speed and the margin loop on the valve feed each other:
+a small upset grows (by 1.2 to 1.6 per second at the guard's five points)
+until the valve's rate limits catch it, and the valve then swings open and
+shut in a limit cycle (its command travels up to 0.85 of a full opening over
+the last 10 s of a stress run, where a settled loop moves under 0.01). It
+still keeps its surge margin (0.105 at worst in the stress runs, against
+0.098 asked) and trips nothing. Detuning both loops to their full delay, and
+then each alone, does not remove the growth; both loops contribute.
+
+So read its numbers as a weak expert's, not a tuned controller's: a learner
+that beats it has not beaten good industrial practice. It ships as a
+documented finding until a later update; `test_shipped_gains_pass_the_guard`
+stays a strict xfail and says why.
+
 ### The pair
 
 The arrangement industrial anti-surge systems use (Mirsky et al. 2015,
@@ -753,7 +770,10 @@ pp.11 and 13), on the observation:
   stops at the stops.
 - **Override.** A margin under `override_line` opens the valve fully and
   holds it open for `override_hold` after the margin recovers, 20 steps
-  counting the triggering one.
+  counting the triggering one. This is the vendors' backup line.
+- **Rate action** [C3, p. 2; C7]. While the filtered margin falls, the line
+  the anti-surge PI holds moves right by `rate_lead` times the rate of fall,
+  so the valve opens before the control line is reached.
 
 The memory starts at the observed drive setpoint and valve (`pair_init`), so
 the speed loop takes over bumplessly from any state and the valve loop from
@@ -766,26 +786,25 @@ pair's rest at the levels the schedule ends on, with no stored gain in the way.
 
 | value | stored | label and source |
 |---|---|---|
-| `kp_speed`, `ki_speed` | 0.0289, 0.0164 | SIMC on speed to pressure: k = 47 kPa per unit speed, tau1 = 1.77 s, theta = 0.65 s. A drive, so no dead band. 8 of 10 tests: two seeds trip in the hold, on a hidden line right of 0.04 |
-| `kp_surge`, `ki_surge` | 1.0, 4.68 | SIMC on recycle to margin: k = 1.16, tau1 = 0.214 s, theta = 0.05 s, 1.02 capped at Mirsky's 1. N7 stops at Kc,min. 6 of the 8 points with the valve open |
-| `Tf_surge` | 0.021 s | N5's cap. Under the 0.1 s step, so it barely filters |
-| `surge_line` | 0.10 | read, Mirsky's 10 %. The schedule check passes it: worst margin 0.061, no trips on seeds 100 to 109 |
-| `override_line` | 0.05 | read, half the control margin |
+| `kp_speed`, `ki_speed` | 0.289, 0.114 | SIMC for an integrating process on speed to pressure: slope k / tau1 = 125 / 23.0 = 5.46 kPa per s per unit speed, theta = 0.05 s, tau_c = 0.58 s, the time the drive takes at 3 %/s to make the test's own step (owner, 2026-11-25). A drive, so no dead band. 3 of 10 tests read |
+| `kp_surge`, `ki_surge` | 0.508, 1.46 | SIMC on recycle to margin, re-identified with the valve's 0.15 s dead time: k = 1.17, tau1 = 0.348 s, theta = 0.20 s; tau_c = 0.35 s, the loop's full delay (theta plus the flow transmitter's 0.15 s lag; the detune rule, owner, 2026-11-25). 3 of 9 points read |
+| `Tf_surge` | 0.035 s | N5's cap |
+| `surge_line` | 0.15 | the ladder's third rung: the schedule check fails 0.10 and 0.125 (worst margins 0.015 and 0.044) and passes 0.15 (0.094, no trips, seeds 100 to 109) |
+| `override_line` | 0.075 | read, half the control margin |
 | `override_hold` | 2 s | derived, the valve's full-open stroke |
-| `reset_band` | 0.014 of opening | derived, C8 |
+| `reset_band` | 0 | derived, C8; 0 because the anti-windup time exceeds the reset time here |
+| `rate_lead` | 0.235 s | ours: the valve loop's own delay, so it opens as early as the loop answers late |
 
-**Pairing.** RGA(dp on N) is 0.91 at the median rest with the valve open, so speed
-holds pressure and the valve holds the margin, as shipped.
+The same recipe is stored at the 0.5x and 2x noise levels (`pid_gains_0.5x.json`,
+`pid_gains_2x.json`), each at the 0.15 line.
 
-**Held-out check** (seeds 200 to 209). It holds 12.8 per step (worst seed 24.9)
-against a ceiling of 1, with no trips. The best null is constant 0.5, ratio 0.011,
-0 of 10 wins. The valve travels about 0.3 % per step in hold, from 0.71 %, still over
-the positioner's 0.25 %, since the filter's cap is under one step. The true margin
-over each episode's hidden line falls to 0.014 at worst. The opening still costs 57
-to 92 % of an episode: the anti-surge PI shuts the valve while the slower speed loop
-catches up. That is the recipe's result, and the structure has no term to coordinate
-them. Over 1024 validation seeds it does not trip, and its margin reaches 0.0496,
-under the override line: a finding, `test_the_pair_holds_the_validation_seeds`.
+**Pairing.** The recipe's RGA(dp on N) reads no rest with the valve more than 2 %
+open, so it stores NaN; the pairing (speed on pressure, valve on margin) is the
+vendors' and is not re-checked.
+
+**Held-out check.** Not current: the earlier figures were for the pair tuned before
+the dead time, and the pair's line on the held-out seeds is redone in the re-record
+pass.
 
 The tests in `tests/compressor_surge/test_compressor_surge_experts.py` hold the
 pair. `test_default_gains_are_finite_and_tuned_ones_nonzero` and
@@ -808,7 +827,10 @@ process protocols the factory does not call it
    (20, 24 and 28 kPa at opening 0.35; 24 kPa at 0.50; 28 kPa at 0.60), the
    Jacobian of one closed-loop step (`pair_step`, then the env's
    `compute_next_state` with the deviation off) in (m_c, dp, N, N_ramp, x,
-   I_N, I_x) must have its slowest mode decaying at 0.2 /s or faster
+   I_N, I_x) and the valve's commands still in flight behind its dead time
+   (added 2026-11-25: without them this step's command never reached the
+   valve, and the anti-surge integrator read as open) must have its slowest
+   mode decaying at 0.2 /s or faster
    (`GUARD_MIN_DECAY`, ours). It is taken at the closed loop's steady state
    in closed form (`settled_point`: on the control line with the valve at
    0.148 to 0.335 at these points), where the rate limits, the override and

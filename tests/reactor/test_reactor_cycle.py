@@ -30,6 +30,11 @@ written before the code:
   starts again at the range's start, uncharged; a window never refuels (owner,
   2026-11-11 and 2026-11-15).
 - A trip's restart keeps the core: its cycle point is not drawn again.
+- A run never reaches the end of the load-following range (owner, 2026-11-25): its
+  core's point is drawn evenly over the range less what the run burns at the core's
+  own rate, ``max_steps_in_episode`` steps of 30 s at full power. By hand: 7 days at
+  3.3 ppm a day burn 23.1 ppm, 23.1 / 1690 = 0.013669 of the cycle, so the point is
+  drawn over [0, 0.886331].
 """
 
 import jax
@@ -237,3 +242,19 @@ def test_a_restart_keeps_the_cores_cycle_point():
     obs, s, _, _, info = env.step_env(jax.random.PRNGKey(4), scram, action, p)
     assert bool(info["tripped"])
     assert float(obs[CYCLE]) == pytest.approx(before, abs=1e-5)
+
+
+def test_a_runs_core_never_reaches_the_end_of_its_range():
+    """Two thousand draws of a 7-day run's core at 3.3 ppm a day: every one starts
+    no later than 0.9 - 0.013669, and the draws still reach within 0.002 of it."""
+    env = Reactor()
+    p = ReactorParams(
+        **{**QUIET, "burnup_range": (3.3, 3.3)}, max_steps_in_episode=7 * 2880
+    )
+    keys = jax.random.split(jax.random.PRNGKey(11), 2000)
+    obs, _ = jax.vmap(env.reset_env, in_axes=(0, None))(keys, p)
+    start = np.asarray(obs[:, CYCLE])
+    last = 0.9 - 7 * 3.3 / 1690.0
+    assert start.min() >= 0.0
+    assert start.max() <= last + 1e-6
+    assert start.max() >= last - 0.002

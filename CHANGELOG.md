@@ -9,6 +9,36 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Scaled observations and rewards (2026-11-25)
+
+- `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
+  each observation's documented range to [-1, 1] and divides the reward by one
+  fixed constant per task (`scaled.SCALES`, the five scored tasks). The raw
+  reward rides in `info["raw_reward"]`. The score never reads the wrapper, and
+  `scaled.raw_policy` hands `score_policy` a policy trained on scaled
+  observations.
+
+### Reactor curve book, cycle draw and limits (2026-11-25)
+
+- The reactor's expert reads a measured curve book: the recipe's physics tests at
+  power (a dilution bump, a calibrated rod bump) at both ends of the load-following
+  range replace the plant's own lines. Its turbine thresholds follow a rule on the
+  measured load wobble.
+- A reactor run's core is drawn so it never reaches the end of its load-following
+  range (reactor-v10, re-stamped in place: it never shipped). Scoring runs build
+  their stream's params with the run's length.
+- The reactor's DNB limit follows NUREG-1431 Rev. 5.0 (ML21259A155), LCO 3.4.1: 2 h
+  to restore, then the turbine unloads along a straight line to MODE 2's 5 % over
+  6 h, and the plant goes to hot standby after 8 h above the limit without a break,
+  where it went at 2 h (`dnb_restore`, `dnb_allowed`, `mode_2_load`).
+- The reactor's rod insertion limit follows NUREG-1431 Rev. 5.0, LCO 3.1.6
+  Conditions B and D: 2 h to restore, then the turbine unloads along a straight
+  line to no load over 6 h, and hot standby after 8 h past the limit
+  (`ril_restore`, `ril_allowed`).
+- The reactor's expert lets its Tavg loop go once Tavg is back inside its free
+  band. Holding the loop's output there kept moving boron for a Tavg nothing
+  charges, which made the expert fragile to its curve book late in the cycle.
+
 ### Upgrading from 0.7.0
 
 The next release is 0.8.0, because these changes break code written for
@@ -34,6 +64,10 @@ The next release is 0.8.0, because these changes break code written for
     page says it was recorded on an earlier version and shows the numbers
     again once it is re-recorded. `records.current_parts` gives the current
     part of an old-format row.
+  - Each scored task's page names the hidden facts its ceiling reads (the
+    true surge line, the acid strength, the weather or load ahead), so part
+    of the room may be out of reach of a policy; the list is
+    `charter.CEILING_READS`.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and

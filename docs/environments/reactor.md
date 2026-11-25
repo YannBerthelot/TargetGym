@@ -93,6 +93,8 @@ What an agent is measured against: the expected cost per step over the task's we
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
+The ceiling reads what the policy does not observe: the core's xenon and iodine, top and bottom; the boron in the core now, where the policy reads it 20 min late; the load's frequency-control wobble ahead. Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
 The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
@@ -194,9 +196,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ao_limit_allowed` | 1800 | s |
 | `ril_full` | 0.22 |  |
 | `ril_half` | 0.78 |  |
-| `ril_allowed` | 7200 | s |
+| `ril_restore` | 7200 | s |
+| `ril_allowed` | 28800 | s |
 | `dnb_margin` | 2.83333 | K |
-| `dnb_allowed` | 7200 | s |
+| `dnb_restore` | 7200 | s |
+| `dnb_allowed` | 28800 | s |
+| `mode_2_load` | 0.05 | - |
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |
