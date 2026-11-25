@@ -118,6 +118,11 @@ d(boron)/dt = Q / M (C_feed - boron)
 Q = 10 kg/s dilution (C_feed 0), 3 kg/s boration (C_feed boric_acid_ppm)
 ```
 
+The law is exact over a sub-step, and its sum carries its own rounding
+(`boron_carry`): a trickle changes the boron by less over 5 s than a
+single-precision number near 1690 ppm can hold (1.2e-4 ppm), and without the
+carry 72 kg of water diluted as 130 kg and 36 kg as none.
+
 The heat path is unchanged: fuel, hot leg, cold leg, steam generator, with the
 turbine taking `P_ref load`. Energy balance fixes steady power at the load. Thermal
 states and xenon step explicitly, neutrons by TR-BDF2, 4 solves in each of 6 sub-steps
@@ -334,7 +339,10 @@ reads as obs 2. Boron flow is -1 for full dilution, +1 for full boration. The
 turbine's rate is -1 to unload at 5 %/min, +1 to load at it, 0 to hold; the turbine
 never takes more than the plan, so +1 follows it, and the plan it does not take is
 charged as lost output. The third action joined on 2026-11-15: a policy with two
-outputs must be rebuilt. Xenon, iodine, their tilts, the boron on its way and the
+outputs must be rebuilt. A reset holds the plant's own starting move, the rods where
+it parked them (a demand of 1 - 2 x 3/228), no boron flow and the turbine on its plan
+(`initial_action`, 2026-11-24): held all day, it is the do-nothing the charter's
+"hold reset" null runs. Xenon, iodine, their tilts, the boron on its way and the
 delay's length are hidden; the power history in obs 10 is what an operator's xenon
 tool starts from.
 
@@ -686,7 +694,7 @@ tripping (the re-record pass, step 5, records them again).
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 140 |
+| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 141 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

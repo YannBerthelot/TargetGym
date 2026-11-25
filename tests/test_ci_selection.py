@@ -227,3 +227,46 @@ def test_ci_selects_on_a_pull_request_and_keeps_the_whole_tier_on_the_push():
     assert "--base HEAD^1" in selecting[0]["run"]
     assert "not records" in selecting[0]["run"]
     assert steps[0]["with"]["fetch-depth"] >= 2
+
+
+def _conftest():
+    spec = importlib.util.spec_from_file_location(
+        "tg_conftest", ROOT / "tests" / "conftest.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_shards_split_the_tests_into_disjoint_parts_that_cover_them_all():
+    """A pull request's tests run on several runners at once (owner, 2026-11-24):
+    every test runs on exactly one of them, whatever the order of collection."""
+    in_shard = _conftest().in_shard
+    ids = [f"tests/test_x.py::test_{i}[case{i % 7}]" for i in range(300)]
+
+    parts = [{t for t in ids if in_shard(t, k, 3)} for k in (1, 2, 3)]
+
+    assert set().union(*parts) == set(ids)
+    assert sum(len(p) for p in parts) == len(ids)
+    assert all(len(p) > 50 for p in parts)  # 100 each expected; none starved
+    assert parts[0] == {t for t in reversed(ids) if in_shard(t, 1, 3)}
+
+
+def test_one_shard_of_one_is_every_test():
+    assert _conftest().in_shard("tests/test_x.py::test_a", 1, 1)
+
+
+def test_ci_shards_the_selected_run_and_requires_one_aggregate_check():
+    """On a pull request into the integration branch the test job runs as three
+    shards, and one job, 'tests pass', is what the branch requires."""
+    import yaml
+
+    jobs = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "python-app.yml").read_text()
+    )["jobs"]
+    matrix = jobs["test"]["strategy"]["matrix"]
+
+    assert "[1, 2, 3]" in matrix["shard"] or "[1,2,3]" in matrix["shard"]
+    assert "TG_SHARD" in jobs["test"]["env"]
+    assert jobs["tests-pass"]["name"] == "tests pass"
+    assert jobs["tests-pass"]["needs"] == "test"
