@@ -212,6 +212,56 @@ def test_still_air_has_no_rolling_gust(params):
     assert float(rolling_gust(jax.random.PRNGKey(0), 230.0, still)) == 0.0
 
 
+def test_a_rolling_gust_draw_is_the_dryden_size_times_the_normal_draw(params):
+    from target_gym.plane3d.dynamics import rolling_gust
+
+    key = jax.random.PRNGKey(3)
+    # The same Phi_0 as above: s = sqrt(pi Phi_0 / 1 s) = 0.013640 rad/s at
+    # 230 m/s, times the step's standard normal draw.
+    expected = 0.013640 * float(jax.random.normal(key))
+    assert float(rolling_gust(key, 230.0, params)) == pytest.approx(expected, rel=1e-3)
+
+
+def test_still_air_gust_has_a_finite_derivative_in_airspeed(params):
+    """A planner's model zeroes the turbulence (plan_params). The gust's
+    derivative in airspeed must then be 0, not inf * 0 = NaN, or the NaN
+    reaches every action the planner differentiates through."""
+    from target_gym.plane3d.dynamics import rolling_gust
+
+    still = params.replace(turbulence_sigma=0.0)
+    slope = jax.grad(lambda v: rolling_gust(jax.random.PRNGKey(0), v, still))(230.0)
+    assert float(slope) == 0.0
+
+
+@pytest.mark.parametrize("task", ["plane3d_circle", "plane3d_heading"])
+def test_the_planners_model_of_each_aircraft_task_has_a_finite_gradient(task):
+    """Every gradient planner on these tasks differentiates the summed reward
+    of a rollout of its own model (turbulence zeroed) in the actions. Five
+    steps from the start are enough: on the unguarded gust every step's
+    gradient was NaN from the first. formation and the patrol tasks read the
+    same ``rolling_gust``, whose still-air derivative the test above holds;
+    their three-aircraft gradient stopped a CI runner, so it is not run here."""
+    from target_gym.experts.mpc import plan_params
+
+    spec = REGISTRY[task]
+    env = spec.make_env()
+    params = spec.make_test_params()
+    _, state = env.reset_env(jax.random.PRNGKey(100), params)
+    model = plan_params(spec, params)
+    key = jax.random.PRNGKey(0)
+
+    def total_reward(actions):
+        def step(s, a):
+            _, s2, r, _, _ = env.step_env(key, s, a, model)
+            return s2, r
+
+        return jnp.sum(jax.lax.scan(step, state, actions)[1])
+
+    n = env.action_space(params).shape[0]
+    grad = jax.grad(total_reward)(jnp.zeros((5, n)))
+    assert bool(jnp.all(jnp.isfinite(grad)))
+
+
 def test_scored_turbulence_reaches_the_bank():
     """The review's finding: in the scored turbulence with nothing commanded the
     bank stayed exactly 0. Now p_g works on the roll axis and the inner loop works

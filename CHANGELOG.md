@@ -42,6 +42,25 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`glass_furnace` charges the defects its tank blocks give off, reads them, and
+  has a new oracle without a seed.** `glass_furnace-v6` is unreleased and was
+  re-stamped in place. Upgrade notes:
+  - The plant carries the temperature of the blocks its glass touches. A block at or
+    above 1450 C gives off defects when its temperature rises, and fining still
+    running past the last port is reboil (REALITY.md section 10; the two rates and
+    the 1450 C are ours). On a step that keeps both marks, the reward's lost-glass
+    term charges the plates those defects reject. `PhysicalParams` gains
+    `block_lag`, `block_release_T`, `block_release` and `reboil_plate`, and the
+    plant's fields `block` and `defects`.
+  - The observation has 13 channels, not 12: the last is the defects per plate read
+    at the cold end, 0.3 h late.
+  - The oracle without a seed, which `make_oracle("glass_furnace")` and the runners
+    build, plans every 4 h and prices the chance of a lost step in place of a limit
+    on the fining share; the one it replaces lost a tenth of its steps on this
+    plant. `GlassOracle` takes `spread` and `paths` and no longer `replan_hours`,
+    and `oracle.solve` takes `fining_spread`. With a seed the oracle is unchanged.
+  - Every recorded row of the task predates this plant, except its ceiling
+    (`data/oracle_ceilings/glass_furnace.json`: reference 49.23, ceiling 46.96).
 - **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
   the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
   release shipped, keeps its number). Upgrade notes:
@@ -94,6 +113,18 @@ The next release is 0.8.0, because these changes break code written for
     turbine on its plan. Its first step of an episode solves for a minute or
     two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
     gone with the model it described.
+  - A trickle of boron flow now moves the boron it pays for (2026-11-23). The
+    mixing summed changes smaller than a single-precision boron can hold over a
+    sub-step, so 72 kg of water diluted as 130 kg and 36 kg as none. The sum now
+    carries its rounding (`ReactorState.boron_carry`); large flows are unchanged.
+  - The oracle's first solve of a day also solves from the plan that leaves the
+    rods parked, and keeps the cheaper of the two. From its first guess alone it
+    ended, on baseload days whose xenon dips, on a plan $13 dearer in its own
+    model, and lost those days to the expert.
+  - A reset holds the reactor's own starting move (`Reactor.initial_action`: rods
+    parked, no boron flow, the turbine on its plan). The action held after a reset
+    was the middle of the box, so the charter's "hold reset" null drove the rods
+    to half their stroke. No step, reward or observation changes.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
@@ -143,8 +174,29 @@ The next release is 0.8.0, because these changes break code written for
 - **`consumption_ratio` reads the quantity itself** on `glass_furnace`,
   `cement_kiln`, `boiler_drum`, `distillation`, `ph_neutralization` and
   `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
+- **The patrol family's lead engages in trim.** The scripted lead of `patrol`,
+  `patrol_range_bearing` and `wake_surf`, which is part of the plant, and
+  `formation`'s reference lead now start their TECS on the level trim they spawn
+  in, as the A320 tasks' autopilot does (owner, 2026-11-24). They used to start
+  on the airliner's trim constants and sink 11 to 22 m in their first seconds.
+  The versions keep their number (none shipped); the records are re-recorded.
 - **`first_order` has left the capability radar.** It is a sanity fixture, and
   `CAPABILITIES["first_order"]` is now empty.
+- **`boiler_drum` is Extra, as solved, and the radar has ten axes.** Its
+  classical reference costs nothing on normal days, so it leaves
+  `registry.benchmark_specs()` and the headline; its plant, expert and oracle
+  stay (`boiler_drum/PHYSICS.md`, Status). An Extra task now carries no
+  capability tag: `CAPABILITIES` is empty for `boiler_drum` and `four_tank`
+  too, and `"instability"` and `"inverse_response"` are gone from
+  `suite.AXES` and `suite.LABELS` until a core task is shown to carry them.
+- **Five aircraft tasks are Extra, and the radar has nine axes.** By the owner's
+  decisions on the aircraft five-task review (2026-11-24): `patrol` and
+  `patrol_range_bearing` as solved, `formation` as several agents (outside the
+  charter's one plant, one agent), `plane3d_circle` and `plane3d_figure8` as
+  solved with no airliner duty. They leave `registry.benchmark_specs()` and the
+  headline, carry no capability tag, and stay registered and usable (each
+  package's `PHYSICS.md`, Status). `"multi_agent"`, which only `formation`
+  carried, is gone from `suite.AXES` and `suite.LABELS`.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of

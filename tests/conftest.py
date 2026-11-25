@@ -11,6 +11,7 @@ worker leaves the parallelism to xdist, which is where it belongs.
 """
 
 import os
+import zlib
 
 import pytest
 
@@ -134,3 +135,21 @@ def pytest_configure(config):  # noqa: ARG001
     # skips the many medium-sized graphs that make up most of this suite's bill.
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+
+
+def in_shard(nodeid: str, k: int, n: int) -> bool:
+    """Whether a test runs on shard ``k`` of ``n`` (1-based). A test's shard is
+    a hash of its id, so it does not depend on what else is collected."""
+    return zlib.crc32(nodeid.encode()) % n == k - 1
+
+
+def pytest_collection_modifyitems(config, items):
+    """``TG_SHARD=k/n`` keeps shard ``k`` of ``n``: CI runs a pull request's
+    tests on several runners at once (owner, 2026-11-24)."""
+    shard = os.environ.get("TG_SHARD", "")
+    if not shard:
+        return
+    k, n = (int(x) for x in shard.split("/"))
+    kept = [item for item in items if in_shard(item.nodeid, k, n)]
+    config.hook.pytest_deselected(items=[i for i in items if i not in kept])
+    items[:] = kept

@@ -71,7 +71,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 48 fields.
+`reset` samples the initial condition and the target; state has 49 fields.
 
 ## Episode end
 
