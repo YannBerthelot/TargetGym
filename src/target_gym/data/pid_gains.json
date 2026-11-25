@@ -388,8 +388,8 @@
   "compressor_surge": {
     "kp_speed": 0.289387,
     "ki_speed": 0.114232,
-    "kp_surge": 0.632071,
-    "ki_surge": 1.815196,
+    "kp_surge": 0.507587,
+    "ki_surge": 1.457698,
     "Tf_surge": 0.034821,
     "surge_line": 0.15,
     "override_line": 0.075,
@@ -417,11 +417,11 @@
         "bands": 3.55392,
         "spread": 3.311395,
         "tests": 3.0,
-        "tau_c": 0.234821
+        "tau_c": 0.35
       },
       "rga": NaN,
       "schedule": {
-        "least margin": 0.0941617488861084,
+        "least margin": 0.09416079521179199,
         "trips": 0
       }
     },
