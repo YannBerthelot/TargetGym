@@ -1,6 +1,7 @@
 # compressor_surge: a margin the plant earns
 
-Status: prototype, nothing registered. Open for the owner (2026-11-23).
+Status: the owner chose option 1, the lag and the hidden line shift, its four values,
+and a shift local to the line (2026-11-23). It is built in the plant.
 
 ## The finding
 
@@ -66,6 +67,10 @@ points. And on the header pressure itself the reference leaves its zone on about
 the fast-day seeds even at the zone's centre, so there the rule has no grid point
 without an exit.
 
+The table was measured on the plant before the change, on the branch of the ceiling
+fixes. The script now starts from that plant (`BARE`); on a later head of the
+integration branch its rows come out within 2 % of these, with the same surges.
+
 ## The decision
 
 1. **Lag and a hidden line shift (recommended).** A first-order lag on the flow and
@@ -78,3 +83,55 @@ without an exit.
 
 Not decided here: the shift's law and range, whether a restart redraws it, and
 whether the observation gains a suction temperature channel [C4, C5].
+
+## As built, and what it gives (2026-11-23)
+
+Decided by the owner: the shift is uniform within 5 % either side of the map; a
+restart keeps the machine; no suction temperature channel; the flow reading lags
+0.15 s and the pressure reading 0.3 s [C10]; and the shift is local to the line.
+
+**Local to the line.** A first build stretched the whole map, and the speed that held
+24 kPa at a given flow then gave the shift away (0.7 % for 5 %, seventy steps of the
+speed reading), which a plant cannot do [C10]. Now the machine differs from its map
+only inside the control margin: from the map's control line on (10 % right of the
+map's surge line, the line the plant is established on and holds [C6; C1]) its head
+is the map's exactly; at and left of its true line it is the map moved; between the
+two the move fades smoothly (the fade's shape is ours). Two machines with opposite
+shifts then read alike to within their instruments' resolution in normal operation,
+and part as the line nears: on a demand fall that carries the map's own machine
+onto its line, the one whose line is 5 % right surges and the one whose line is 5 %
+left does not (`tests/compressor_surge/test_compressor_surge_hidden_line.py`).
+
+**The reference's margin by the owner's rule**, on seeds 100 to 109: no surge on any
+seed from 0.13 down to 0.09, two fast-day seeds at 0.08. So 0.09.
+
+**Room** on held-out seeds 200 to 209, the reference at 0.09 against the ceiling on
+the true line, paired by seed, kJ per step, with a 95 % interval from a bootstrap
+over seeds within each scenario:
+
+| scenario | reference | ceiling | balance floor | room |
+|---|---|---|---|---|
+| normal | 0.722 | 0.116 | 0.103 | 6.22 [3.67, 15.99] |
+| slow_approach | 11.10 | 8.75 | 8.64 | 1.27 [1.23, 1.32] |
+| fast_approach | 12.69 | 9.45 | 9.34 | 1.34 [1.27, 1.43] |
+| load_swings | 5.24 | 3.51 | 3.40 | 1.49 [1.36, 1.73] |
+| J | 3.04 | 1.95 | 1.91 | 1.55 [1.46, 1.66] |
+
+The ceiling costs less than the reference on 40 seeds of 40, trips on none, and sits
+2 % above the balance floor on J. 34 of its 40 solves end on the 1200-iteration cap.
+The fast and load_swings solves ran on JAX 0.6.2, the other two on 0.11.2.
+
+**What the rule's margin is worth on machines it was not placed on.** The reference
+on 200 other machines per scenario (seeds 1000 to 1199):
+
+| margin | fast days with a surge, of 200 | other days with a surge, of 600 | trips | J |
+|---|---|---|---|---|
+| 0.09 (the rule's, from 10 seeds) | 11 | 0 | 0 | 3.04 |
+| 0.10 | 7 | 0 | 0 | 3.19 |
+| 0.12 | 0 | 0 | 0 | 3.53 |
+
+Every surging machine has its line right of its map: none of 97 with it left, 2 of 46
+within 2.5 % right, 9 of 57 beyond. A margin placed on ten machines surges on about
+one fast day in twenty elsewhere, never trips, and the margin that surges on none of
+200 is 0.12, inside practice's 10 to 15 % [C1], at 16 % more recycle energy.
+

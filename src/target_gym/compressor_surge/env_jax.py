@@ -33,6 +33,11 @@ from target_gym.compressor_surge.rendering import _render
 from target_gym.expert_access import RegistryExperts
 from target_gym.video import SavesVideo
 
+#: Salt for the machine's draw at the reset, apart from the schedule's.
+MACHINE = 0x4D414348
+#: The tenths ``machine_stratum`` picks from (ruling F, 2026-11-24).
+MACHINE_STRATA = 10
+
 
 class CompressorSurge(
     RegistryExperts,
@@ -53,6 +58,7 @@ class CompressorSurge(
         "demand_levels",
         "block_clock",
         "demand_ramp",
+        "line_shift",
     )
     #: The plant's history a restart keeps too: the surge counter's times and
     #: the last step's count, which the policy writes.
@@ -76,8 +82,10 @@ class CompressorSurge(
     # PHYSICS.md section on readings. The delivered flow is computed, so its
     # meter reads through ``demand_dev``. 1 rpm at an assumed 10,000 rpm.
     readings: tuple = (
-        FieldReading("dp", sigma=9.17),
-        FieldReading("m_c", sigma=0.021),
+        # First-order transmitter lags [C10, pp. 29-30]: flow dP at 100 to
+        # 150 ms, 200 ms at most; 300 to 400 ms acceptable on pressure.
+        FieldReading("dp", sigma=9.17, lag=0.3),
+        FieldReading("m_c", sigma=0.021, lag=0.15),
         FieldReading("demand_dev", sigma=8.4e-4),
         FieldReading("N", sigma=5.8e-5, step=1e-4),
         FieldReading("x", sigma=1.5e-3),
@@ -187,7 +195,16 @@ class CompressorSurge(
             jax.random.normal(dev_key), -clip, clip
         )
         opening = demand_opening(demand_levels, 0.0, demand_dev, params)
-        m_c, dp, N0, x0, phi = established_point(opening, params)
+        # The machine, on a key of its own so that the schedule's and the
+        # deviation's draws keep their values.
+        # A stratum puts the same draw inside its tenth of the range.
+        draw = jax.random.uniform(
+            jax.random.fold_in(key, MACHINE), minval=-1.0, maxval=1.0
+        )
+        stratum = params.machine_stratum
+        spread = 2.0 * (stratum + 0.5 * (draw + 1.0)) / MACHINE_STRATA - 1.0
+        line_shift = params.line_shift_max * jnp.where(stratum < 0, draw, spread)
+        m_c, dp, N0, x0, phi = established_point(opening, params, line_shift)
 
         state = CompressorSurgeState(
             time=0,
@@ -203,15 +220,23 @@ class CompressorSurge(
             block_clock=0,
             valve_cmds=jnp.full((VALVE_HISTORY,), x0),
             demand_ramp=jnp.asarray(params.demand_ramp_s, jnp.float32),
+            line_shift=line_shift,
         )
 
         obs = self.get_obs(state, params)
         return obs, state
 
+    def params_for_seed(self, params: CompressorSurgeParams, seed: int):
+        """The protocol's parameters for seed ``seed``: its machine from tenth
+        ``seed mod 10`` of the shift range (``machine_stratum``). The protocol
+        calls it through ``benchmark.seed_params`` wherever it resets a seed."""
+        return params.replace(machine_stratum=int(seed) % MACHINE_STRATA)
+
     def restart_plant(self, key, state, params: CompressorSurgeParams):
         """A trip's restart (``base.failure_kernel``): the plant back in
         established operation for the demand the outside world carries on
-        with, which is ``state``'s, not a fresh draw's. A machine restarted on
+        with, which is ``state``'s, not a fresh draw's, and on ``state``'s
+        machine: a trip does not move its surge line. A machine restarted on
         another demand's balance would meet its consumers off its header zone,
         or left of its line."""
         fresh = self.reset_env(key, params)[1]
@@ -222,7 +247,7 @@ class CompressorSurge(
             params,
             ramp=schedule_ramp(state, params),
         )
-        m_c, dp, N0, x0, phi = established_point(opening, params)
+        m_c, dp, N0, x0, phi = established_point(opening, params, state.line_shift)
         return canonical_dtypes(
             fresh.replace(
                 m_c=m_c,

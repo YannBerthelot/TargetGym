@@ -27,6 +27,15 @@ def _row(name, overrides, **kw):
 #: (``env.renew_schedule``), so the window's event-free suite carries over as it is.
 _DAY_H, _SHIFT_H = 24.0, 8.0
 
+#: The evaluation cut (owner, picker 2026-11-24, ruling E): a scenario stays only
+#: if removing it would hide a named behaviour or change which controller looks
+#: better. Load swings (demand 0.35 to 0.95, 5 s ramps, weight 0.15) showed no
+#: behaviour of its own: the reference priced it like 43 % slow approach and 57 %
+#: normal, and dropping it kept the order of every line (room on J 1.52 with it,
+#: 1.48 without; the compressor_surge review notes, 2026-11-24). Its weight goes
+#: to those two in that split.
+_SWINGS, _SWINGS_TO_NORMAL = 0.15, 0.57
+
 
 def compressor_surge_scenarios() -> tuple[dict, ...]:
     return (
@@ -36,7 +45,7 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             source="[C3, p. 2]",
             description="demand high, the point right of the control line, "
             "the recycle shut or nearly",
-            weight=0.7,
+            weight=0.7 + _SWINGS_TO_NORMAL * _SWINGS,
             dwell_h=_DAY_H,
         ),
         _row(
@@ -44,7 +53,7 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             {"demand_range": (0.25, 0.6), "demand_ramp_s": 15.0},
             source="[C3, p. 2]",
             description="demand falls slowly toward the control line",
-            weight=0.1,
+            weight=0.1 + (1.0 - _SWINGS_TO_NORMAL) * _SWINGS,
             dwell_h=_SHIFT_H,
         ),
         _row(
@@ -53,14 +62,6 @@ def compressor_surge_scenarios() -> tuple[dict, ...]:
             source="[C3, p. 2]",
             description="demand falls fast; rate action or the backup line",
             weight=0.05,
-            dwell_h=_SHIFT_H,
-        ),
-        _row(
-            "load_swings",
-            {"demand_range": (0.35, 0.95), "demand_ramp_s": 5.0},
-            source="[C3, pp. 2-4]",
-            description="demand swings across the map, both approaches",
-            weight=0.15,
             dwell_h=_SHIFT_H,
         ),
     )
