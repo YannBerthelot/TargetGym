@@ -177,6 +177,9 @@ class Row:
     ``exits``, ``unheld`` and whether it ``holds`` every seed it can, and ``starts``
     the scored parameters its episodes start with; ``placed``, ``scans``, ``unheld``
     and ``score`` then show the pi rung's until ``keep_rung`` shows the kept one's.
+    ``schedules`` are the practitioner laws that are not loops of PIs, by rung name,
+    each a function of its zone loop's set point giving a ``Controller``; each is
+    placed by the exit rule like the PI rungs (owner, 2026-11-25).
     ``bumpless`` starts every rung from ``rest`` at the reset
     (``ladder_controller``'s ``start``), for a task whose reset stands on a steady
     state its balances can't compute, because something they need is hidden."""
@@ -202,6 +205,37 @@ class Row:
     placements: dict = dataclasses.field(default_factory=dict)
     starts: dict = dataclasses.field(default_factory=dict)
     bumpless: bool = False
+    schedules: dict = dataclasses.field(default_factory=dict)
+
+
+def scheduled(name, row, spec, label, law):
+    """The scheduled rung ``label``, ``law(setpoint)``, at the first point of its
+    zone loop's grid, from the cheap edge, at which it leaves the zone on none of
+    the seeds it can hold (J1, as ``build`` places the PI rungs)."""
+    (c,) = [c for c in row.loops if c.zone and c.exit_terms]
+
+    def exits_at(point):
+        left = zone_exits(
+            name, row, Reference("candidate", law(point)), c.exit_terms, spec
+        )
+        seeds = len({seed for _, seed in left})
+        print(
+            f"    {label}, {c.name}: setpoint {point:.4g}, {len(left)} episodes "
+            f"leave, on {seeds} seeds",
+            flush=True,
+        )
+        return left
+
+    setpoint, scan, unheld = first_without_exit(zone_grid(*c.zone), exits_at)
+    own = {
+        "setpoint": setpoint,
+        "exits": {k: _by_scenario(v) for k, v in scan.items()},
+        "unheld": _by_scenario(unheld),
+        "holds": leaves_only_unheld(setpoint, scan, unheld),
+    }
+    row.placements[label], row.starts[label] = {c.name: own}, {}
+    print(f"    {label}, {c.name}: kept setpoint {setpoint:.4g}", flush=True)
+    return law(setpoint)
 
 
 def corners(**ranges) -> tuple:
@@ -553,6 +587,9 @@ def build(name: str, row: Row, spec=None) -> dict:
         loops = tuple(tuned)
         rungs["cascade"] = make(Rung("cascade", loops, mix, cascades), bias)
 
+    for label, law in row.schedules.items():
+        rungs[label] = scheduled(name, row, spec, label, law)
+
     if row.decouple:
         G = gain_matrix(plant, row, inst_of(row.loops[0].inst), n)
         print(f"    gains: {np.round(G, 4).tolist()}", flush=True)
@@ -637,7 +674,7 @@ def keep_rung(row, results: dict):
     trips none, and it says so. The row then shows the kept rung's placement and
     start (``_show``), for the runs that follow it: the nulls, the oracle, the
     ceiling."""
-    order = [k for k in _ORDER if k in results]
+    order = [k for k in (*_ORDER, *row.schedules) if k in results]
     ranked = {k: results[k] for k in order}
     holds = {
         k: all(own["holds"] for own in row.placements.get(k, {}).values())

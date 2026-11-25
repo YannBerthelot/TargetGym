@@ -252,13 +252,25 @@ def _cert(plan) -> dict:
             "violation": float(c.violation)}  # fmt: skip
 
 
+def model_kwargs(task) -> dict:
+    """The keywords ``task``'s plan model is built with: hvac's plan costs only
+    its scored window (owner, 2026-11-25), the wind turbine's plans no rest."""
+    if task == "wind_turbine":
+        return {"rest": False}
+    if task == "hvac":
+        from target_gym.hvac.oracle import scored_window
+
+        return {"window": scored_window()}
+    return {}
+
+
 def solve_shooting(task, scenario, seed, warm=None, k11=False):
     from target_gym.oracles.controller import enable_x64, float64, widths_row
     from target_gym.oracles.shooting import Shooting, StageModel
 
     L, spec, row, env, params, st, keys, T, O = setup(task, scenario, seed)
     build = getattr(O, SHOOTING[task])
-    kw = {"rest": False} if task == "wind_turbine" else {}
+    kw = model_kwargs(task)
     tm32 = build(env, params, **kw)
     base32 = O.ceiling_data(env, params, st, keys)
     rungs, rows = _rungs(task), []

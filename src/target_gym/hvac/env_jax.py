@@ -219,6 +219,7 @@ class BuildingHVAC(
             T_return=return_temperature(T_supply, T_core, params),
             T_floor=floor_surface_temperature(T_core, T_air, params),
             frost=jnp.zeros(()),
+            stored_heat_cost=jnp.zeros_like(T_core),
         )
         return self.get_obs(state), state
 

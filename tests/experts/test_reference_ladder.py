@@ -710,3 +710,111 @@ def test_a_zone_left_only_before_the_scored_window_is_not_left(ladder):
     )
     assert late == ()
     assert early == tuple(("normal", s) for s in range(100, 110))
+
+
+# A scheduled rung (owner, 2026-11-25, the hvac review's P2): a practitioner's law
+# that is not a loop of PIs, built from its zone loop's set point and placed by the
+# same exit rule as the PI rungs: the first grid point, from the cheap edge, at
+# which it leaves the zone on none of the seeds.
+
+
+def test_a_scheduled_rung_is_placed_by_the_exit_rule_and_can_be_kept(ladder):
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+    from target_gym.experts.pid import Controller
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+
+    def held(setpoint):
+        # x settles at twice the raw action (the Pulse note above): hold x there.
+        return Controller(
+            None, 0.0, lambda _p, s, obs, xp: (xp.full((1,), setpoint / 2.0), s)
+        )
+
+    row = dataclasses.replace(
+        base, loops=(x,), balance=None, score=BAND, schedules={"held": held}
+    )
+    rungs = ladder.build("first_order", row)
+    grid = zone_grid(0.5, 1.5, "high")
+    # Every candidate in the zone holds x inside it, so the first is kept.
+    assert row.placements["held"]["x on u"]["setpoint"] == pytest.approx(grid[0])
+    results = {k: ladder.run_rung("first_order", row, k, c) for k, c in rungs.items()}
+    assert "held" in results
+    assert ladder.keep_rung(row, results) in results
+
+
+def _hour_obs(hour, T_air=21.0, T_core=22.0, forecast=5.0):
+    import numpy as np
+
+    a = 2.0 * np.pi * hour / 24.0
+    obs = np.zeros(12, np.float32)
+    obs[[0, 3, 6, 7, 8, 9]] = [T_air, T_core, np.sin(a), np.cos(a), 23.5, forecast]
+    return obs
+
+
+def _night_supply(controller, state, **obs):
+    import numpy as np
+
+    from target_gym.hvac.env import HVACParams
+
+    lo, hi = HVACParams().T_supply_min, HVACParams().T_supply_max
+    raw, state = controller.step(controller.params, state, _hour_obs(3.0, **obs), np)
+    return lo + 0.5 * (float(raw[0]) + 1.0) * (hi - lo), state
+
+
+def _a_day(controller, state, T_air):
+    """One day of quarter hours from 07:00, the room at ``T_air`` throughout."""
+    import numpy as np
+
+    for k in range(96):
+        hour = (7.0 + k / 4.0) % 24.0
+        if hour == 3.0:
+            break
+        _, state = controller.step(
+            controller.params, state, _hour_obs(hour, T_air=T_air), np
+        )
+    return state
+
+
+def test_the_night_rung_runs_no_water_by_day(ladder):
+    import numpy as np
+
+    night = ladder.ROWS["hvac"]().schedules["night charging"](21.0)
+    raw, _ = night.step(night.params, night.init_state, _hour_obs(12.0), np)
+    assert float(raw[0]) == -1.0  # the valve's lowest, which gives no heat
+
+
+def test_the_night_rung_charges_on_the_core_it_reads(ladder):
+    """At night the water runs a fixed lift above the core [14]: a core 1 K
+    warmer gets water 1 K warmer."""
+    night = ladder.ROWS["hvac"]().schedules["night charging"](21.0)
+    cool, _ = _night_supply(night, night.init_state, T_core=22.0)
+    warm, _ = _night_supply(night, night.init_state, T_core=23.0)
+    assert warm - cool == pytest.approx(1.0, abs=1e-3)
+
+
+def test_the_night_rung_trims_the_next_charge_on_the_days_room(ladder):
+    """Day-to-day room correction [9, p. 3], 1 K of curve per K of room for a
+    floor [11, p. 2], charged in the 7 night hours [14] for the day's 24: a day
+    1 K under the set point lifts the next night's water 24 / 7 K."""
+    night = ladder.ROWS["hvac"]().schedules["night charging"](21.0)
+    on, _ = _night_supply(night, _a_day(night, night.init_state, 21.0))
+    under, _ = _night_supply(night, _a_day(night, night.init_state, 20.0))
+    assert under - on == pytest.approx(24.0 / 7.0, abs=1e-3)
+
+
+def test_the_night_rungs_trim_stops_at_five_kelvin(ladder):
+    """Room feedback is limited to about 5 K [9, part 2]: after a week 3 K
+    under, the trim is 5 K, so the water is 5 x 24 / 7 K over a day on set."""
+    night = ladder.ROWS["hvac"]().schedules["night charging"](21.0)
+    on, _ = _night_supply(night, _a_day(night, night.init_state, 21.0))
+    state = night.init_state
+    for _ in range(7):
+        state = _a_day(night, state, 18.0)
+        _, state = _night_supply(night, state)
+    capped, _ = _night_supply(night, state)
+    assert capped - on == pytest.approx(5.0 * 24.0 / 7.0, abs=1e-3)

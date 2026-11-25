@@ -110,6 +110,53 @@ def test_hvac_plan_costs_what_the_env_charges():
     np.testing.assert_allclose(planned, replayed, rtol=1e-9)
 
 
+def test_hvac_ceiling_plans_on_the_scored_window_alone():
+    """Owner, 2026-11-25 (review finding 1): the ceiling plans on what the task
+    scores, the steps of its scored window with the stored heat charged, and
+    nothing before or after. A window of steps 38 and 39 from a plan at step 36:
+    the plan pays the env's charge on its third and fourth steps only."""
+    from target_gym.hvac.oracle import ceiling_data, hvac_model
+
+    spec = REGISTRY["hvac"]
+    env, p = spec.make_env(), spec.make_test_params()
+    moves = [[1.0], [-1.0], [-0.2], [0.4], [1.0]]
+    resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
+    keys = steps[:, 0]
+    with enable_x64():
+        p64 = float64(p)
+        st = float64(env.reset_env(resets[0], p)[1]).replace(time=36, T_core=19.5)
+        tm = hvac_model(env, p64, window=(38, 40))
+        d = {
+            "task": float64(ceiling_data(env, p64, st, keys, run_as=as_called)),
+            "widths": jnp.zeros(5),
+        }
+        x, planned = tm.state_x(st), []
+        for t, u in enumerate(moves):
+            x, c, y = tm.step(d, x, jnp.asarray(u, jnp.float64), t)[:3]
+            planned.append(float(c + hinge_costs(tm.hinges, jnp.asarray(y))))
+        s, charged = st, []
+        for t, u in enumerate(moves):
+            _, s, r, _, _ = env.step_env(keys[t], s, jnp.asarray(u, jnp.float64), p64)
+            charged.append(-float(r))
+    assert planned[:2] == [0.0, 0.0] and planned[4] == 0.0
+    np.testing.assert_allclose(planned[2:4], charged[2:4], rtol=1e-9)
+
+
+def test_hvac_oracles_plan_on_the_tasks_scored_window():
+    """The registry's oracle (the ceiling and the receding line) is windowed on
+    the task's evaluation: a step in the burn-in costs the plan nothing."""
+    from target_gym.hvac.oracle import make_hvac_mpc
+
+    spec = REGISTRY["hvac"]
+    env, p = spec.make_env(), spec.make_test_params()
+    tm = make_hvac_mpc(env, p).model
+    st = env.reset_env(jax.random.PRNGKey(0), p)[1].replace(T_core=19.5)
+    d = {"task": (st.time, st.weather_dev, None), "widths": jnp.zeros(5)}
+    _, c, y = tm.step(d, tm.state_x(st), jnp.ones(1), 0)[:3]
+    assert float(c) == 0.0
+    assert float(hinge_costs(tm.hinges, jnp.asarray(y))) == 0.0
+
+
 def test_hvac_comfort_hinges_are_priced_at_the_work_loss():
     from target_gym.hvac.oracle import hvac_model
 
@@ -496,3 +543,16 @@ def test_wind_receding_plan_sees_the_extreme_gust_the_env_applies():
             applied.append(float(s.v_wind - s.v_mean - s.v_turb))
     assert max(abs(a) for a in applied) > 1.0  # the gust is on, metres a second
     np.testing.assert_allclose(planned, applied, atol=1e-9)
+
+
+def test_the_ceiling_script_plans_hvac_on_its_scored_window():
+    """The recorded ceiling builds the plan's model itself, so it windows it on
+    the task's scored steps as the registry's oracle does: days 4 to 10."""
+    import importlib
+    import pathlib
+    import sys
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts"))
+    record_ceilings = importlib.import_module("record_ceilings")
+    assert record_ceilings.model_kwargs("hvac") == {"window": (3 * 96, 10 * 96)}
+    assert record_ceilings.model_kwargs("wind_turbine") == {"rest": False}
