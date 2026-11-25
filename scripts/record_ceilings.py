@@ -41,7 +41,8 @@ The protocols are the ones the ceilings were first measured with (2026-11-08 to
   cheaper untripped plan kept. compressor_surge (owner, 2026-11-24, ruling A) takes
   exactly those two starts (its ``CEILING_STARTS``), and the file records the stop
   rule: converged when the two starts' J agree within 1 % and the kept J is within 3 %
-  of the balance floor (``pc_gym.foresight.ceiling_converged``). Its first records
+  of the balance floor, and (2026-11-25) every seed's kept plan holds its zone and surge
+  rows to -0.1 unit (``pc_gym.foresight.ceiling_converged``). Its first records
   (2026-11-09) also started from the midpoint, each start restarted twice.
 - shooting (boiler_drum, hvac, wind_turbine): the shared interior-point solver
   (``oracles.shooting``) on the oracle's own model, one plan over the episode, block 1,
@@ -232,6 +233,10 @@ def solve_process(task, scenario, seed, warm=None, expert=None):
         trace = run_policy(ref, env, params, task_info(task, env, params, 1),
                            seeds=[seed], record={"opening": O.floor_opening})  # fmt: skip
         out["floor"] = floor(np.asarray(trace["records"]["opening"][0]), params, st)
+    held = getattr(O, "CEILING_HELD_ROWS", None)
+    if held is not None:  # the kept plan's worst held margin, for the stop rule
+        rows = F.plan_margins(env, params, seed, plan, O.ceiling_margins)
+        out["held_margin"] = float(min(rows[O.CEILING_ROWS.index(r)] for r in held))
     solver = {k: cert[k] for k in ("status", "capped", "fell_back", "iterations",
                                    "projected_gradient", "min_margin")}  # fmt: skip
     return out | {
@@ -609,7 +614,7 @@ def _stop_rule(weights, got) -> dict:
     runs = [r for s in weights for r in got[s]]
     if not all("floor" in r for r in runs):
         return {}
-    from target_gym.pc_gym.foresight import AGREE, NEAR, ceiling_converged
+    from target_gym.pc_gym.foresight import AGREE, HELD, NEAR, ceiling_converged
 
     names = set.intersection(*(set(r["starts"]) for r in runs))
 
@@ -620,8 +625,11 @@ def _stop_rule(weights, got) -> dict:
 
     starts = {n: J(lambda r, n=n: r["starts"][n]) for n in sorted(names)}
     floor = J(lambda r: r["floor"])
+    held = [r["held_margin"] for r in runs if "held_margin" in r]
+    worst = min(held) if held else None
     return {"stop_rule": {"starts_J": starts, "floor_J": floor, "agree": AGREE,
-                          "near": NEAR, "converged": ceiling_converged(starts, floor)}}  # fmt: skip
+                          "near": NEAR, "held": HELD, "worst_held_margin": worst,
+                          "converged": ceiling_converged(starts, floor, worst)}}  # fmt: skip
 
 
 def _method(task) -> str:

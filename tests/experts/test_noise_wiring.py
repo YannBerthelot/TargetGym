@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pytest
 
-from target_gym.pc_gym.cstr.experts import cstr_temperature_pi
+from target_gym.pc_gym.cstr.experts import cstr_valve_position
 from target_gym.pc_gym.distillation.experts import distillation_base_layer
 from target_gym.pc_gym.first_order.experts import first_order_pi
 from target_gym.pc_gym.ph_neutralization.experts import (
@@ -46,12 +46,14 @@ def test_first_order_reads_its_filter(Tf):
 @pytest.mark.parametrize("Tf", [0.0, 0.5])
 def test_the_cstr_temperature_loop_reads_its_filter(Tf):
     # P only, gain 0.1 per K, on T stepping 1 K above its setpoint: the first
-    # update starts the filter, the second moves it by a of the step (v5).
+    # update starts the filter, the second moves it by a of the step (v5). In
+    # version 8 the loop is the valve position expert's temperature loop, held
+    # under_top under the band's top; the valve position loop's gain is 0.
     p = REGISTRY["cstr"].make_test_params()
     a = _coefficient(float(p.delta_t), Tf) if Tf else 1.0
-    c = cstr_temperature_pi(0.1, 1e12, p, Tf=Tf)
+    c = cstr_valve_position(0.1, 1e12, 0.0, 1e12, float(p.T_band), 0.95, p, Tf=Tf)
     sp = float(p.T_setpoint)
-    out = _run(c, [[sp, 320.0, 50.0, sp], [sp + 1.0, 320.0, 50.0, sp]])
+    out = _run(c, [[sp, 320.0, 50.0, 70.0, sp], [sp + 1.0, 320.0, 50.0, 70.0, sp]])
     assert out[1][0] - out[0][0] == pytest.approx(0.1 * a, rel=1e-3)
 
 

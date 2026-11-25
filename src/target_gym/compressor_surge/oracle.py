@@ -214,6 +214,10 @@ CEILING_TERMS = ("energy",)
 
 #: The rows of ``ceiling_margins``, in order.
 CEILING_ROWS = ("zone_low", "zone_high", "surge", "drive_reach", "valve_reach")
+#: The rows the stop rule holds on every seed's kept plan (owner, picker
+#: 2026-11-25): the zone and the machine's line. The reach rows are a solver
+#: aid (a command past the reach has no gradient), not a limit of the plant.
+CEILING_HELD_ROWS = ("zone_low", "zone_high", "surge")
 #: The ceiling's margins' units: 0.1 kPa of header pressure, 0.01 of Phi, and
 #: one step's travel of an actuator (a reach).
 ZONE_UNIT, PHI_UNIT = 0.1 * KPA, 0.01

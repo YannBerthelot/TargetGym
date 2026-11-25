@@ -167,7 +167,10 @@ failed and pass now.
   the surge line allows; its anti-surge rung backs off from the line by its
   control margin (10 to 15 % [C1], about 10 % [C6], 3 to 5 % of span [C7]).
 - Scenarios: the three above.
-- The pair (`experts.py`) predates the dead time and limit-cycles with it.
+- The pair (`experts.py`) was re-run by its recipe on 2026-11-25 (owner): speed on
+  integrating SIMC with tau_c from the drive rate, the valve loop re-identified with
+  the dead time, and rate action [C3, p. 2; C7]. It passes the schedule check and the
+  battery's margin, and still limit-cycles under the dead time (the guard's xfail).
 
 ### Oracle needs
 

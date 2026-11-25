@@ -1,270 +1,75 @@
-"""Prototype, not a task: the jacketed CSTR scored on what it makes.
+"""The registered cstr task (version 8) measured as its charter record will be,
+until the charter's own scripts take it over. Nothing here is recorded.
 
-From the cstr review of 2026-11-23 (owner: measure it before deciding). Nothing
-here is registered, recorded or fingerprinted. It asks one question: if the
-operator also moves the feed and is paid for product, where does the reference
-lose production against a foresight ceiling?
+    python scripts/prototypes/cstr_production.py OUT_DIR build    # ladder, set points
+    python scripts/prototypes/cstr_production.py OUT_DIR judge COMMIT   # J2's runs
+    python scripts/prototypes/cstr_production.py OUT_DIR measure  # reference, ceiling
+    python scripts/prototypes/cstr_production.py OUT_DIR sweep    # B7's draws
 
-    python scripts/prototypes/cstr_production.py OUT_DIR [SEEDS]
+The plant, its score and its scenarios are the package's (``pc_gym/cstr``); this
+was their prototype until the owner's decision of 2026-11-24. The reference is the
+ladder's valve position rung on the row ``scripts/ladder_rows/cstr.py``. Set
+points are placed on a fixed grid by the owner's rule (2026-11-23): the cheapest
+at which no seed of the normal day leaves the band, a seed no set point saves not
+deciding. The ladder's own placement (PR #232) replaces ``place`` once merged.
 
-What changes from ``pc_gym.cstr``, and why:
-
-- A second handle, the feed, 40 to 110 g/s. The top is S1's feed range [S1,
-  Table 1]; the floor is ours. Past the cooling's capacity practice cuts the
-  feed (cstr/PHYSICS.md D3, D6), which the shipped task cannot do.
-- The score is production lost against the nameplate (the top feed fully
-  converted), in fractions of it per step. Product made with the reactor more
-  than ``T_band`` (ours: 1 K) off its setpoint is off-spec and counts for
-  nothing. A trip loses 4 h of nameplate production, as the shipped task prices
-  it. One unit throughout, so no price is needed.
-- The window starts in established production: the reactor on its setpoint with
-  the water valve at ``valve_rest`` of its span (ours: 0.9, a practitioner's
-  "maximum desirable valve position") and the feed that takes.
-
-The reference is hand-built, not the ladder's: the shipped SIMC PI on the water,
-started bumpless, and a valve position controller on the feed (an integral that
-holds the water valve at its rest position) with a proportional feed cut as the
-temperature nears the top of its band. Its numbers come from the plant's steady
-balances, written where they are set. The ceiling is ``pc_gym.foresight``'s.
+The ceiling is ``pc_gym.foresight``'s on the package's margins
+(``cstr/oracle.py``). It starts from the reset's hold and from the reference's
+moves, restarts from its own end plan, and is never above the reference: its
+moves are a candidate too.
 """
 
 import json
 import pathlib
 import sys
-import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
 
-import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
-from flax import struct  # noqa: E402
-from gymnax.environments import spaces  # noqa: E402
-from jax.tree_util import Partial as partial  # noqa: E402
 
-from target_gym import reward as R  # noqa: E402
-from target_gym.base import (  # noqa: E402
-    actuate,
-    canonical_reset,
-    finish_step,
-    measured_obs,
-)
+from target_gym import scenarios as suites  # noqa: E402
 from target_gym.benchmark import episodes_of, run_policy, task_info  # noqa: E402
-from target_gym.integration import integrate_dynamics  # noqa: E402
 from target_gym.pc_gym import foresight as F  # noqa: E402
-from target_gym.pc_gym.cstr.env import (  # noqa: E402
-    CP_WATER,
-    CSTRParams,
-    CSTRState,
-    check_is_terminal,
-    day_minute,
-    event_sizes,
-    events,
-    feed_temperature,
-    rate,
-)
-from target_gym.pc_gym.cstr.env_jax import CSTR  # noqa: E402
+from target_gym.pc_gym.cstr.env import CSTRParams, made  # noqa: E402
+from target_gym.pc_gym.cstr.oracle import CEILING_TERMS, ceiling_margins  # noqa: E402
+from target_gym.registry import REGISTRY  # noqa: E402
+
+SPEC = REGISTRY["cstr"]
 
 
-@struct.dataclass
-class ProdParams(CSTRParams):
-    q_min: float = 2.4  # L/min, 40 g/s (ours)
-    q_max: float = 6.6  # L/min, 110 g/s [S1, Table 1]
-    T_band: float = 1.0  # K either side of the setpoint (ours)
-    valve_rest: float = 0.9  # of the water valve's span (ours)
-    failure_cost: float = 1.0  # a step of nameplate production
-    restart_steps: int = 960  # 4 h, as the shipped task
+def hold(o, xp):
+    """The raw action holding both valves where the observation shows them."""
+    return xp.stack([o[2] / 50.0 - 1.0, o[3] / 50.0 - 1.0])
 
 
-@struct.dataclass
-class ProdState(CSTRState):
-    q: float = struct.field(default=5.4, kw_only=True)  # L/min, the feed as it ran
-
-
-def velocity(x, F_w, q, p, extra):
-    """The shipped balances with the feed ``q`` (L/min) in place of ``p.q``."""
-    T_f, Caf, k0 = extra
-    C_a, T, T_j = x[0], x[1], x[2]
-    r = rate(T, C_a, p, k0)
-    dC = (Caf - C_a) * q / p.V - r
-    dT = (T_f - T) * q / p.V + (-p.deltaHr) * r / (p.rho * p.C)
-    dT = dT - p.UA * (T - T_j) / (p.rho * p.C * p.V)
-    dTj = (F_w * CP_WATER * (p.Tw_in - T_j) + p.UA * (T - T_j)) / (p.M_j * CP_WATER)
-    return jnp.array([dC, dT, dTj]), None
-
-
-def rest(T, T_f, F_w, p):
-    """The steady state at ``T`` with the water at ``F_w``: ``(C_A, T_j, q)``. The
-    jacket's balance gives its temperature and duty; the reactor's is a quadratic
-    in the feed, whose smaller root is the operating one."""
-    T_j = (F_w * CP_WATER * p.Tw_in + p.UA * T) / (F_w * CP_WATER + p.UA)
-    duty = p.UA * (T - T_j)
-    k = p.k0 * jnp.exp(-p.EA_over_R / T)
-    a, c = p.rho * p.C * (T - T_f), k * p.V
-    b = (-p.deltaHr) * k * p.V * p.Caf
-    h = b - a * c - duty
-    q = (h - jnp.sqrt(h * h - 4.0 * a * duty * c)) / (2.0 * a)
-    return p.Caf / (1.0 + c / q), T_j, q
-
-
-def made(state, p):
-    """Product made now, mol/min, and the feed's reactant it is made from."""
-    _, Caf, _, _ = events(state, p, state.time * p.delta_t)
-    return state.q * (Caf - state.C_a)
-
-
-class ProductionCSTR(CSTR):
-    """Observation (5,): [T, T_j, F_w_pct, q_pct, T_setpoint]. Action (2,):
-    cooling water and feed, raw in [-1, 1]."""
-
-    obs_target_index: int = 4
-
-    def __init__(self, integration_method: str = "rk4_1"):
-        super().__init__(integration_method)
-        self.obs_shape = (5,)
-
-    @property
-    def default_params(self):
-        return ProdParams()
-
-    def action_space(self, params=None):
-        return spaces.Box(-jnp.ones(2), jnp.ones(2), (2,), jnp.float32)
-
-    def initial_action(self, state, params):
-        p = params
-        w = 2.0 * (state.F_w - p.Fw_min) / (p.Fw_max - p.Fw_min) - 1.0
-        f = 2.0 * (state.q - p.q_min) / (p.q_max - p.q_min) - 1.0
-        return jnp.stack([w, f])
-
-    @canonical_reset
-    def reset_env(self, key, params=None):
-        p = self.default_params if params is None else params
-        feed_key, event_key = jax.random.split(key)
-        phase = jax.random.uniform(feed_key, minval=0.0, maxval=2.0 * jnp.pi)
-        T_feed = feed_temperature(phase, p, 0.0)
-        T = jnp.asarray(p.T_setpoint)
-        F_w = p.Fw_min + p.valve_rest * (p.Fw_max - p.Fw_min)
-        C_a, T_j, q = rest(T, T_feed, F_w, p)
-        lo, hi = p.event_window
-        at = jax.random.uniform(event_key, minval=lo, maxval=hi)
-        state = ProdState(
-            time=0, C_a=C_a, T=T, target_T=T, F_w=F_w, T_j=T_j, T_feed=T_feed,
-            feed_phase=phase, event_at=at, event_until=at + p.event_hold,
-            event_size=event_sizes(p), q=jnp.clip(q, p.q_min, p.q_max),
-            actuator_held=jnp.zeros(2),
-        )  # fmt: skip
-        return self.get_obs(state), state
-
-    def step_env(self, key, state, action, params=None):
-        p = self.default_params if params is None else params
-        action, state = actuate(self, state, jnp.reshape(action, (2,)), p)
-        minute = state.time * p.delta_t
-        u = jnp.clip(action, -1.0, 1.0)
-        F_w = p.Fw_min + 0.5 * (u[0] + 1.0) * (p.Fw_max - p.Fw_min)
-        q = p.q_min + 0.5 * (u[1] + 1.0) * (p.q_max - p.q_min)
-        _, Caf, k0, cooling = events(state, p, minute)
-        F_w = jnp.where(cooling, F_w, 0.0)
-        (C_a, T, T_j), _ = integrate_dynamics(
-            positions=jnp.array([state.C_a, state.T, state.T_j]),
-            delta_t=p.delta_t,
-            compute_velocity=partial(
-                velocity, F_w=F_w, q=q, p=p, extra=(state.T_feed, Caf, k0)
-            ),
-            method=self.integration_method,
-        )
-        proposal = state.replace(
-            C_a=C_a, T=T, T_j=T_j, F_w=F_w, q=q,
-            target_T=events(state, p, minute + p.delta_t)[0],
-            T_feed=feed_temperature(state.feed_phase, p, day_minute(state, p)),
-            time=state.time + 1,
-        )  # fmt: skip
-        new, reward, done, info = finish_step(self, key, state, proposal, p)
-        return self.get_obs(new, p), new, reward, done, info
-
-    @measured_obs
-    def get_obs(self, state, params=None):
-        p = self.default_params if params is None else params
-        w = 100.0 * (state.F_w - p.Fw_min) / (p.Fw_max - p.Fw_min)
-        f = 100.0 * (state.q - p.q_min) / (p.q_max - p.q_min)
-        return jnp.array([state.T, state.T_j, w, f, state.target_T])
-
-    def reward_terms(self, state, params, tripped=None):
-        p = params
-        if tripped is None:
-            tripped, _ = check_is_terminal(state, p)
-        nameplate = p.q_max * p.Caf
-        product = made(state, p) / nameplate
-        on_spec = jnp.abs(state.T - state.target_T) <= p.T_band
-        terms = {
-            "lost_production": 1.0 - product,
-            "off_spec": jnp.where(on_spec, 0.0, product),
-        }
-        return R.with_trip(terms, tripped, R.trip_cost(p))
-
-    def compute_reward(self, state, params):
-        return R.total(self.reward_terms(state, params))
-
-
-#: For ``foresight.solve``: the smooth term, and the steps as margins, in tenths
-#: of a kelvin backed off one tenth: the band's two edges and the interlock.
-CEILING_TERMS = ("lost_production",)
-
-
-def ceiling_margins(state, p):
-    off = state.T - state.target_T
-    edges = [p.T_band - off, p.T_band + off, p.T_trip - state.T]
-    return jnp.stack([e / p.e_floor - 1.0 for e in edges]), R.trip_cost(p)
-
-
-class Reference:
-    """The hand-built reference, vectorised over episodes on the host.
-
-    Water: the shipped SIMC PI (Kp 0.105 raw per K, Ti 15.4 min,
-    ``data/pid_gains.json``), started from the valve as the reset left it, on
-    the setpoint plus ``lift``. Feed: an integral holding the water valve at
-    ``valve`` (raw), with closed-loop time ``vpc_min``. The valve answers the
-    feed by 1.36 raw per raw at the design point (the steady balances: 90 to
-    100 g/s of feed takes 120 to 131.9 g/s of water), so the integral gain is
-    1 / (1.36 vpc_min). Past ``T_band - guard`` above the setpoint the feed is
-    cut by ``cut`` raw per K.
-    """
-
-    oracle, name = False, "reference"
-
-    def __init__(self, p, valve, lift=0.0, vpc_min=75.0, cut=1.0, guard=0.3, gain=1.0):
-        self.p, self.valve, self.lift, self.gain = p, valve, lift, gain
-        self.ki, self.cut, self.guard = 1.0 / (1.36 * vpc_min), cut, guard
-
-    def reset(self, key, obs, task):
-        o = np.asarray(obs, float)
-        return {"i": np.zeros(len(o)), "w": o[:, 2] / 50 - 1, "f": o[:, 3] / 50 - 1}
-
-    def act(self, m, obs, t):
-        o, dt = np.asarray(obs, float), float(self.p.delta_t)
-        e = o[:, 0] - (o[:, 4] + self.lift)  # a hot reactor opens the water
-        integral = m["i"] + e * dt
-        asked = m["w"] + self.gain * 0.105366 * (e + integral / 15.40763)
-        water = np.clip(asked, -1.0, 1.0)
-        integral = np.where(asked == water, integral, m["i"])
-        feed = np.clip(m["f"] + self.ki * dt * (self.valve - water), -1.0, 1.0)
-        over = np.maximum(o[:, 0] - (o[:, 4] + float(self.p.T_band) - self.guard), 0.0)
-        action = np.stack([water, np.clip(feed - self.cut * over, -1.0, 1.0)], axis=1)
-        return action, {"i": integral, "w": m["w"], "f": feed}
-
-
-SCENARIOS = {  # the shipped suite less the setpoint move, with its weights
-    "normal": ({}, 0.7),
-    "catalyst_loss": ({"k0_drop": 0.4, "k0_decay": 90.0}, 0.1),
-    "feed_buildup": ({"feed_rise": 0.1}, 0.05),  # with a feed to cut, S3's 10 %
-    "cooling_loss": ({"cooling_loss": 5.0}, 0.05),
-}
+SEEDS = tuple(range(100, 110))
+#: Solves per start, each from the last one's end plan. Two settle every scenario
+#: but the catalyst decay, whose starts ended up to 46 % apart; six brought them
+#: within 12 % (1.5 % at the median) and its ceiling 2.4 % lower.
+SOLVES = {"catalyst_loss": 6}
 RECORD = {
     "made": lambda s, p, t: made(s, p),
     "T": lambda s, p, t: s.T,
     "off": lambda s, p, t: jnp.abs(s.T - s.target_T) > p.T_band,
     "Fw": lambda s, p, t: s.F_w,
     "q": lambda s, p, t: s.q,
+}
+#: The placement grid, fixed before any run: the temperature set point in tenths
+#: of a kelvin under the band's top (the score's resolution) down to its centre,
+#: and the valve's set point from [P1]'s 95 % toward its top and down to 90 %.
+GRID_VALVE = (0.99, 0.98, 0.95, 0.9)
+#: The project's own numbers and the ranges B7 draws them from (cstr/PHYSICS.md,
+#: "Production prototype"). The feed's floor runs down to S1's 0 [S1, Table 1].
+OURS = {
+    "T_band": (0.5, 2.0),
+    "q_min": (0.0, 2.4),
+    "setpoint_ramp": (30.0, 120.0),
+    "feed_rise": (0.03, 0.10),
+    "cooling_loss": (2.0, 8.0),
+    "normal_weight": (0.5, 0.9),
 }
 
 
@@ -276,7 +81,7 @@ def run(env, p, policy, seeds):
     summary = {
         "cost": [float(e.cost.mean()) for e in eps],
         "trips": [bool(np.any(e.failed)) for e in eps],
-        "made": rec["made"].mean(1).tolist(),
+        "on_spec": (rec["made"] * (1 - rec["off"])).mean(1).tolist(),
         "off_spec": rec["off"].mean(1).tolist(),
         "T_max": rec["T"].max(1).tolist(),
         "valve": ((rec["Fw"].mean(1) / 60 - 40) / 96).tolist(),
@@ -287,85 +92,307 @@ def run(env, p, policy, seeds):
 
 def show(name, label, r):
     print(
-        f"{name:14s} {label:36s} cost {np.mean(r['cost']):.5f}"
-        f" made {np.mean(r['made']):.3f} mol/min off-spec {np.mean(r['off_spec']):.3f}"
-        f" valve {np.mean(r['valve']):.3f} feed {np.mean(r['feed_gps']):.1f} g/s"
+        f"{name:14s} {label:28s} cost {np.mean(r['cost']):.5f}"
+        f" on-spec {np.mean(r['on_spec']):.3f} mol/min off {np.mean(r['off_spec']):.3f}"
         f" Tmax {max(r['T_max']) - 273.15:.2f} C trips {sum(r['trips'])}",
         flush=True,
     )
 
 
-def main():
-    out = pathlib.Path(sys.argv[1])
-    seeds = tuple(range(100, 100 + (int(sys.argv[2]) if len(sys.argv) > 2 else 10)))
-    env, result, t0 = ProductionCSTR(), {}, time.time()
-    base = ProdParams(sensor_noise_scale=1.0)
-    rest_valve = 2.0 * float(base.valve_rest) - 1.0
-    # The charter's zone rule (J1): two standard deviations inside each edge, the
-    # deviations read on the normal day under the practitioner's reference, over
-    # the second half of each window.
-    _, moves, rec = run(env, base, Reference(base, rest_valve), seeds)
-    half = moves.shape[1] // 2
-    sig_w, sig_T = float(np.std(moves[:, half:, 0])), float(np.std(rec["T"][:, half:]))
-    result["sigma"] = {"valve_raw": sig_w, "T_K": sig_T}
-    print("sigma", result["sigma"], flush=True)
-    for name, (over, weight) in SCENARIOS.items():
-        p = base.replace(**over)
-        rows, starts = {}, {}
-        rows["reference"], starts["reference"], _ = run(
-            env, p, Reference(p, rest_valve), seeds
-        )
-        edge = Reference(
-            p, 1.0 - 2 * sig_w, lift=float(p.T_band) - 2 * sig_T, guard=sig_T
-        )
-        label = "reference, 2 sigma inside the edges"
-        rows[label], starts["edge"], _ = run(env, p, edge, seeds)
-        plans = []
-        for i, seed in enumerate(seeds):
-            first = starts["reference"][i]
-            inits = {"hold": np.tile(first[:1], (len(first), 1)), "reference": first}
-            inits["edge"] = starts["edge"][i]
-            best = None
-            for start, init in inits.items():
+def ladder():
+    import reference_ladder as RL
+
+    return RL
+
+
+def gains(RL, test=None):
+    """The ladder's row for cstr, built: the PI's and the valve position loop's
+    SIMC gains, from its bump tests. ``test`` changes the plant under them."""
+    row = RL.ROWS["cstr"]()
+    row.test = {**row.test, **(test or {})}
+    kept, build = {}, RL.ladder_controller
+    RL.ladder_controller = lambda rung, *a: kept.update({rung.name: rung}) or build(
+        rung, *a
+    )
+    try:
+        RL.build("cstr", row)
+    finally:
+        RL.ladder_controller = build
+    rung = kept["valve position"]
+    pi, vp = rung.loops[0], rung.valve_positions[0]
+    return {"water": [pi.kc, pi.ti, pi.alpha], "valve": [vp.kc, vp.ti]}
+
+
+def reference(RL, p, g, b, valve):
+    """The valve position rung on the stored gains, the temperature held ``b``
+    under the band's top and the water valve at ``valve`` of its span."""
+    from target_gym.experts.ladder import Pi, Rung, ValvePosition, ladder_controller
+
+    band = float(p.T_band)
+    position = ValvePosition(
+        lambda o, xp: o[2] / 50.0 - 1.0, 2 * valve - 1, 1, *g["valve"]
+    )
+    rung = Rung(
+        "valve position",
+        (Pi(0, *g["water"]),),
+        np.array([[1.0], [0.0]]),
+        (),
+        (),
+        (position,),
+    )
+    law = ladder_controller(
+        rung, lambda o, xp: xp.stack([o[0]]), lambda o, xp: xp.stack([o[4] + band - b]),
+        lambda o, xp: xp.zeros(2), float(p.delta_t), hold,
+    )  # fmt: skip
+    return RL.Reference("reference", law)
+
+
+def grid_b(p):
+    """Tenths of a kelvin under the band's top, down to its centre."""
+    return tuple(
+        round(0.1 * k, 1) for k in range(1, int(float(p.T_band) / 0.1 + 1e-6) + 1)
+    )
+
+
+def place(RL, env, p, g, seeds=SEEDS):
+    """``(b, valve)`` by the owner's rule: on the fixed grid, the cheapest setting
+    at which no deciding seed of the normal day leaves the band or trips. A seed
+    that does so at every setting does not decide, and is returned by name."""
+    cost, exits = {}, {}
+    for valve in GRID_VALVE:
+        for b in grid_b(p):
+            r, _, _ = run(env, p, reference(RL, p, g, b, valve), seeds)
+            cost[b, valve] = float(np.mean(r["cost"]))
+            exits[b, valve] = (np.array(r["off_spec"]) > 0) | np.array(r["trips"])
+    left_out = np.all(list(exits.values()), axis=0)
+    stays = [k for k in cost if not exits[k][~left_out].any()]
+    best = min(stays, key=cost.get) if stays else None
+    return best, [seeds[i] for i in np.flatnonzero(left_out)], cost
+
+
+def scenarios(p, weights=None, **sizes):
+    """``{name: (params, weight)}`` over the registered suite, weights summing
+    to 1; ``sizes`` replace an event's size where a scenario sets it."""
+    shares = suites.weights(SPEC)
+    out = {}
+    for s in suites.suite(SPEC):
+        over = {k: sizes.get(k, v) for k, v in s.overrides.items()}
+        out[s.name] = (p.replace(**over), (weights or shares)[s.name])
+    return out
+
+
+class Constant:
+    """A null: both valves held at one raw value."""
+
+    oracle = False
+
+    def __init__(self, raw):
+        self.raw, self.name = raw, f"constant {(raw + 1) / 2:g}"
+
+    def reset(self, key, obs, task):
+        self.n = task.n_episodes
+
+    def act(self, carry, obs, t):
+        return np.full((self.n, 2), self.raw), carry
+
+
+def nulls(RL):
+    return [Constant(-1.0), Constant(0.0), Constant(1.0), RL.HoldReset()]
+
+
+def load(out):
+    ref = json.loads((out / "production_reference.json").read_text())
+    return ref["gains"], ref["b"], ref["valve"]
+
+
+def build(out):
+    RL, env, p = ladder(), SPEC.make_env(), CSTRParams(sensor_noise_scale=1.0)
+    g = gains(RL)
+    best, left_out, cost = place(RL, env, p, g)
+    record = {"gains": g, "b": best[0], "valve": best[1], "left_out": left_out}
+    record["grid"] = {f"{b}/{v}": c for (b, v), c in cost.items()}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "production_reference.json").write_text(
+        json.dumps(record, indent=1, default=float)
+    )
+    print(
+        json.dumps({k: v for k, v in record.items() if k != "grid"}, default=float),
+        flush=True,
+    )
+
+
+def judge(out):
+    """J2's runs: the reference and the nulls on the hash seeds of ``COMMIT``."""
+    from target_gym import charter
+
+    RL, env, base = ladder(), SPEC.make_env(), CSTRParams(sensor_noise_scale=1.0)
+    g, b, valve = load(out)
+    weights = suites.weights(SPEC)
+    seeds = charter.j2_seeds(sys.argv[3], weights)
+    policies = {"reference": lambda p: reference(RL, p, g, b, valve)}
+    policies |= {n.name: (lambda p, n=n: n) for n in nulls(RL)}
+    costs, trips = {k: {} for k in policies}, 0
+    for name, (p, _) in scenarios(base).items():
+        for label, make in policies.items():
+            policy = make(p)
+            if hasattr(policy, "bind"):
+                policy.bind(env, p, seeds[name])
+            r, _, _ = run(env, p, policy, tuple(seeds[name]))
+            costs[label][name] = r["cost"]
+            trips += sum(r["trips"]) if label == "reference" else 0
+    n = sum(len(v) for v in seeds.values())
+    wins = {
+        k: charter.null_wins(costs["reference"], v)
+        for k, v in costs.items()
+        if k != "reference"
+    }
+    result = {
+        "commit": sys.argv[3],
+        "seeds": seeds,
+        "n": n,
+        "reference_trips": trips,
+        "wins": wins,
+        "costs": costs,
+    }
+    (out / "production_j2.json").write_text(json.dumps(result, indent=1, default=float))
+    print(
+        json.dumps({k: result[k] for k in ("n", "reference_trips", "wins")}), flush=True
+    )
+
+
+def ceiling(env, p, name, seeds, moves, cost, solves):
+    """Each seed's plan: L-BFGS-B from the reference's first move held and from
+    its moves, restarted from its own end plan, the reference's moves a candidate."""
+    plans, certs = [], []
+    for i, seed in enumerate(seeds):
+        first = moves[i]
+        options = [(cost[i], first, "reference", 0.0)]
+        for start, init in (
+            ("hold", np.tile(first[:1], (len(first), 1))),
+            ("moves", first),
+        ):
+            plan = init
+            for _ in range(solves):
                 plan, cert = F.solve(
-                    env, p, seed, ceiling_margins, CEILING_TERMS, init, maxiter=3000
+                    env, p, seed, ceiling_margins, CEILING_TERMS, plan, maxiter=3000
                 )
-                if cert["tripped"] or (best and cert["planned_cost"] >= best[1]):
-                    continue
-                best = (plan, cert["planned_cost"], start, cert["status"])
-            plans.append(best[0])
-            print(
-                f"  {name} seed {seed}: ceiling {best[1]:.5f} from {best[2]},"
-                f" status {best[3]}, {time.time() - t0:.0f} s",
-                flush=True,
-            )
-        rows["ceiling"], _, _ = run(env, p, F.PlanPolicy(np.stack(plans)), seeds)
-        result[name] = {"weight": weight, **rows}
-        for label, r in rows.items():
-            show(name, label, r)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "cstr_production.json").write_text(json.dumps(result, indent=1))
+            if not cert["tripped"]:
+                options.append(
+                    (cert["planned_cost"], plan, start, cert["projected_gradient"])
+                )
+        solved = sorted(o[0] for o in options[1:])
+        best = min(options, key=lambda o: o[0])
+        plans.append(best[1])
+        gap = (
+            (solved[-1] - solved[0]) / max(solved[0], 1e-9) if len(solved) > 1 else None
+        )
+        certs.append(
+            {"start": best[2], "starts_gap": gap, "projected_gradient": best[3]}
+        )
+        print(
+            f"  {name} seed {seed}: {best[0]:.5f} from {best[2]}, gap {gap}", flush=True
+        )
+    row, _, _ = run(env, p, F.PlanPolicy(np.stack(plans)), seeds)
+    return row | {"certs": certs}
+
+
+def measure(out, seeds=SEEDS):
+    """The placed reference and the ceiling on every scenario, per seed."""
+    RL, env, base = ladder(), SPEC.make_env(), CSTRParams(sensor_noise_scale=1.0)
+    g, b, valve = load(out)
+    result = {}
+    for name, (p, weight) in scenarios(base).items():
+        ref, moves, _ = run(env, p, reference(RL, p, g, b, valve), seeds)
+        top = ceiling(env, p, name, seeds, moves, ref["cost"], SOLVES.get(name, 2))
+        result[name] = {"weight": weight, "reference": ref, "ceiling": top}
+        show(name, "reference", ref)
+        show(name, "ceiling", top)
+        (out / "production_measure.json").write_text(
+            json.dumps(result, indent=1, default=float)
+        )
     print("done", flush=True)
 
 
-def grid():
-    """How much the hand-built reference's own settings move its production: the
-    valve it holds, how far above the setpoint it runs, and its water loop's gain.
-    Closed loop only, so it says what a classical loop reaches, not a ceiling."""
-    out = pathlib.Path(sys.argv[1])
-    seeds, env, result = tuple(range(100, 110)), ProductionCSTR(), {}
-    base = ProdParams(sensor_noise_scale=1.0)
-    for name, (over, _) in SCENARIOS.items():
-        p = base.replace(**over)
-        for valve in (0.9, 0.95, 0.98):
-            for lift in (0.0, 0.5):
-                for gain in (1.0, 8.0):
-                    ref = Reference(p, 2 * valve - 1, lift=lift, gain=gain)
-                    label = f"valve {valve}, lift {lift}, gain x{gain:g}"
-                    result[f"{name}: {label}"], _, _ = run(env, p, ref, seeds)
-                    show(name, label, result[f"{name}: {label}"])
-    (out / "cstr_production_grid.json").write_text(json.dumps(result, indent=1))
+def sweep(out):
+    """B7: the project's own numbers drawn jointly, 8 Latin-hypercube draws on
+    fixed seeds. On each the ladder is rebuilt and placed, and the reference must
+    cost less than every null on the median over seeds; the ceiling is solved on
+    the two draws at the ends of the band, the number the room moves with most."""
+    from scipy.stats import qmc
+
+    RL, env = ladder(), SPEC.make_env()
+    unit = qmc.LatinHypercube(d=len(OURS), seed=0).random(8)
+    draws = [
+        {k: lo + u * (hi - lo) for u, (k, (lo, hi)) in zip(row, OURS.items())}
+        for row in unit
+    ]
+    bands = [d["T_band"] for d in draws]
+    ends, result = {int(np.argmin(bands)), int(np.argmax(bands))}, []
+    for i, d in enumerate(draws):
+        plant = {k: d[k] for k in ("T_band", "q_min", "setpoint_ramp")}
+        p = CSTRParams(sensor_noise_scale=1.0, **plant)
+        g = gains(RL, plant)
+        best, left_out, _ = place(RL, env, p, g)
+        other = (1.0 - d["normal_weight"]) / 0.3
+        weights = {
+            k: (d["normal_weight"] if k == "normal" else w * other)
+            for k, w in suites.weights(SPEC).items()
+        }
+        row = {"draw": d, "placed": best, "left_out": left_out, "J": {}, "trips": 0}
+        if best is not None:
+            suite = scenarios(
+                p, weights, feed_rise=d["feed_rise"], cooling_loss=d["cooling_loss"]
+            )
+            J = {n.name: np.zeros(len(SEEDS)) for n in nulls(RL)} | {
+                "reference": np.zeros(len(SEEDS))
+            }
+            top = np.zeros(len(SEEDS))
+            for name, (q, w) in suite.items():
+                ref, moves, _ = run(env, q, reference(RL, q, g, *best), SEEDS)
+                J["reference"] += w * np.array(ref["cost"])
+                row["trips"] += sum(ref["trips"])
+                for null in nulls(RL):
+                    if hasattr(null, "bind"):
+                        null.bind(env, q, SEEDS)
+                    J[null.name] += w * np.array(run(env, q, null, SEEDS)[0]["cost"])
+                if i in ends:
+                    top += w * np.array(
+                        ceiling(env, q, name, SEEDS[:5], moves, ref["cost"], 2)["cost"]
+                        + [0.0] * 5
+                    )
+            row["J"] = {k: float(np.median(v)) for k, v in J.items()}
+            row["beats_nulls"] = all(
+                row["J"]["reference"] < v
+                for k, v in row["J"].items()
+                if k != "reference"
+            )
+            if i in ends:
+                row["ceiling_J"] = float(np.mean(top[:5]))
+                row["reference_J_same_seeds"] = float(np.mean(J["reference"][:5]))
+                row["ceiling_beats_reference"] = (
+                    row["ceiling_J"] < row["reference_J_same_seeds"]
+                )
+        row["holds"] = bool(
+            best is not None
+            and row.get("beats_nulls")
+            and row.get("ceiling_beats_reference", True)
+        )
+        result.append(row)
+        print(
+            json.dumps(
+                {k: v for k, v in row.items() if k != "J"}
+                | {"J_ref": row["J"].get("reference")},
+                default=float,
+            ),
+            flush=True,
+        )
+        (out / "production_sweep.json").write_text(
+            json.dumps(result, indent=1, default=float)
+        )
+    print("sweep holds on every draw:", all(r["holds"] for r in result), flush=True)
 
 
 if __name__ == "__main__":
-    grid() if sys.argv[2:3] == ["grid"] else main()
+    {"build": build, "judge": judge, "measure": measure, "sweep": sweep}[sys.argv[2]](
+        pathlib.Path(sys.argv[1])
+    )

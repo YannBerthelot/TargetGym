@@ -233,6 +233,16 @@ what the coolant's room allows through the steady gain, 80 steps, with the inner
 loop closed as run. `u_d` is the coolant and setpoint moves of the load limits at
 the middle target.
 
+**`cstr`, version 8 (2026-11-24).** The task is run for what it makes and the
+expert is valve position control, so the recipe has three steps
+(`cstr/PHYSICS.md`, section 9): the temperature loop on the water as above, in
+manual with both valves held and the water at 80 % of its span; the valve
+position loop on the feed, tested with that loop closed and tuned by SIMC at the
+30 dead times its source asks for at least; then the two set points, placed on a
+fixed grid by the owner's no-exit rule on the training seeds. Where no set point
+keeps the band the valve position loop's time doubles, up to 120 dead times
+(ours).
+
 **`first_order`.** Rest at the target. N1 to N7, no load.
 
 **`ph_neutralization`.** The buffer stream off, `q2 = 0`, the plant's lower limit

@@ -41,6 +41,7 @@ import numpy as np  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from target_gym import eval as E  # noqa: E402
 from target_gym.experts.pid import Controller  # noqa: E402
@@ -52,6 +53,7 @@ from target_gym.identification import (  # noqa: E402
     noise_tune,
     pick_fit,
     rga,
+    simc,
     single_run,
 )
 from target_gym.provenance import GAIN_LEVELS, gains_path  # noqa: E402
@@ -214,44 +216,157 @@ def tune_first_order() -> dict:
     }
 
 
-def _cstr_raw(p, T, T_f):
-    """The raw water that holds the reactor at ``T`` with the feed at ``T_f``,
-    from the three balances (``env.steady_state``)."""
-    from target_gym.pc_gym.cstr.env import steady_state
+def _cstr_hold(o, xp):
+    """The raw action holding both of cstr's valves where the observation shows
+    them (obs 2 and 3, read exactly): the reset puts the reactor at rest there."""
+    return xp.stack([o[2] / 50.0 - 1.0, o[3] / 50.0 - 1.0])
 
-    F_w = steady_state(T, T_f, p)[2]
-    return 2 * (F_w - p.Fw_min) / (p.Fw_max - p.Fw_min) - 1
+
+#: cstr's placement grid, fixed before any run: the water valve's set point from
+#: [S13]'s 95 % toward its top and down to 90 %, and the temperature's in tenths
+#: of a kelvin (the thermometry's resolution) under the band's top, down to its
+#: centre.
+CSTR_VALVES = (0.99, 0.98, 0.95, 0.9)
+#: The valve position loop's closed-loop time, as multiples of the 30 dead times
+#: its source asks for at least [S13]. Its dead time is read off the noise band,
+#: so a quieter plant reads a shorter one and gets a faster loop, which at half
+#: the noise swings with the temperature loop (measured 2026-11-24). The recipe
+#: slows it rung by rung until a set point keeps the band, as a loop that swings
+#: with the one it watches is slowed; the last rung ships with the seeds it lost if
+#: none does (C9). The project's own rule, a fixed step at every level (owner,
+#: 2026-11-24).
+CSTR_SLOWER = (1.0, 2.0, 4.0)
+
+
+def _cstr_place(gains: dict) -> tuple:
+    """``(under_top, valve, left_out, holds)`` by the owner's rule (2026-11-23):
+    on the fixed grid, the cheapest setting at which no deciding training seed
+    of the normal day leaves the band or trips. A seed that does so at every
+    setting does not decide, and is returned by number. Where no setting holds,
+    the one the fewest seeds leave, then the cheapest, with those seeds. The
+    project's own function until the ladder's shared placement is merged."""
+    from reference_ladder import Reference
+
+    from target_gym.benchmark import episodes_of, run_policy, task_info
+    from target_gym.pc_gym.cstr.experts import cstr_valve_position
+
+    spec = REGISTRY["cstr"]
+    env, p = spec.make_env(), spec.make_test_params(sensor_noise_scale=LEVEL)
+    task = task_info("cstr", env, p, len(TRAIN))
+    off = {"off": lambda s, q, t: jnp.abs(s.T - s.target_T) > q.T_band}
+    tenths = range(1, round(float(p.T_band) / 0.1) + 1)
+    cost, exits = {}, {}
+    for valve in CSTR_VALVES:
+        for under in (round(0.1 * k, 1) for k in tenths):
+            law = cstr_valve_position(**gains, under_top=under, valve=valve, params=p)
+            ro = run_policy(
+                Reference("expert", law), env, p, task, seeds=tuple(TRAIN), record=off
+            )
+            eps = episodes_of(ro)
+            cost[under, valve] = float(np.mean([e.cost.mean() for e in eps]))
+            exits[under, valve] = np.asarray(ro["records"]["off"]).any(axis=1) | (
+                np.array([bool(np.any(e.failed)) for e in eps])
+            )
+    left_out = np.all(list(exits.values()), axis=0)
+    stays = [k for k in cost if not exits[k][~left_out].any()]
+    holds = bool(stays) and not left_out.all()
+    if holds:
+        under, valve = min(stays, key=cost.get)
+    else:
+        under, valve = min(cost, key=lambda k: (exits[k].sum(), cost[k]))
+        left_out = exits[under, valve]
+    print(
+        f"  {'placed' if holds else 'no set point keeps the band; least bad'}"
+        f" {under} K under the band's top, valve at {valve};"
+        f" cost {cost[under, valve]:.4f}; left out {left_out.sum()} seeds"
+    )
+    return under, valve, [int(TRAIN[i]) for i in np.flatnonzero(left_out)], holds
 
 
 def tune_cstr() -> dict:
-    """The temperature loop on the cooling water (PHYSICS.md, sections 9, 10):
-    in manual at the water each seed's setpoint needs, the feed held at the
-    middle of its day, then a water bump read for S1's 110 min of settling."""
+    """Valve position control [S13] (PHYSICS.md, sections 9, 10), in three steps.
+
+    The temperature loop on the cooling water: in manual with both valves held
+    where each seed's reset left them, the water at 80 % of its span so that a
+    bump has room, the feed's temperature held at the middle of its day, then a
+    water bump read for S1's 110 min of settling. The valve position loop on
+    the feed: the same plant with that loop closed, a feed bump read on the
+    water valve over three hours, and SIMC at the 30 dead times its source asks
+    for. Then the two set points, placed on the scored plant; where none keeps
+    the band the valve position loop is slowed (``CSTR_SLOWER``) and they are
+    placed again."""
+    from reference_ladder import VALVE_TAU_C, closed_loops
+
+    from target_gym.experts.ladder import Pi
+    from target_gym.identification import simc
+    from target_gym.pc_gym.cstr.env import feed_at_rest, steady_state
+
     name = "cstr"
     nominal = _params(name)
     T_mid = float(sum(nominal.feed_T_range) / 2)
     # The feed's daily cycle is the plant's only load, so it stands still (R2).
-    spec, p = REGISTRY[name], _params(name, feed_T_range=(T_mid, T_mid))
-    env = spec.make_env()
-    rest = manual(lambda o, xp: xp.reshape(_cstr_raw(p, o[3], T_mid), (1,)))
-    plant = Plant(spec, p, [lambda o, s, q: o[0]], [(None, None)], controller=rest)
+    spec = REGISTRY[name]
+    p = _params(name, feed_T_range=(T_mid, T_mid), valve_rest=0.8)
+    env, dt = spec.make_env(), float(p.delta_t)
+    cvs = [lambda o, s, q: o[0], lambda o, s, q: o[2] / 50.0 - 1.0]
+    limits = [(None, float(p.T_trip)), (None, None)]
+    plant = Plant(spec, p, cvs, limits, controller=manual(_cstr_hold))
     inst = Instrument.of(env, p, "T")
     # S1, Fig. 2: a 2 C setpoint step settled in 110 min.
-    window = round(110.0 / float(p.delta_t))
+    window = round(110.0 / dt)
     loop = read_loop(plant, "T on water", 0, 0, 0.1, window, inst, room=plant.room(0))
-    # The largest load is the feed's day, as the water it moves at the setpoint.
-    T_sp = float(p.T_setpoint)
-    u_d = abs(
-        float(_cstr_raw(p, T_sp, nominal.feed_T_range[1]))
-        - float(_cstr_raw(p, T_sp, nominal.feed_T_range[0]))
+    # The largest load is the feed's day, as the water it moves at the setpoint
+    # with the feed the test rests at.
+    T_sp, span = float(p.T_setpoint), float(p.Fw_max - p.Fw_min)
+    q = feed_at_rest(T_sp, T_mid, p.Fw_min + p.valve_rest * span, p)
+    ends = [float(steady_state(T_sp, T_f, p, q)[2]) for T_f in nominal.feed_T_range]
+    out = tuned(loop, inst.h, RAW_BAND, 2.0 * abs(ends[1] - ends[0]) / span)
+    alpha = -float(np.expm1(-dt / out["Tf"])) if out["Tf"] else 1.0
+    closed = Plant(
+        spec,
+        p,
+        cvs,
+        limits,
+        controller=manual(_cstr_hold),
+        actuate=closed_loops([Pi(0, out["Kc"], out["Ti"], alpha)], [0], dt),
+        paired=True,
     )
-    out = tuned(loop, inst.h, RAW_BAND, u_d)
-    # The expert's error is T less its setpoint, and the water cools: Kp is -Kc.
+    # The valve answers the feed through the closed temperature loop over about
+    # an hour, so its test runs three (scripts/ladder_rows/cstr.py).
+    valve = read_loop(
+        closed,
+        "valve on feed",
+        1,
+        1,
+        0.1,
+        round(180.0 / dt),
+        Instrument(dt),
+        room=closed.room(1),
+    )
+    for slower in CSTR_SLOWER:
+        tau_c = slower * VALVE_TAU_C * valve["theta"]
+        kv, tiv = simc(valve["k"], valve["tau1"], valve["theta"], tau_c)
+        print(f"    Kv {kv:.4g}, Tiv {tiv:.4g}, tau_c {tau_c:.4g}")
+        # The expert's error is T less its target, and the water cools: Kp is -Kc.
+        gains = {
+            "Kp": -out["Kc"],
+            "Ti": out["Ti"],
+            "Tf": out["Tf"],
+            "Kv": kv,
+            "Tiv": tiv,
+        }
+        under, valve_at, left_out, holds = _cstr_place(gains)
+        if holds:
+            break
     return {
-        "Kp": -out["Kc"],
-        "Ti": out["Ti"],
-        "Tf": out["Tf"],
-        "model": {"T": record(loop, out)},
+        **gains,
+        "under_top": under,
+        "valve": valve_at,
+        "model": {
+            "T": record(loop, out),
+            "valve": record(valve, {"tau_c": tau_c}),
+            "placement": {"left_out": left_out, "holds": holds},
+        },
     }
 
 
@@ -582,6 +697,19 @@ def tune_distillation() -> dict:
 SURGE_LADDER = (0.10, 0.125, 0.15)
 
 
+def _full_delay(loop, reading: str) -> float:
+    """The detune rule (owner, picker 2026-11-25), fixed before the run: a
+    loop's SIMC tau_c is at least its full delay, the dead time it was read
+    with plus the first-order lag of the transmitter it reads (``reading``'s
+    ``lag``), counted whole as delay. For the anti-surge loop that is the
+    valve's 0.15 s dead time and half a sample, plus the flow transmitter's
+    0.15 s; for the pressure loop 0.05 s plus the pressure transmitter's 0.3 s."""
+    from target_gym.compressor_surge.env_jax import CompressorSurge
+
+    lag = {r.field: r.lag for r in CompressorSurge.readings}[reading]
+    return float(loop["theta"]) + float(lag)
+
+
 def _compressor_pair(line: float) -> dict:
     """The pair at control line ``line``, from bumps at each seed's rest there."""
     from target_gym.compressor_surge import experts as X
@@ -617,11 +745,23 @@ def _compressor_pair(line: float) -> dict:
         plant, "dp on N", 0, 0, 0.05 * span * per_speed, 100, inst, room=plant.room(0)
     )
     speed = rescaled(speed, per_speed)
-    speed_out = tuned(speed, inst.h)  # a drive: no sourced dead band
+    # The pressure on speed reads as integrating: its fitted lag runs to tens of
+    # thousands of seconds against a 0.05 s delay, past SIMC's 8 theta, so it is
+    # tuned on the slope k / tau1 (owner, picker 2026-11-25). tau_c is the time
+    # the drive takes, at its rate, to make the move the test itself made: the
+    # loop asks no faster than the drive delivers a normal step.
+    step_N = 0.05 * span
+    tau_c_N = max(step_N / float(p.drive_rate), _full_delay(speed, "dp"))
+    kc_N, ti_N = simc(speed["k"] / speed["tau1"], None, speed["theta"], tau_c_N)
+    speed_out = {"Kc": kc_N, "Ti": ti_N, "Tf": 0.0, "tau_c": tau_c_N}
+    print(f"    Kc {kc_N:.4g}, Ti {ti_N:.4g}, tau_c {tau_c_N:.4g} (drive rate)")
     active = [i for i, r in enumerate(rests) if r[4] > 0.02]
+    # Re-identified on the plant with the positioner's dead time [C7], held as
+    # the datasheet's delay (owner, picker 2026-11-25).
     valve = read_loop(
-        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active
-    )
+        plant, "margin on x", 1, 1, 0.1, 100, inst, room=plant.room(1), seeds=active,
+        delay=float(p.valve_lag),
+    )  # fmt: skip
     valve = rescaled(valve, 2.0)  # raw 2 is one full opening
     # The largest load in hold, the demand's 3 sd, as a recycle opening.
     u_d = (
@@ -629,6 +769,11 @@ def _compressor_pair(line: float) -> dict:
         - float(X.consumer_flow(25e3, 0.6, p, np))
     ) / float(X.recycle_flow(25e3, 1.0, p, np))
     valve_out = tuned(valve, inst.h, DEAD_BAND, u_d)
+    floor = _full_delay(valve, "m_c")
+    if valve_out["tau_c"] < floor:  # the detune rule
+        kc_x, ti_x = simc(valve["k"], valve["tau1"], valve_out["theta"], floor)
+        valve_out = {**valve_out, "Kc": kc_x, "Ti": ti_x, "tau_c": floor}
+        print(f"    detuned: Kc {kc_x:.4g}, Ti {ti_x:.4g}, tau_c {floor:.4g}")
     kp_surge = min(abs(valve_out["Kc"]), 1.0)  # Mirsky's "less than 1"
     Tt = np.sqrt(valve_out["Ti"] * (valve_out["tau_c"] + valve["theta"]))  # C8
     return {
@@ -641,6 +786,9 @@ def _compressor_pair(line: float) -> dict:
         "override_line": line / 2,
         "override_hold": 1.0 / float(p.valve_open_rate),
         "reset_band": kp_surge * max(1 - Tt / valve_out["Ti"], 0.0) * line,
+        # Rate action [C3, p. 2; C7]: the line leads by the loop's own delay, so
+        # the valve opens as early as the loop answers late (ours).
+        "rate_lead": float(valve_out["theta"]),
         "model": {"speed": record(speed, speed_out), "valve": record(valve, valve_out)},
     }
 

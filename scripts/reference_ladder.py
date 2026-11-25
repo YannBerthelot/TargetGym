@@ -68,6 +68,7 @@ from target_gym.experts.ladder import (  # noqa: E402
     Override,
     Pi,
     Rung,
+    ValvePosition,
     best_rung,
     cv_sigma,
     decoupler,
@@ -86,6 +87,7 @@ from target_gym.identification import (  # noqa: E402
     Plant,
     noise_tune,
     pick_fit,
+    simc,
     single_run,
 )
 from target_gym.registry import REGISTRY  # noqa: E402
@@ -94,6 +96,12 @@ SEEDS = tuple(range(100, 110))
 NOISE = 1.0
 RAW_BAND = DEAD_BAND * 2.0  # a valve's dead band on an action spanning 2
 FREE = (-np.inf, np.inf)
+#: A valve position loop's closed-loop time, in dead times. Its source tuned it at one
+#: dead time, as every other loop here, found "an aggressive behavior and oscillations"
+#: and gives the remedy: it "should be increased to at least" 30 (Reyes-Lua, Zotica and
+#: Skogestad, IFAC ADCHEM 2018, p. 438). On the cstr production prototype one dead time
+#: asks a gain of 8.2 and six of ten normal-day seeds leave the band at every set point.
+VALVE_TAU_C = 30.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -160,6 +168,21 @@ class Limit:
     seeds: object = None
 
 
+@dataclasses.dataclass(frozen=True)
+class Valve:
+    """A valve position loop (``ladder.ValvePosition``): hold ``read``, a loop's
+    valve, at ``setpoint`` by MV ``mv``. Its bump test steps ``mv`` by ``du`` with
+    every loop of the row closed and reads the valve over ``window`` steps; SIMC
+    then takes ``VALVE_TAU_C`` dead times as its closed-loop time."""
+
+    name: str
+    read: object
+    setpoint: float
+    mv: int
+    du: float
+    window: int
+
+
 @dataclasses.dataclass
 class Row:
     """What the ladder needs of one task. ``rest`` holds the plant for its tests, on
@@ -194,6 +217,7 @@ class Row:
     balance: object = None
     cascades: tuple = ()
     limits: tuple = ()
+    valves: tuple = ()
     decouple: bool = False
     holds: tuple = ()
     start: object = None
@@ -316,6 +340,28 @@ def closed_inner(pis, mvs, n_cv, dt):
     return actuate
 
 
+def closed_loops(pis, mvs, dt):
+    """The loops' PIs as the law runs them, each holding its CV where the test
+    found it and starting from its MV at rest, for a test of another MV."""
+
+    def actuate(u, y, m):
+        u = np.array(u, float)
+        if m is None:
+            m = [(y[p.loop], 0.0, y[p.loop], u[mv]) for p, mv in zip(pis, mvs)]
+        out = []
+        for (f, integral, sp, base), p, mv in zip(m, pis, mvs):
+            f = f + p.alpha * (y[p.loop] - f)
+            e = sp - f
+            v = base + p.kc * (e + (integral + e * dt) / p.ti)
+            if -1.0 <= v <= 1.0:
+                integral += e * dt
+            u[mv] = np.clip(v, -1.0, 1.0)
+            out.append((f, integral, sp, base))
+        return u, out
+
+    return actuate
+
+
 def gain_matrix(plant, row, inst, n):
     """Steady gains, CVs by MVs, each read at the end of the longest window."""
     window = max(c.window for c in row.loops)
@@ -347,6 +393,7 @@ def build(name: str, row: Row, spec=None) -> dict:
     n, nc = len(row.loops), len(row.cascades)
     cvs = [wrap(c.read) for c in row.loops] + [wrap(c.read) for c in row.cascades]
     cvs += [wrap(o.read) for o in row.limits]
+    cvs += [wrap(v.read) for v in row.valves]
 
     def params_at(change):
         return spec.make_test_params(**{**_test_params(row), **change})
@@ -637,6 +684,39 @@ def build(name: str, row: Row, spec=None) -> dict:
         rungs["override"] = make(
             Rung("override", loops, mix, cascades, tuple(over)), bias
         )
+    if row.valves:
+        # Each valve's answer to its MV with the loops closed, as the structure's
+        # source tunes it, on plants whose loops hold their CVs at rest.
+        closed = [
+            Plant(
+                spec,
+                q,
+                cvs,
+                [(None, None)] * len(cvs),
+                controller=manual(rest_of(q)),
+                start=row.start,
+                actuate=closed_loops(pis, [c.mv for c in row.loops], dt),
+                paired=True,
+            )
+            for q in at_points
+        ]
+        first = n + nc + len(row.limits)
+        held = []
+        for k, v in enumerate(row.valves):
+            designs = []
+            for j, at in enumerate(closed):
+                m = read_loop(
+                    at, f"{v.name} at point {j}", v.mv, first + k, v.du, v.window,
+                    Instrument(dt), at.room(v.mv), "fopdt", row.holds,
+                )  # fmt: skip
+                kc, ti = simc(m["k"], m["tau"], m["theta"], VALVE_TAU_C * m["theta"])
+                designs.append({"Kc": kc, "Ti": ti})
+            out = most_sensitive(designs)
+            print(f"    {v.name}: {out}", flush=True)
+            held.append(ValvePosition(v.read, v.setpoint, v.mv, out["Kc"], out["Ti"]))
+        rungs["valve position"] = make(
+            Rung("valve position", tuple(pis), mix, (), (), tuple(held)), bias
+        )
     _show(row, "pi")
     return rungs
 
@@ -896,7 +976,15 @@ def climb(name: str, nulls: bool = False) -> dict:
 #: rule's own resolution at 1 %, or after PLACE_ROUNDS reads.
 PLACE_TOLERANCE, PLACE_ROUNDS = 0.01, 8
 
-_ORDER = ("pi", "feedforward", "cascade", "decoupler", "override", "published")
+_ORDER = (
+    "pi",
+    "feedforward",
+    "cascade",
+    "decoupler",
+    "override",
+    "valve position",
+    "published",
+)
 
 
 class HoldReset:

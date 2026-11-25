@@ -33,6 +33,24 @@ def test_a_zero_feed_period_holds_the_feed_where_it_starts():
         start = float(s.T_feed)
         for k in range(3):
             _, s, *_ = env.step_env(
-                jax.random.PRNGKey(k), s, jnp.zeros((1,), jnp.float32), p
+                jax.random.PRNGKey(k), s, jnp.zeros((2,), jnp.float32), p
             )
             assert float(s.T_feed) == start
+
+
+def test_a_window_starts_in_established_production():
+    """Charter B5 and [S13, pp. 436, 438]: the window starts with the water
+    valve held short of its limit, at 95 % of its span, the feed that takes and
+    the reactor on its setpoint; where the feed's top binds, the feed at its top
+    and the water under 95 %. The observation shows both valves in percent."""
+    env = CSTR()
+    p = env.default_params
+    for k in range(8):
+        obs, s = env.reset_env(jax.random.PRNGKey(k), p.replace(sensor_noise_scale=0.0))
+        water, feed = float(obs[2]), float(obs[3])
+        assert obs.shape == (5,)
+        assert abs(float(obs[4]) - p.T_setpoint) < 1e-3
+        assert abs(float(s.T) - p.T_setpoint) < 1e-3
+        at_rest = abs(water - 95.0) < 0.01 and feed < 100.0
+        feed_bound = abs(feed - 100.0) < 0.01 and water < 95.0
+        assert at_rest or feed_bound, (k, water, feed)

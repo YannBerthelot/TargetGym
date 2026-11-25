@@ -277,3 +277,45 @@ figure below was read once and confirmed on a second fetch.
   pages). https://stacks.cdc.gov/view/cdc/230000/cdc_230000_DS1.pdf
 - [ST3] Circadian, "8-Hour vs. 12-Hour Shift Schedules" (survey year not
   given). https://circadian.com/managing-247-article-1-0712
+
+### Production and the feed, third search (2026-11-23)
+
+Searched for what an operator of such a reactor is paid for beyond holding its
+temperature, and for how closely the temperature must be held. Every source
+below was fetched twice and the two fetches agree.
+
+- **The feed is what practice cuts when the cooling saturates.** "Shinskey
+  (1988) describes this solution for temperature control in a reactor, where
+  the feed rate is reduced if the cooling saturates" [S13, p. 436]. The
+  structure is valve position control: the temperature stays on the cooling,
+  and a second controller holds the cooling valve short of its limit by the
+  throughput. With the valve near its constraint it "achieves only near-optimal
+  operation because some back-off is used to maintain the valve within the
+  controllable range" [S13, p. 436]. Its example holds the valve at 95 % of its
+  opening [S13, p. 438, Fig. 7].
+- **How that controller is tuned.** Each loop by SIMC on a first-order model
+  fitted to a step response; the valve position controller on the valve's
+  response to a throughput step with the temperature loop closed [S13, p. 437,
+  Fig. 6]. Tuned at a closed-loop time of one dead time it showed "an
+  aggressive behavior and oscillations", and that time "should be increased to
+  at least 30" dead times [S13, p. 438].
+- **Feed range.** 0 to 110 g/s on PARSEX [S1, Table 1]. The lowest feed a plant
+  runs at in operation (its turndown): not found.
+- **How closely the temperature must be held: not found.** The DuPont patent
+  gives only its broad window, "maintained from about 80 C. to about 180 C."
+  [S9]. Emerson's article gives no figure in degrees: the tuned batches "had
+  practically no overshoot and undershoot" [S12]. PARSEX's own traces move by
+  2 C on a setpoint move and dip 1.7 C under a catalyst loss [S1, Figs. 2, 3],
+  which are excursions, not a tolerance.
+- **A stake in production.** Better jacket temperature control is credited
+  with a cut of batch cycle times by 10 % on a batch plant [S12]. A figure for
+  a continuous reactor: not found. A product price for a generic A to B
+  reaction: none exists to find.
+- G. McMillan's article on maximising a liquid reactor's production rate
+  (automation.com) refused both fetches (HTTP 403) and is not used.
+
+- [S13] A. Reyes-Lua, C. Zotica, S. Skogestad, "Optimal Operation with Changing
+  Active Constraint Regions using Classical Advanced Control", Preprints, 10th
+  IFAC International Symposium on Advanced Control of Chemical Processes,
+  Shenyang, 25-27 July 2018, pp. 434-439.
+  https://skoge.folk.ntnu.no/prost/proceedings/ADCHEM-2018/media/files/0071.pdf
