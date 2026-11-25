@@ -713,6 +713,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="plane3d_circle",
+        extra=(
+            "no airliner duty and solved (2026-11-24, owner's decision, "
+            "aircraft five-task review): no source makes a constant-radius orbit "
+            "a transport duty, 87 % of the reference's cost is its wings-level "
+            "start, and after it the reference holds 0.8 m of height and 0.6 m "
+            "of path (plane3d/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_plane3d_circle,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
@@ -787,6 +794,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="plane3d_figure8",
+        extra=(
+            "no airliner duty and solved (2026-11-24, owner's decision, "
+            "aircraft five-task review): no transport duty and no sourced "
+            "manoeuvre stand behind the pattern, 84 % of the reference's cost "
+            "is its wings-level start, and after it the reference is 1 m from "
+            "the curve (plane3d/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_plane3d_figure8,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
@@ -818,6 +832,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="patrol",
+        extra=(
+            "solved (2026-11-24, owner's decision, aircraft five-task review): "
+            "after its start the reference already holds its slot to 4.0 m RMS, "
+            "inside NASA AFF's 10 ft, so a score from that source leaves it near "
+            "0; 63 % of its cost is the start, and its oracle loses to it "
+            "(patrol/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_patrol,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
@@ -852,6 +873,12 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="patrol_range_bearing",
+        extra=(
+            "solved with patrol (2026-11-24, owner's decision, aircraft "
+            "five-task review): patrol's job seen through a range and bearing, "
+            "a third of whose cost is one unsourced azimuth figure "
+            "(patrol/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_patrol_range_bearing,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
@@ -1320,6 +1347,11 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="formation",
+        extra=(
+            "one policy flies three aircraft (2026-11-24, owner's decision, "
+            "aircraft five-task review): several agents, outside the "
+            "charter's one plant, one agent (formation/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_formation,
         params_cls=_LazyParams("target_gym.formation.env", "FormationParams"),

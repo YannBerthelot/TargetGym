@@ -13,7 +13,12 @@ and the capability claims the same way. boiler_drum is Extra by the owner's
 decision of 2026-11-24, as solved (charter J5): its reference costs nothing on
 normal days and what room remains is worth GBP 90 to 170 a year. The same day
 the owner set one rule for the radar: an Extra task carries no capability tag
-and moves no spoke, four_tank included.
+and moves no spoke, four_tank included. Also on 2026-11-24 the owner sent five
+aircraft tasks to Extra on the aircraft five-task review: patrol and
+patrol_range_bearing as solved (a follower already holds the source's 10 ft
+after the start), formation as several agents (outside the charter's one plant,
+one agent), and plane3d_circle and plane3d_figure8 as solved with no airliner
+duty behind them.
 """
 
 import pytest
@@ -69,12 +74,38 @@ def test_boiler_drum_is_extra_with_its_reason():
     assert "boiler_drum" not in {s.name for s in registry.benchmark_specs()}
 
 
+@pytest.mark.parametrize(
+    "name, reason",
+    [
+        ("patrol", "solved"),
+        ("patrol_range_bearing", "solved"),
+        ("formation", "agent"),
+        ("plane3d_circle", "duty"),
+        ("plane3d_figure8", "duty"),
+    ],
+)
+def test_the_five_reviewed_aircraft_tasks_are_extra_with_their_reason(name, reason):
+    spec = registry.get(name)
+    assert spec.extra and reason in spec.extra
+    assert name not in {s.name for s in registry.benchmark_specs()}
+
+
 def test_an_extra_task_carries_no_capability_tag():
     """Owner's rule, 2026-11-24: an Extra task moves no spoke."""
     from target_gym import suite
 
     extra = [name for name, spec in registry.REGISTRY.items() if spec.extra]
-    assert {"four_tank", "battery", "unstable_cstr", "boiler_drum"} <= set(extra)
+    assert {
+        "four_tank",
+        "battery",
+        "unstable_cstr",
+        "boiler_drum",
+        "patrol",
+        "patrol_range_bearing",
+        "formation",
+        "plane3d_circle",
+        "plane3d_figure8",
+    } <= set(extra)
     assert {name: suite.CAPABILITIES[name] for name in extra} == dict.fromkeys(
         extra, ()
     )

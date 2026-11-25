@@ -49,7 +49,16 @@ def rolling_gust(key, speed, params):
     length = params.turbulence_scale_length
     level = sigma_w2 / (speed * length)
     level = level * 0.8 * (jnp.pi * length / (4.0 * span)) ** (1.0 / 3.0)
-    return jnp.sqrt(jnp.pi * level / dt) * jax.random.normal(key)
+    # A planner's model zeroes the turbulence (``plan_params``), and the square
+    # root's derivative at 0 is infinite: times the zero derivative of
+    # ``level`` in airspeed it was NaN, which reached every action a gradient
+    # planner differentiates. The guard keeps the root's argument off 0 in the
+    # branch it does not take, so every value is the same and the derivative
+    # in still air is 0.
+    size2 = jnp.pi * level / dt
+    windy = size2 > 0.0
+    size = jnp.where(windy, jnp.sqrt(jnp.where(windy, size2, 1.0)), 0.0)
+    return size * jax.random.normal(key)
 
 
 def compute_velocity_3d(x_dot, y_dot, z_dot):

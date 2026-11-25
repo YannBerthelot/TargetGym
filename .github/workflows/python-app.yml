@@ -177,7 +177,7 @@ jobs:
     # Every interpreter in the project's requires-python window. The columns
     # run concurrently, so covering four of them costs runner minutes but not
     # a contributor's wall-clock wait.
-    name: test (py${{ matrix.python-version }})
+    name: test (py${{ matrix.python-version }}${{ matrix.shard != 0 && format(', {0}/3', matrix.shard) || '' }})
     # A stale record fails the records job alone, in a few minutes, before
     # three interpreters spend their runner minutes on a tree that needs a
     # re-record first.
@@ -197,8 +197,12 @@ jobs:
         # that also type-checks and enforces coverage; the push after its merge
         # runs all four.
         python-version: ${{ fromJSON(github.base_ref == 'int/amendment3' && '["3.13"]' || '["3.11", "3.12", "3.13", "3.14"]') }}
+        # A pull request into int/amendment3 runs its tests in three shards on
+        # three runners at once (owner, 2026-11-24); 0 is no sharding.
+        shard: ${{ fromJSON(github.base_ref == 'int/amendment3' && '[1, 2, 3]' || '[0]') }}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      TG_SHARD: ${{ matrix.shard != 0 && format('{0}/3', matrix.shard) || '' }}
       # On the integration branch only, until its one re-record. Every plant
       # compiles from scratch there, and the compiled programs fill a runner on
       # the older JAX, whatever the worker count, so they are freed after each
@@ -299,6 +303,17 @@ jobs:
       run: |
         if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
         uv run python scripts/ci_select_tests.py --base HEAD^1 -- -q -n auto -m "not medium and not large and not records" $INTEGRATION_ARGS
+
+  tests-pass:
+    # The one check the integration branch requires: every shard of the test
+    # job passed. Its shards' names change with the matrix; this one does not.
+    name: tests pass
+    needs: test
+    if: ${{ always() && github.base_ref == 'int/amendment3' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - run: test "${{ needs.test.result }}" = "success"
 
   large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the
