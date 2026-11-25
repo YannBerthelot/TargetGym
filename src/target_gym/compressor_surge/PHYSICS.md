@@ -28,10 +28,47 @@ the surge line, with as little recycle as possible and no counted surge.
 | `zone_price` | 1000 | kJ/s | ours: a second outside the zone costs about 16 s of the hold's recycle power |
 | `surge_price` | 2000 | kJ | ours: each surge's wear [C3, p. 1], no price found |
 | `reset_margin` | 0.10 | of surge flow at speed | ours, family: the control line the plant is established on at reset and after a trip; about 10 % [C6], 10 to 15 % [C1] (2026-11-23) |
+| `line_shift_max` | 0.05 | of the map's surge flow | ours, family: the machine's true surge line against the map, drawn uniformly either side at the reset; 2.6 to 7 % at low suction pressure [C14] (2026-11-23) |
+| `machine_stratum` | -1 | - | the evaluation's spread (owner, 2026-11-24): -1 draws over the whole range; the protocol sets seed mod 10, one machine per tenth over ten seeds |
+| flow and pressure reading lags | 0.15, 0.3 | s | read: flow dP transmitters at 100 to 150 ms, 200 ms at most; 300 to 400 ms acceptable on pressure [C10, pp. 29-30] (2026-11-23) |
 
 The hidden surge-line offset, the moving setpoint
 schedule (`p_ref_range`) and the travel, tracking and running terms are gone:
 none had a source.
+
+### The hidden line and the transmitters (2026-11-23)
+
+Until this change the plant asked for no surge margin: its controller read the surge
+line exactly and its readings had no lag, so the reference placed on the line itself
+never surged on normal and slow days (`docs/proposals/compressor-surge-margin.md`).
+The sources say what the margin is for [C10, p. 11]: the line's position and the
+transmitters' response, with the disturbance's speed. The plant now has both.
+
+- **The machine.** Each episode's machine has its true surge line a hidden fraction
+  `line_shift` off the map, drawn uniformly within `line_shift_max` either side at
+  the reset. The head peaks at Phi = 2W (1 + `line_shift`), at the map's peak head.
+  The difference is local to the line (`on_the_map`; owner, 2026-11-23): a plant
+  cannot measure where its line has drifted [C10], so in normal operation the
+  machine must read as its map. "Near the line" is inside the control margin: from
+  the map's control line on, `reset_margin` (10 %) right of the map's surge line,
+  the line the plant is established on and holds [C6; C1], the machine's head is
+  the map's exactly. At and left of its true line it is the map moved by
+  2W `line_shift`, and between the two the move fades by a smoothstep, so the head
+  stays one-humped with no jump in slope while the shift is under the margin. The
+  shape of the fade is ours: no source gives one. A first version stretched the
+  whole map, and the speed that held 24 kPa at a given flow then gave the shift
+  away (0.7 % for 5 %, seventy steps of the speed reading). The map
+  (`surge_flow_per_speed`, the margin a controller reads off the observation) is
+  unchanged, and no observation channel carries the shift. A trip's restart keeps
+  the machine: the sources tie the line's position to the machine's condition and
+  to the map's error [C10; C1], which a trip does not change.
+- **Established operation** is on the map's 10 % line, the one the plant's control
+  system knows. There every machine is its map, so the reset gives no machine
+  away; one whose line is right of its map starts closer to its true line than its
+  controller reads, 4.8 % from it at the largest shift.
+- **The transmitters.** The flow and pressure readings lag first order, 0.15 s and
+  0.3 s [C10, pp. 29-30]. The score reads the true state.
+- **The oracle and the ceiling** know the machine: their limit is its true line.
 
 ### Limits (rule 14)
 
@@ -75,9 +112,12 @@ rules out. Demand moves as the scenario says:
 | `normal` | 0.7 to 0.95, 5 s ramps | [C3, p. 2]: right of the control line, recycle shut or nearly |
 | `slow_approach` | 0.25 to 0.6, 15 s ramps | [C3, p. 2] |
 | `fast_approach` | 0.2 to 0.6, 1 s ramps | [C3, p. 2] |
-| `load_swings` | 0.35 to 0.95, 5 s ramps | [C3, pp. 2-4] |
 
-Sizes and rates are ours; the sources name the cases. An emergency shutdown
+Sizes and rates are ours; the sources name the cases. A fourth scenario,
+`load_swings` (0.35 to 0.95, 5 s ramps [C3, pp. 2-4]), was dropped in the
+evaluation cut (owner, 2026-11-24): it showed no behaviour of its own, since the
+reference priced it like 43 % slow approach and 57 % normal, and without it no
+line changed order. An emergency shutdown
 [C6] needs a driver model and has no scenario yet.
 
 ### Score (rule 15)
@@ -1063,7 +1103,7 @@ controller knows which way the error runs.
 
 ### Scenario weights (charter J4)
 
-`normal` 0.7, `slow_approach` 0.1, `fast_approach` 0.05, `load_swings` 0.15: shares of operating time for the headline. No source says how often each
+`normal` 0.7855, `slow_approach` 0.1645, `fast_approach` 0.05: shares of operating time for the headline. They were 0.7, 0.1 and 0.05 with `load_swings` at 0.15; the cut (2026-11-24) gave its weight 57 % to normal and 43 % to slow approach. No source says how often each
 window occurs (`REALITY.md`), so each is ours, the normal day in the family
 range 0.5 to 0.9 and the rest split among the upsets; the family sweep (B7)
 draws them.
@@ -1100,7 +1140,7 @@ outside world (`OUTSIDE_WORLD`), which depends on the seed and the time only.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 90 |
+| `compressor_surge` | 1200 | 0.1 | 2 min | 2 in [-1, 1] | 8 | 94 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

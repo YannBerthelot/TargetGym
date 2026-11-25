@@ -10,9 +10,13 @@ The page opens with a chart of each task's oracle and ceiling against its
 expert: interactive on the docs site (``docs/javascripts/results-chart.js``
 draws it from the rows embedded in the page), and as two static images for
 the README, light and dark (``images/results-vs-expert*.svg``, which the
-README links on the published site). It also draws the expert's and the
-oracle's capability profiles for ``docs/capability-profile.md``
-(``images/capability-profile*.svg``).
+README links on the published site). ``capability_svg`` draws the expert's
+and the oracle's capability profiles; the docs do not publish them in this
+release (owner, 2026-11-24), so ``outputs`` leaves them out.
+
+Only the scored tasks (``charter.FLAGSHIP``) have rows here. The records of a
+task outside the suite are not held current, so the page prints none of their
+numbers and lists those tasks by name at its end.
 
 The page is the headline results of the whole library, so it is generated from
 the recorded data rather than transcribed: the protocol scores from
@@ -65,7 +69,10 @@ INTRO = """\
      src/target_gym/data/protocol_results/ and baseline_returns/ at build time.
      Do not edit by hand. -->
 
-Every environment ships two reference controllers, scored on its test
+These are the results of the scored suite: {scored}. The other tasks run the
+same way but are not scored, and are listed [at the end](#not-scored).
+
+Every scored task ships two reference controllers, scored on its test
 configuration (`spec.make_test_params()`):
 
 - **The expert** (the `"pid"` slot): reads the observation only, as your agent
@@ -467,7 +474,7 @@ def _episode() -> list[str]:
 def _returns() -> list[str]:
     from target_gym.provenance import load_recorded_baselines
 
-    recorded = load_recorded_baselines()
+    recorded = _scored(load_recorded_baselines())
     rows, stale, losing, tripping, seeds = {}, [], [], [], []
     for name, row in recorded.items():
         if not row or "pid_returns" not in row:
@@ -527,7 +534,7 @@ def _caveats() -> list[str]:
 
     notes = [
         f"- [`{n}`](environments/{n}.md): {note}"
-        for n, s in REGISTRY.items()
+        for n, s in _scored(REGISTRY).items()
         for note in (s.baselines_note, getattr(s, "mpc_degraded", None))
         if note
     ]
@@ -539,7 +546,7 @@ def _charter() -> list[str]:
     has a record."""
     from target_gym import charter
 
-    records = {t: r for t in charter.charter_tasks() if (r := charter.load(t))}
+    records = {t: r for t in charter.FLAGSHIP if (r := charter.load(t))}
     if not records:
         return []
 
@@ -564,24 +571,60 @@ def _charter() -> list[str]:
     ]
 
 
+def _unscored() -> list[str]:
+    """Every task outside the suite, by status, with a link to its page."""
+    from target_gym import charter
+    from target_gym.registry import REGISTRY
+
+    said = {
+        charter.UNDER_REVIEW: "Under review",
+        charter.EXTRA: "Extra, kept with its reason and never scored",
+        charter.FIXTURE: "Test fixture",
+    }
+    lines = [
+        "## Not scored",
+        "",
+        "These tasks are registered and run through `tg.make`, but their records",
+        "are not held current, so no number is published for them. Each task's",
+        "page says where it stands.",
+        "",
+    ]
+    for status, label in said.items():
+        names = [n for n in REGISTRY if charter.status(n) == status]
+        links = ", ".join(f"[`{n}`](environments/{n}.md)" for n in names)
+        lines += [f"- **{label}:** {links}."] if names else []
+    return lines
+
+
 def _page() -> str:
+    from target_gym import charter
+
     sections = (_glance(), _room(), _charter(), _episode(), _returns(), _caveats())
-    parts = [INTRO, *("\n".join(p) for p in sections if p)]
+    names = [f"`{n}`" for n in charter.FLAGSHIP]
+    intro = INTRO.format(scored=", ".join(names[:-1]) + " and " + names[-1])
+    parts = [intro, *("\n".join(p) for p in (*sections, _unscored()) if p)]
     return "\n\n".join(s.strip("\n") for s in parts) + "\n"
 
 
+def _scored(rows: dict) -> dict:
+    """The rows of the scored tasks, in ``rows``' order."""
+    from target_gym.charter import FLAGSHIP
+
+    return {name: row for name, row in rows.items() if name in FLAGSHIP}
+
+
 def _protocol() -> dict:
+    """The recorded protocol rows the page publishes: the scored tasks'."""
     from target_gym.scoring import recorded
 
-    return recorded()
+    return _scored(recorded())
 
 
 def outputs() -> dict[str, str]:
     """Every generated file, by its path under ``docs/``."""
     data = _protocol()
     rows = chart_rows(data)
-    out = {PAGE: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
-    return out | {p: capability_svg(data, d) for d, p in CAPABILITY_IMAGES.items()}
+    return {PAGE: _page(), **{p: results_svg(rows, d) for d, p in IMAGES.items()}}
 
 
 def main(argv: list[str] | None = None) -> int:

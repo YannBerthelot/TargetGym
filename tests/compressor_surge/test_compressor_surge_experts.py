@@ -12,6 +12,7 @@ the MPC's hold. The oracle, on the shared solver, has its own tests
 The env is built directly from its class.
 """
 
+import dataclasses
 import json
 import pathlib
 
@@ -76,14 +77,23 @@ REFUSED = {
 }
 
 
+class MapMachine(CompressorSurge):
+    """The map's own machine read by ideal transmitters. This file's numbers
+    are the map's, and its hand-built states carry no transmitter history; the
+    hidden line and the lags have their own tests
+    (test_compressor_surge_hidden_line.py)."""
+
+    readings = tuple(dataclasses.replace(r, lag=0.0) for r in CompressorSurge.readings)
+
+
 @pytest.fixture(scope="module")
 def env():
-    return CompressorSurge()
+    return MapMachine()
 
 
 @pytest.fixture(scope="module")
 def params():
-    return CompressorSurgeParams()
+    return CompressorSurgeParams(line_shift_max=0.0)
 
 
 @pytest.fixture(scope="module")

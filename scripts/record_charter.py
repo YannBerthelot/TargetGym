@@ -20,6 +20,12 @@ ceiling solved them. On a task that declares an evaluation, record its ceilings
 first (``scripts/record_ceilings.py``, ``owed`` lists the seeds the seed rule asks
 for), then these lines, so every line is paired with the ceiling seed by seed.
 
+A task with a scoring-run protocol (``target_gym.scoring_runs``: the reactor) runs
+every part on its stream pinned to each kept scenario, with the twins' weight
+folded, instead of one-day windows; its ceiling part also names the scenarios
+whose room interval contains 1, which take the protocol's extra seeds (the stop
+rule), and its reference and ceiling are then run again on them.
+
 A part whose fingerprint is current is skipped unless ``--force``. Each part run
 is written at once and appended to ``data/charter/log.jsonl``.
 """
@@ -58,11 +64,16 @@ class Task:
         import reference_ladder as L
 
         from target_gym import scenarios
+        from target_gym import scoring_runs as S
         from target_gym.registry import REGISTRY
 
-        self.L, self.name, self.record = L, name, record
+        self.L, self.name, self.record, self.S = L, name, record, S
         self.spec = REGISTRY[name]
-        self.weights = scenarios.weights(self.spec)
+        self.protocol = name in S.PROTOCOLS
+        self.mpc_pieces: list[str] = []
+        self.weights = (
+            S.weights(name) if self.protocol else scenarios.weights(self.spec)
+        )
         self.expert = name in charter.EXPERT_REFERENCE
         self.row = L.Row(0, None) if self.expert else L.ROWS[name]()
         self.seeds = charter.line_seeds(
@@ -83,7 +94,7 @@ class Task:
 
         kept = self.kept()
         if self.expert:
-            return shipped_policy("pid")
+            return "pid" if self.protocol else shipped_policy("pid")
         return self.L.Reference(kept, self.L.build(self.name, self.row)[kept])
 
     def on_seeds(self, result: dict) -> dict:
@@ -100,6 +111,11 @@ class Task:
         runs, broken = {}, {}
         for null in self.L.null_set(self.name):
             try:
+                if self.protocol:
+                    # On the stream the reset is the stream's own: its held move.
+                    held = "null" if null.name == "hold reset" else null
+                    runs[null.name] = self.suite(held, seeds)
+                    continue
                 runs[null.name] = self.L.run_suite(
                     self.name, self.row, null, seeds=seeds
                 )
@@ -107,12 +123,72 @@ class Task:
                 broken[null.name] = f"{type(err).__name__}: {err}"
         return runs, broken
 
+    def seeds_for(self, scenario: str) -> list[int]:
+        """A protocol scenario's seeds: the first block, and the extra one where the
+        recorded ceiling part found its room interval containing 1."""
+        extended = scenario in self.record.get("ceiling", {}).get("extended", [])
+        return self.S.seeds(self.name, extended=extended)
+
+    def suite(self, policy, seeds=None) -> dict:
+        """``run_suite``'s result on the protocol's runs: ``policy`` a
+        ``scoring_runs`` kind or a ``benchmark`` policy; ``seeds`` one list for
+        every scenario, ``{scenario: seeds}``, or each scenario's own."""
+        per = {}
+        for s in self.weights:
+            own = seeds.get(s) if isinstance(seeds, dict) else seeds
+            out = self.S.run(self.name, s, policy, own or self.seeds_for(s))
+            per[s] = {"costs": out["costs"], "trips": sum(out["trips"])}
+        counts = {len(v["costs"]) for v in per.values()}
+        costs = None
+        if len(counts) == 1:
+            costs = [
+                sum(self.weights[s] * per[s]["costs"][i] for s in per)
+                for i in range(counts.pop())
+            ]
+        return {
+            "costs": costs,
+            "trips": sum(v["trips"] for v in per.values()),
+            "scenarios": per,
+        }
+
+
+def extended(reference, ceiling, weights: dict, more_seeds) -> list[str]:
+    """The stop rule on two J3 lines: the scenarios, run on their first seeds only,
+    whose room interval contains 1 (``scoring_runs.needs_more``)."""
+    if NM in (reference, ceiling):
+        return []
+    out = []
+    for s in weights:
+        r, c = (ln["scenarios"][s]["costs"] for ln in (reference, ceiling))
+        if len(r) == len(c) and len(r) < len(more_seeds) and _needs(r, c):
+            out.append(s)
+    return out
+
+
+def _needs(reference_costs, ceiling_costs) -> bool:
+    from target_gym.scoring_runs import needs_more
+
+    return needs_more(reference_costs, ceiling_costs)
+
+
+def line_from_pieces(pieces, weights: dict, seeds: dict) -> dict:
+    """A J3 line from ``reactor_ceiling.py`` pieces: every scenario on its seeds,
+    once, or no line (``SystemExit``); converged only if every seed's solves were."""
+    import reactor_ceiling
+
+    stored = reactor_ceiling.assemble(pieces, weights, seeds)
+    return charter.ceiling_line(stored, weights)
+
 
 def part_reference(t: Task) -> dict:
     from target_gym.benchmark import shipped_policy
 
     if t.expert:
-        res = t.L.run_suite(t.name, t.row, shipped_policy("pid"), seeds=t.seeds)
+        res = (
+            t.suite("pid")
+            if t.protocol
+            else t.L.run_suite(t.name, t.row, shipped_policy("pid"), seeds=t.seeds)
+        )
         out = {"kept": "expert", "rungs": {"expert": res}, "left_out": {}}
         kept = res
     else:
@@ -141,6 +217,12 @@ def part_mpc(t: Task) -> dict:
     why = charter.MPC_NOT_MEASURED.get(t.name)
     if why or t.spec.make_mpc is None:
         return {"line": NM, "why": why or "the task ships no oracle"}
+    if t.protocol:
+        if t.mpc_pieces:
+            pieces = [json.loads(pathlib.Path(p).read_text()) for p in t.mpc_pieces]
+            seeds = {s: t.S.seeds(t.name) for s in t.weights}
+            return {"line": line_from_pieces(pieces, t.weights, seeds)}
+        return {"line": t.line(t.suite("mpc"))}
     run = t.L.run_suite(t.name, t.row, shipped_policy("mpc"), seeds=t.seeds)
     return {"line": t.line(run)}
 
@@ -151,13 +233,21 @@ def part_ceiling(t: Task) -> dict:
     stored = charter.load_ceiling(t.name)
     part = charter.ceiling_part(stored, environment_fingerprint(t.spec), t.weights)
     source = charter.CEILINGS / f"{t.name}.json"
-    return part | {"source": str(source.relative_to(charter.REPO)) if stored else None}
+    part |= {"source": str(source.relative_to(charter.REPO)) if stored else None}
+    if t.protocol:
+        ref = t.record.get("reference", {}).get("line", NM)
+        more = t.S.seeds(t.name, extended=True)
+        part["extended"] = extended(ref, part["line"], t.weights, more)
+    return part
 
 
 def part_j2(t: Task) -> dict:
     commit, dirty = git_commit()
     seeds = charter.j2_seeds(commit, t.weights)
-    ref = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
+    if t.protocol:
+        ref = t.suite(t.policy(), seeds)
+    else:
+        ref = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
     runs, broken = t.nulls(seeds)
     costs = {s: v["costs"] for s, v in ref["scenarios"].items()}
     wins = {
@@ -192,7 +282,10 @@ def part_j2(t: Task) -> dict:
 
 def part_anchor(t: Task) -> dict:
     seeds = list(charter.ANCHOR_SEEDS)
-    res = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
+    if t.protocol:
+        res = t.suite(t.policy(), seeds)
+    else:
+        res = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
     return {"seeds": seeds, "line": t.line(res)}
 
 
@@ -216,7 +309,7 @@ def summary(part: str, block: dict) -> dict:
     return {"J": ln["J"], "trips": ln["trips"]} if isinstance(ln, dict) else ln
 
 
-def record(name: str, parts, force: bool) -> list[str]:
+def record(name: str, parts, force: bool, mpc_pieces=()) -> list[str]:
     """Run ``parts`` on ``name``, skipping current ones unless ``force``; returns
     the record's schema errors."""
     now = charter.current(name)
@@ -225,6 +318,7 @@ def record(name: str, parts, force: bool) -> list[str]:
     if rec.get("version") != now["version"]:
         rec = {}
     t = Task(name, rec)
+    t.mpc_pieces = list(mpc_pieces)
     rec.update(task=name, version=now["version"], weights=t.weights)
     commit, dirty = git_commit()
     for part in [p for p in charter.PARTS if p in parts]:
@@ -258,6 +352,11 @@ def main(argv=None) -> int:
     ap.add_argument("--tasks", nargs="+", required=True)
     ap.add_argument("--parts", default=",".join(charter.PARTS))
     ap.add_argument("--force", action="store_true")
+    ap.add_argument(
+        "--mpc-pieces", nargs="*", default=[],
+        help="planner-line pieces from reactor_ceiling.py --kind mpc, merged "
+        "instead of running the line in one process",
+    )  # fmt: skip
     args = ap.parse_args(argv)
     parts = [p for p in args.parts.split(",") if p]
     unknown = sorted(set(parts) - set(charter.PARTS))
@@ -265,7 +364,7 @@ def main(argv=None) -> int:
         ap.error(f"unknown parts {unknown}; choose from {charter.PARTS}")
     bad = 0
     for name in args.tasks:
-        errors = record(name, parts, args.force)
+        errors = record(name, parts, args.force, args.mpc_pieces)
         for e in errors:
             print(f"{name}: schema: {e}", file=sys.stderr)
         bad += bool(errors)

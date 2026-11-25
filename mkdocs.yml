@@ -84,9 +84,13 @@ extra_javascript:
 extra_css:
   - stylesheets/results-chart.css
 
-# Design drafts, kept in the repository but not published.
+# Design drafts, kept in the repository but not published. The capability
+# profile is out of this release (owner, 2026-11-24): its radar is drawn from
+# the tracking score, and it returns when it is rebuilt on the saving over the
+# reference. Its page stays in the repository, where the tests still run it.
 exclude_docs: |
   proposals/
+  capability-profile.md
 
 nav:
   - Home: index.md
@@ -135,7 +139,6 @@ nav:
   - Results:
       - Baseline results: baseline-results.md
       - RL protocol: rl-protocol.md
-      - Capability profile: capability-profile.md
       - RL results: rl-baselines.md
   - Background:
       - Target MDPs: target-mdp.md
