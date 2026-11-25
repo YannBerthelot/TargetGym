@@ -59,7 +59,7 @@ reactor temperature trips an interlock that cuts the feed [S3, PDF p. 38].
 | `feed_T_range` | 296.25, 298.05 | K | cited: 23.1 and 24.9 C on two days [S1, Tables 3, 4]; the feed at room temperature swings across it |
 | `feed_T_period` | 1440 | min | ours: room temperature cycles once a day; the phase is drawn per episode, so an episode sees up to about 0.9 K of drift |
 | `T_setpoint` | 331.15 | K | cited: 58 C [S1, Tables 3, 4] |
-| `T_band` | 1 | K | ours: product made further from the setpoint is off-spec; no tolerance found (REALITY.md, third search); flat inside by the owner's decision (2026-11-24); the sweep draws it from 0.5 to 2 |
+| `T_band` | 1 | K | ours: product made further from the setpoint is off-spec; no tolerance found (REALITY.md, third and fourth searches); flat inside by the owner's decision (2026-11-24); the sweep draws it from 0.5 to 2 |
 | `setpoint_ramp` | 60 | min | derived: S1's closed loop took about an hour to carry its 2 C move to its peak [S1, Fig. 2] |
 | `valve_rest` | 0.95 | of span | cited: where [S13]'s example holds the cooling valve, short of its limit [S13, pp. 436, 438] |
 | `T_trip` | 348.15 | K | ours: 75 C, 17 K over the setpoint and short of the 81 C adiabatic rise, so a runaway trips; the interlock is cited [S3], its setting for this chemistry is not found |
@@ -157,7 +157,7 @@ inside the band (owner, 2026-11-24).
 
 | parameter | value | source |
 | --- | --- | --- |
-| `T_band` | 1 K | ours: no tolerance found (REALITY.md, third search) |
+| `T_band` | 1 K | ours: no tolerance found (REALITY.md, third and fourth searches) |
 | `e_floor` | 0.1 K | ours: a reactor probe's resolution, what the band's edge is read to |
 | `failure_cost` | 1 | a step of nameplate production |
 | `restart_steps` | 960 | ours: 4 h of lost production, seven residence times; no restart time found |
