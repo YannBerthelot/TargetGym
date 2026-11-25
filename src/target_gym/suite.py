@@ -14,7 +14,9 @@ expert is the 0.5 ring, a policy worse than the expert falls inside it, and 0
 is as far below the expert as the ceiling (or the best known) is above. A task
 with no room (its expert already within the ceiling, or a best known move
 under ``MIN_REACH_ROOM`` times cheaper than the expert's) has no point, and a
-capability is the mean of its tasks' points.
+capability is the mean of its tasks' points. Only a scored task
+(``charter.FLAGSHIP``) has a point: the tags of the others say what they will
+probe when they join.
 
 Profile a policy::
 
@@ -33,6 +35,7 @@ import math
 import numpy as np
 
 from target_gym import scoring
+from target_gym.charter import FLAGSHIP
 
 __all__ = ["AXES", "CAPABILITIES", "LABELS", "plot_profile", "profile"]
 __all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
@@ -136,8 +139,13 @@ def _reach_score(m: dict) -> float:
 def profile(results: dict, tags: dict | None = None) -> dict:
     """``{"hold": {capability: radius}, "reach": {...}}``: per capability, the
     mean radius of its tasks in ``results`` (task -> ``score_policy``'s
-    numbers) that have one; NaN where none has."""
-    tags = CAPABILITIES if tags is None else tags
+    numbers) that have one; NaN where none has. Under the suite's own tags
+    only a scored task counts (``charter.FLAGSHIP``); ``tags`` of your own
+    count every task they name."""
+    counted = tags
+    if tags is None:
+        tags = CAPABILITIES
+        counted = {name: ts for name, ts in tags.items() if name in FLAGSHIP}
     radii = {
         name: {"hold": radius(m["score"]), "reach": radius(_reach_score(m))}
         for name, m in results.items()
@@ -149,7 +157,7 @@ def profile(results: dict, tags: dict | None = None) -> dict:
         for axis in axes:
             vals = [
                 radii[name][which]
-                for name, ts in tags.items()
+                for name, ts in counted.items()
                 if axis in ts and name in radii and not math.isnan(radii[name][which])
             ]
             out[which][axis] = float(np.mean(vals)) if vals else _NAN
@@ -180,19 +188,20 @@ def references(rows: dict | None = None, tags: dict | None = None) -> dict:
     return {"expert": profile(expert, tags), "oracle": profile(oracle, tags)}
 
 
-def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
-    """Score ``make_policy(name)`` on every task, or on ``tasks``, with
-    ``scoring.score_policy``, and fold the results into a profile.
+def run_suite(make_policy, seeds: int = 10, tasks=FLAGSHIP) -> dict:
+    """Score ``make_policy(name)`` on the scored tasks, or on ``tasks``, with
+    ``scoring.score_policy``, and fold the results into a profile. Any
+    registered task can be named; one outside the flagship is scored in
+    ``"tasks"`` and moves no spoke.
 
     ``make_policy(name)`` returns a fresh ``policy(obs)`` or
     ``policy(obs, state)`` for task ``name``; it is called once per episode,
     as ``scoring.score_policy`` resets a policy before each one.
     Returns ``{"tasks": {name: numbers}, "profile": profile(numbers)}``.
     """
-    names = list(CAPABILITIES) if tasks is None else list(tasks)
     results = {
         name: scoring._score(name, lambda name=name: make_policy(name), seeds, None)
-        for name in names
+        for name in tasks
     }
     return {"tasks": results, "profile": profile(results)}
 

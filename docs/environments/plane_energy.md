@@ -1,5 +1,8 @@
 # Altitude and airspeed
 
+!!! note "Under review"
+    Altitude and airspeed is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane_energy/pid_output.gif" width="480px"/></p>
 
 Fly ATC's level and speed clearances with the same airliner as `plane`: TECS's job, altitude changes with the speed held and speed changes at a constant level [TECS]. Redesigned on 2026-11-08 under Amendment 2; see *Amendment 2: `plane_energy`* below.
@@ -17,6 +20,7 @@ env, params = tg.make("plane_energy")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 1800 steps of 1 s (30 min) |
 | Cite as | `plane_energy-v10` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space
@@ -76,7 +80,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): the shipped model plans the earlier cost, so plane_energy's room is not measured (charter rule 9).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (clearances on the AIM and RVSM bands, plane/PHYSICS.md): the shipped model plans the earlier cost, so plane_energy's room is not measured (charter rule 9).
 
 ## Arguments
 

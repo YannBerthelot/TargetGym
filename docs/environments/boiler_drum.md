@@ -20,6 +20,7 @@ env, params = tg.make("boiler_drum")
 | Tracked variable(s) | drum level (m), drum pressure (bar) |
 | Episode length | 1800 steps of 2 s (60 min) |
 | Cite as | `boiler_drum-v6` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/boiler_drum/PHYSICS.md) |
 
 ## Action space
@@ -79,14 +80,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 1800-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -1.794 | 0.0009965 |
-| MPC | -8.5e-06 | 4.722e-09 |
-
-The MPC beats the PID on 9 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 ## Arguments
 

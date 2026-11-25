@@ -1,5 +1,8 @@
 # Altitude hold
 
+!!! note "Under review"
+    Altitude hold is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/plane/pid_output.gif" width="480px"/></p>
 
 Cruise an A320-class airliner at its assigned level and speed for 30 min, through one zone of light turbulence, with throttle and a pitch demand. Redesigned on 2026-11-08 under charter Amendment 2 from REALITY.md and COLD_REVIEW.md; the section *Amendment 2: `plane`* below gives every change and the status of every number it brought in.
@@ -17,6 +20,7 @@ env, params = tg.make("plane")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 1800 steps of 1 s (30 min) |
 | Cite as | `plane-v7` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane/PHYSICS.md) |
 
 ## Action space
@@ -76,7 +80,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-No MPC ships with this environment, so there is no recorded comparison. No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+No oracle ships until the 2D oracle is rebuilt for the Amendment 2 score (+-65 ft and +-10 kt bands, plane/PHYSICS.md): the shipped model plans the earlier quadratic cost, so plane's room is not measured (charter rule 9).
 
 ## Arguments
 

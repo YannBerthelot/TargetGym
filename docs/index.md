@@ -16,8 +16,12 @@ hide:
 </p>
 
 **25 environments**: 11 aircraft, 6 process control, 6 industrial / energy, 2 renewable energy. Every one of them is in the
-[gallery](environments.md) with its own page and clip, and its recorded baseline
-numbers are in [Baseline results](baseline-results.md).
+[gallery](environments.md) with its own page and clip.
+
+**Five of them are scored:** `reactor`, `hvac`, `cstr`, `compressor_surge` and
+`ph_neutralization`. Each has a measured reference to beat and a ceiling, and
+their numbers are in [Baseline results](baseline-results.md). The other twenty
+run the same way and are not scored yet: each one's page says where it stands.
 
 ---
 

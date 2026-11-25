@@ -237,6 +237,12 @@ scores) and the oracle's (the MPC's), and each part has a fingerprint of its
 own, so retuning an expert re-records only the PIDs, in minutes, and
 rebuilding an oracle only the MPCs.
 
+Only the scored suite's records are held current: the five tasks of
+`target_gym.charter.FLAGSHIP`. The rows of a task outside it stay in the
+repository, no page prints them, and neither the `records` check nor the
+`re-record` label touches them. Name such a task with `--envs` to record it
+by hand.
+
 The easy way is to let CI do it. Add the `re-record` label to your pull
 request: one job per stale environment records its stale parts on GitHub's
 runners and commits the rows, the table and the pages to your branch, and the
