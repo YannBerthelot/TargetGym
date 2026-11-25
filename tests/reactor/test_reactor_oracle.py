@@ -319,3 +319,40 @@ def test_the_oracle_halves_the_references_cost_late_in_the_cycle():
     assert max(under) < 10.0 / 1.8  # the turbine never runs into its stop
     assert reference[1] == 0  # the reference does not trip either
     assert planned[0] < 0.5 * reference[0]
+
+
+@pytest.mark.medium
+def test_dearer_rods_never_make_the_first_plan_cheaper():
+    """The cheapest plan cannot get cheaper when one of its prices rises. A plan
+    found with rods a hundred times dearer moves none of them (a single step
+    would cost $100), so it is a plan of the task's own problem at the same
+    cost, and the task's plan may not cost more.
+
+    The day: baseload from xenon balanced with 80 % of load, which burns off for
+    four hours and builds back. On such days the planner absorbed the dip with
+    some 24 rod steps where its own model priced boron alone $13.6 cheaper (seed
+    116, review of 2026-11-23): the rods' worth grows with insertion, so a plan
+    that already holds them deep sees no gain in taking them out a little.
+
+    50 cents of slack: both solves stop at a tolerance, and it is a third of a
+    percent of such a day."""
+    spec, env = REGISTRY["reactor"], Reactor()
+    (sc,) = [s for s in scenarios.suite(spec) if s.name == "baseload"]
+    p = scenarios.params_for(
+        spec,
+        sc,
+        cycle_range=(0.02, 0.02),
+        initial_xenon_power_range=(0.8, 0.8),
+        max_steps_in_episode=960,  # 8 h, past the dip
+    )
+    obs, s = env.reset_env(jax.random.PRNGKey(116), p)
+
+    def first_plan(q):
+        oracle = DayOracle(env, plan_params(spec, q))
+        oracle.step(obs, s)
+        (applied,) = [c for c in oracle.certificates if c["applies"]]
+        assert not applied["failed"] and not applied["capped"]
+        return applied["cost"]
+
+    dear = first_plan(p.replace(rod_step_price=100.0 * float(p.rod_step_price)))
+    assert first_plan(p) <= dear + 0.5

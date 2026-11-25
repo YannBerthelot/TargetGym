@@ -1,7 +1,7 @@
 # 3D figure-8
 
-!!! note "Under review"
-    3D figure-8 is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    3D figure-8 is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: no airliner duty and solved (2026-11-24, owner's decision, aircraft five-task review): no transport duty and no sourced manoeuvre stand behind the pattern, 84 % of the reference's cost is its wings-level start, and after it the reference is 1 m from the curve (plane3d/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/plane3d_figure8/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("plane3d_figure8")
 | Tracked variable(s) | distance to path (m) |
 | Episode length | 1000 steps of 1 s (16.7 min) |
 | Cite as | `plane3d_figure8-v7` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space

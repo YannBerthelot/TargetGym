@@ -1,7 +1,7 @@
 # Formation
 
-!!! note "Under review"
-    Formation is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    Formation is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: one policy flies three aircraft (2026-11-24, owner's decision, aircraft five-task review): several agents, outside the charter's one plant, one agent (formation/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/formation/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("formation")
 | Tracked variable(s) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `formation-v5` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
 ## Action space

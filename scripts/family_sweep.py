@@ -180,6 +180,24 @@ def at_rest_cost(env, p):
     return float(np.sum(cost)), int(np.sum(trip))
 
 
+def judged(ref, null) -> dict:
+    """One scenario of the reactor's sweep: the reference's and the null's medians
+    as scored, and with what each day leaves owed at its end added seed by seed
+    (``reactor_ladder.owed``). The property is judged on the priced ones: a null
+    that dilutes nothing leaves its day's burnup for the next (owner, 2026-11-23)."""
+    scored = [float(np.median(r["cost_by_seed"])) for r in (ref, null)]
+    priced = [
+        float(np.median(np.add(r["cost_by_seed"], r["owed_by_seed"])))
+        for r in (ref, null)
+    ]
+    return {
+        "reference_median": scored[0], "null_median": scored[1],
+        "reference_priced": priced[0], "null_priced": priced[1],
+        "beats_null": priced[0] < priced[1],
+        "beats_null_as_scored": scored[0] < scored[1],
+    }  # fmt: skip
+
+
 def reactor(table):
     import reactor_ladder as L
 
@@ -217,15 +235,14 @@ def reactor(table):
             q = ReactorParams(**{**sc.overrides, **d})
             ref = L.rows(env, q, act, expert.init_state)
             null = L.rows(env, q, hold, jnp.asarray(0.0))
-            row["scenarios"][sc.name] = {
-                "reference_median": float(np.median(ref["cost_by_seed"])),
-                "null_median": float(np.median(null["cost_by_seed"])),
-                "reference_tripped": ref["seeds_tripped"],
-                "beats_null": float(np.median(ref["cost_by_seed"]))
-                < float(np.median(null["cost_by_seed"])),
+            row["scenarios"][sc.name] = judged(ref, null) | {
+                "reference_tripped": ref["seeds_tripped"]
             }
         row["holds"] = rest < 1.0 and all(
             v["beats_null"] for v in row["scenarios"].values()
+        )
+        row["holds_as_scored"] = rest < 1.0 and all(
+            v["beats_null_as_scored"] for v in row["scenarios"].values()
         )
         print(json.dumps(row), flush=True)
         report.append(row)

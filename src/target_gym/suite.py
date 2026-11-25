@@ -43,7 +43,8 @@ __all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
 #: The capabilities, in their order around the radar. An Extra task carries no
 #: tag (owner, 2026-11-24), so an axis is here only while a core task carries
 #: it: instability and inverse response, which only boiler_drum and four_tank
-#: carried, come back when a core task is shown to carry them.
+#: carried, and multi-agent, which only formation carried, come back when a
+#: core task is shown to carry them.
 AXES = (
     "basic",
     "nonlinearity",
@@ -53,7 +54,6 @@ AXES = (
     "moving_target",
     "economic",
     "partial_observability",
-    "multi_agent",
     "safety",
 )
 
@@ -66,7 +66,6 @@ LABELS = {
     "moving_target": "moving target",
     "economic": "economic",
     "partial_observability": "partial observability",
-    "multi_agent": "multi-agent",
     "safety": "safety",
 }
 
@@ -96,13 +95,16 @@ CAPABILITIES = {
     "plane_energy": ("moving_target", "coupling"),
     "plane_sine": ("moving_target",),
     "plane3d_heading": ("coupling",),
-    "plane3d_circle": ("moving_target",),
+    # Extra (owner, 2026-11-24, the aircraft five-task review): circle and
+    # figure8 have no airliner duty, patrol and patrol_range_bearing are solved,
+    # formation is several agents (each package's PHYSICS.md, Status).
+    "plane3d_circle": (),
     "plane3d_racetrack": ("moving_target",),
-    "plane3d_figure8": ("moving_target",),
-    "patrol": ("moving_target",),
-    "patrol_range_bearing": ("moving_target", "partial_observability"),
+    "plane3d_figure8": (),
+    "patrol": (),
+    "patrol_range_bearing": (),
     "wake_surf": ("economic", "safety"),
-    "formation": ("multi_agent", "moving_target"),
+    "formation": (),
 }
 
 _NAN = float("nan")

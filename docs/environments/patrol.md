@@ -1,7 +1,7 @@
 # Patrol - wingman
 
-!!! note "Under review"
-    Patrol - wingman is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    Patrol - wingman is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved (2026-11-24, owner's decision, aircraft five-task review): after its start the reference already holds its slot to 4.0 m RMS, inside NASA AFF's 10 ft, so a score from that source leaves it near 0; 63 % of its cost is the start, and its oracle loses to it (patrol/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/patrol/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("patrol")
 | Tracked variable(s) | slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `patrol-v6` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space

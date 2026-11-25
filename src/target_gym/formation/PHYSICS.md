@@ -20,6 +20,18 @@ a learner, so it is a **multi-agent** target MDP: each wingman's reference is
 a co-player, not an exogenous signal (see `docs/target-mdp.md`, *Multi-agent
 target MDPs*).
 
+## Status: Extra, several agents, 2026-11-24
+
+The owner's decision on the aircraft five-task review: `formation` leaves the
+core pool. One policy flies three aircraft, which is outside the charter's
+scope of one plant and one agent. It is out of the headline (J4) and the
+capability claims, and it was the only task on the multi-agent spoke, which
+leaves the radar. Plant, expert, oracle, the `FormationMARL` view and tests
+stay; in code it is `EnvSpec.extra`, so `registry.benchmark_specs()` leaves
+it out. The review measured (seeds 100 to 109) that a third of the reference's
+cost is its lead's start out of trim and a third the route asking for more
+than the parade limits allow (30 deg of bank, 10 deg/s of roll).
+
 ## 1. Model and provenance
 
 **The flight physics is not this module's.** Every aircraft is advanced by

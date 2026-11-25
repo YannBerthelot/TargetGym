@@ -1,7 +1,7 @@
 # 3D circle
 
-!!! note "Under review"
-    3D circle is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    3D circle is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: no airliner duty and solved (2026-11-24, owner's decision, aircraft five-task review): no source makes a constant-radius orbit a transport duty, 87 % of the reference's cost is its wings-level start, and after it the reference holds 0.8 m of height and 0.6 m of path (plane3d/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/plane3d_circle/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("plane3d_circle")
 | Tracked variable(s) | altitude (m) |
 | Episode length | 600 steps of 1 s (10 min) |
 | Cite as | `plane3d_circle-v6` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/plane3d/PHYSICS.md) |
 
 ## Action space

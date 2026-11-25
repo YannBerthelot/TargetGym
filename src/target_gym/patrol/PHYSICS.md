@@ -44,6 +44,33 @@ This is a **dynamic** target MDP. The target subset of states is "the follower
 is in the slot", but the slot moves with a manoeuvring lead, so the set the
 agent must stay inside is itself in motion.
 
+## Status: Extra, as solved (charter J5), 2026-11-24
+
+The owner's decision on the aircraft five-task review: `patrol` and
+`patrol_range_bearing` leave the core pool. They are out of the headline (J4)
+and the capability claims; plant, expert, oracle, scenarios and tests stay. In
+code each is `EnvSpec.extra` on its registry entry, so
+`registry.benchmark_specs()` leaves it out, and its capability tags are empty
+(`suite.CAPABILITIES`). The reasons, measured on seeds 100 to 109:
+
+- **The reference already meets its source after the start.** After the first
+  30 s the follower holds its slot to 3.97 m RMS (2.70, 1.13 and 2.67 m by
+  axis), inside NASA AFF's 10 ft one sigma on most steps, so a score taken from
+  that source, a band, leaves it near 0.
+- **Most of its cost is how the episode starts.** 63 % of `patrol`'s reference
+  cost falls in the first 30 s: the follower spawns off its slot, and the lead
+  sinks about 20 m when its autopilot engages.
+- **No ceiling.** The shipped oracle loses to the reference (7 424 a step
+  against 4.97). A stand-in planner over the reference hold costs 0.86, but
+  63 % of that gap is the start and the rest is precision inside 10 ft.
+- **`patrol_range_bearing`** costs 2.1 times `patrol`, and a third of its
+  cost is one provisional azimuth figure (0.026 rad) with no source for a
+  wingman 40 to 80 m out.
+
+What would bring them back: a plant record that finds a cost operators pay for
+station keeping. None of the AFF sources prices it; the fuel saving belongs to
+`wake_surf`.
+
 ## 1. Model and provenance
 
 **The flight physics is not this module's.** Both aircraft are advanced by

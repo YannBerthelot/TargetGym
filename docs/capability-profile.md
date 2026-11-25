@@ -104,12 +104,12 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
 | `plane_energy` | moving target, coupling | A ladder of altitudes with airspeed scored too, which removes the spare degree of freedom (193, 194). |
 | `plane_sine` | moving target | A sinusoid, as a frequency probe (193). |
 | `plane3d_heading` | coupling | Banking costs lift: altitude and heading share the controls. |
-| `plane3d_circle` | moving target | A path. |
+| `plane3d_circle` | none | Extra since 2026-11-24 (owner's decision): no airliner duty, and solved after its wings-level start, so it is in no aggregate. Its reason is in `plane3d/PHYSICS.md`, Status. |
 | `plane3d_racetrack` | moving target | A path. |
-| `plane3d_figure8` | moving target | A climbing and descending path. |
-| `patrol` | moving target | The slot moves with a manoeuvring lead (8, 9). |
-| `patrol_range_bearing` | moving target, partial observability | A range-and-bearing sensor (46): the lead's heading is not observed. |
-| `formation` | multi-agent, moving target | Every aircraft is flown by the policy, on one team cost. |
+| `plane3d_figure8` | none | Extra since 2026-11-24 (owner's decision): no airliner duty and no sourced manoeuvre, and solved after its wings-level start, so it is in no aggregate. Its reason is in `plane3d/PHYSICS.md`, Status. |
+| `patrol` | none | Extra since 2026-11-24 (owner's decision): solved, its reference already holds the source's 10 ft after the start, so it is in no aggregate. Its reason is in `patrol/PHYSICS.md`, Status. |
+| `patrol_range_bearing` | none | Extra since 2026-11-24 (owner's decision), with `patrol`: its job seen through a sensor a third of whose cost has no source, so it is in no aggregate. Its reason is in `patrol/PHYSICS.md`, Status. |
+| `formation` | none | Extra since 2026-11-24 (owner's decision): one policy flies three aircraft, outside the charter's one plant, one agent, so it is in no aggregate. Its reason is in `formation/PHYSICS.md`, Status. |
 | `wake_surf` | economic, safety | Fuel is priced: the follower's cost falls only where it finds the lead's upwash; a bank past 60 deg is an upset, a trip. |
 
 ## Limits
@@ -118,8 +118,8 @@ Each tag comes from the task's PHYSICS.md (line numbers in brackets).
   times cheaper than the expert upwards. `oracle_transient_ratio` gives it.
 - The fixed settle is 0 steps on `hvac`, 1 on `reactor` and 4 on `battery`, so
   their move cost covers a step or a few. Read `settling_ratio` there.
-- Multi-agent rests on one task, so a single task moves that spoke.
-- Instability and inverse response are not on the radar. Only `boiler_drum`
-  and `four_tank` carried them, both are Extra, and an Extra task carries no
-  tag. Each comes back when a core task is shown to carry it.
+- Instability, inverse response and multi-agent are not on the radar. Only
+  `boiler_drum` and `four_tank` carried the first two and only `formation` the
+  third; all three are Extra, and an Extra task carries no tag. Each comes back
+  when a core task is shown to carry it.
 - Every task counts the same on a spoke, however long its episode.

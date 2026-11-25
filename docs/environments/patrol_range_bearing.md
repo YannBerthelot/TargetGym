@@ -1,7 +1,7 @@
 # Patrol - wingman, range and bearing
 
-!!! note "Under review"
-    Patrol - wingman, range and bearing is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+!!! note "Extra task"
+    Patrol - wingman, range and bearing is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved with patrol (2026-11-24, owner's decision, aircraft five-task review): patrol's job seen through a range and bearing, a third of whose cost is one unsourced azimuth figure (patrol/PHYSICS.md, Status).
 
 <p align="center"><img src="../../videos/patrol_range_bearing/pid_output.gif" width="480px"/></p>
 
@@ -20,7 +20,7 @@ env, params = tg.make("patrol_range_bearing")
 | Tracked variable(s) | measured range (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `patrol_range_bearing-v6` |
-| Status | Under review, not scored |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/patrol/PHYSICS.md) |
 
 ## Action space
