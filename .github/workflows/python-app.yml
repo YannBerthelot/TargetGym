@@ -21,13 +21,14 @@ on:
 permissions:
   contents: read
 
-# A new push to a branch makes the run already in flight for it obsolete.
-# Cancelling it frees the runner immediately, which is what a contributor
-# pushing a fixup actually wants -- their new run starts now, not after the
-# stale one finishes.
+# A new push to a pull request makes the run already in flight for it
+# obsolete: cancelling it frees the runner for the fixup. A push to a branch
+# (a merge into int or main) waits its turn instead, because merges an hour
+# apart kept cancelling the full run before its medium tier reported
+# (2026-11-25). At most one run waits; a newer push replaces it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   UV_VERSION: "0.11.28"
