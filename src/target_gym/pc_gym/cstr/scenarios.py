@@ -50,10 +50,10 @@ def cstr_scenarios() -> tuple[dict, ...]:
             stream_overrides=_NO_WINDOW_EVENT,
         ),
         _row(
-            "setpoint_step",
+            "setpoint_move",
             {"setpoint_step": 2.0},
             source="[S1, Fig. 2]",
-            description="the reactor's setpoint moved up 2 K",
+            description="the reactor's setpoint moved up 2 K over an hour",
             weight=0.1,
             **_upset(hold_min=_SHIFT_H * 60.0),
         ),
@@ -70,17 +70,12 @@ def cstr_scenarios() -> tuple[dict, ...]:
         ),
         _row(
             "feed_buildup",
-            # Derived: the largest whole percent the valve can hold at the design
-            # point. It takes the water to 135.5 of its 136 g/s at the middle feed
-            # temperature, past the top on a warm feed and short of it on a cold
-            # one, as Bayer's cooler held only under a feed limit [S3]. The 10 % of
-            # before needed 179 g/s: 5 K high whatever the controller did.
-            {"feed_rise": 0.03},
+            # Ours: feed build-up is sourced [S3], its size is not. With the
+            # feed to cut it can be held, so it is the 10 % of versions 5 and 6,
+            # not the 3 % version 7 took to stay inside the valve's range.
+            {"feed_rise": 0.1},
             source="[S3, PDF pp. 36-37, 46]",
-            description=(
-                "the feed's reactant rises 3 %, to the top of what the cooling"
-                " water can hold at the design point (derived)"
-            ),
+            description="the feed's reactant rises 10 % (size ours)",
             weight=0.05,
             **_upset(hold_min=120.0),
         ),

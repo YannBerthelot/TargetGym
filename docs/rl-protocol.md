@@ -238,7 +238,7 @@ added `wake_surf`, whose tau has not been measured.
 | --- | --- | --- | --- | --- |
 | cstr | 960 | 5 | 25 | 0.99896 |
 | first_order | 150 | 10 | 50 | 0.99333 |
-| hvac | 1344 | not remeasured | not remeasured | 0.99926 |
+| hvac | 1152 | not remeasured | not remeasured | 0.99913 |
 | plane | 1800 | 23 | 115 | 0.99944 |
 | plane_energy | 1800 | 23 | 115 | 0.99944 |
 | plane_sine | 480 | 23 | 115 | 0.99792 |

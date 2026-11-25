@@ -398,6 +398,15 @@ def _glance() -> list[str]:
         "each controller is from as good as a real plant can verify. Hover a row",
         "for the numbers, including the whole episode. Only tasks scored on",
         "tracking are drawn; a task charged in money is under Charter lines.",
+        *(
+            []
+            if rows
+            else [
+                "",
+                "No scored task has a current record here yet: a row recorded",
+                "on an earlier version of its task shows again once re-recorded.",
+            ]
+        ),
         "",
         '<div class="tg-results-chart"></div>',
         '<script type="application/json" id="tg-results-data">'
@@ -422,6 +431,8 @@ def _room() -> list[str]:
             f"{_fmt(b)} | {_fmt(c)} | {headroom(b, c):.2f} | {_fmt(x)} | "
             f"{'—' if s is None or s != s else f'{s:.2f}'}"
         )
+    if not rows:
+        return []
     return [
         "## Room to grow",
         "",
@@ -454,6 +465,8 @@ def _episode() -> list[str]:
         for who, m in (("expert", pid), ("oracle", mpc)):
             if m and m["failure_rate"] > 0:
                 failing.append(f"the {who} on `{name}` ({m['failure_rate']:.3g})")
+    if not rows:
+        return []
     lines = [
         "## Whole episode",
         "",
@@ -474,10 +487,10 @@ def _episode() -> list[str]:
 def _returns() -> list[str]:
     from target_gym.provenance import load_recorded_baselines
 
-    recorded = _scored(load_recorded_baselines())
+    recorded = _current(_scored(load_recorded_baselines()))
     rows, stale, losing, tripping, seeds = {}, [], [], [], []
     for name, row in recorded.items():
-        if not row or "pid_returns" not in row:
+        if "pid_returns" not in row or "mpc_returns" not in row:
             continue
         pid = np.asarray(row["pid_returns"], dtype=float)
         mpc = np.asarray(row["mpc_returns"], dtype=float)
@@ -506,6 +519,8 @@ def _returns() -> list[str]:
             + "; ".join(stale)
             + "\nRe-record those environments before regenerating the page."
         )
+    if not rows:
+        return []
     lines = [
         "## Episode returns",
         "",
@@ -546,19 +561,31 @@ def _charter() -> list[str]:
     has a record."""
     from target_gym import charter
 
-    records = {t: r for t in charter.FLAGSHIP if (r := charter.load(t))}
+    # A stale part reads "not current" and a record with nothing current has
+    # no row (owner, 2026-11-25).
+    records = {}
+    for t in charter.FLAGSHIP:
+        if r := charter.load(t):
+            stale = set(charter.stale_parts(r, charter.current(t)))
+            if stale != set(charter.PARTS):
+                records[t] = ({k: v for k, v in r.items() if k not in stale}, stale)
     if not records:
         return []
 
     def cell(ln) -> str:
         return ln if isinstance(ln, str) else _fmt(ln["J"]) + f" ({ln['trips']})"
 
+    parts = {"best_null": "nulls", "reference": "reference", "mpc": "mpc"}
+    parts["ceiling"] = "ceiling"
     rows = []
-    for t, r in records.items():
+    for t, (r, stale) in records.items():
         lines = charter.j3(r)
         j2 = r.get("j2", {}).get("accepted")
-        cells = [cell(lines[k]) for k in ("best_null", "reference", "mpc", "ceiling")]
-        rows.append(f"| {t} | {' | '.join(cells)} | {'—' if j2 is None else j2} |")
+        j2 = "not current" if "j2" in stale else "—" if j2 is None else j2
+        cells = [
+            "not current" if p in stale else cell(lines[k]) for k, p in parts.items()
+        ]
+        rows.append(f"| {t} | {' | '.join(cells)} | {j2} |")
     return [
         "## Charter lines",
         "",
@@ -613,11 +640,26 @@ def _scored(rows: dict) -> dict:
     return {name: row for name, row in rows.items() if name in FLAGSHIP}
 
 
+def _current(rows: dict) -> dict:
+    """The scored tasks' rows as far as the tree still describes them
+    (``records.current_parts``): a stale part is not published (owner,
+    2026-11-25), and a row with nothing current is left out."""
+    from target_gym import records
+    from target_gym.provenance import fingerprints
+    from target_gym.registry import REGISTRY
+
+    kept = {
+        n: records.current_parts(r, fingerprints(REGISTRY[n])) for n, r in rows.items()
+    }
+    return {n: r for n, r in _scored(kept).items() if r}
+
+
 def _protocol() -> dict:
-    """The recorded protocol rows the page publishes: the scored tasks'."""
+    """The recorded protocol rows the page publishes: the scored tasks',
+    current ones only."""
     from target_gym.scoring import recorded
 
-    return _scored(recorded())
+    return _current(_scored(recorded()))
 
 
 def outputs() -> dict[str, str]:

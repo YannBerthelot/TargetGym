@@ -192,6 +192,23 @@ def sweep_result(draws):
 # --- J3 and J4 --------------------------------------------------------------
 
 
+def line_seeds(spec, weights: dict, stored: dict | None) -> dict:
+    """``{scenario: seeds}`` the J3 lines run on: the task's evaluation seeds
+    (``evaluation.Evaluation``), and its extra seeds in a scenario where the ceilings
+    file ``stored`` solved them. The seed rule (``evaluation.line_seeds``) is applied
+    where the ceiling is solved (``scripts/record_ceilings.py owed``), so every line
+    is paired with the ceiling seed by seed."""
+    from target_gym import evaluation
+
+    ev = evaluation.of(spec)
+    out = {}
+    for s in weights:
+        row = ((stored or {}).get("scenarios") or {}).get(s) or {}
+        ran = set(row.get("seeds") or ())
+        out[s] = ev.seeds + (ev.extra_seeds if ran & set(ev.extra_seeds) else ())
+    return out
+
+
 def line(scenarios: dict, weights: dict, converged=None) -> dict:
     """A J3 line from ``{scenario: {"costs": [...], "trips": int}}``."""
     per = {
@@ -500,6 +517,16 @@ def current(task: str) -> dict:
     stored = load_ceiling(task)
     if stored is not None:
         out["ceiling_stamp"] = stored.get("stamp")
+    if spec.evaluation is not None:
+        # The lines run on the seeds the ceiling solved (``line_seeds``): a ceiling
+        # that adds a scenario's extra seeds stales them. A task that declares no
+        # evaluation runs on fixed seeds, and its fingerprints stay as they were.
+        from target_gym import scenarios
+
+        weights = scenarios.weights(spec)
+        seeds = _digest(sorted(line_seeds(spec, weights, stored).items()))
+        for part in ("reference", "nulls", "mpc"):
+            fps[part] = _digest(fps[part], seeds)
     return out
 
 

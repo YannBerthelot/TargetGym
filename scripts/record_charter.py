@@ -14,6 +14,12 @@ seeds, and the family sweep, ``scripts/family_sweep.py``, on the task's
 scoring seeds). J3's lines run on the ladder seeds 100 to 109, as the ceilings do.
 ``nulls``, ``j2`` and ``anchor`` read the recorded reference.
 
+The J3 lines (reference, nulls, mpc) run on ``charter.line_seeds``: the task's
+evaluation seeds (``evaluation.Evaluation``), plus the extra seeds of a scenario whose
+ceiling solved them. On a task that declares an evaluation, record its ceilings
+first (``scripts/record_ceilings.py``, ``owed`` lists the seeds the seed rule asks
+for), then these lines, so every line is paired with the ceiling seed by seed.
+
 A task with a scoring-run protocol (``target_gym.scoring_runs``: the reactor) runs
 every part on its stream pinned to each kept scenario, with the twins' weight
 folded, instead of one-day windows; its ceiling part also names the scenarios
@@ -70,6 +76,9 @@ class Task:
         )
         self.expert = name in charter.EXPERT_REFERENCE
         self.row = L.Row(0, None) if self.expert else L.ROWS[name]()
+        self.seeds = charter.line_seeds(
+            self.spec, self.weights, charter.load_ceiling(name)
+        )
 
     def line(self, result: dict, converged=None) -> dict:
         return charter.line(result["scenarios"], self.weights, converged)
@@ -87,6 +96,16 @@ class Task:
         if self.expert:
             return "pid" if self.protocol else shipped_policy("pid")
         return self.L.Reference(kept, self.L.build(self.name, self.row)[kept])
+
+    def on_seeds(self, result: dict) -> dict:
+        """``result``, a run on the ladder's seeds, cut to each scenario's line
+        seeds (all of them among the ladder's)."""
+        out = {}
+        for s, v in result["scenarios"].items():
+            at = [self.L.SEEDS.index(x) for x in self.seeds[s]]
+            tripped = [v["tripped"][i] for i in at]
+            out[s] = {"costs": [v["costs"][i] for i in at], "trips": sum(tripped)}
+        return {"scenarios": out}
 
     def nulls(self, seeds=None) -> tuple[dict, dict]:
         runs, broken = {}, {}
@@ -168,12 +187,13 @@ def part_reference(t: Task) -> dict:
         res = (
             t.suite("pid")
             if t.protocol
-            else t.L.run_suite(t.name, t.row, shipped_policy("pid"))
+            else t.L.run_suite(t.name, t.row, shipped_policy("pid"), seeds=t.seeds)
         )
         out = {"kept": "expert", "rungs": {"expert": res}, "left_out": {}}
+        kept = res
     else:
-        out = t.L.climb(t.name)
-    kept = out["rungs"].get(out["kept"]) if out["kept"] else None
+        out = t.L.climb(t.name)  # the rungs on the ladder's seeds, as placed
+        kept = t.on_seeds(out["rungs"][out["kept"]]) if out["kept"] else None
     rungs = {
         k: {"J": t.line(v)["J"], "trips": v["trips"]} for k, v in out["rungs"].items()
     }
@@ -187,7 +207,7 @@ def part_reference(t: Task) -> dict:
 
 
 def part_nulls(t: Task) -> dict:
-    runs, broken = t.nulls()
+    runs, broken = t.nulls(t.seeds)
     return {"lines": {k: t.line(v) for k, v in runs.items()}, "broken": broken}
 
 
@@ -203,7 +223,8 @@ def part_mpc(t: Task) -> dict:
             seeds = {s: t.S.seeds(t.name) for s in t.weights}
             return {"line": line_from_pieces(pieces, t.weights, seeds)}
         return {"line": t.line(t.suite("mpc"))}
-    return {"line": t.line(t.L.run_suite(t.name, t.row, shipped_policy("mpc")))}
+    run = t.L.run_suite(t.name, t.row, shipped_policy("mpc"), seeds=t.seeds)
+    return {"line": t.line(run)}
 
 
 def part_ceiling(t: Task) -> dict:

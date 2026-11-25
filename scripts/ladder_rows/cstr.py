@@ -1,8 +1,9 @@
 """The reference ladder's row for ``cstr`` (docs/proposals/task-charter.md, J1).
 
-What the plant's datasheet and balances say, and nothing read from a score
-(PHYSICS.md section 10). One loop, the reactor temperature on the fresh cooling
-water, tracking its setpoint; then the jacket outlet as the cascade's inner reading.
+What the plant's datasheet and its structure's source say, and nothing read from a
+score (PHYSICS.md section 10). Version 8 is run for what it makes: the reactor
+temperature is held by the fresh cooling water, and the water valve is held short of
+its limit by the feed, valve position control [S13].
 """
 
 from __future__ import annotations
@@ -11,109 +12,74 @@ import math
 
 from reference_ladder import (  # noqa: E402
     Cv,
-    Inner,
     Row,
+    Valve,
 )
 
 from target_gym.registry import REGISTRY
 
 
 def row() -> Row:
-    from target_gym.pc_gym.cstr.env import steady_state
-
     spec = REGISTRY["cstr"]
     p = spec.make_test_params()
-    w_min, w_span = float(p.Fw_min), float(p.Fw_max - p.Fw_min)
-    # The feed's temperature is hidden: the balances take the middle of its range
-    # [S1, Tables 3, 4], as the expert does.
-    T_f = 0.5 * (float(p.feed_T_range[0]) + float(p.feed_T_range[1]))
 
-    def water(o, xp):
-        """The raw command holding the reset's water: the reset puts the reactor on
-        the steady state of its point (``env.steady_state``), and the valve reads
-        exactly (obs 2)."""
-        return xp.reshape(o[2] / 50.0 - 1.0, (1,))
-
-    def balance(o, xp):
-        """The water the three balances need at the setpoint the operator reads
-        (obs 3), at the middle feed temperature, design activity and feed."""
-        F_w = steady_state(o[3], T_f, p)[2]
-        return xp.reshape(xp.clip(2.0 * (F_w - w_min) / w_span - 1.0, -1.0, 1.0), (1,))
-
-    def jacket_rest(o, xp):
-        """The jacket temperature at that steady state."""
-        return steady_state(o[3], T_f, p)[1]
+    def hold(o, xp):
+        """The raw commands holding both valves where the observation shows them
+        (obs 2 and 3, read exactly): the reset puts the reactor at rest there."""
+        return xp.stack([o[2] / 50.0 - 1.0, o[3] / 50.0 - 1.0])
 
     dt = float(p.delta_t)
     # The reactor: a cooling step first reaches 95 % of its final value in 0.99
-    # residence times open loop, 33 min of the 34 min residence; the window is
-    # twice that. The response then overshoots and settles in 3.72 (PHYSICS.md, T8).
+    # residence times open loop, 33 min of the design's 34 min residence; the window
+    # is twice that. The response then overshoots and settles later (PHYSICS.md, T8).
     residence = float(p.V) / float(p.q)
     window = math.ceil(2 * 0.99 * residence / dt)
-    # The jacket: its time constant M_j / (F_w + UA / cp_w) is 2.2 min at the design
-    # water, read 2 min late [S6]; its window is that dead time and five of it.
-    _, _, F_design = steady_state(float(p.T_setpoint), T_f, p)
-    tau_j = float(p.M_j) / (float(F_design) + float(p.UA) / 4.18)
-    inner_window = math.ceil((2.0 + 5 * tau_j) / dt)
-    # Each water bump is 5 % of the valve's span (0.1 raw), the outer test's jacket
-    # setpoint step 0.5 K; the noise band sizes them up where they read too small.
-    T = Cv("T on water", 0, lambda o, xp: o[0], lambda o, xp: o[3], "T", 0.1, window)
-    jacket = Inner(
+    # The temperature on the water, read as its gap to the setpoint (obs 0 less obs
+    # 4), so the band the product is on spec in is a fixed zone while the setpoint
+    # moves. Where it rests in the band is a placement (charter J1, zones): the
+    # score charges ``off_spec`` for leaving it, and a hotter reactor converts more,
+    # so the cheap edge is the top.
+    band = float(p.T_band)
+    T = Cv(
+        "T on water",
         0,
-        "T_j on water",
-        lambda o, xp: o[1],
-        jacket_rest,
-        "T_j",
+        lambda o, xp: o[0] - o[4],
+        lambda o, xp: xp.zeros((), xp.float32),
+        "T",
         0.1,
-        inner_window,
-        0.5,
         window,
+        zone=(-band, band, "high"),
+        exit_terms=("off_spec",),
     )
-
-    # Bump tests from the reset steady state with the events off (PHYSICS.md
-    # section 10), at every corner of the ranges the loop visits: the setpoint and
-    # its 2 K step [S1, Fig. 2], the feed temperature's range [S1, Tables 3, 4],
-    # the catalyst at full and 40 % lost activity [S1, Fig. 3], and the feed's
-    # reactant at nominal and at the feed build-up's rise. The reset puts each on
-    # its own steady state. A corner whose steady water lies past the valve's range
-    # has no rest to test at: the rise on the warmest feed at full activity.
-    (build_up,) = [s for s in spec.scenarios() if s.name == "feed_buildup"]
-    feed_rise = float(build_up.overrides["feed_rise"])
-
-    def fits(q) -> bool:
-        T_f = float(q["feed_T_range"][0])
-        F_w = float(steady_state(q["T_setpoint"], T_f, p.replace(**q))[2])
-        return float(p.Fw_min) <= F_w <= float(p.Fw_max)
-
-    corners = (
-        {
-            "T_setpoint": float(p.T_setpoint) + dT,
-            "feed_T_range": (T_feed, T_feed),
-            "k0": float(p.k0) * activity,
-            "Caf": float(p.Caf) * feed,
-        }
-        for dT in (0.0, 2.0)
-        for T_feed in (float(p.feed_T_range[0]), float(p.feed_T_range[1]))
-        for activity in (1.0, 1.0 - 0.4)
-        for feed in (1.0, 1.0 + feed_rise)
+    # The water valve by the feed, held where [S13]'s example holds it, 95 % of its
+    # span (0.9 raw) [S13, p. 438, Fig. 7]. It answers the feed through the closed
+    # temperature loop over about an hour, so its test runs three hours.
+    valve = Valve("valve by feed", lambda o, xp: o[2] / 50.0 - 1.0, 0.9, 1, 0.1, 720)
+    # Bump tests from a reset with both valves in mid-range (the water at 80 % of its
+    # span), at the middle and at both ends of the feed's temperature range [S1,
+    # Tables 3, 4]. The catalyst-lost and richer-feed corners have no rest inside the
+    # valves' ranges at that reset.
+    lo, hi = (float(x) for x in p.feed_T_range)
+    measured = (
+        "tried under the valve position loop on 2026-11-23 (commit 4acda1c): it "
+        "leaves the band at every set point on the normal day"
     )
-    points = tuple(q for q in corners if fits(q))
     return Row(
         240,
-        water,
+        hold,
         (T,),
-        points=points,
-        balance=balance,
-        cascades=(jacket,),
+        test={"valve_rest": 0.8},
+        points=({"feed_T_range": (lo, lo)}, {"feed_T_range": (hi, hi)}),
+        valves=(valve,),
         # The reset stands on the steady state of the day's feed temperature, which
-        # is hidden, so the balances above are off by up to 0.9 K of feed. Every
-        # rung takes over from the valve as the reset left it (charter B5: a
-        # scenario starts in established operation).
+        # is hidden: every rung takes over from the valves as the reset left them
+        # (charter B5: a scenario starts in established operation).
         bumpless=True,
         why={
-            "decoupler": "one loop",
-            "override": "the interlock reads the loop's own temperature and the "
-            "water is its only MV: an override would push the way the loop already "
-            "does",
+            "feedforward": measured,
+            "cascade": measured,
+            "decoupler": "one loop and one valve position loop",
+            "override": "a feed cut first heats the reactor, so a second "
+            "temperature loop on the feed swings it (measured 2026-11-23, 4acda1c)",
         },
     )

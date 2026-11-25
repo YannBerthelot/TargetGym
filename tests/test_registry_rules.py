@@ -655,21 +655,24 @@ def test_the_record_fingerprints_cover_the_burn_in(tmp_path, monkeypatch):
     episode (``eval.scored_burn_in``), and the CSTR and four-tank oracles plan
     on that value, so a change to it stales the record. A change the cap
     absorbs does not, and neither does the rest of the hold row, which is a
-    measurement."""
-    spec = registry.REGISTRY["cstr"]
+    measurement. On four_tank since cstr-v8 ships no oracle (owner, 2026-11-24):
+    it is the other task whose planner reads the burn-in."""
+    spec = registry.REGISTRY["four_tank"]
     params = spec.make_test_params()
     half = int(params.max_steps_in_episode) // 2
     before = provenance.fingerprints(spec)
     rows = records.load("hold_measurements")
-    assert rows["cstr"]["burn_in"] < half  # so a bump is not absorbed
+    assert rows["four_tank"]["burn_in"] < half  # so a bump is not absorbed
     monkeypatch.setattr(records, "DATA", tmp_path)
 
     def fingerprint_with(**changes):
-        records.write("hold_measurements", "cstr", {**rows["cstr"], **changes})
+        records.write(
+            "hold_measurements", "four_tank", {**rows["four_tank"], **changes}
+        )
         return provenance.fingerprints(spec)
 
-    assert fingerprint_with(seeds=rows["cstr"]["seeds"] + 1) == before
-    bumped = fingerprint_with(burn_in=rows["cstr"]["burn_in"] + 1)
+    assert fingerprint_with(seeds=rows["four_tank"]["seeds"] + 1) == before
+    bumped = fingerprint_with(burn_in=rows["four_tank"]["burn_in"] + 1)
     assert all(bumped[part] != before[part] for part in provenance.PARTS)
     capped = fingerprint_with(burn_in=half)
     assert fingerprint_with(burn_in=half + 1) == capped

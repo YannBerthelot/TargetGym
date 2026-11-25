@@ -29,6 +29,11 @@ The next release is 0.8.0, because these changes break code written for
   - The capability profile page and its chart are left out of the docs for
     this release. `target_gym.suite` still works, and the page returns when
     the radar is rebuilt on the saving over the reference.
+  - The generated pages publish a recorded row only while its fingerprint or
+    version stamp matches the code. A stale row stays in `data/`; its task's
+    page says it was recorded on an earlier version and shows the numbers
+    again once it is re-recorded. `records.current_parts` gives the current
+    part of an old-format row.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and

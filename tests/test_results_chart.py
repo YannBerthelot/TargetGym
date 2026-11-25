@@ -55,11 +55,13 @@ def test_the_chart_shows_the_recorded_results(gen):
         assert rows[name]["ceiling"] == recorded["ceiling"]
 
 
-def test_the_page_embeds_the_same_rows(gen):
+def test_the_page_embeds_the_same_rows(gen, monkeypatch):
     """The interactive chart reads its data from the page, so the page must
     carry exactly the rows the chart is built from: the scored tasks' rows,
     since no number is published for a task outside the suite (owner,
-    2026-11-24)."""
+    2026-11-24). Every row is read as current here: a stale one is not
+    published (owner, 2026-11-25, tests/test_current_rows.py)."""
+    monkeypatch.setattr(records, "current_parts", lambda row, fps: dict(row))
     data = records.load("protocol_results")
     data = {name: row for name, row in data.items() if name in charter.FLAGSHIP}
     block = re.search(

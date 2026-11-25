@@ -48,26 +48,54 @@ RHO = (1.0, 100.0, 1e4)
 
 #: The stop rule (owner, picker 2026-11-24, ruling A), fixed before any result:
 #: the starts' J agree within ``AGREE`` and the kept plan's J lies within
-#: ``NEAR`` above the task's balance floor.
-AGREE, NEAR = 0.01, 0.03
+#: ``NEAR`` above the task's balance floor. Amended 2026-11-25 (picker): and
+#: every seed's kept plan holds the task's held margin rows to ``-HELD``, in the
+#: rows' own units; a row there is priced, not tripped, so the cost cannot show
+#: a plan that leaves it.
+AGREE, NEAR, HELD = 0.01, 0.03, 0.1
 
 
-def ceiling_converged(starts: dict, floor: float, agree=AGREE, near=NEAR) -> bool:
+def ceiling_converged(
+    starts: dict, floor: float, worst_margin=None, agree=AGREE, near=NEAR, held=HELD
+) -> bool:
     """Whether a ceiling counts as converged: ``starts`` maps each start to the
     J its plan reaches (the suite's weighted cost), ``floor`` is the J no plan
     can beat by more than the plenum's storage. The kept plan is the cheapest;
-    the spread is taken on it. A plan under the floor is near it."""
+    the spread is taken on it. A plan under the floor is near it.
+    ``worst_margin`` is the smallest held margin over every seed's kept plan
+    (``plan_margins``), unchecked where None."""
     costs = [float(c) for c in starts.values()]
     kept = min(costs)
-    return (max(costs) - kept) <= agree * kept and kept <= (1.0 + near) * floor
+    holds = worst_margin is None or float(worst_margin) >= -held
+    return (
+        (max(costs) - kept) <= agree * kept and kept <= (1.0 + near) * floor and holds
+    )
+
+
+def plan_margins(env, params, seed: int, plan, margins: Callable) -> np.ndarray:
+    """Each margin row's smallest value over ``plan`` replayed on seed
+    ``seed``'s episode, as the plant runs it (a trip restarts the plant)."""
+    s0, keys = _episode(env, params, seed)
+    plan = jnp.asarray(plan, jnp.float32)
+    m = jax.jit(lambda s, k, z: _rollout(env, params, s, k, z, margins)[2])(
+        s0, keys, plan
+    )
+    return np.asarray(m).min(axis=0)
 
 
 def _episode(env, params, seed: int):
-    """The seed's reset state and step keys, as ``run_policy`` draws them."""
+    """The seed's reset state and step keys, as ``run_policy`` draws them. The
+    reset is compiled as the benchmark's loop compiles it (``benchmark._batched``),
+    so a plan starts from the very state its replay does. Run eagerly, a reset
+    that solves a nearly degenerate balance rounds apart from it: cstr's, near
+    its cooling limit, by 6.6e-6 of its feed, which showed as a planned cost
+    1.3e-6 off its replay."""
     T = int(params.max_steps_in_episode)
     reset_keys, step_keys = episode_keys(jax.random.PRNGKey(seed), 1, T)
-    _, s0 = env.reset_env(reset_keys[0], seed_params(env, params, seed))
-    return s0, step_keys[:, 0]
+    _, batch = jax.jit(jax.vmap(env.reset_env, in_axes=(0, None)))(
+        reset_keys, seed_params(env, params, seed)
+    )
+    return jax.tree_util.tree_map(lambda x: x[0], batch), step_keys[:, 0]
 
 
 def _rollout(env, params, s0, keys, plan, margins: Callable | None):

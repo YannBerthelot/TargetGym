@@ -223,10 +223,10 @@ def test_records_are_the_protocols():
 
 def test_a_task_the_policy_cannot_run_is_reported_not_run():
     res = B.run_policy_on_benchmark(
-        SingleInputOnly(), tasks=["cstr", "four_tank"], n_episodes=1, test_params=True,
-        verbose=False,
+        SingleInputOnly(), tasks=["first_order", "four_tank"], n_episodes=1,
+        test_params=True, verbose=False,
     )  # fmt: skip
-    assert "metrics" in res["cstr"]
+    assert "metrics" in res["first_order"]
     assert res["four_tank"] == {"unsupported": "2 actuators"}
 
 
@@ -354,7 +354,8 @@ def test_the_shipped_controller_runs_as_a_policy():
         B.shipped_policy("pid"), env, params, info, jax.random.PRNGKey(0), n_steps=3
     )
     a = r["action"]
-    assert a.shape == (2, 3, 1) and np.isfinite(a).all()
+    # Two episodes, three steps, cstr's two moves (version 8: water and feed).
+    assert a.shape == (2, 3, 2) and np.isfinite(a).all()
     assert (a >= info.action_low).all() and (a <= info.action_high).all()
 
 

@@ -141,7 +141,7 @@ restated on the family's ranges:
 | 2. Flow reversal | within 0.06 s [C1, C2] | pass |
 | 3. Swings about zero flow | negative every cycle, mean within half the half-amplitude [C8, Fig. 5] (50 % ours, the audit's 25 % widened) | pass |
 | 4. Period rises with volume | direction [C8, p. 4] | pass |
-| 5. Signal directions at onset | [C4, Table 1] | not tested: no suction volume, energy balance or drive inertia (D7) |
+| 5. Signal directions at onset | [C4, Table 1] | not tested: no suction volume, energy balance or drive inertia (Omitted, below) |
 | 6. Valve stroke | T95 under 2.5 s [C1]; under 5 % at 0.15 s, more at 0.30 s [C7] | pass, with the dead time |
 | 7. Surge counted before it trips | 1 surge no trip, 3 in the window trip [C5] | pass |
 | Constant header setpoint | [C3, p. 4] | pass |
@@ -166,15 +166,20 @@ failed and pass now.
   reference holds the setpoint (zone centre) and keeps the recycle as low as
   the surge line allows; its anti-surge rung backs off from the line by its
   control margin (10 to 15 % [C1], about 10 % [C6], 3 to 5 % of span [C7]).
-- Scenarios: the four above.
-- The pair (`experts.py`) predates the dead time and limit-cycles with it.
+- Scenarios: the three above.
+- The pair (`experts.py`) was re-run by its recipe on 2026-11-25 (owner): speed on
+  integrating SIMC with tau_c from the drive rate, the valve loop re-identified with
+  the dead time, and rate action [C3, p. 2; C7]. It passes the schedule check and the
+  battery's margin, and still limit-cycles under the dead time (the guard's xfail).
 
 ### Oracle needs
 
-`oracle.py`'s model now prices recycle energy and a smooth zone hinge, and
-keeps Phi right of the line as a limit, so it never surges: a bound from the
-safe side. Its valve model lacks the positioner's dead time, which must be
-added before rule 9 runs it. Not run.
+`oracle.py`'s model prices recycle energy and a smooth zone hinge, and keeps
+Phi right of the machine's true line, 2W (1 + `line_shift`), as a limit, so it
+never surges: a bound from the safe side. Its valve model carries the
+positioner's dead time, `valve_lag`, counted in whole substeps as the plant
+counts it (`oracle.history`). The oracle has been run and recorded; its records
+predate the hidden line (2026-11-24) and are redone in the re-record pass.
 
 **The ceiling (2026-11-23).** `ceiling_margins` holds the ceiling's plans to the
 same line, Phi at least 2W, where it had asked only for forward flow: left of the
@@ -293,7 +298,7 @@ Deliberately **not** modelled:
 | Rotating stall (D1) | The trip at the peak keeps the plant on the unstalled branch; section 9. |
 | Compressibility in the duct (D2) | Mach up to 0.48 in the duct; section 9. |
 | Discharge temperature (D3) | The plenum's speed of sound is taken at suction temperature. |
-| Time for surge to develop (D4) | The trip is instantaneous on the substep minimum. |
+| Time for surge to develop (D4, fixed) | A surge is counted, and three in 15 s trip [C5]; a short excursion that recovers does not trip. |
 | A tight check valve (D5) | The smooth square root leaks 0.706 kg/s at zero drop and full opening. |
 | Recycle-line volume and cooler | The recycle returns to suction at once, at suction conditions. |
 | Drive torque and inertia | The speed follows a rate-limited setpoint through a first-order lag. |
@@ -396,7 +401,7 @@ at the end, with their sources.
 | `N_min`, `N_max` | 0.70, 1.05 | of rated | ours | speed command range; every schedule corner needs 78.6 to 101.8 % (derived, `test_every_block_is_feasible`) | ✅ |
 | `drive_rate` | 0.03 | of rated per s | TUNED | section 6, drive rate | ⚠️ |
 | `tau_N` | 1.0 | s | ours | speed lag behind the drive setpoint | ⚠️ |
-| `valve_open_rate` | 0.5 | per s | read-consistent | full open in 2 s, opened and checked again in both sources: under 2 s with under 0.4 s of delay (Mirsky et al. p.23; 0.3 s on p.27), 2 s including dead time and 0.4 s of opening dead time (Wilson and Sheldon Table 1). The plant folds the dead time into the stroke (D6) | ✅ |
+| `valve_open_rate` | 0.5 | per s | read-consistent | full open in 2 s, opened and checked again in both sources: under 2 s with under 0.4 s of delay (Mirsky et al. p.23; 0.3 s on p.27), 2 s including dead time and 0.4 s of opening dead time (Wilson and Sheldon Table 1). The plant adds `valve_lag`, 0.15 s, before the stroke (D6, fixed) | ✅ |
 | `valve_close_rate` | 0.1 | per s | TUNED | full close in 10 s, the slowest closing Mirsky et al. p.23 allow (no more than 8 to 10 s under positioner control); Wilson and Sheldon Table 1 ask for 3 s, where the shipped pair trips 341 times over 256 episodes and the pair at `DEFAULT_GAINS` does not trip (measured, `--sensitivity`, section 6); the shipped gains were tuned and validated at 10 s | ⚠️ |
 | `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the moving setpoint (section 6) | ⚠️ |
 | `setpoint_block_steps` | 300 (30 s) | steps | ours | four blocks per episode | ✅ |
@@ -1074,29 +1079,33 @@ frequency by about 4 %. The env's pair on the peak has modulus 13.8923 rad/s
 against the suction value 13.8924; `test_helmholtz_frequency_sees_the_discharge_temperature`
 asks for at least 3 % more.
 
-**⚠️ D4. The trip is instantaneous.** Surge takes time to develop, and a
-machine carried across its line for less than a Helmholtz period recovers.
-Here, from an equilibrium 5 % right of the line at rated speed with the flow
-knocked to 1 % left of it, the plant is back right of the line within one
-period, and the env trips on the first step;
-`test_a_short_excursion_does_not_trip` asks for no trip.
+**✅ D4 (fixed). The trip was instantaneous.** Surge takes time to develop, and
+a machine carried across its line for less than a Helmholtz period recovers.
+From an equilibrium 5 % right of the line at rated speed with the flow knocked
+to 1 % left of it, the plant is back right of the line within one period. The
+env used to trip on the first step; it now counts surges and trips on three in
+the window [C5], and `test_a_short_excursion_does_not_trip` passes.
 
 **⚠️ D5. The check valve leaks.** The smooth one-sided square root passes
 k_d sqrt(s ln 2) = 0.706 kg/s at zero drop and full opening (derived), where a
 real consumer valve passes nothing; `test_check_valve_is_tight` asks for
 under 1e-3 kg/s.
 
-**⚠️ D6. The valve has no dead time of its own.** Both sources allow up to 0.4 s, and
-Wilson and Sheldon count it inside their 2 s full opening, so the plant opens at a
-steady 50 %/s from the first substep. A small command therefore answers up to 0.4 s
-sooner than a real valve would. A first-order lag on the command would stand in for
-it, at the cost of a state in the oracle's model and a new reach bound there.
+**✅ D6 (fixed). The valve had no dead time of its own.** Both sources allow up to
+0.4 s, and Wilson and Sheldon count it inside their 2 s full opening. The plant now
+has one: `valve_lag`, 0.15 s, the family range's lower end [C7], before the valve
+moves at its rate, counted in whole substeps since each command (2026-11-23). The
+oracle's model and the ceiling's reach rows carry it.
 
-**⚠️ D7. The offset moves the trip, not the characteristic, and only to the right.**
-A real line moves with the machine, and either way. Here the line stays at or right
-of the peak, so no continuing state sits on the unstable branch left of it, which the
-regime of validity needs. The price is that the map's line is the best case, so a
-controller knows which way the error runs.
+**✅ D7 (replaced, 2026-11-23). The offset moved the trip, not the characteristic,
+and only to the right.** A real line moves with the machine, and either way. Since
+the hidden line (owner, 2026-11-23) each episode's machine has its true line
+`line_shift` off the map, drawn either side within `line_shift_max`, and its
+characteristic peaks there: the machine's head is the map's from the map's control
+line on and falls smoothly to its own line between them (`on_the_map`). The plant
+is established on the map's control line, right of every machine's true line, so
+no continuing state starts on the unstable branch. A controller no longer knows
+which way the error runs.
 
 ---
 
@@ -1281,7 +1290,7 @@ status in the table above.
 | --- | --- | --- |
 | Recycle valve, full open | 2 s, dead time included | read, twice: Mirsky et al. p.23, Wilson and Sheldon Table 1 |
 | Recycle valve, full close | 10 s | TUNED, read: the limit of Mirsky et al. p.23. Wilson and Sheldon ask for 3 s and note 10 s is also specified (section 6) |
-| Recycle valve, dead time | none of its own | read and folded in, D6 |
+| Recycle valve, dead time | 0.15 s (`valve_lag`) | read, the family range's lower end [C7]; D6 fixed |
 | Drive rate | 3 %/s | TUNED, section 6 |
 | `tau_N` | 1 s | **ours** |
 | Control step | 0.1 s | **ours** |
