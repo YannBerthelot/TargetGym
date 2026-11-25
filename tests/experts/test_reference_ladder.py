@@ -465,8 +465,11 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
     on the steady state of the day's feed temperature, which no reading shows, so
     its row starts bumpless: on a still feed with the noise off the reactor stays
     on its setpoint, within a fifth of the score's 0.1 K. The same loop without the
-    start hold moves it, because its balance assumes the middle feed temperature.
-    The claim is about the start, so the gains are any stable ones."""
+    start hold moves it: version 8's row has no balance (``row.balance`` is None),
+    so without the hold both valves start from mid-range, not where the reset left
+    them. The claim is about the start, so the gains are any stable ones; the loop
+    is the row's own, temperature (obs 0) on the water (MV 0) against the setpoint
+    (obs 4), with the feed (MV 1) left on its start."""
     import jax
     import numpy as np
 
@@ -477,16 +480,17 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
     env = spec.make_env()
     row = ladder.ROWS["cstr"]()
     assert row.bumpless
+    assert row.balance is None
     p = spec.make_test_params(sensor_noise_scale=0.0, feed_T_period=0.0)
-    rung = Rung("pi", (Pi(0, -0.1, 15.0),), np.eye(1))
+    rung = Rung("pi", (Pi(0, -0.1, 15.0),), np.array([[1.0], [0.0]]))
     plant = jax.jit(env.step_env)
 
     def worst(start):
         ctrl = ladder_controller(
             rung,
             lambda o, xp: xp.stack([o[0]]),
-            lambda o, xp: xp.stack([o[3]]),
-            row.balance,
+            lambda o, xp: xp.stack([o[4]]),
+            lambda o, xp: xp.zeros(2),
             float(p.delta_t),
             start,
         )
