@@ -149,7 +149,12 @@ def ph_model(env, p) -> TaskModel:
     def step(d, x, u, t):
         x1, reagent, pH = ph_step(env, p, x, u, t, d["task"])
         cost = R.priced_cost(per_mL_s * reagent, 1.0)
-        return x1, cost, pH[None] / PH_UNIT, pH[None], ()
+        # Tracked: what the plant's probe reports, its own bisection (K8 compares
+        # it with the replay). The limit keeps the polished root, whose slope the
+        # solver needs; the two differ by at most the bisection's half-width,
+        # 7e-6 pH, under the margin's 1e-3 back-off.
+        read = solve_pH(x1[2] / MM, x1[3] / MM, p)
+        return x1, cost, pH[None] / PH_UNIT, read[None], ()
 
     return TaskModel(
         nx=8, nu=2, step=step,
@@ -232,9 +237,25 @@ def _hold_run(env):
     return jax.jit(run)
 
 
+def start_inventory(state, params):
+    """The base the two tanks hold above the permit's low edge, in litres of the
+    base stream: what a policy that never leaves the permit can spend once.
+
+    At a fixed pH the charge balance is affine in the invariants, and invariants mix
+    by volume, so a tank whose content has residual ``g`` at the edge holds
+    ``V g / g3`` of base beyond what its water needs there, ``g3`` the base stream's
+    residual. Negative where a tank starts below the edge."""
+    p, edge = params, params.permit_low
+    g3 = titration_residual(edge, p.Wa3, p.Wb3, p)
+    g1 = titration_residual(edge, state.Wa_s1, state.Wb_s1, p)
+    g2 = titration_residual(edge, state.Wa, state.Wb, p)
+    return float((p.V_s1 * g1 + p.V * g2) / g3) / 1000.0
+
+
 def perfect_hold(env, params, reset_key, step_keys) -> dict:
-    """The task's ceiling (owner, 2026-11-23): the discharge held exactly on the
-    permit's low edge, the cheap one, through one episode.
+    """The task's ceiling (owner, 2026-11-23 and 2026-11-24): the discharge held
+    exactly on the permit's low edge, the cheap one, through one episode, less the
+    base the tanks hold above that edge at its start.
 
     The episode is the one its keys name: ``reset_key`` and ``step_keys``, one per
     step, which the caller draws as the scoring runner does (``reset_keys[0]`` and
@@ -245,19 +266,32 @@ def perfect_hold(env, params, reset_key, step_keys) -> dict:
     that step (the influent's flow and acid strength, the buffer flow the step
     draws) sits on the edge. Mixing is linear in the invariants and so is the charge
     balance at a fixed pH, so tanks that start on the edge stay on it under these
-    flows (tested on the plant). Nothing is planned: a window's start or end gains
-    the hold nothing, and no base held in the tanks at the reset is spent.
+    flows (tested on the plant). Nothing is planned.
 
-    Returns ``flow``, the base flow per step (mL/s); ``cost``, its mean in the
-    reward's units per step (the ``reagent`` term; the hold is charged no other);
-    and ``feasible``, whether stage 1's valve passes every flow.
+    An episode starts on the reference's set point, above the edge, so the tanks
+    hold base the edge does not need (``start_inventory``). The reagent a policy
+    adds, plus what the tanks hold at the start, less what they hold at the end, is
+    what the outflow carries; outflow inside the permit carries at least its water's
+    need on the edge, and tanks inside the permit hold none below it. So no policy
+    that never leaves the permit costs less than the hold less that inventory (owner,
+    2026-11-24: counted in the ceiling).
+
+    Returns ``flow``, the hold's base flow per step (mL/s); ``hold``, its mean cost
+    per step (the ``reagent`` term; the hold is charged no other); ``inventory``,
+    the start's base above the edge in litres; ``cost``, the ceiling: ``hold`` less
+    the inventory's price spread over the episode; and ``feasible``, whether stage
+    1's valve passes every flow.
     """
     _, state = env.reset_env(reset_key, params)
     flow = np.asarray(_hold_run(env)(params, state, step_keys), float)
-    litres = float(params.reagent_price) * float(params.delta_t) / 1000.0
+    price = float(params.reagent_price)
+    hold = float(flow.mean()) * price * float(params.delta_t) / 1000.0
+    inventory = start_inventory(state, params)
     return {
         "flow": flow,
-        "cost": float(flow.mean()) * litres,
+        "hold": hold,
+        "inventory": inventory,
+        "cost": hold - price * inventory / len(flow),
         "feasible": bool(
             np.all((flow >= float(params.q3_min)) & (flow <= float(params.q3_max)))
         ),

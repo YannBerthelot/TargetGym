@@ -43,6 +43,8 @@ import numpy as np
 
 from target_gym.reactor import Reactor, ReactorParams
 from target_gym.reactor.env import (
+    core_at,
+    cycle_point,
     moderator_tilt,
     rod_balance,
     rod_insertion_limit,
@@ -549,9 +551,30 @@ def bumps(env, params):
 # ---------------------------------------------------------------------------
 
 
+def owed(state, params):
+    """What it takes to put the plant back on its feet where a day leaves it, in
+    dollars: the rods back at their park at their price a step, and the boron
+    moved by what then closes Tavg's error, at the effluent's price. The task's
+    score charges none of it; the family sweep does (owner, 2026-11-23)."""
+    q = core_at(cycle_point(state, params), params)
+    cold = state.T_ref - 0.5 * (state.T_coolant + state.T_cold)
+    back = rod_worth(q.rod_park, q) - rod_worth(state.rod_in, q)
+    # The ppm to add: Tavg's error is linear in the boron, as in the bump tests.
+    ppm = (-(q.alpha_coolant + q.alpha_fuel) * cold - back) / q.boron_worth
+    water = jnp.log(state.boron / (state.boron + jnp.minimum(ppm, 0.0)))
+    gap = q.boric_acid_ppm - state.boron
+    acid = jnp.log(gap / (gap - jnp.maximum(ppm, 0.0)))
+    travel = jnp.abs(state.rod_in - q.rod_park) * q.rod_stroke_steps
+    return (
+        q.effluent_price * q.primary_mass * (water + acid) + q.rod_step_price * travel
+    )
+
+
 def episode(env, p, seed, act, memory):
-    """One whole episode under ``act``; the true cost, the split and any trip."""
+    """One whole episode under ``act``; the true cost, the split, any trip, and
+    what the day adds to what the plant owes at its end (``owed``)."""
     obs, s = env.reset_env(jax.random.PRNGKey(seed), p)
+    owed_at_reset = owed(s, p)
 
     def step(carry, key):
         s, obs, memory = carry
@@ -565,12 +588,12 @@ def episode(env, p, seed, act, memory):
         )  # fmt: skip
 
     keys = jax.random.split(jax.random.PRNGKey(seed + 7), p.max_steps_in_episode)
-    _, (c, tr, ru, trip, ao, rod, boron, e, ril) = jax.lax.scan(
+    (last, _, _), (c, tr, ru, trip, ao, rod, boron, e, ril) = jax.lax.scan(
         step, (s, obs, memory), keys
     )
     return {
         "cost": jnp.sum(c), "tracking": jnp.sum(tr), "running": jnp.sum(ru),
-        "trips": jnp.sum(trip),
+        "trips": jnp.sum(trip), "owed": owed(last, p) - owed_at_reset,
         "past_band_steps": jnp.sum(jnp.abs(ao - p.ao_ref) > p.ao_band),
         "max_abs_offset": jnp.max(jnp.abs(ao - p.ao_ref)),
         "past_dead_band_steps": jnp.sum(jnp.abs(e) > p.e_tol),
@@ -586,6 +609,7 @@ def rows(env, p, act, memory):
     return {
         "cost_mean": float(out["cost"].mean()),
         "cost_by_seed": [round(float(x), 1) for x in out["cost"]],
+        "owed_by_seed": [round(float(x), 1) for x in out["owed"]],
         "tracking": float(out["tracking"].mean()),
         "running": float(out["running"].mean()),
         "seeds_tripped": int(np.sum(out["trips"] > 0)),

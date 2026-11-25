@@ -551,6 +551,12 @@ class Reactor(
             lambda new, old: jnp.where(due, new, old), fresh, state
         )
 
+    def initial_action(self, state: ReactorState, params: ReactorParams):
+        """The raw action that holds the reset plant: the rods where it parked them,
+        no boron flow, the turbine loading as far as its plan."""
+        rods = 1.0 - 2.0 * state.rod_in
+        return jnp.stack([rods, jnp.zeros_like(rods), jnp.ones_like(rods)])
+
     def action_space(self, params: ReactorParams | None = None) -> spaces.Box:
         return spaces.Box(
             low=-jnp.ones(3),

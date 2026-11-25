@@ -1,5 +1,8 @@
 # Patrol - wingman
 
+!!! note "Extra task"
+    Patrol - wingman is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved (2026-11-24, owner's decision, aircraft five-task review): after its start the reference already holds its slot to 4.0 m RMS, inside NASA AFF's 10 ft, so a score from that source leaves it near 0; 63 % of its cost is the start, and its oracle loses to it (patrol/PHYSICS.md, Status).
+
 <p align="center"><img src="../../videos/patrol/pid_output.gif" width="480px"/></p>
 
 Fly as a wingman: reach and hold a slot fixed in the lead aircraft's frame, behind, beside and above or below it, while the lead flies a patrol route that turns onto a new rate every minute. The slot moves whenever the lead turns, so the reference is non-stationary, the heading difference to the lead is charged too, and coming too close to the lead trips the plant.

@@ -25,6 +25,7 @@ from target_gym.plane.experts_tecs import (
     TECSParams,
     TECSState,
     tecs_step,
+    tecs_step_409,
 )
 
 # ---------------------------------------------------------------------------
@@ -122,15 +123,19 @@ def _v_min(params, z, xp):
     return params.v_min_eas / xp.sqrt(sigma)
 
 
-def _engaged(tecs, state, power, pitch, v, xp):
+def _engaged(tecs, state, power, pitch, v, xp, tecs_fn=None):
     """``state`` with, before TECS's first step, the integrators that make its
     outputs the observed ``power`` and ``pitch``, its errors being zero there.
     The throttle action spans [-1, 1] for power in [0, 1]. The pitch integral
-    is in the units of master's pitch loop (``experts_tecs.tecs_step``), an
-    energy-balance rate: pitch above trim times TAS g."""
+    is in the units of the pitch loop ``tecs_fn`` flies: master's
+    (``experts_tecs.tecs_step``), an energy-balance rate, pitch above trim
+    times TAS g; or the 4.0.9 port's (``tecs_step_409``), whose pitch divides
+    by ``time_const`` more."""
     throttle = 2.0 * power - 1.0
     fresh = state.started <= 0.0
     gain_inv = xp.maximum(v, 1.0) * tecs.gravity
+    if tecs_fn is tecs_step_409:
+        gain_inv = gain_inv * tecs.time_const
     return state.replace(
         thr_integ=xp.where(fresh, throttle - tecs.thr_trim, state.thr_integ),
         pitch_integ=xp.where(
@@ -169,11 +174,12 @@ def _fly(
     bank that makes ``accel`` in a coordinated turn. Returns the demands the
     plant's inner loop holds, ``[throttle, pitch, bank]`` in [-1, 1].
 
-    With ``airspeed`` and ``power`` (the amended tasks' air data and engine
-    reading), TECS reads the airspeed and engages on the trim found, and the
-    speed floor carries the load factor of the bank demanded, not of the full
-    limit. Without it, the earlier expert: ground speed, and the floor at the
-    full bank's load factor (the Extra tasks, patrol, formation).
+    With ``airspeed`` (the amended tasks' air data), TECS reads the airspeed,
+    and the speed floor carries the load factor of the bank demanded, not of
+    the full limit. Without it, the earlier expert: ground speed, and the floor
+    at the full bank's load factor (patrol, formation). With ``power``, the
+    engine's reading, TECS engages on the trim it finds (rule 17), on the
+    amended tasks and on the patrol family's leads (owner, 2026-11-24).
 
     ``tecs_fn`` is the TECS step, ``experts_tecs.tecs_step`` unless given: the
     patrol family's scripted lead, part of its plant, flies the 4.0.9 port
@@ -192,12 +198,14 @@ def _fly(
     floor_bank = params.max_bank_rad if airspeed is None else xp.abs(demanded)
     target_speed = xp.maximum(target_speed, v_min / xp.sqrt(xp.cos(floor_bank)))
     tecs_state = state.tecs
-    if airspeed is not None:
-        # The amended tasks start established, the autopilot already flying
-        # (rule 17): on its first step TECS's integrators take up the trim it
-        # finds, the observed throttle and pitch, so it engages bumpless.
-        tecs_state = _engaged(params.tecs, tecs_state, power, obs[..., 4], v, xp)
     step = tecs_step if tecs_fn is None else tecs_fn
+    if power is not None:
+        # The plant starts established, the autopilot already flying (rule
+        # 17): on its first step TECS's integrators take up the trim it finds,
+        # the observed throttle and pitch, so it engages bumpless.
+        tecs_state = _engaged(
+            params.tecs, tecs_state, power, obs[..., 4], v, xp, tecs_fn=step
+        )
     power, pitch, tecs = step(
         params.tecs, tecs_state, z, z_dot, v, h_dem, target_speed, phi, xp
     )
@@ -208,14 +216,23 @@ def _fly(
     return xp.stack(action, axis=-1), state.replace(tecs=tecs, **carry)
 
 
-def plane3d_heading_step(params, state, obs, xp=jnp, tecs_fn=None):
+def plane3d_heading_step(params, state, obs, xp=jnp, tecs_fn=None, engage=False):
     """Course hold: the turn rate that closes the heading error in ``tau_hdg``.
-    ``tecs_fn`` as :func:`_fly`'s."""
+    ``tecs_fn`` as :func:`_fly`'s; with ``engage``, TECS engages on the trim
+    it finds, read from the observation's power (``obs[12]``) and pitch."""
     v = _ground_speed(obs, xp)
     turn_rate = _wrap_angle(obs[..., 11] - obs[..., 9], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
     return _fly(
-        params, state, obs, xp, obs[..., 10], v * turn_rate, target, tecs_fn=tecs_fn
+        params,
+        state,
+        obs,
+        xp,
+        obs[..., 10],
+        v * turn_rate,
+        target,
+        power=obs[..., 12] if engage else None,
+        tecs_fn=tecs_fn,
     )
 
 

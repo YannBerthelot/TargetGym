@@ -564,6 +564,9 @@ class ReactorState(EnvState):
     Xe_tilt: float = 0.0  # Xe-135, top half against the mean
     rod_in: float = 3.0 / 228.0  # how far in the rods are, a fraction of the stroke
     boron: float = 1690.0  # ppm in the core
+    #: What rounding has given ``boron`` beyond the exact sum of its changes, ppm:
+    #: taken off the next change, so a trickle is not lost or doubled.
+    boron_carry: float = 0.0
     delta_I: float = 0.0  # power difference, top minus bottom, a fraction of rated
     #: Boron flow commands on their way to the core, newest first.
     boron_queue: jax.Array = struct.field(
@@ -1123,8 +1126,13 @@ def compute_next_state(
         arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow
     )
     feed = jnp.where(arriving < 0, 0.0, p.boric_acid_ppm)
-    closes = 1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t)
-    boron = state.boron + (feed - state.boron) * closes
+    closes = -jnp.expm1(-flow / p.primary_mass * p.delta_t)
+    # A trickle changes the boron by less over a sub-step than a single-precision
+    # number near 1690 ppm can hold (1.2e-4 ppm), so the sum carries its rounding
+    # (Kahan): without it 72 kg of water diluted as 130 kg and 36 kg as none.
+    change = (feed - state.boron) * closes - state.boron_carry
+    boron = state.boron + change
+    boron_carry = (boron - state.boron) - change
 
     # Critical boron where the core stood at reset or its last refuelling, and the
     # burnup since, as the boron it is worth (D9).
@@ -1245,6 +1253,7 @@ def compute_next_state(
             Xe_tilt=Xe_tilt,
             delta_I=delta_I,
             boron=boron,
+            boron_carry=boron_carry,
             target_n=new_load,
             T_ref=tavg_program(new_load, p),
             load_wobble=wobble,

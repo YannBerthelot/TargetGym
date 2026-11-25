@@ -57,10 +57,7 @@ DRAWS_INSIDE_A_STEP = {
     "between float32 and float64; its dynamics are plane3d_circle's, which is checked",
 }
 #: Fails the precision contract today: a finding, strict so that a fix shows.
-ROUNDS_IN_FLOAT32 = {
-    "reactor": "the boron mixing rounds small flows in float32 (found 2026-11-23; the "
-    "fix is on plant/reactor-baseload-losses)",
-}
+ROUNDS_IN_FLOAT32: dict[str, str] = {}
 #: Takes one integration setting only, with the reason.
 ONE_STEP_ONLY = {
     "glass_furnace": "its own stepping takes euler_1 only (glass_furnace/env_jax.py)",

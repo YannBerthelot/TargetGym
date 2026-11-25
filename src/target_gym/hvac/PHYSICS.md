@@ -138,9 +138,12 @@ Nothing trips. The old 5 C and 35 C trips had no source and are gone.
 
 **Zones and cheap side (rule 22).** The comfort band, 21 to 26 C, is the
 zone; its cheap side is the low edge, since heat costs and the band's top is
-reached only by the sun. The reference's room setpoint is 21 C plus two
-standard deviations of the occupied room temperature, measured on its bump
-seeds. The floor limit never binds in the heating season (22.2 C at design).
+reached only by the sun. Leaving the band in office hours is charged as lost
+work, so each rung of the reference's ladder holds the lowest candidate of the
+zone's grid (21 C and 0.25 K steps to the centre, 23.5 C) at which it leaves
+the band on none of the ladder's seeds in any scenario, and the ladder keeps
+the cheapest rung (charter J1, owner, 2026-11-23). The floor limit never binds
+in the heating season (22.2 C at design).
 
 ## 5. Observation, episode and score
 
@@ -275,9 +278,15 @@ B6), not a number moved until the test passed.
 
 - The move is the supply water temperature (C). A bump test is a supply step;
   the slab's time constant is hours (test 1), so bumps need about a day.
-- The zone back-off (section 4): room setpoint 21 C plus 2 sigma of the
-  occupied room temperature on the bump seeds, with `ladder.zone_setpoint`
-  and the cheap side "low".
+- The zone's set point (section 4): each rung's own lowest candidate of the
+  band's grid with no exit, by `ladder.zone_grid` and
+  `ladder.first_without_exit`; the row names the score's `comfort` term as the
+  exit's charge, and the cheap side "low". Measured on 2026-11-24, of 50
+  episodes: the pi rung leaves on 48, 40, 16, 5 and 0 at 21.00 to 22.00 C, the
+  feedforward on 48, 36, 16, 5 and 0, the cascade on 49, 49, 46, 23, 5 and 0
+  at 21.00 to 22.25 C. So the pi and the feedforward hold 22.00 C and the
+  cascade 22.25 C; the feedforward is the cheapest and is kept. Every seed is
+  held by some candidate, so none is left out of a placement.
 - The steady-state feedforward rung is the heating curve from the plant's
   balance (hvac/experts.py), read on the 24 h mean or the forecast (channel 9).
 - The cascade rung has measured inner variables: the slab core (channel 3) or
