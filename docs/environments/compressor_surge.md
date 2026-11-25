@@ -17,6 +17,7 @@ env, params = tg.make("compressor_surge")
 | Tracked variable(s) | header pressure (kPa) |
 | Episode length | 1200 steps of 0.1 s (2 min) |
 | Cite as | `compressor_surge-v5` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/compressor_surge/PHYSICS.md) |
 
 ## Action space
@@ -69,6 +70,19 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 **Termination.** None by default. Leaving the operating envelope trips the plant: the step that leaves it is charged the trip cost and sets `info["tripped"]` and `info["trip_cost"]`, and the plant restarts as `reset_env` would while the episode clock keeps running. Episodic use is optional: with `continuing = False` the plant is lost and `terminated` is raised on that step instead. The counted-surge trip [C5; C3, p. 3]: ``surge_trip_count`` surges within ``surge_window``. A NaN fails the comparison, so a non-finite proposal trips. No trip on the line itself: crossing it is the start of a surge, which is counted when the flow reverses. See [Reward shaping](../reward-shaping.md#failure).
 
 **Truncation.** After 1200 steps.
+
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies (`hold reset`) | 90.27 | 0 |
+| Reference | the controller to beat | 8.581 | 0 |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | 4.92e+05 | 19 |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | 2.787 | 0 |
+
+Room, the reference's cost divided by the ceiling's, is 3.08.
 
 ## Baselines
 

@@ -20,6 +20,7 @@ env, params = tg.make("formation")
 | Tracked variable(s) | lead altitude (m), wingman 0 slot error (m), wingman 1 slot error (m) |
 | Episode length | 200 steps of 1 s (3.33 min) |
 | Cite as | `formation-v5` |
+| Status | Extra, never scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/formation/PHYSICS.md) |
 
 ## Action space
@@ -80,14 +81,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-Recorded over 10 seeds of the 200-step episode (see [Baseline results](../baseline-results.md)). The reward is a cost, so a return closer to zero is better.
-
-| controller | mean return | cost per step |
-|---|---|---|
-| PID | -5.837e+04 | 291.9 |
-| MPC | -5320 | 26.6 |
-
-The MPC beats the PID on 10 of 10 seeds and does not trip the plant on any of them.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 The PID flies the lead seat as a formation lead: the 3D heading task's course hold and pitch on height, aimed at the heading the route commands, at a set power, so its wingmen have a steady reference. Each wingman seat flies the patrol's formation hold. The MPC slot is the patrol oracle's design applied to the whole formation: the patrol's lead autopilot in the lead seat and its twin-autopilot law in each wingman seat, with one residual planner over every seat on the team cost.
 

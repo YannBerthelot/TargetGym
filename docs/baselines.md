@@ -49,8 +49,9 @@ for _ in range(int(params.max_steps_in_episode)):
 
 **The expert reads only `obs`**, as a plant controller does. The MPC,
 `tg.make_oracle(name)`, is called as `oracle.step(obs, state)` and **reads the
-true simulator state**, so it is an upper bound rather than a peer to a policy
-that sees what a plant instruments.
+true simulator state**, so it is the best known plan rather than a peer to a
+policy that sees what a plant instruments. Its cost is achieved, not a bound: a
+planner backs off its limits and is only as good as its solve.
 
 To compare your own agent, evaluate it on the seeds the baselines were recorded
 on, 0 to 9. The comparison is then paired, and the baseline returns can be read
