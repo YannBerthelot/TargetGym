@@ -125,3 +125,20 @@ def test_hold_reset_holds_the_resets_move_through_a_run():
     run of the stream: no rod step and no kilogram of effluent."""
     out = S.run("reactor", "baseload", "null", seeds=[5], steps=40, terms=True)
     assert out["running"][0] == pytest.approx(0.0, abs=1e-4)
+
+
+@pytest.mark.medium
+def test_the_compiled_runner_scores_the_same_runs_as_the_policy_runner():
+    """``run_functional`` is ``run`` for a JAX controller: the same seeds, worlds
+    and costs. The reference written both ways, on 40 steps of two seeds."""
+    from target_gym.registry import REGISTRY
+
+    ctrl = REGISTRY["reactor"].make_pid_controller()
+    act = lambda m, o: ctrl.step(ctrl.params, m, o)  # noqa: E731
+    fast = S.run_functional(
+        "reactor", "edf_daily", act, ctrl.init_state, [5, 6], steps=40
+    )
+    slow = S.run("reactor", "edf_daily", "pid", [5, 6], steps=40)
+    assert fast["seeds"] == slow["seeds"] and fast["trips"] == slow["trips"]
+    # Float32, one jit against a step at a time: 1e-4 of the cost.
+    assert fast["costs"] == pytest.approx(slow["costs"], rel=1e-4)

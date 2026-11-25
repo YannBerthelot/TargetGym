@@ -32,6 +32,7 @@ __all__ = [
     "needs_more",
     "policy",
     "run",
+    "run_functional",
     "run_params",
     "scored_steps",
     "seeds",
@@ -112,14 +113,15 @@ def needs_more(reference, other) -> bool:
     return bool(lo <= 0.0 <= hi)
 
 
-def stream(name: str, scenario: str, steps: int | None = None):
+def stream(name: str, scenario: str, steps: int | None = None, params=None):
     """The stream pinned to ``scenario`` with no burn-in, ending after ``steps``
-    (the protocol's by default), and its params."""
+    (the protocol's by default), and its params: ``params``, or the scored ones."""
     from target_gym import scenarios
     from target_gym.stream import StreamEnv, _event_rate, _per_step
 
     spec = _spec(name)
-    env, params, suite = spec.make_env(), spec.make_test_params(), scenarios.suite(spec)
+    env, suite = spec.make_env(), scenarios.suite(spec)
+    params = spec.make_test_params() if params is None else params
     pin = [s.name for s in suite].index(scenario)
     scored = scored_steps(name) if steps is None else int(steps)
     from target_gym.registry import control_step_seconds
@@ -133,16 +135,16 @@ def stream(name: str, scenario: str, steps: int | None = None):
     return out, params
 
 
-def run_params(name: str, scenario: str, steps: int | None = None):
+def run_params(name: str, scenario: str, steps: int | None = None, params=None):
     """The task's params as the run's scenario has them, with the run's length:
     what a planner is built on, so it plans to the run's end."""
-    s, params = stream(name, scenario, steps)
+    s, params = stream(name, scenario, steps, params)
     pin = [x.name for x in s.scenarios].index(scenario)
     scored = scored_steps(name) if steps is None else int(steps)
     return s.scenario_params(params, pin).replace(max_steps_in_episode=scored)
 
 
-def policy(name: str, scenario: str, kind: str, steps: int | None = None):
+def policy(name: str, scenario: str, kind: str, steps=None, params=None):
     """A shipped policy for a run: ``pid`` (the reference), ``mpc`` (the planner on
     the mean path), ``ceiling`` (the planner with the outside world foreseen) or
     ``null`` (the reset's own move held). Planners read the task's state."""
@@ -150,7 +152,7 @@ def policy(name: str, scenario: str, kind: str, steps: int | None = None):
     from target_gym.runners.runners import baseline_policy
 
     spec = _spec(name)
-    p = run_params(name, scenario, steps)
+    p = run_params(name, scenario, steps, params)
     if kind == "pid":
         return CallablePolicy(lambda _t: baseline_policy(spec, "pid", p), name=kind)
     env = spec.make_env()
@@ -182,15 +184,17 @@ def policy(name: str, scenario: str, kind: str, steps: int | None = None):
     return CallablePolicy(make, name=kind, oracle=True)
 
 
-def run(name, scenario, kind_or_policy, seeds, steps=None, terms=False) -> dict:
+def run(
+    name, scenario, kind_or_policy, seeds, steps=None, terms=False, params=None
+) -> dict:
     """``{"seeds", "costs", "trips"}``: each seed's mean cost per step over the run
     and whether it tripped; with ``terms``, each reward term's mean per step too.
     ``kind_or_policy`` is a :func:`policy` kind or any ``benchmark`` policy."""
     from target_gym.benchmark import run_policy, task_info
 
-    s, params = stream(name, scenario, steps)
+    s, params = stream(name, scenario, steps, params)
     pol = (
-        policy(name, scenario, kind_or_policy, steps)
+        policy(name, scenario, kind_or_policy, steps, params)
         if isinstance(kind_or_policy, str)
         else kind_or_policy
     )
@@ -208,3 +212,38 @@ def run(name, scenario, kind_or_policy, seeds, steps=None, terms=False) -> dict:
             {k: [float(x) for x in v.mean(axis=1)] for k, v in roll["terms"].items()}
         )
     return out
+
+
+def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) -> dict:
+    """:func:`run` for a policy written as ``act(memory, obs) -> (action, memory)``
+    in JAX (a ``Controller``'s step), compiled once and run on every seed at once:
+    the same seeds, worlds and costs as :func:`run`, much faster."""
+    import jax
+    import jax.numpy as jnp
+
+    from target_gym.benchmark import episode_keys
+
+    s, params = stream(name, scenario, steps, params)
+    T = scored_steps(name) if steps is None else int(steps)
+    keys = jnp.stack(
+        [episode_keys(jax.random.PRNGKey(int(x)), 1, 1)[0][0] for x in seeds]
+    )
+
+    def one(key):
+        obs, state = s.reset_env(key, params)
+
+        def step(carry, _):
+            obs, state, m = carry
+            u, m = act(m, obs)
+            obs, state, r, _, info = s.step_env(None, state, u, params)
+            return (obs, state, m), (-r, info["tripped"])
+
+        _, (cost, tripped) = jax.lax.scan(step, (obs, state, memory), None, length=T)
+        return cost.mean(), tripped.any()
+
+    cost, tripped = jax.jit(jax.vmap(one))(keys)
+    return {
+        "seeds": [int(x) for x in seeds],
+        "costs": [float(c) for c in np.asarray(cost)],
+        "trips": [int(t) for t in np.asarray(tripped)],
+    }
