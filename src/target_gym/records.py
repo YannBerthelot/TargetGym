@@ -111,6 +111,18 @@ PARTS = {
 }
 
 
+def current_parts(row: dict, fingerprints: dict) -> dict:
+    """``row`` with only the parts whose fingerprint is ``fingerprints[part]``
+    (``provenance.fingerprints``), or ``{}`` when the expert's has moved: the
+    oracle's numbers are read against the expert's. The generated pages show
+    only these (owner, 2026-11-25); a stale row stays in ``data/``."""
+    if row.get("expert_fingerprint") != fingerprints.get("expert"):
+        return {}
+    if row.get("oracle_fingerprint") == fingerprints.get("oracle"):
+        return dict(row)
+    return {k: v for k, v in row.items() if k not in PARTS["oracle"]}
+
+
 def with_part(row: dict, fresh: dict, part: str) -> dict:
     """``row`` re-recorded for ``part`` alone: ``fresh``, with the other
     part's keys as ``row`` has them."""
