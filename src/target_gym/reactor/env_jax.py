@@ -291,7 +291,7 @@ class Reactor(
             params = self.default_params
 
         keys = jax.random.split(key, 6)
-        key, down_key, hold_key, demand_key, history_key, delay_key = keys
+        key, down_key, hold_key, demand_key, history_key, _delay_key = keys
 
         # The day: when the load starts down, and how long it holds.
         down_at = jax.random.uniform(
@@ -357,12 +357,9 @@ class Reactor(
         # Critical on boron: the rods stay parked, whatever xenon asks for.
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, core)
         boron = core.boron_ref + needed / core.boron_worth
-        delay = jax.random.randint(
-            delay_key,
-            (),
-            params.boron_delay_range[0],
-            params.boron_delay_range[1] + 1,
-        )
+        # The line's delay is the plant's (owner, 2026-11-25). Its key is still split
+        # off above, so every other draw stays where it was.
+        delay = jnp.asarray(params.boron_delay, jnp.int32)
 
         # The draw's precision: float32 as scored, float64 under enable_x64.
         dtype = down_at.dtype

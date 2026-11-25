@@ -67,8 +67,9 @@ def draws(table):
             for n in group:
                 r = table["ranges"][n]
                 d[n] = float(r["lo"] + u * (r["hi"] - r["lo"]))
-        if "restart_steps" in d:
-            d["restart_steps"] = int(round(d["restart_steps"]))
+        for n in ("restart_steps", "boron_delay"):  # counts of control steps
+            if n in d:
+                d[n] = int(round(d[n]))
         row = {n: d[n] for n in names}
         for n, expr in table.get("derived", {}).items():
             row[n] = float(eval(expr, {"__builtins__": {}}, dict(d)))

@@ -179,9 +179,10 @@ class ReferenceParams:
     # Bump tests: boron to Tavg is an integrator with this dead time, the line's
     # 5 to 15 min and the plant's lag. SIMC with tc = theta gives the boron loop
     # ``Kc = 1 / (k 2 theta)`` and ``Ti = 8 theta``, ``k`` the curve book's K of
-    # Tavg per ppm. The recipe reads 600 s on this plant (2026-11-23); the 615 s
-    # carried until then was the previous plant's.
-    theta: float = 600.0  # s
+    # Tavg per ppm. The recipe reads 660 s on this plant: its line's 600 s and a
+    # minute of the plant's own lag (2026-11-25; 600 s while the line's delay was
+    # drawn at every reset, 615 s on the plant before that).
+    theta: float = 660.0  # s
     ao_ref: float = 0.0
     # The rods' action band: no error while the flux difference is within half its
     # 5 % target band (owner, 2026-11-08; PHYSICS.md section 6).
@@ -191,10 +192,6 @@ class ReferenceParams:
     # edge of its free band, since a Tavg that close predicts a charge. The Tavg
     # loop itself acts only past the edge, on what is charged (owner, 2026-11-10).
     backoff: float = 2.0
-    lead: float = 20.0 * 30.0  # s, the middle of the line's 10 to 30 steps
-    # The tool's play pulls each edge in by what xenon moves Tavg before boron sent
-    # now reaches the core: the line's longest delay, since an edge is a limit.
-    longest: float = 30.0 * 30.0  # s
     # The turbine's thresholds, by the rule the recipe fixed before its run (owner,
     # 2026-11-25; scripts/reactor_ladder.py, ``ON_PLAN_SD``): in standard
     # deviations of the load read off its plan on a calm day, measured at 0.005025.
@@ -214,6 +211,21 @@ class ReferenceParams:
     book_cycle_end: float = 0.9
     park: float = 1.0 - 2.0 * 3.0 / 228.0
     reach: float = 30.0 * 72.0 / 60.0 / 228.0 * 2.0
+
+    @property
+    def lead(self) -> float:
+        """The plan's boron is sent this far ahead: the line's dead time, as the
+        recipe measured it on the member (owner, 2026-11-25; until then a fixed
+        600 s, the middle of a delay drawn each day)."""
+        return self.theta
+
+    @property
+    def longest(self) -> float:
+        """The tool's play pulls each edge in by what xenon moves Tavg before boron
+        sent now reaches the core: the member's own dead time, known now that the
+        line's delay is the plant's (until 2026-11-25 the longest of the drawn
+        delays, 900 s, since an edge is a limit)."""
+        return self.theta
 
 
 @struct.dataclass
