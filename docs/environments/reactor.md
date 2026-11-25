@@ -167,14 +167,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_avg_min` | 556 | K |
 | `floor_allowed` | 900 | s |
 | `rod_motion_weight` | 0.02 | - |
-| `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
-| `imbalance_factor` | 3 | - |
 | `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |

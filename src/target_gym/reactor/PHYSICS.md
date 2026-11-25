@@ -227,7 +227,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | Symbol | Value | Unit | Source | Status |
 |---|---|---|---|---|
 | `beta_i`, `lambda_i` | 6-group | | Keepin (1965) | earlier |
-| `Lambda_gen` | 1e-4 | s | PWR range | earlier |
+| `Lambda_gen` | 1e-4 | s | A thermal reactor's order, a few times a PWR's tens of microseconds (Nuclear Technology, NT13-120); the prompt jump it sets, about 15 ms, settles inside one 5 s sub-step either way. It was labelled "PWR range" until the package review (2026-11-25) | ours |
 | `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | earlier |
 | `alpha_coolant` | -12e-5 | 1/K | The start-of-cycle MTC (1690 ppm, OAPS's start-of-cycle ramps). It is near zero there and grows more negative as boron falls (NRC GFE PWR 192004, nuclear-power.com): BEAVRS measures the isothermal coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power and 975 and 1405 ppm, and specifications keep it at or below 0 above 50 % power. No hot-full-power start-of-cycle figure was found; the reviewer's judgment is -9 to -18 pcm/K (physics review, finding 2). The range was 0 to -20 until the family sweep (2026-11-10): at -2.9 to -7 the rods cannot carry a 5 %/min return, so the owner took the reviewer's range. The sweep draws it with `boron_worth`, the most negative MTC with the largest worth | ours, range -9 to -18 pcm/K |
 | `alpha_tilt` | -30e-5 | 1/K | The part-power axial shift's lumped coefficient (moderator and Doppler redistribution), kept at the value that reproduces Krsko's +5 % delta I at half power when the MTC moved | ours |
@@ -778,7 +778,10 @@ so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg chann
   documents on power-range accuracy could not be read.
 
 The expert reads these values, and so does every tuner. The oracle plans and acts
-on the true state, so it stays a full-state bound. `reward`, trips and the score
+on the true state. Its plan is the best one found, with its limits backed off and a
+few solver settings set by hand (`oracle.py`), so its cost is the best known with the
+true state and the future, an achieved cost and not a bound below which no controller
+can go (package review, 2026-11-25). `reward`, trips and the score
 read the true state. `step_env` sums `info["measured_reward"]` over the six
 sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
