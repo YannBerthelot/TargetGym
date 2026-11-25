@@ -251,6 +251,22 @@ It cost about 5 % less in this build-up and 43 % more in cooling loss, so the
 ladder kept the PI. A feed cut first heats the reactor, as less cold feed
 comes in, and acts too slowly for a 1 K band.
 
+The upsets are not past what the plant can ride. On a quick check
+(`scripts/prototypes/cstr_ceiling_upsets.py`, seeds 100 to 102, two solves per
+start, not recorded), the foresight ceiling never leaves the band in any of the
+three upsets. Its hottest point is 58.9 C. The shipped expert leaves the band
+48 to 67 % of the time:
+
+| scenario | reference off-band, J | ceiling off-band, J | ceiling's mean feed against the reference's |
+|---|---|---|---|
+| catalyst loss | 58 %, 0.700 | 0 %, 0.296 | about the same |
+| feed build-up | 67 %, 0.758 | 0 %, 0.331 | 7 to 21 % lower |
+| cooling loss | 48 %, 0.623 | 0 %, 0.251 | about the same |
+
+Except in the build-up, the ceiling holds the band by timing its moves ahead of
+the upset, not by running less feed. That is foresight no feedback structure
+on the ladder has, so the room in the upsets is a gap in anticipation.
+
 **Finding, J2 (v6, decay).** Under S1's step the ladder's cascade lost to the
 I-only null on all 10 seeds (median J 403 against 124), almost all of it the
 catalyst loss (3045 against 248 per step): SIMC's loops gave the valve's span

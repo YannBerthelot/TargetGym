@@ -16,7 +16,7 @@ env, params = tg.make("first_order")
 | You want to test | Start with | Then |
 |---|---|---|
 | That a training loop runs at all | [`first_order`](environments/first_order.md) | [`cstr`](environments/cstr.md) |
-| A nonlinear plant with one input | [`cstr`](environments/cstr.md) | [`ph_neutralization`](environments/ph_neutralization.md), [`unstable_cstr`](environments/unstable_cstr.md) |
+| A nonlinear plant with two inputs | [`cstr`](environments/cstr.md) | [`ph_neutralization`](environments/ph_neutralization.md) |
 | An open-loop unstable plant | [`unstable_cstr`](environments/unstable_cstr.md) | |
 | Two inputs acting on coupled outputs | [`four_tank`](environments/four_tank.md) | [`distillation`](environments/distillation.md), [`boiler_drum`](environments/boiler_drum.md) |
 | A response that first moves the wrong way (non-minimum phase) | [`boiler_drum`](environments/boiler_drum.md) | [`four_tank`](environments/four_tank.md) |
