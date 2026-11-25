@@ -340,3 +340,91 @@ def test_a_push_run_is_never_cancelled_by_a_later_push():
     )["concurrency"]
     cancel = str(group["cancel-in-progress"])
     assert "pull_request" in cancel and cancel.startswith("${{"), cancel
+
+
+#: Tests measured alone on bob over 6 GB resident (2026-11-25, JAX 0.6.2, cold
+#: compile cache, peak RSS from /usr/bin/time). Two of them on the two workers
+#: of a 16 GB runner shut it down: push run 45655952101 lost shards 2 and 3 of
+#: py3.11 and shard 3 of py3.14 that way, and a replay of those shards' medium
+#: tier on bob put two workers at 24 to 29 GB together.
+_MEASURED_OVER_6_GB = [
+    "tests/oracles/test_process_oracles.py::"
+    "test_the_column_solves_its_reset_to_the_solvers_tolerance",  # 15.3 GB
+    "tests/experts/test_pid_tuning.py::"
+    "test_tuner_returns_usable_gains[tune_plane3d_heading_pid]",  # 13.7 GB
+    "tests/experts/test_pid_tuning.py::"
+    "test_tuner_returns_usable_gains[tune_plane_pid]",  # 13.6 GB
+    "tests/test_measurement_noise.py::"
+    "test_noise_runs_under_jit_vmap_and_scan[formation]",  # 13.2 GB
+    "tests/oracles/test_aircraft_oracles.py::"
+    "test_a_plan_from_a_reset_converges_inside_its_limits",  # 12.7 GB
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[plane_sine]",  # 12.4 GB
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[wind_turbine]",  # 12.3 GB
+    "tests/test_env_conformance.py::"
+    "test_full_episode_stays_finite[formation]",  # 10.3 GB
+    "tests/formation/test_formation_lead.py::"
+    "test_the_lead_banks_no_more_than_the_parade_turn",  # 9.6 GB
+    "tests/formation/test_formation_lead.py::"
+    "test_the_lead_rolls_at_the_parade_rate_through_route_reversals",  # 9.6 GB
+    "tests/boiler_drum/test_boiler_drum_reality.py::"
+    "test_feedwater_steps_show_inverse_response_and_stay_in_band",  # 7.1 GB
+    "tests/boiler_drum/test_boiler_drum_reality.py::"
+    "test_swell_grows_toward_low_load",  # 6.4 GB
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[plane3d_figure8]",  # 6.1 GB
+]
+
+
+@pytest.mark.medium  # a pytest collection in another process
+def test_a_test_measured_to_fill_a_runner_runs_alone():
+    """Owner's rule of 2026-11-25: a test whose compile fills most of a runner
+    runs alone. Every test measured over 6 GB is collected as solo, so no
+    parallel step of the tier picks it up."""
+    files = sorted({nodeid.split("::")[0] for nodeid in _MEASURED_OVER_6_GB})
+    out = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-n",
+            "0",
+            "-m",
+            "solo",
+            *files,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ, "TG_SHARD": ""},
+    )
+    collected = set(out.stdout.split())
+
+    assert out.returncode == 0, out.stdout[-2000:] + out.stderr[-2000:]
+    assert [n for n in _MEASURED_OVER_6_GB if n not in collected] == []
+
+
+def test_no_parallel_step_runs_a_solo_test_and_one_worker_runs_them_all():
+    """Every pytest call on more than one worker leaves solo tests out, and the
+    solo tests of each tier run on one worker in every shard, since thirteen of
+    them on one runner would take most of an hour."""
+    steps = _workflow_jobs()["test"]["steps"]
+    calls = [
+        line
+        for step in steps
+        for line in step.get("run", "").splitlines()
+        if ("pytest" in line or "ci_select_tests" in line) and "-m " in line
+    ]
+    parallel = [c for c in calls if "-n auto" in c or "-n 2" in c]
+    alone = [c for c in calls if "-n 0" in c and "solo and" in c]
+
+    assert parallel and all("not solo" in c for c in parallel), parallel
+    assert any("not medium" in c for c in alone), alone  # the small tier's
+    assert any('"medium and solo' in c for c in alone), alone  # the medium's
+    solo_step = next(s for s in steps if '-m "solo' in s.get("run", ""))
+    assert "if" not in solo_step and "TG_SHARD" not in solo_step.get("env", {})

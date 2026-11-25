@@ -280,9 +280,15 @@ jobs:
     # the oldest and the newest JAX. After the small tier with coverage, they
     # would put the 3.13 column past ten minutes whenever the compile cache
     # misses (14.5 minutes on 2026-10-28).
+    #
+    # A medium test whose compile fills most of the runner (solo, see
+    # FILLS_A_RUNNER in tests/conftest.py) runs after the rest, on one worker:
+    # two of them at once shut down three shards of push run 45655952101.
     - name: Medium tests
       if: matrix.python-version == '3.11' || matrix.python-version == '3.14'
-      run: uv run pytest -q -m "medium and not records" -n 2
+      run: |
+        uv run pytest -q -m "medium and not solo and not records" -n 2
+        uv run pytest -q -m "medium and solo and not records" -n 0
 
     # One column carries the coverage gate, over the small tier (93% on
     # 2026-10-28, without the medium tests' 1.4 points). pytest-cov aggregates
@@ -318,13 +324,11 @@ jobs:
         if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
         uv run python scripts/ci_select_tests.py --base HEAD^1 -- -q -n auto -m "not medium and not large and not records and not solo" $INTEGRATION_ARGS
 
-    # A test whose compile fills a runner by itself (marked solo) runs alone on
-    # one worker, once per column, after the rest (owner, 2026-11-25).
+    # A small test whose compile fills a runner by itself (marked solo) runs
+    # alone on one worker, after the rest (owner, 2026-11-25). Each shard runs
+    # its own share of them: together they take too long for one runner.
     - name: Solo tests
-      if: matrix.shard <= 1
-      env:
-        TG_SHARD: ""
-      run: uv run pytest -q -n 0 -m "solo and not records"
+      run: uv run pytest -q -n 0 -m "solo and not medium and not large and not records"
 
   tests-pass:
     # The one check the integration branch requires: every shard of the test

@@ -143,9 +143,47 @@ def in_shard(nodeid: str, k: int, n: int) -> bool:
     return zlib.crc32(nodeid.encode()) % n == k - 1
 
 
+#: Tests whose compile alone fills most of a 16 GB CI runner, as measured on
+#: bob (2026-11-25, JAX 0.6.2, cold cache, peak resident size). They are marked
+#: solo here, where a parametrised case can be named on its own, so CI runs them
+#: on one worker (owner's rule, 2026-11-25): two of them on the two workers of
+#: one runner shut push run 45655952101's shards down. A test past 6 GB joins.
+FILLS_A_RUNNER = {
+    "tests/oracles/test_process_oracles.py::"
+    "test_the_column_solves_its_reset_to_the_solvers_tolerance": 15.3,
+    "tests/experts/test_pid_tuning.py::"
+    "test_tuner_returns_usable_gains[tune_plane3d_heading_pid]": 13.7,
+    "tests/experts/test_pid_tuning.py::"
+    "test_tuner_returns_usable_gains[tune_plane_pid]": 13.6,
+    "tests/test_measurement_noise.py::"
+    "test_noise_runs_under_jit_vmap_and_scan[formation]": 13.2,
+    "tests/oracles/test_aircraft_oracles.py::"
+    "test_a_plan_from_a_reset_converges_inside_its_limits": 12.7,
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[plane_sine]": 12.4,
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[wind_turbine]": 12.3,
+    "tests/test_env_conformance.py::test_full_episode_stays_finite[formation]": 10.3,
+    "tests/formation/test_formation_lead.py::"
+    "test_the_lead_banks_no_more_than_the_parade_turn": 9.6,
+    "tests/formation/test_formation_lead.py::"
+    "test_the_lead_rolls_at_the_parade_rate_through_route_reversals": 9.6,
+    "tests/boiler_drum/test_boiler_drum_reality.py::"
+    "test_feedwater_steps_show_inverse_response_and_stay_in_band": 7.1,
+    "tests/boiler_drum/test_boiler_drum_reality.py::"
+    "test_swell_grows_toward_low_load": 6.4,
+    "tests/experts/test_mpc_baselines.py::"
+    "test_registered_mpc_builds_and_controls[plane3d_figure8]": 6.1,
+}
+
+
+@pytest.hookimpl(tryfirst=True)  # before ``-m`` deselects on the marks
 def pytest_collection_modifyitems(config, items):
     """``TG_SHARD=k/n`` keeps shard ``k`` of ``n``: CI runs a pull request's
     tests on several runners at once (owner, 2026-11-24)."""
+    for item in items:
+        if item.nodeid in FILLS_A_RUNNER:
+            item.add_marker(pytest.mark.solo)
     shard = os.environ.get("TG_SHARD", "")
     if not shard:
         return
