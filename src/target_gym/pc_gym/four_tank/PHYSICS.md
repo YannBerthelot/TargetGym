@@ -4,10 +4,11 @@
 
 The owner's decision: a lab rig with no industrial job. Johansson's teaching
 process tracks levels to 1 mm, and no plant family stands behind a right
-half-plane zero made by a flow split; inverse response is carried by
-`boiler_drum` and strong interaction by `distillation`. In code it is
-`EnvSpec.extra` on the registry entry, so `registry.benchmark_specs()` leaves
-it out. It keeps its plant, expert and tests: the decoupled expert was re-run
+half-plane zero made by a flow split; strong interaction is carried by
+`distillation`, and inverse response by no core task since `boiler_drum`
+became Extra on 2026-11-24. In code it is `EnvSpec.extra` on the registry
+entry, so `registry.benchmark_specs()` leaves it out, and since that day its
+capability tags are empty, as every Extra task's are (`suite.CAPABILITIES`). It keeps its plant, expert and tests: the decoupled expert was re-run
 on this rig by its recipe (`scripts/tune_process_experts.py --envs four_tank`),
 and `test_four_tank_decoupler.py` passes on it.
 

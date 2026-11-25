@@ -1,5 +1,8 @@
 # Patrol - wingman, range and bearing
 
+!!! note "Extra task"
+    Patrol - wingman, range and bearing is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved with patrol (2026-11-24, owner's decision, aircraft five-task review): patrol's job seen through a range and bearing, a third of whose cost is one unsourced azimuth figure (patrol/PHYSICS.md, Status).
+
 <p align="center"><img src="../../videos/patrol_range_bearing/pid_output.gif" width="480px"/></p>
 
 The `patrol` task flown by sight and a TCAS-style sensor: the wingman sees range, azimuth and elevation to the lead instead of the lead's relative state. The lead's heading, which places the slot, is not measured and has to be inferred from how the bearing changes. The tracked value is the measured range, against the distance at which the slot sits from the lead.

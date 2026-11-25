@@ -1,5 +1,8 @@
 # Boiler Drum
 
+!!! note "Extra task"
+    Boiler Drum is kept in the repository but is not part of the benchmark, so it is out of the headline and the capability claims. The reason: solved as scored (charter J5, owner's decision of 2026-11-24): the classical reference costs nothing on normal and low-load days and never trips, the room that remains is worth GBP 90 to 170 a year on this unit, and the two redesigns tried, a fuel and air loop and the turbine valve as a third move, were measured and dropped (boiler_drum/PHYSICS.md, Status).
+
 <p align="center"><img src="../../videos/boiler_drum/pid_output.gif" width="480px"/></p>
 
 Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. The level first moves the wrong way after a steam or feedwater change (shrink and swell). The policy reads the level, the pressure, the steam flow, its two actuators, the load plan and the caps an upset puts on firing and feedwater. Each step is charged, in GBP, the steam delivered off the plan beyond the meter's resolution. A level past either trip level for more than 10 s trips the unit, which is charged as a hot restart.
