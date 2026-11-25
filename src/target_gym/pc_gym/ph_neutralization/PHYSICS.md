@@ -138,6 +138,12 @@ level. The buffer flow and the acid strength are hidden. Each step is charged,
 in litres of reagent, the reagent used, the time outside the permit, and the
 effluent diverted while the discharge is below pH 5. One excursion longer than
 60 min, or an overrun basin, is a violation and is charged as a restart.
+Most of the room between the reference and the ceiling comes from where the set
+point sits, not from riding the disturbances. The reference holds pH 6.45, the
+lowest set point at which it leaves the permit on none of its seeds. The ceiling
+holds the permit's edge, pH 6.00, because it knows the hidden buffer flow and acid
+strength. Placing a set point safely without that knowledge is a real control
+skill, and it is most of what this task scores (owner, 2026-11-25).
 
 | obs | meaning |
 |---|---|
