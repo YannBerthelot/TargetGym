@@ -1080,6 +1080,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_distillation_mpc", module="target_gym.pc_gym.distillation.oracle"
         ),
+        oracle_data=_shared_oracle("distillation"),
         # 400 min ~ two dominant time constants, the length the episode rule asks
         # of the analyser-fed expert. The column is the slowest environment per
         # step (80 states, 16 substeps for stability).

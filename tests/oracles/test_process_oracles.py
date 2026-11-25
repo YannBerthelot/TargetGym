@@ -44,6 +44,7 @@ from target_gym.runners.runners import pid_policy
 # cstr left this group with its planner (version 8, owner, 2026-11-24).
 FOUR = ("first_order", "four_tank", "unstable_cstr", "compressor_surge")
 PH = ("ph_neutralization",)
+DIST = ("distillation",)
 #: Exactness is the rewrites', so what a planner leaves out of its plan by
 #: design is held still here: a disturbance it holds over the plan (the
 #: autoclave's feed wander; the compressor consumers' noise, whose mean path it
@@ -57,12 +58,24 @@ QUIET = {
     "wind_turbine": {"tower_share": 0.0},
     "compressor_surge": {"demand_sigma": 0.0, "zone_price": 0.0},
     "ph_neutralization": {"window_upsets": 0.0},
+    "distillation": {"feed_step": 0.0, "zF_step": 0.0},
 }
 #: An event already in force at the solve, as the state carries it (certainty
 #: equivalence): four_tank's extra outlet in tank 4, opened before the reset.
 IN_FORCE = {
     "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
-}
+    # Both feed steps of [D1, Fig. 18] on since before the reset, rate down 20 %
+    # and composition down 0.1, neither returning: the signs under which the
+    # held moves keep both products in their zones over the ten stages (rate up
+    # takes the bottoms off spec in 6 steps), so the replay charges no off-spec.
+    "distillation": (
+        {},
+        {
+            "feed_step_at": -1, "feed_size": 0.2, "feed_sign": -1.0,
+            "zF_step_at": -1, "zF_size": 0.1, "zF_sign": -1.0,
+        },
+    ),
+}  # fmt: skip
 C2 = (
     "hvac",
     "boiler_drum",
@@ -78,7 +91,7 @@ OWN_PLANNER = ("reactor",)
 # oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
 # plant on the old cost.
 AIRCRAFT = ("plane_sine",)
-ON_SOLVER = FOUR + PH + C2 + AIRCRAFT
+ON_SOLVER = FOUR + PH + DIST + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -120,6 +133,36 @@ def test_the_four_tank_rig_solves_its_reset_though_it_has_no_trip():
     assert report["solver_failures"] == 0
     assert report["solver_capped"] == 0
     assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
+def test_the_column_solves_its_reset_to_the_solvers_tolerance():
+    """The column's first solve from training seed 100's reset, a cold start
+    through K7's rungs: converged, inside the cap, with no retry or failure,
+    and its plan replays on the env (K8) within float64 rounding. The window's
+    feed steps are held off: the plan holds the feed of the solve (certainty
+    equivalence), and a step later in its horizon is the plant's, not a
+    rewrite's, gap."""
+    env, params, oracle = _oracle("distillation", **QUIET["distillation"])
+    key = episode_keys(jax.random.PRNGKey(100), 1, 400)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+    assert report["solver_max_error"] <= 1e-8
+    # The distillate's range is the plant's (its clip, env.py's ``flows``): a
+    # plan past it draws a negative bottoms that the model would count as
+    # light key recovered. Every planned move keeps D inside it, so K8's
+    # replay meets no crossed guard and matches the plan.
+    q = oracle.params
+    moves = np.asarray(oracle.shooting.moves(oracle._plan))
+    L = q.L_min + 0.5 * (moves[:, 0] + 1.0) * (q.L_max - q.L_min)
+    V = q.V_min + 0.5 * (moves[:, 1] + 1.0) * (q.V_max - q.V_min)
+    assert np.all((V - L >= float(q.D_min)) & (V - L <= float(q.D_max)))
+    assert report["solver_guard_flags"] == 0
+    assert report["solver_max_replay_gap"] <= 1e-6
 
 
 @pytest.mark.medium
@@ -536,6 +579,10 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # - 14.0588188099 = 0.0162127646 mL/s, over 5 s, in litres. (The same
         # formula gives 0.0159565404 at 6.5, what Brent's method gave there.)
         ("ph_neutralization", 0.0162127646 * 5.0 / 1000.0),
+        # In kmol of boilup: half the bottoms analyser's 4e-4 of light key lost
+        # for one minute at the nominal bottoms, 0.5 kmol/min, at 100 kmol of
+        # boilup a kmol: 100 x 0.5 x 2e-4 x 1 = 0.01.
+        ("distillation", 0.01),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -555,6 +602,7 @@ PRICED = {
     "cement_kiln": 2,  # free lime, fuel
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
     "ph_neutralization": 1,  # reagent; both valves' sum at a steady state
+    "distillation": 2,  # boilup, light key lost
 }  # fmt: skip
 
 
