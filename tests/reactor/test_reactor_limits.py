@@ -11,8 +11,13 @@ Contracts, from the family's sources, written before the code:
   full at every power.
 - Rod insertion limit (family shape, KAIST's lead): a straight line in power, 22 %
   of the stroke in at full power, 78 % at half. Time deeper than the limit counts,
-  resets once the rods are back above it, and 2 h of it (STS 3.1.6) ends the run
-  in hot standby.
+  and resets once the rods are back above it. The rods are the lead bank (bank D),
+  so STS 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0, ML21259A155, pages 3.1.6-1
+  and 3.1.6-2; Condition A covers only banks A, B and C): 2 h to restore; then
+  Condition D, MODE 2 with keff < 1.0 within 6 h, so the turbine unloads along a
+  straight line to no load over those 6 h, and the plant goes to hot standby at
+  2 h + 6 h (owner, 2026-11-25; until then hot standby at 2 h). By hand, 3 h into
+  the shutdown the turbine may carry 1 - 3 / 6 = 0.5 of rated load.
 - Trips are lost production at the spot price on 1 GWe: a scram's restart takes
   48 h (ours, family 24 to 70 h: Doel-3's 6 h shutdown then 18 h at reduced power,
   INIS 1ypr9-dk595; APR1400 restart windows of 22 to 70 h, KNS 20A-065); hot
@@ -23,6 +28,15 @@ Contracts, from the family's sources, written before the code:
   reversing Amendment 3 decision 7): both cited procedures keep a two-sided band
   (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), and at part power the hot side is
   bounded by the steam side, not by DNB.
+- Tavg above its DNB limit (Westinghouse STS, NUREG-1431 Rev. 5.0, LCO 3.4.1): the
+  parameter is restored within 2 h (Condition A), else the unit is in MODE 2 within
+  6 h (Condition B), and a parameter restored before then ends the required action
+  (LCO 3.0.2). The plant flies Condition B: past 2 h its turbine unloads along a
+  straight line to MODE 2's 5 % of rated power (NUREG-1431 Table 1.1-1) at 2 h + 6 h,
+  and the plant is lost to hot standby only after 28,800 s above the limit without a
+  break (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; until then
+  hot standby at 2 h). By hand, 3 h into the shutdown the turbine may carry
+  1 - 0.95 x 3 / 6 = 0.525 of rated load.
 - The operator reads the recent power history the starting xenon is balanced with,
   and the core boron only through a boronmeter 20 min late (Areva, US 8,489,338).
 
@@ -108,8 +122,20 @@ def test_time_past_the_insertion_limit_counts_and_resets():
     assert float(step(env, p, shallow).ril_outside) == 0.0
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_past_the_insertion_limit_ends_the_run(seconds, ends):
+@pytest.mark.parametrize(
+    "seconds, load", [(7000.0, 1.0), (7200.0 + 3 * 3600.0, 0.5), (28795.0, 5.0 / 21600)]
+)
+def test_past_two_hours_past_the_insertion_limit_the_turbine_unloads(seconds, load):
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    extra = float(rod_worth(0.3, p) - rod_worth(float(s.rod_in), p))
+    deep = at(
+        s, rod_in=0.3, ril_outside=seconds, boron=float(s.boron) - extra / p.boron_worth
+    )
+    assert float(step(env, p, deep).target_n) == pytest.approx(load, abs=2e-3)
+
+
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_past_the_insertion_limit_end_the_run(seconds, ends):
     env, p, obs, s = reset()
     terminated, _ = check_is_terminal(at(s, ril_outside=seconds), p)
     assert bool(terminated) is ends
@@ -125,7 +151,7 @@ def test_a_scram_costs_two_days_of_output():
 
 
 @pytest.mark.parametrize(
-    "field, value", [("below_floor", 900.0), ("ril_outside", 7200.0)]
+    "field, value", [("below_floor", 900.0), ("ril_outside", 28800.0)]
 )
 def test_a_timed_limits_overrun_costs_hot_standby(field, value):
     env, p, obs, s = reset()
@@ -213,8 +239,30 @@ def test_the_dnb_limit_is_the_full_power_programs_at_every_power():
     )
 
 
-@pytest.mark.parametrize("seconds, ends", [(7195.0, False), (7200.0, True)])
-def test_two_hours_above_the_dnb_limit_costs_hot_standby(seconds, ends):
+@pytest.mark.parametrize(
+    "seconds, load",
+    [
+        (7000.0, 1.0),
+        (7200.0 + 3 * 3600.0, 0.525),
+        (28795.0, 1.0 - 0.95 * 21595 / 21600),
+    ],
+)
+def test_past_two_hours_above_the_dnb_limit_the_turbine_ramps_to_mode_2(seconds, load):
+    """A plant on its plan at full load, Tavg above its DNB limit for ``seconds``:
+    the turbine takes no more than the shutdown's straight line allows."""
+    env, p, obs, s = reset(demand_sigma=0.0, ramp_down_range=(1e6, 1e6))
+    limit = float(tavg_program(1.0, p)) + HOT_MARGIN
+    tavg = float(0.5 * (s.T_coolant + s.T_cold))
+    hot = s.replace(
+        T_coolant=s.T_coolant + 2 * (limit + 0.5 - tavg),
+        T_cold=s.T_cold + 2 * (limit + 0.5 - tavg),
+    )
+    after = step(env, p, at(hot, above_dnb=seconds))
+    assert float(after.target_n) == pytest.approx(load, abs=2e-3)
+
+
+@pytest.mark.parametrize("seconds, ends", [(28795.0, False), (28800.0, True)])
+def test_eight_hours_above_the_dnb_limit_cost_hot_standby(seconds, ends):
     env, p, obs, s = reset()
     s = at(s, above_dnb=seconds)
     terminated, _ = check_is_terminal(s, p)
