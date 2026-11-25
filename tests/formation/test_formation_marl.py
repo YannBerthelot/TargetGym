@@ -86,7 +86,9 @@ class TestAutoReset:
         assert bool(dones["__all__"])
         assert int(state.time) == 0
 
-    @pytest.mark.parametrize("k", [1, 4])
+    # Four wingmen compile to about 11 GB on JAX 0.6.2, most of a 16 GB CI
+    # runner, so that case never shares one with another worker (solo).
+    @pytest.mark.parametrize("k", [1, pytest.param(4, marks=pytest.mark.solo)])
     def test_jit_scan_and_autoreset(self, k):
         env = FormationMARL(num_wingmen=k)
         params = env.default_params.replace(max_steps_in_episode=40)
