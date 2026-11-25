@@ -270,3 +270,59 @@ def test_ci_shards_the_selected_run_and_requires_one_aggregate_check():
     assert "TG_SHARD" in jobs["test"]["env"]
     assert jobs["tests-pass"]["name"] == "tests pass"
     assert jobs["tests-pass"]["needs"] == "test"
+
+
+def _workflow_jobs():
+    import yaml
+
+    return yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "python-app.yml").read_text()
+    )["jobs"]
+
+
+def test_a_push_to_the_integration_branch_runs_the_whole_tier_in_shards():
+    """Owner, 2026-11-25: the push after a merge runs the whole tier on every
+    Python, split in three shards like a pull request, since unsplit it ran past
+    the job's 60 minutes on three of four Pythons."""
+    matrix = _workflow_jobs()["test"]["strategy"]["matrix"]
+
+    assert "refs/heads/int/amendment3" in matrix["shard"]
+    assert "[1, 2, 3]" in matrix["shard"]
+
+
+def test_sharded_coverage_is_combined_and_gated_once():
+    """A shard covers a third of the tests, so no shard can hold the coverage
+    gate: each one uploads its data and 'tests pass' combines them and enforces
+    the project's floor, on the push as on the pull request."""
+    jobs = _workflow_jobs()
+    steps = jobs["test"]["steps"]
+    covered = [s for s in steps if "--cov=target_gym" in s.get("run", "")]
+    gate = jobs["tests-pass"]
+
+    assert len(covered) == 1
+    assert "--cov-fail-under" in covered[0]["run"]  # waived per shard only
+    assert any("upload-artifact" in s.get("uses", "") for s in steps)
+    assert "refs/heads/int/amendment3" in gate["if"]
+    runs = " ".join(s.get("run", "") for s in gate["steps"])
+    assert "coverage combine" in runs and "coverage report" in runs
+
+
+def test_a_solo_test_never_shares_a_runner_with_another_worker():
+    """Owner, 2026-11-25: a test whose compile fills a runner (the four-wingman
+    formation rollout, about 11 GB of a 16 GB runner) runs alone. Every
+    parallel run of the tier leaves it out, and one step runs it on one
+    worker."""
+    import tomllib
+
+    steps = _workflow_jobs()["test"]["steps"]
+    parallel = [s["run"] for s in steps if "-n auto" in s.get("run", "")]
+    alone = [s for s in steps if '-m "solo' in s.get("run", "")]
+    markers = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["pytest"][
+        "ini_options"
+    ]["markers"]
+
+    assert parallel and all("not solo" in run for run in parallel), parallel
+    assert len(alone) == 1 and "-n 0" in alone[0]["run"]
+    assert any(m.startswith("solo:") for m in markers)
+    source = (ROOT / "tests" / "formation" / "test_formation_marl.py").read_text()
+    assert "mark.solo" in source
