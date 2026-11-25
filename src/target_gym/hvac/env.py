@@ -166,12 +166,21 @@ class HVACParams(EnvParams):
     occupants_per_m2: float = 0.10
     #: EU hourly labour cost, 2023 (Eurostat, REALITY.md [21]).
     labour_cost: float = 31.8  # EUR per person-hour
-    #: Euros per occupied kelvin-hour: productivity_per_K x occupants x labour
-    #: cost, 0.02 x 15 x 31.8.
-    comfort_price: float = 0.02 * 0.10 * 150.0 * 31.8  # EUR per K h
     #: No limit trips this plant (``check_is_terminal``), so a trip costs 0.
     restart_steps: int = 0
     failure_cost: float = 0.0
+
+    @property
+    def comfort_price(self):
+        """Euros per occupied kelvin-hour: the work it loses, productivity_per_K x
+        occupants_per_m2 x A_floor x labour_cost (0.02 x 15 x 31.8 = 9.54 for the
+        member), derived so it follows each of the four."""
+        return (
+            self.productivity_per_K
+            * self.occupants_per_m2
+            * self.A_floor
+            * self.labour_cost
+        )
 
 
 #: Units of the HVACParams fields, for the generated environment pages.

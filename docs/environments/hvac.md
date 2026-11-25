@@ -145,7 +145,6 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `productivity_per_K` | 0.02 | 1/K |
 | `occupants_per_m2` | 0.1 | 1/m^2 |
 | `labour_cost` | 31.8 | EUR/h |
-| `comfort_price` | 9.54 | EUR/(K h) |
 | `restart_steps` | 0 | steps |
 | `failure_cost` | 0 | EUR per step |
 

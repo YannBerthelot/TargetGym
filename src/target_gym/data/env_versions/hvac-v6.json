@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f37c1f181176d1d1",
-  "note": "2026-11-24 evaluation cut (owner): episode 12 days (3 burn-in, 7 scored, 2-day tail), sunny_spell and low_gains folded into normal and shoulder_season. v6 has never shipped (0.7.0 carried v3), so it keeps its number.",
-  "stamped": "2026-11-25T00:59:40+00:00"
+  "fingerprint": "751b85d828178adc",
+  "note": "2026-11-25 review fix: comfort_price derived from productivity_per_K, occupants_per_m2, A_floor and labour_cost instead of a literal with 150 m^2; the member's price is unchanged (9.54). v6 has never shipped (0.7.0 carried v3).",
+  "stamped": "2026-11-25T01:15:45+00:00"
 }

@@ -202,6 +202,32 @@ def test_occupied_discomfort_is_priced_as_lost_work(env, T_air, T_floor, kelvin)
     )
 
 
+@pytest.mark.parametrize(
+    "change, price",
+    [
+        # Lost work = productivity per K x occupants per m^2 x floor x labour cost
+        # (env.py, the comfort_price note), by hand from each changed number.
+        ({"occupants_per_m2": 0.07}, 0.02 * 0.07 * 150.0 * 31.8),  # 6.678
+        ({"labour_cost": 40.0}, 0.02 * 0.10 * 150.0 * 40.0),  # 12.0
+        ({"productivity_per_K": 0.03}, 0.03 * 0.10 * 150.0 * 31.8),  # 14.31
+        ({"A_floor": 200.0}, 0.02 * 0.10 * 200.0 * 31.8),  # 12.72
+    ],
+)
+def test_lost_work_follows_the_occupants_their_pay_and_the_floor(env, change, price):
+    """One occupied kelvin-hour below the band, with no heat, at the changed
+    building's price: the price is derived from its four numbers, not fixed."""
+    _, state = _reset(env)
+    out = state.replace(
+        time=48,
+        T_air=jnp.asarray(20.0),
+        T_floor=jnp.asarray(22.0),
+        Q_slab=jnp.asarray(0.0),
+    )
+    assert float(-compute_reward(out, PARAMS.replace(**change))) == pytest.approx(
+        price * 1.0 * 0.25, rel=1e-5
+    )
+
+
 def test_out_of_hours_discomfort_costs_nothing(env):
     _, state = _reset(env)
     night = state.replace(time=8, T_air=jnp.asarray(18.0), Q_slab=jnp.asarray(0.0))
