@@ -28,9 +28,9 @@ policy has to act ahead: it reads the room, slab and water temperatures, the
 outdoor temperature with its last-24 h mean and next-24 h forecast, the clock,
 and the tariff with the hours to its next change. Each step is charged, in
 euros, the heat pump's electricity at the tariff, each occupied
-kelvin-hour of room outside the band or of floor above its limit, and the heat
-it draws from the building's store at the cheapest price heat can be stored
-at. Nothing trips.
+kelvin-hour of room outside the band or of floor above its limit. The
+evaluation also charges, once, the heat the building's store lost across the
+scored days, at the cheapest price heat can be stored at. Nothing trips.
 
 | obs | meaning |
 |---|---|
@@ -227,10 +227,12 @@ what it was.
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
-work it loses; and the heat the step draws from the store, `C_m T_mass +
-C_slab T_core`, at the valle tariff over the COP of the design supply
-(`env.stored_heat_price`), credited for heat put in. Over the scored days that
-charge is the store they start with less the store they leave, so heat bought
+work it loses. Every term is a cost, as the shared reward contract asks. The
+evaluation adds one charge at the scored window's edges: the store, `C_m T_mass
++ C_slab T_core`, at the valle tariff over the COP of the design supply
+(`env.stored_value`, recorded on every run), as it was before the first scored
+step less as it is after the last, spread over the scored steps
+(`evaluation.Evaluation.edge_charge`), so heat bought
 in the unscored burn-in, or run down on the last scored evening, is paid for
 at what storing it costs (owner, 2026-11-25, the review's finding 1: a policy
 at full supply on the last unscored evening and off on the last scored one had

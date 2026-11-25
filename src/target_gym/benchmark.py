@@ -352,7 +352,9 @@ def run_policy(
     here) on the state after the step, its parameters, and whether the step
     tripped (False where the plant reports no trips; after a trip the state is
     the restarted plant, so ``tripped`` is how a function scores that step).
-    Returned as ``records`` (name -> ``(n, T)``).
+    Returned as ``records`` (name -> ``(n, T)``). A plant that stores what it
+    buys (``env.stored_value(state, params)``) has that value recorded too, as
+    ``stored_value``, for its evaluation's edge charge (``evaluation.Evaluation``).
 
     ``seeds`` replaces ``key``: episode ``i`` is then the one-episode run on
     ``PRNGKey(seeds[i])``, as ``runners.rollout`` and ``eval.run_episode`` run
@@ -384,6 +386,9 @@ def run_policy(
     first_target = np.asarray(obs)[:, list(task.target_index)]
     carry = policy.reset(jax.random.fold_in(key, 1), obs, task)
     oracle = bool(getattr(policy, "oracle", False))
+    stored = getattr(env, "stored_value", None)
+    if stored is not None:  # what an evaluation's edge charge reads
+        record = {"stored_value": lambda s, p, _: stored(s, p), **(record or {})}
     record_b = {
         k: jax.jit(jax.vmap(fn, in_axes=(0, pa, 0))) for k, fn in (record or {}).items()
     }

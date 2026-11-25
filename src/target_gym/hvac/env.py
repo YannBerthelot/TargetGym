@@ -153,11 +153,11 @@ class HVACParams(EnvParams):
     # Energy: the heat pump's electricity at a three-period tariff, so night
     # charging of the slab pays, as Madrid charges its floors on the night
     # tariff [14, p. 14]. Comfort: lost office work while occupied, per
-    # kelvin-hour outside the band or of floor above 29 C. Stored heat (v5,
-    # owner, 2026-11-25): each step pays for the heat it draws from the mass
-    # and the slab, at the cheapest price heat can be stored at, so a window
-    # of steps pays for the store it starts with less the store it leaves
-    # (``stored_heat_price``).
+    # kelvin-hour outside the band or of floor above 29 C. v5 (owner,
+    # 2026-11-25): the reward's terms are v4's, and the heat the mass and the
+    # slab lose across the scored window is charged once by the evaluation, at
+    # the cheapest price heat can be stored at (``stored_value``,
+    # ``evaluation.Evaluation.edge_charge``).
     reward_version: int = 5
     #: Spanish 2.0TD energy prices, EUR/kWh, one retailer's offer (REALITY.md
     #: [19]): valle 00:00 to 08:00, llano 08:00 to 10:00, 14:00 to 18:00 and
@@ -632,9 +632,6 @@ def compute_next_state(
             T_return=return_temperature(T_supply, T_core, p),
             T_floor=floor_surface_temperature(T_core, T_air, p),
             frost=frost,
-            stored_heat_cost=stored_heat_cost(
-                state.T_mass, state.T_core, T_mass, T_core, p
-            ),
             time=new_time,
         ),
         None,
@@ -711,7 +708,6 @@ def compute_reward_terms(state: "HVACState", params: HVACParams, xp=jnp, tripped
     terms = {
         "comfort": p.comfort_price * comfort_kelvin_hours(state, p, xp),
         "electricity": electricity_price(state.time - 1, p) * electricity_kwh(state, p),
-        "stored_heat": state.stored_heat_cost,
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
 
@@ -783,6 +779,13 @@ def stored_heat_price(params: HVACParams):
     return p.price_valle / heat_pump_cop(T_design, p) / 3.6e6
 
 
+def stored_value(state, params: HVACParams):
+    """The store's value in euros: its heat above 0 C at ``stored_heat_price``.
+    An evaluation charges what it lost across the scored window (owner,
+    2026-11-25)."""
+    return stored_heat_price(params) * stored_heat(state.T_mass, state.T_core, params)
+
+
 def stored_heat_cost(T_mass, T_core, T_mass_next, T_core_next, params):
     """The euros a step pays for the heat it draws from the store (negative for
     heat it puts in), as a sum of the two nodes' changes, so it stays exact in
@@ -810,7 +813,5 @@ class HVACState(EnvState):
     T_return: float  # return water, measured [12]
     T_floor: float  # floor surface, C
     frost: float  # 1 while frost protection holds the supply at its maximum
-    #: Euros the last step paid for the heat it drew from the store.
-    stored_heat_cost: float = 0.0
 
     actuator_held: jax.Array = actuator_field(1)

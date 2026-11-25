@@ -34,6 +34,7 @@ from target_gym.hvac.env import (
     solve_air_and_surface,
     split_gains,
     steady_state,
+    stored_value,
 )
 from target_gym.hvac.rendering import _render
 from target_gym.video import SavesVideo
@@ -94,6 +95,9 @@ class BuildingHVAC(
 
     def reward_terms(self, state, params, tripped=None):
         return compute_reward_terms(state, params, tripped=tripped)
+
+    def stored_value(self, state, params):
+        return stored_value(state, params)
 
     def step_env(
         self,
@@ -219,7 +223,6 @@ class BuildingHVAC(
             T_return=return_temperature(T_supply, T_core, params),
             T_floor=floor_surface_temperature(T_core, T_air, params),
             frost=jnp.zeros(()),
-            stored_heat_cost=jnp.zeros_like(T_core),
         )
         return self.get_obs(state), state
 

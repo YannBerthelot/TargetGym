@@ -122,7 +122,7 @@ def replay(task, env, params, seed, policy) -> dict:
         run_policy(policy, env, params, task_info(task, env, params, 1), seeds=[seed])
     )
     return {
-        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.episode_cost(REGISTRY[task], ep),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -161,7 +161,7 @@ def oracle_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.episode_cost(REGISTRY[task], ep),
         "trips": int(np.sum(ep.failed)),
     }
 
@@ -182,7 +182,7 @@ def expert_run(task, scenario, seed) -> dict:
     (ep,) = episodes_of(rollout)
     return {
         "moves": np.asarray(rollout["action"][0], float),
-        "cost": evaluation.scored_cost(REGISTRY[task], ep.cost),
+        "cost": evaluation.episode_cost(REGISTRY[task], ep),
         "trips": int(np.sum(ep.failed)),
     }
 

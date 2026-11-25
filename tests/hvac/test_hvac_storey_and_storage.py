@@ -13,9 +13,11 @@ Contract:
 - Stored heat ``E = C_m T_mass + C_slab T_core``, with C_m = 110 000 x 150 and
   C_slab = 2400 x 1000 x 0.25 x 150 J/K, is priced at the cheapest heat the
   plant can store: the valle tariff over the COP at the design supply (-10 C
-  outdoors, the room at 21 C). Each step charges that price on the heat it draws
-  from the store, so over any run of steps the charge is the price times the
-  store at its start less the store at its end.
+  outdoors, the room at 21 C). Every run records the store's value at that price
+  after each step, as ``stored_value``, and hvac's evaluation names it as its
+  edge charge: the store lost across the scored window is charged once, out of
+  the reward (owner, 2026-11-25, P1 as amended), so the reward stays minus a sum
+  of non-negative terms.
 """
 
 import jax
@@ -58,27 +60,43 @@ def _price():
     return P.price_valle / cop / 3.6e6  # EUR per J
 
 
-def test_the_stored_heat_charge_over_a_run_is_the_price_on_the_change_in_store():
+def test_a_run_records_the_store_at_the_price_of_the_cheapest_stored_heat():
+    from target_gym.benchmark import run_policy, task_info
+
+    class Moves:
+        name = "moves"
+
+        def reset(self, key, obs, task):
+            return 0
+
+        def act(self, carry, obs, t):
+            u = jnp.asarray([[0.8 if t % 6 < 3 else -0.6]])
+            return u, carry + 1
+
     env = BuildingHVAC()
-    _, s = env.reset_env(jax.random.PRNGKey(0), P)
-    moves = jax.random.uniform(jax.random.PRNGKey(1), (24,), minval=-1.0, maxval=1.0)
-    states, charged = [s], []
-    for k, u in enumerate(moves):
-        _, s, _, _, _ = env.step_env(jax.random.PRNGKey(10 + k), s, u[None], P)
-        states.append(s)
-        charged.append(float(env.reward_terms(s, P)["stored_heat"]))
-    # Steps 6 to 18: the store at the start of step 6 less the store after 18.
-    expected = _price() * (_store(states[6]) - _store(states[18]))
-    assert abs(expected) > 1e-3  # the moves did move the store
-    assert sum(charged[6:18]) == pytest.approx(expected, rel=2e-3)
+    task = task_info("hvac", env, P, 1)
+    nodes = {"T_mass": lambda s, p, t: s.T_mass, "T_core": lambda s, p, t: s.T_core}
+    out = run_policy(Moves(), env, P, task, seeds=[0], n_steps=24, record=nodes)
+    rec = out["records"]
+    store = (
+        110_000.0 * 150.0 * rec["T_mass"]
+        + 2400.0 * 1000.0 * 0.25 * 150.0 * rec["T_core"]
+    )
+    assert np.ptp(store) > 1e5  # the moves did move the store
+    # float32 states near 2.3e9 J at about 6e-9 EUR/J: 1e-5 EUR covers rounding.
+    np.testing.assert_allclose(rec["stored_value"], _price() * store, rtol=0, atol=1e-5)
 
 
-def test_heat_put_into_the_store_is_credited():
-    """Full supply into a cold slab stores heat, so its step's charge is
-    negative."""
+def test_the_reward_carries_no_stored_heat_and_the_evaluation_charges_its_edges():
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    assert evaluation.of(REGISTRY["hvac"]).edge_charge == "stored_value"
     env = BuildingHVAC()
     _, s = env.reset_env(jax.random.PRNGKey(0), P)
     s = s.replace(T_core=jnp.asarray(18.0), T_mass=jnp.asarray(19.0))
-    _, s1, _, _, _ = env.step_env(jax.random.PRNGKey(5), s, jnp.ones(1), P)
-    assert float(env.reward_terms(s1, P)["stored_heat"]) < 0.0
-    assert np.isfinite(float(env.reward_terms(s1, P)["stored_heat"]))
+    _, s1, r, _, _ = env.step_env(jax.random.PRNGKey(5), s, jnp.ones(1), P)
+    terms = env.reward_terms(s1, P)
+    # Full supply into a cold slab stores heat; no term credits it.
+    assert all(float(v) >= 0.0 for v in terms.values())
+    assert float(r) == pytest.approx(-sum(float(v) for v in terms.values()), rel=1e-6)

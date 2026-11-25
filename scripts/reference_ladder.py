@@ -833,7 +833,7 @@ def _episodes(spec) -> int:
 
 def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     """``run_rung`` for any ``benchmark.Policy``, each episode's cost read over the
-    task's scored window (``evaluation.scored_cost``). ``seeds`` replaces the ladder's,
+    task's scored window (``evaluation.episode_cost``). ``seeds`` replaces the ladder's,
     as one tuple or ``{scenario: seeds}``; with counts that differ by scenario,
     ``costs`` (per seed across scenarios) is None and ``trips`` the scenarios' sum."""
     spec = spec or REGISTRY[name]
@@ -841,7 +841,7 @@ def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     per = {}
     for scenario, episodes in _suite_episodes(name, row, policy, spec, seeds):
         per[scenario] = (
-            np.array([evaluation.scored_cost(spec, e.cost) for e in episodes]),
+            np.array([evaluation.episode_cost(spec, e) for e in episodes]),
             np.array([bool(np.any(e.failed)) for e in episodes]),
         )
     if len({len(c) for c, _ in per.values()}) > 1:
