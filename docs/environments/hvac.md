@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/hvac/pid_output.gif" width="480px"/></p>
 
-Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, each occupied kelvin-hour of room outside the band or of floor above its limit, and the heat it draws from the building's store at the cheapest price heat can be stored at. Nothing trips.
+Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, each occupied kelvin-hour of room outside the band or of floor above its limit. The evaluation also charges, once, the heat the building's store lost across the scored days, at the cheapest price heat can be stored at. Nothing trips.
 
 ```python
 import target_gym as tg
@@ -56,7 +56,7 @@ Every environment in this suite scores on one contract. The reward is
 minus the sum of non-negative costs: a tracking cost where the task
 holds a target, a running cost for what the plant consumes or fails to
 deliver, and a failure cost for trips out of the operating envelope.
-This task's terms are `comfort`, `electricity`, `stored_heat`, `failure`, reported
+This task's terms are `comfort`, `electricity`, `failure`, reported
 each step in `info["reward_terms"]`.
 The reward is never positive, and its scale differs
 by orders of magnitude between plants. Some plants are
@@ -66,7 +66,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 18 fields.
+`reset` samples the initial condition and the target; state has 17 fields.
 
 ## Episode end
 

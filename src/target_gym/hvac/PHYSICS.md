@@ -365,7 +365,7 @@ B6), not a number moved until the test passed.
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hvac` | 1152 | 900 | 288.0 h | 1 in [-1, 1] | 12 | 111 |
+| `hvac` | 1152 | 900 | 288.0 h | 1 in [-1, 1] | 12 | 110 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f1dee6d492fd006e",
-  "note": "2026-11-25 owner (hvac review P1, P3): stored heat charged at the valle price over the design COP (reward v5), no roof (a middle storey), ISO 13790 light mass beside the slab. v6 has never shipped (0.7.0 carried v3), so it keeps its number.",
-  "stamped": "2026-11-25T01:32:07+00:00"
+  "fingerprint": "cba93268284e63b6",
+  "note": "hvac-v6 re-stamped in place, never shipped (owner, 2026-11-25, PR 274): the stored-heat charge leaves the reward for the evaluation's edge charge; env.stored_value recorded on every run",
+  "stamped": "2026-11-25T08:43:28+00:00"
 }
