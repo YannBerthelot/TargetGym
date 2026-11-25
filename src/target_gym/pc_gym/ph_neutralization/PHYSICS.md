@@ -84,7 +84,7 @@ family's documented range, or ours with a reason.
 | `sewer_floor` | 5.0 | pH | cited [P9] |
 | `basin_volume` | 236.2 | L | ours, family "hours of flow" (Amendment 3): 2 h of nominal discharge |
 | `pumpback_flow` | 4.15 | mL/s | ours: a quarter of the influent, so the basin drains in about 16 h |
-| `setpoint_pH` | 6.5 | pH | ours: where the reference's rule places it (section 10), the lowest tenth of a pH above 6 at which the reference never leaves the permit; the set point is the operator's [P3, p. 4], lowered toward the limit while the discharge stays comfortably above it [P3, pp. 4-5] |
+| `setpoint_pH` | 6.45 | pH | ours: where the reference's rule places it (section 10), the lowest step of the permit's grid (6.0 to the centre 7.5 in ten steps of 0.15) at which the reference never leaves the permit; the set point is the operator's [P3, p. 4], lowered toward the limit while the discharge stays comfortably above it [P3, pp. 4-5] |
 | `delta_t`, `max_steps_in_episode` | 5, 1440 | s, steps | ours: 2 h, past the 60 min excursion [P8] |
 | `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
@@ -155,7 +155,7 @@ effluent diverted while the discharge is below pH 5. One excursion longer than
 ## 5. Episode (rule 17)
 
 Both tanks start on the steady state that holds the operator's set point, pH
-6.5 (section 10), under the buffer flow they meet, the trim valve shut and the
+6.45 (section 10), under the buffer flow they meet, the trim valve shut and the
 basin empty, as a loop in automatic leaves them. What then moves is set by the scenario (section 6): influent acid
 strength [P3, p. 4], influent flow, and the buffer's Ornstein-Uhlenbeck drift
 [P1; P2]. Each upset comes twice, at times drawn over the episode, to a level
@@ -180,8 +180,8 @@ held through an unannounced upset (`bad_day`), the steep curve (`buffer_loss`). 
 acid-only and flow-only windows repeated the bad day: the reference's cost over the
 ceiling's was 1.138 and 1.139 against the bad day's 1.139 on seeds 200 to 249, and
 every exit that set the reference's back-off was on the bad day or the acid window
-on the same seeds. They are folded into the bad day. On the cut suite the reference
-is placed at 6.5 on every rung, the feedforward is kept, the best null wins 2 seeds
+on the same seeds. They are folded into the bad day. On the cut suite, under the
+6 to 8 permit then shipped, the reference was placed at 6.5 on every rung, the feedforward is kept, the best null wins 2 seeds
 of 10, and the room on seeds 200 to 209 is 1.167 (1.154 to 1.179), as on the full
 suite (1.167, 1.154 to 1.180). Windows stay 2 h: the permit's 60 min clock is the
 only trip. The scoring seeds follow the stop rule (`charter.stop_seeds`): blocks
@@ -266,12 +266,24 @@ sewer floor. The basin, the diversion's price and the 60 min rule price failing
 policies only. Effect on the score: none for a controller that holds the permit;
 the task measures the reagent saved on the permit's edge, not the defence of a
 limit. A source for larger upsets would make the limits part of the job.
+The exit count above was measured under the 6 to 8 permit.
+
+Search for a sourced upset (2026-11-25, two fetches each): the nearest is a
+design basis, not plant data. Faanes and Skogestad's neutralisation design
+example assumes the influent acid concentration varies by up to +-50 % and its
+flow by up to +-50 % (Comput. Chem. Eng. 28, 2004). A vendor's neutralisation
+system lists the influent pH it accepts (1 to 13), a capacity, not an upset. No
+measured upset size from a plant was found. The owner kept D7 (2026-11-25): an
+assumed design basis does not size the task's upsets. At +-50 % acid, stage 1
+would need more than its 22 mL/s valve.
 
 **Sensitivity** (owner, 2026-11-24; `scripts/ph_sensitivity.py`). None of the 29
 `ours` numbers has a documented family range, so the charter's sweep (B7) runs the
 shipped member alone. In its place, a sensitivity with stated spans, not sourced
 ones: each group scaled by 0.5 and 1.5, the ladder climbed afresh on each, the nulls
 on the ladder's seeds, the room against the ceiling on scoring seeds 200 to 209.
+Measured under the 6 to 8 permit then shipped, with the grid in tenths; not re-run
+on 6 to 9.
 
 | Member | Kept set point | Room (95 %) | Best null's wins of 10 |
 |---|---|---|---|
@@ -299,17 +311,20 @@ is the bicarbonate a hold on the edge uses that a reference held higher pays for
   less base holds a lower pH (19 % less at pH 6 than at 7 at nominal buffer).
   The score charges every step outside the permit at the price of a violation
   (section 7), so the reference is not placed 2 sigma inside the edge: each rung
-  holds the lowest tenth of a pH above 6 at which it leaves the permit on none of
-  the ladder's seeds, in any scenario, and the ladder keeps the cheapest rung
-  (`ladder.zone_grid`, `ladder.first_without_exit`; charter J1, owner,
-  2026-11-23). Each candidate is run from episodes started on
+  holds the lowest step of the permit's grid (6.0 to the centre 7.5 in ten steps
+  of 0.15) at which it leaves the permit on none of the ladder's seeds, in any
+  scenario, and the ladder keeps the cheapest rung (`ladder.zone_grid`,
+  `ladder.first_without_exit`; charter J1, owner, 2026-11-23). Each candidate is
+  run from episodes started on
   it, and every rung takes over from the valves as the reset left them: stage 1's
   valve there depends on the buffer flow the tanks meet, which is hidden, so no
-  balance gives it. Measured on 2026-11-23, of 50 episodes: the pi rung leaves
-  on 50, 46, 23, 9, 2 and 0 at 6.0 to 6.5, the feedforward and the override on 50,
-  48, 17, 7, 2 and 0. All three keep 6.5, which is `setpoint_pH`; the feedforward
-  is the cheapest. A seed no candidate could hold would not constrain a rung's
-  placement and would be listed; here every seed is held at 6.5, so none is.
+  balance gives it. Measured on 2026-11-25 on the 6 to 9 permit, of 30 episodes
+  (10 seeds, three scenarios): the pi rung leaves on 30, 14, 2 and 0 at 6.0, 6.15,
+  6.3 and 6.45, the feedforward and the override on 30, 13, 2 and 0. All three
+  keep 6.45, which is `setpoint_pH` (owner, 2026-11-25). (Under the 6 to 8 permit,
+  in tenths, all three kept 6.5.) A seed no candidate could hold would not
+  constrain a rung's placement and would be listed; here every seed is held at
+  6.45, so none is.
   Stage 1 has no zone and follows the same
   setpoint.
 - Scenarios: the three of section 6.
@@ -353,9 +368,9 @@ the buffer flow and the acid strength, which the observation hides, and the
 buffer's next draw.
 
 **The start's inventory is counted in the ceiling** (owner, 2026-11-24). An episode
-starts on the reference's set point, 6.5, where the two tanks hold base the edge
+starts on the reference's set point, 6.45, where the two tanks hold base the edge
 does not need: about 1.6 L of the base stream on seeds 100 to 109 (0.5 to 2.9),
-1.9 % of the hold's reagent over 2 h. The reagent a policy adds, plus what the
+1.9 % of the hold's reagent over 2 h, measured from 6.5 (2026-11-24). The reagent a policy adds, plus what the
 tanks hold at the start, less what they hold at the end, is what the outflow
 carries; an outflow inside the permit carries at least its water's need on the
 edge, and tanks inside the permit hold none below it. So no policy that never

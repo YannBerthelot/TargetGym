@@ -1,5 +1,5 @@
 {
-  "fingerprint": "f7b8cd4fec01810e",
-  "note": "2026-11-25, owner: the permit is 6 to 9 (40 CFR 133.102(c)), the observation's target channel shows the permit's centre instead of the set point, and the KPI band is the permit's half-width. A behaviour change on a version no release shipped, so re-stamped in place (unreleased-versions rule).",
-  "stamped": "2026-11-25T01:20:59+00:00"
+  "fingerprint": "7172caac547e040a",
+  "note": "2026-11-25, owner: the permit is 6 to 9 (40 CFR 133.102(c)), the observation's target channel shows the permit's centre instead of the set point, the KPI band is the permit's half-width, and the set point is 6.45, where the reference ladder's rule places it on the 6 to 9 grid (J1, rule 17). A behaviour change on a version no release shipped, so re-stamped in place (unreleased-versions rule).",
+  "stamped": "2026-11-25T08:35:59+00:00"
 }
