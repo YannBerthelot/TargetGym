@@ -38,6 +38,11 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 - The reactor's expert lets its Tavg loop go once Tavg is back inside its free
   band. Holding the loop's output there kept moving boron for a Tavg nothing
   charges, which made the expert fragile to its curve book late in the cycle.
+- The reactor's boron line delay is the plant's: `boron_delay` (20 steps on the
+  shipped member) replaces `boron_delay_range`, drawn at every reset, and the
+  family sweep draws it per member, 10 to 30 steps. The expert leads the plan's
+  boron, and pulls in its xenon tool's edges, by the dead time its recipe measures
+  (`theta`, 660 s on the shipped member), where it led by a fixed 600 s.
 
 ### Upgrading from 0.7.0
 

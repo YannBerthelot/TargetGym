@@ -549,3 +549,40 @@ def test_a_shard_with_no_solo_test_passes_its_solo_step():
 
     assert len(calls) == 2, calls
     assert all(c.endswith("|| test $? -eq 5") for c in calls), calls
+
+
+def _gate_passes(event, test, medium, light):
+    """Run the first step of 'tests pass' as GitHub runs it (bash -e) with
+    these job results substituted, and say whether it exits 0."""
+    import subprocess
+
+    script = _workflow_jobs()["tests-pass"]["steps"][0]["run"]
+    for name, value in {
+        "needs.test.result": test,
+        "needs.medium.result": medium,
+        "needs.light.result": light,
+        "github.event_name": event,
+    }.items():
+        script = script.replace("${{ " + name + " }}", value)
+    return subprocess.run(["bash", "-e", "-c", script]).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "event, test, medium, light, passes",
+    [
+        ("push", "success", "success", "success", True),
+        ("pull_request", "success", "skipped", "skipped", True),
+        # The medium tier failed on the first push of 2026-11-25 and the gate
+        # still passed, because the light job's success came last.
+        ("push", "success", "failure", "success", False),
+        ("push", "success", "success", "failure", False),
+        ("push", "failure", "success", "success", False),
+        ("push", "success", "skipped", "success", False),
+        ("push", "success", "cancelled", "success", False),
+        ("pull_request", "success", "failure", "skipped", False),
+    ],
+)
+def test_tests_pass_fails_when_any_job_it_needs_did_not_pass(
+    event, test, medium, light, passes
+):
+    assert _gate_passes(event, test, medium, light) is passes

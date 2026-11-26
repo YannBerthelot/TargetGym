@@ -476,7 +476,9 @@ jobs:
     - run: |
         test "${{ needs.test.result }}" = "success"
         for result in "${{ needs.medium.result }}" "${{ needs.light.result }}"; do
-          test "$result" = "success" || { test "$result" = "skipped" && test "${{ github.event_name }}" = "pull_request"; }
+          # An explicit exit: bash -e ignores a failure inside an || list,
+          # and the loop's last test would decide the step's result.
+          test "$result" = "success" || { test "$result" = "skipped" && test "${{ github.event_name }}" = "pull_request"; } || exit 1
         done
     # The push's shards each kept their coverage; the floor in
     # pyproject.toml is enforced here, over all of them.
