@@ -3,6 +3,71 @@ from typing import Any, Callable, Optional, Tuple
 import jax
 import jax.numpy as jnp
 
+#: Steps taken by name, beside the fixed-step Euler and Runge-Kutta families:
+#: ``(field, y, h, drift) -> (y after h, aux)``, with ``field(y) -> (dy/dt,
+#: aux)``. ``"<name>_<N>"`` takes N of them over ``delta_t``. Open: a caller
+#: may register its own.
+STEPPERS: dict = {}
+
+
+def matrix_drift(rate, jacobian, h):
+    """``h phi1(h J) rate``: how far a state moves in ``h`` when its rate is
+    ``rate`` now and changes with the constant ``jacobian`` J.
+
+    One matrix exponential, of ``[[h J, h rate], [0, 0]]``, whose last column
+    holds it. Any modes, real or complex, and a singular J.
+    """
+    n = rate.shape[0]
+    block = jnp.zeros((n + 1, n + 1), rate.dtype)
+    block = block.at[:n, :n].set(h * jacobian).at[:n, n].set(h * rate)
+    return jax.scipy.linalg.expm(block)[:n, n]
+
+
+def exponential_step(field, y, h, drift=None):
+    """The exponential Rosenbrock-Euler step, ``y + h phi1(h J) f(y)`` with J
+    the field's Jacobian at ``y``.
+
+    Exact, whatever ``h``, where the field is affine in ``y`` (a linear plant
+    with its input held); of order 2 elsewhere. Fixed work, no iteration.
+    ``drift(rate, jacobian, h)`` replaces ``matrix_drift`` for a caller that
+    knows its Jacobian's structure (a closed form for a 2 by 2 network, say).
+    """
+    rate, aux = field(y)
+    jacobian = jax.jacfwd(lambda z: field(z)[0])(y)
+    moved = (matrix_drift if drift is None else drift)(rate, jacobian, h)
+    return y + moved, aux
+
+
+STEPPERS["exp"] = exponential_step
+
+
+def _stacked(field, v_shape, p_shape, y):
+    """The second-order form as the first-order system ``[v, p]' = [a(v, p), v]``."""
+    size = y.shape[0] // 2
+    v, p = y[:size].reshape(v_shape), y[size:].reshape(p_shape)
+    a, aux = field(v, p)
+    return jnp.concatenate([jnp.ravel(a), jnp.ravel(v)]), aux
+
+
+def _take_registered(step, count, delta_t, positions, velocities, field, drift):
+    """``count`` steps of a registered stepper, in either form."""
+    h = delta_t / count
+    if velocities is None:
+        return jax.lax.scan(
+            lambda y, _: step(field, y, h, drift), positions, None, length=count
+        )
+    stacked = jax.tree_util.Partial(_stacked, field, velocities.shape, positions.shape)
+    start = jnp.concatenate([jnp.ravel(velocities), jnp.ravel(positions)])
+    end, aux = jax.lax.scan(
+        lambda y, _: step(stacked, y, h, drift), start, None, length=count
+    )
+    size = velocities.size
+    return (
+        end[:size].reshape(velocities.shape),
+        end[size:].reshape(positions.shape),
+        aux,
+    )
+
 
 def integrate_dynamics(
     positions: jnp.ndarray,
@@ -13,6 +78,7 @@ def integrate_dynamics(
         Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, Any]]
     ] = None,
     compute_velocity: Optional[Callable[[jnp.ndarray], Tuple[jnp.ndarray, Any]]] = None,
+    drift: Optional[Callable] = None,
 ):
     """
     General integrator for ODEs.
@@ -24,7 +90,9 @@ def integrate_dynamics(
     Args:
         positions: jnp.ndarray, current position/state
         delta_t: float, integration step size
-        method: str, either "euler_N" or "rkK_N" (K = 2–4, N = substeps)
+        method: str, "euler_N", "rkK_N" (K = 2–4, N = substeps), or "<name>_N"
+            for a name in ``STEPPERS``: "exp_N" is the exponential step
+        drift: for "exp_N", the caller's own ``exponential_step`` drift
         velocities: jnp.ndarray, current velocities (required for 2nd-order)
         compute_acceleration: function (v, p) -> (a, metrics), required for 2nd-order
         compute_velocity: function (p) -> velocity, required for 1st-order
@@ -36,6 +104,22 @@ def integrate_dynamics(
     """
 
     # Parse method string
+    name, _, count = method.rpartition("_")
+    if name in STEPPERS:
+        first_order = compute_velocity is not None
+        if not first_order and (compute_acceleration is None or velocities is None):
+            raise ValueError(
+                "Must provide either (compute_velocity) or (velocities + compute_acceleration)."
+            )
+        return _take_registered(
+            STEPPERS[name],
+            int(count),
+            delta_t,
+            positions,
+            None if first_order else velocities,
+            compute_velocity if first_order else compute_acceleration,
+            drift,
+        )
     if "euler" in method:
         order, n_substeps = "euler", int(method.split("_")[1])
     elif "rk" in method:

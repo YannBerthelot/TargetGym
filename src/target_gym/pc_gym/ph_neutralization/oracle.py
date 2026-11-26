@@ -37,6 +37,7 @@ and buffer, in closed form.
 """
 
 import functools
+import math
 
 import jax
 import jax.numpy as jnp
@@ -56,6 +57,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     steady_base_flow,
     titration_residual,
 )
+from target_gym.utils import ou_decay
 
 # ---------------------------------------------------------------------------
 # pH neutralisation
@@ -113,7 +115,7 @@ def ph_step(env, p, x, u, t, task):
     q1, Wa1, q2_0 = task
     q3 = p.q3_min + 0.5 * (u[0] + 1.0) * (p.q3_max - p.q3_min)  # T1
     q3t = 0.5 * (u[1] + 1.0) * p.q3_trim_max
-    decay = 1.0 - BUFFER_OU_THETA * p.delta_t
+    decay = ou_decay(BUFFER_OU_THETA, float(p.delta_t), xp=math)
     q2 = p.q2_nominal + (q2_0 - p.q2_nominal) * decay ** (t + 1)
     x = x.at[INVARIANTS,].divide(MM)
     Wa_1, Wb_1, Wa, Wb, basin, Wa_b, Wb_b = x[:7]

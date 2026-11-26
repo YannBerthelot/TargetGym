@@ -37,6 +37,7 @@ from target_gym.hvac.env import (
     stored_value,
 )
 from target_gym.hvac.rendering import _render
+from target_gym.utils import ou_decay
 from target_gym.video import SavesVideo
 
 
@@ -82,7 +83,7 @@ class BuildingHVAC(
         FieldReading("T_return", sigma=0.023, step=0.1),
     )
 
-    def __init__(self, integration_method: str = "rk4_2"):
+    def __init__(self, integration_method: str = "exp_1"):
         self.obs_shape = (12,)
         self.integration_method = integration_method
 
@@ -159,12 +160,12 @@ class BuildingHVAC(
         # deviation decaying at the weather's rate (``env.outdoor_forecast``).
         ahead = jnp.arange(DAY_STEPS)
         opens = params.occupied_start_h * 3600.0 / params.delta_t
-        dev = weather_dev * (1.0 - WEATHER_OU_THETA * params.delta_t) ** ahead
+        dev = weather_dev * ou_decay(WEATHER_OU_THETA, params.delta_t * ahead)
         night = (ahead < opens) / opens
         out_night = jnp.sum(night * outdoor_temperature(ahead, dev, params))
         int_night = jnp.sum(night * internal_gain(ahead, params))
         sol_night = jnp.sum(night * solar_gain(ahead, params))
-        dev_open = weather_dev * (1.0 - WEATHER_OU_THETA * params.delta_t) ** opens
+        dev_open = weather_dev * ou_decay(WEATHER_OU_THETA, params.delta_t * opens)
         ia_open, st_open, _ = split_gains(
             internal_gain(opens, params), solar_gain(opens, params), params
         )

@@ -57,6 +57,7 @@ from target_gym.integration import integrate_dynamics
 from target_gym.utils import (
     convert_raw_action_to_range,
     log_scaled_reward,
+    ou_decay,
     stationary_innovation,
 )
 
@@ -434,7 +435,7 @@ def compute_next_state(
     # still gives a genuine zero-mean process.
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     # The innovation that keeps the flow's spread at ``q2_noise_std``.
-    decay = 1.0 - BUFFER_OU_THETA * p.delta_t
+    decay = ou_decay(BUFFER_OU_THETA, p.delta_t)
     sigma = stationary_innovation(p.q2_noise_std, decay)
     q2 = p.q2_nominal + decay * (state.q2 - p.q2_nominal) + sigma * noise
     q2 = jnp.clip(q2, p.q2_min, p.q2_max)

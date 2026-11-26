@@ -514,6 +514,14 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Changed
 
+- **hvac steps its two slow nodes exactly.** With the supply, the weather and
+  the gains held over a step the network is linear, so the plant now takes the
+  exponential step `exp_1` (`integration.exponential_step`, with the plant's
+  own closed form for its 2 by 2 network) in place of `rk4_2`. At the shipped
+  15 min step the two agree to rounding (4e-11 of the cost in float64); the
+  exact step stays exact at any length. `BuildingHVAC(integration_method=
+  "rk4_2")` is the old behaviour.
+
 - Before moving to the shared solver (above), the compressor's oracle solved
   the NLP of its CasADi build, term for term, with IPOPT's algorithm written
   in JAX, which became `target_gym.oracles.ipm`: the filter line search with second-order corrections, the inertia correction,
@@ -532,6 +540,21 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- `integrate_dynamics(..., method="exp_N")`: the exponential Rosenbrock-Euler
+  step, exact where the field is affine in the state, with an optional
+  `drift` for a caller that knows its Jacobian's structure. `integration.
+  STEPPERS` maps a name to a step, so `"<name>_<N>"` takes N of a stepper a
+  caller registers.
+- `target_gym.tables.smooth_table(grids, values, point)`: a table read with a
+  continuous gradient in one or more dimensions, through the table's nodes, so
+  a plant and the planner that models it can read one copy. No plant reads it
+  yet.
+- `utils.ou_decay(theta, dt)`, `exp(-theta dt)`.
+- `tests/test_reference_solve.py` (medium tier): each plant's cost at its
+  integration setting against SciPy's LSODA at 1e-10 on the plant's own field,
+  held to 0.1 %.
+- `scripts/trips_inside_a_step.py`: counts limits crossed and recovered inside
+  one control step, on the null-policy gate's runs.
 - `target_gym.scoring_runs`: a task scored on its stream pinned to each
   scenario, from the reset, over a protocol's days, with twin scenarios folded
   and a stop rule for seeds set before results. The reactor's protocol (owner,
@@ -583,6 +606,18 @@ The next release is 0.8.0, because these changes break code written for
   the field stay valid.
 
 ### Fixed
+
+- **Four disturbances decayed faster than their stated rate.** hvac's weather,
+  the pH buffer flow, the kiln's raw-meal feed and the reactor's load wobble
+  kept `1 - theta dt` of a deviation per step, an Euler step that forgets
+  `theta dt / 2` faster than `theta` says (1.0 %, 0.5 %, 1.2 % and 0.8 %) and
+  changes with the step. They now keep `exp(-theta dt)` (`utils.ou_decay`),
+  and so do the forecasts of hvac's expert and the oracles' models of the
+  four. The stationary spread is unchanged. The same draws give a slightly
+  different path: on one noisy 300-step run the kiln's cost moved by 0.2 %,
+  the reactor's by 7e-6, hvac's by 2e-7, and pH's not at all.
+- `cement_kiln.env.compute_next_state` took `rk4_2` when no setting was given,
+  while the registered plant runs `rk4_1`. Its default is now the plant's.
 
 - `make_gymnasium` environments and `save_video` compile the task's step once.
   They called it as plain Python, where a task's sub-step loops are compiled

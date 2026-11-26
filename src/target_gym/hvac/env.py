@@ -29,7 +29,11 @@ from jax.tree_util import Partial as partial
 from target_gym import reward as R
 from target_gym.base import EnvParams, EnvState, actuator_field
 from target_gym.integration import integrate_dynamics
-from target_gym.utils import convert_raw_action_to_range, stationary_innovation
+from target_gym.utils import (
+    convert_raw_action_to_range,
+    ou_decay,
+    stationary_innovation,
+)
 
 SECONDS_PER_DAY = 86_400.0
 SECONDS_PER_HOUR = 3_600.0
@@ -417,7 +421,7 @@ def outdoor_forecast(time, weather_dev, params: HVACParams, level=None):
     outdoor mean on its way to the regime's, as a forecast sees a front coming.
     Its error is the weather's own unforecast innovation."""
     ahead = jnp.arange(1, DAY_STEPS + 1)
-    decay = (1.0 - WEATHER_OU_THETA * params.delta_t) ** ahead
+    decay = ou_decay(WEATHER_OU_THETA, params.delta_t * ahead)
     mean = None if level is None else outdoor_mean_ahead(level, ahead, params)
     return jnp.mean(
         outdoor_temperature(time + ahead, weather_dev * decay, params, mean)
@@ -580,11 +584,17 @@ def compute_next_state(
     state: "HVACState",
     params: HVACParams,
     key: jax.Array,
-    integration_method: str = "rk4_2",
+    integration_method: str = "exp_1",
 ):
     """``action_raw`` in [-1, 1] maps to supply water in [T_supply_min,
     T_supply_max]. Frost protection overrides it with full supply [1]. The
-    source's size bounds the heat, and the supply kept is the water it made."""
+    source's size bounds the heat, and the supply kept is the water it made.
+
+    The two nodes are a linear network over a step, the supply, the weather
+    and the gains being held, so the default ``exp_1`` is their exact solution
+    (``drift_over``) whatever the step's length, while the slab's heat stays in
+    one regime: off, in proportion, or at the source's size. ``rk4_N`` and
+    ``euler_N`` remain."""
     p = params
     commanded = convert_raw_action_to_range(
         action_raw, min_action=p.T_supply_min, max_action=p.T_supply_max
@@ -593,7 +603,7 @@ def compute_next_state(
 
     noise = jax.random.normal(jax.random.fold_in(key, state.time))
     # The innovation that keeps the deviation's spread at ``T_out_noise_std``.
-    decay = 1.0 - WEATHER_OU_THETA * p.delta_t
+    decay = ou_decay(WEATHER_OU_THETA, p.delta_t)
     sigma = stationary_innovation(p.T_out_noise_std, decay)
     weather_dev = decay * state.weather_dev + sigma * noise
     level = outdoor_mean_ahead(state.T_out_level, 1, p)
@@ -610,6 +620,7 @@ def compute_next_state(
         delta_t=p.delta_t,
         compute_velocity=_compute_velocity,
         method=integration_method,
+        drift=drift_over,
     )
     T_mass, T_core = new_positions[0], new_positions[1]
 

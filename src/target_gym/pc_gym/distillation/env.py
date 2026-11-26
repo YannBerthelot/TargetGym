@@ -336,6 +336,13 @@ def compute_next_state(
     /min, inside that. RK4 is stable only for h*|lambda| < 2.78, and 16 substeps
     give 2.35 at worst. Fewer substeps do not merely lose accuracy -- the
     profile saturates to 0/1 within a few steps.
+
+    They are also what resolves the tray flows. A stiff step is stable at one
+    per minute, but the 39 flow lags are real dynamics that every input step
+    excites: on the square wave of ``tests/test_plant_numerics.py`` one RODAS3
+    or Rodas5P step per minute costs 3e-4 to 4e-4 more or less than the
+    converged plant, where these 16 substeps are 2.5e-7 from it, and with the
+    column's tridiagonal solve it is no faster (measured 2026-11-24).
     """
     p = params
     L = convert_raw_action_to_range(

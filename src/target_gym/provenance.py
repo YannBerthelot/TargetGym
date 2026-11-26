@@ -83,6 +83,9 @@ _PHYSICS_SOURCES = (
     _ROOT / "integration.py",
     _ROOT / "reward.py",
     _ROOT / "base.py",
+    # Read by no plant yet: listed now so that the plants moving to it later
+    # change their own stamps only, not every task's a second time.
+    _ROOT / "tables.py",
 )
 
 

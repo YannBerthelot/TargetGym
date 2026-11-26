@@ -25,6 +25,8 @@ The trip's reset, which ``step_env`` evaluates on every step (the kiln's
 cold start holds the fuel and the speed where they are.
 """
 
+import math
+
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 
@@ -32,6 +34,7 @@ from target_gym.cement_kiln.env import FEED_OU_THETA, advance
 from target_gym.oracles.controller import Oracle, TaskModel, raw_of
 from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
+from target_gym.utils import ou_decay
 
 
 def soft_max(values, width):
@@ -45,7 +48,8 @@ def soft_max(values, width):
 def kiln_model(env, p) -> TaskModel:
     assert float(p.e_tol) == 0.0 and float(p.tracking_exponent) == 2.0
     n = int(p.n_zones)
-    decay = 1.0 - FEED_OU_THETA * p.delta_t  # the deviation's mean per step
+    # The deviation's mean per step, a plain float whatever the run's precision.
+    decay = ou_decay(FEED_OU_THETA, float(p.delta_t), xp=math)
 
     def step(d, x, u, t):
         target, deviation = d["task"]
