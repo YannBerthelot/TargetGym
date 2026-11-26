@@ -155,11 +155,18 @@ def test_the_column_solves_its_reset_to_the_solvers_tolerance():
     # The distillate's range is the plant's (its clip, env.py's ``flows``): a
     # plan past it draws a negative bottoms that the model would count as
     # light key recovered. Every planned move keeps D inside it, so K8's
-    # replay meets no crossed guard and matches the plan.
+    # replay meets no crossed guard and matches the plan. The flows are read
+    # in float64, the plan's and the replay's precision: in float32 (JAX's
+    # default outside x64) L and V near 3 round by 2.4e-7, past the solver's
+    # 2e-8 back-off, so a plan on D's bound would read as crossing it.
     q = oracle.params
-    moves = np.asarray(oracle.shooting.moves(oracle._plan))
-    L = q.L_min + 0.5 * (moves[:, 0] + 1.0) * (q.L_max - q.L_min)
-    V = q.V_min + 0.5 * (moves[:, 1] + 1.0) * (q.V_max - q.V_min)
+    with enable_x64():
+        moves = np.asarray(oracle.shooting.moves(oracle._plan), dtype=np.float64)
+    L_min, L_max, V_min, V_max = (
+        float(v) for v in (q.L_min, q.L_max, q.V_min, q.V_max)
+    )
+    L = L_min + 0.5 * (moves[:, 0] + 1.0) * (L_max - L_min)
+    V = V_min + 0.5 * (moves[:, 1] + 1.0) * (V_max - V_min)
     assert np.all((V - L >= float(q.D_min)) & (V - L <= float(q.D_max)))
     assert report["solver_guard_flags"] == 0
     assert report["solver_max_replay_gap"] <= 1e-6
