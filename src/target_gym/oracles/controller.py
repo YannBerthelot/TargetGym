@@ -66,7 +66,10 @@ class TaskModel(NamedTuple):
     charges another way. ``action(state, u)`` is what the env is sent, each
     task step, for a move that is not a raw command, such as a rate
     (``oracles.rates``): the raw move itself if not given, and K8's replay
-    sends the same."""
+    sends the same. ``replay_cost(state, next_state, reward)`` is what the
+    task's evaluation charges an env step, for a task whose evaluation reads a
+    window or charges a store's edges (hvac): K8's replay sums it in place of
+    minus the reward, which it is if not given."""
 
     nx: int
     nu: int
@@ -83,6 +86,7 @@ class TaskModel(NamedTuple):
     tie_budget: float = TIE_BUDGET
     rest: Callable | None = None
     action: Callable | None = None
+    replay_cost: Callable | None = None
 
 
 def float64(tree):
@@ -298,12 +302,13 @@ class Oracle:
             sent = us[t] if m.action is None else m.action(s, us[t])
             _, s1, r, _, info = self.env.step_env(key, s, sent, self.params)
             s1 = jax.tree_util.tree_map(lambda a, b: a.astype(b.dtype), s1, s)
-            return s1, (r, jnp.asarray(m.tracked(s1)), info["tripped"])
+            paid = -r if m.replay_cost is None else m.replay_cost(s, s1, r)
+            return s1, (paid, jnp.asarray(m.tracked(s1)), info["tripped"])
 
         cost, y_plan, low = jax.lax.scan(planned, x0, ts)[1]
-        r, y_env, trip = jax.lax.scan(replayed, st, ts)[1]
+        paid, y_env, trip = jax.lax.scan(replayed, st, ts)[1]
         R_plan = -jnp.sum(jnp.where(live, cost, 0.0))
-        R_env = jnp.sum(jnp.where(live, r, 0.0))
+        R_env = -jnp.sum(jnp.where(live, paid, 0.0))
         q = jnp.asarray(m.resolution, x0.dtype)
         gap = jnp.where(live[:, None], jnp.abs(y_plan - y_env) / q, 0.0)
         return {

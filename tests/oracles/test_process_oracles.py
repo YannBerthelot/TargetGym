@@ -62,6 +62,11 @@ QUIET = {
 }
 #: An event already in force at the solve, as the state carries it (certainty
 #: equivalence): four_tank's extra outlet in tank 4, opened before the reset.
+#: Fields set on the reset before the replay, per task. hvac's oracle plans on
+#: its scored window, steps 288 to 960, so ten stages from the reset's step 0
+#: would cost both sides nothing: they start inside it (owner, 2026-11-26).
+START = {"hvac": {"time": 300}}
+
 IN_FORCE = {
     "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
     # Both feed steps of [D1, Fig. 18] on since before the reset, rate down 20 %
@@ -184,8 +189,10 @@ def test_the_exact_rewrites_replay_on_the_env(name, in_force):
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
     a rewrite is not exact. The compressor's sites run exact (width 0). With
-    an event in force at the solve, the plan and the env both hold it."""
+    an event in force at the solve, the plan and the env both hold it. A task
+    in ``START`` starts where its plan charges something."""
     overrides, fields = IN_FORCE[name] if in_force else ({}, {})
+    fields = {**START.get(name, {}), **fields}
     env, params, oracle = _oracle(name, **QUIET.get(name, {}), **overrides)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
@@ -202,6 +209,34 @@ def test_the_exact_rewrites_replay_on_the_env(name, in_force):
     assert not bool(cert["replay_trip"]), "the plan must meet the constraints"
     assert float(cert["replay_gap"]) <= 1e-10
     assert float(cert["output_gap"]) <= 1e-6
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize("start", [283, 300, 955])
+def test_hvacs_replay_charges_what_the_evaluation_charges(start):
+    """Owner, 2026-11-25 (the hvac review's P1, as amended): hvac's oracle plans
+    on its scored window, steps 288 to 960, and charges the heat each step draws
+    from the store, while the reward carries no stored heat and the evaluation
+    charges the store's loss once at the window's edges. The replay (K8) must
+    charge each env step what the evaluation does: its cost and the store's
+    value it drew down inside the window, nothing outside. Ten stages from 283
+    straddle the window's start, from 300 lie inside it, from 955 straddle its
+    end; the plan and the replay then differ only by float64 rounding."""
+    env, params, oracle = _oracle("hvac")
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(100), params)
+        st, m = (
+            float64(state.replace(time=jnp.asarray(start, state.time.dtype))),
+            oracle.model,
+        )
+        hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
+        wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
+        moves = jnp.clip(hold + wave, -1.0, 1.0)
+        d = {"task": m.data(st), "end": 10 * oracle.tc}
+        d["widths"] = jnp.zeros_like(jnp.asarray(oracle.widths))
+        cert = oracle._certify(d, st, m.state_x(st), moves, 10)
+    assert float(cert["reward_plan"]) != 0.0, "the stages must reach the window"
+    assert float(cert["replay_gap"]) <= 1e-10
 
 
 def _expert_probes(name, seed=100, every=10):
