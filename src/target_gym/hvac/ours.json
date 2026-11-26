@@ -17,13 +17,7 @@
    "lo": 0.07,
    "hi": 0.12,
    "unit": "1/m^2",
-   "why": "ours, family range 0.07 to 0.12 (8 to 15 m^2 a person); hvac/PHYSICS.md:65, env.py:159-160"
-  },
-  "comfort_price": {
-   "lo": 6.678,
-   "hi": 11.448,
-   "unit": "EUR/(K h)",
-   "why": "DERIVED, not a stated range: comfort_price = productivity_per_K x occupants x 150 m^2 x labour_cost (hvac/PHYSICS.md:71, env.py:164-166) at occupants 0.07 and 0.12, i.e. 0.02*0.07*150*31.8 and 0.02*0.12*150*31.8"
+   "why": "ours, family range 0.07 to 0.12 (8 to 15 m^2 a person); hvac/PHYSICS.md:65, env.py:159-160; comfort_price is derived from it (productivity_per_K x occupants_per_m2 x A_floor x labour_cost), so it moves with each draw: 6.678 at 0.07, 11.448 at 0.12"
   },
   "concrete_heat_capacity": {
    "lo": 800.0,
@@ -38,13 +32,6 @@
    "why": "ours (ISO 10456 as commonly quoted, not read); published range 1.5 to 3.5 W/(m K); hvac/PHYSICS.md:57"
   }
  },
- "coupled": [
-  [
-   "occupants_per_m2",
-   "comfort_price"
-  ]
- ],
- "coupled_why": "comfort_price is the work an occupied kelvin-hour loses and is defined as productivity_per_K x occupants x 150 m^2 x labour_cost (hvac/PHYSICS.md:71), so it moves with the occupant density: the low end 0.07 goes with 6.678 and 0.12 with 11.448",
  "no_range": [
   "h_ceiling",
   "T_supply_min",

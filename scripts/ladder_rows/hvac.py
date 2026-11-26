@@ -18,7 +18,14 @@ from reference_ladder import (  # noqa: E402
     Row,
 )
 
+from target_gym.experts.pid import Controller
 from target_gym.registry import REGISTRY
+
+#: The night charging window, 00:00 to 07:00 (Madrid's night setpoint [14, p. 14]).
+NIGHT_END_H = 7.0
+#: Day-to-day room correction [9, p. 3]: 1 K of curve per K of room for a floor
+#: [11, p. 2], limited to about 5 K [9, part 2].
+TRIM_PER_K, TRIM_MAX = 1.0, 5.0
 
 
 def row() -> Row:
@@ -122,6 +129,43 @@ def row() -> Row:
         valve=False,
     )
 
+    # Rung "night charging" (owner, 2026-11-25, the review's P2): Madrid charges
+    # its floors at night on the cheap tariff and lets them release heat by day
+    # [14, p. 14]. The water runs only from 00:00 to 07:00, a lift above the core
+    # it reads that puts the day's heat in those 7 hours: 24 / 7 times the
+    # balance's lift at the forecast's outdoor mean, for the set point. Each new
+    # day the lift is trimmed on the last day's occupied room mean, a kelvin of
+    # curve per kelvin of room [11, p. 2], held to 5 K [9, part 2]. Ours: the
+    # 24 / 7 scaling, read from the balance, and the trim's once-a-day update.
+    occupied = (float(scored.occupied_start_h), float(scored.occupied_end_h))
+
+    def night(T_room):
+        bal = [
+            [float(steady_state(scored, T, T_room, day_int, day_sol)[k]) for T in ends]
+            for k in (3, 1)
+        ]
+        lift0 = bal[0][0] - bal[1][0]
+        lift_slope = ((bal[0][1] - bal[1][1]) - lift0) / (ends[1] - ends[0])
+        scale = 24.0 / NIGHT_END_H
+
+        def step(_p, state, o, xp):
+            trim, total, count, last = state
+            hour = (xp.arctan2(o[6], o[7]) * 24.0 / (2.0 * math.pi)) % 24.0
+            new_day = hour < last
+            mean = total / xp.maximum(count, 1.0)
+            moved = xp.clip(trim + TRIM_PER_K * (T_room - mean), -TRIM_MAX, TRIM_MAX)
+            trim = xp.where(new_day & (count > 0), moved, trim)
+            total, count = xp.where(new_day, 0.0, total), xp.where(new_day, 0.0, count)
+            in_hours = (hour >= occupied[0]) & (hour < occupied[1])
+            total = total + xp.where(in_hours, o[0], 0.0)
+            count = count + xp.where(in_hours, 1.0, 0.0)
+            lift = lift0 + lift_slope * (o[9] - ends[0]) + trim
+            T_sup = xp.where(hour < NIGHT_END_H, o[3] + scale * lift, lo)
+            raw = xp.clip(raw_of(T_sup), -1.0, 1.0)
+            return xp.reshape(raw, (1,)), (trim, total, count, hour)
+
+        return Controller(None, (0.0, 0.0, 0.0, 24.0), step)
+
     def published(s):
         # The heating curve the family runs (hvac/experts.py, [9, 13]).
         return s.make_pid_controller()
@@ -138,6 +182,7 @@ def row() -> Row:
         balance=balance,
         cascades=(slab,),
         published=published,
+        schedules={"night charging": night},
         why={
             "decoupler": "one loop",
             "override": "no limit a select could hold: the supply's 49 C and frost "

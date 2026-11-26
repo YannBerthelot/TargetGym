@@ -14,7 +14,13 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 - objective: the heat pump's electricity at the tariff and the comfort
   hinges through epigraph rows on every occupied state (T2): the room below
   and above the band and the floor above its limit, each linear in
-  kelvin-hours at the work-loss price;
+  kelvin-hours at the work-loss price; the heat each step draws from the
+  store, at the env's price (``env.stored_heat_cost``), linear in the states;
+- window (owner, 2026-11-25, the review's finding 1): the registry's oracle
+  plans on the task's scored window alone (``scenarios.hvac_evaluation``), as
+  the task scores its lines, so the ceiling bounds the scored cost. A step
+  outside it costs the plan nothing; the stored heat charges the store the
+  window starts with and credits the one it leaves;
 - smoothed site (T5): the slab heat's two edges in ``slab_heat``, heating
   only (``max(T_sup - T_core, 0)``) and the source's size [13], which enter the
   dynamics and so cannot be epigraph rows: K2's softplus at the solve's width
@@ -48,8 +54,10 @@ from target_gym.hvac.env import (
     solve_air_and_surface,
     source_size,
     split_gains,
+    stored_heat_cost,
     zone_conductances,
 )
+from target_gym.hvac.scenarios import hvac_evaluation
 from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import (
     Oracle,
@@ -86,7 +94,15 @@ def velocity(position, action, time, weather_dev, width, p):
     return jnp.stack([dT_mass, dT_core]), None
 
 
-def hvac_model(env, p) -> TaskModel:
+def scored_window() -> tuple[int, int]:
+    """The task's scored steps, ``(first, end)``."""
+    ev = hvac_evaluation()
+    return ev["unscored_steps"], ev["unscored_steps"] + ev["scored_steps"]
+
+
+def hvac_model(env, p, window=None) -> TaskModel:
+    """The plan's model; ``window`` ``(first, end)`` costs only the steps in it
+    (every step when None)."""
     hours = p.delta_t / 3600.0
     # The deviation's mean per step, a plain float whatever the run's precision.
     decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
@@ -115,8 +131,12 @@ def hvac_model(env, p) -> TaskModel:
         )
         T_floor = floor_surface_temperature(x1[1], T_air, p)
         occupied = is_occupied(now, p)
+        if window is None:
+            inside = True
+        else:
+            inside = (start + t >= window[0]) & (start + t < window[1])
         y = jnp.where(
-            occupied,
+            occupied & inside,
             jnp.stack(
                 [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
             ),
@@ -127,7 +147,9 @@ def hvac_model(env, p) -> TaskModel:
         q = heat(T_sup, x1[1], p, width)
         made = jnp.minimum(T_sup, x1[1] + q / slab_conductances(p)["H_water"])
         kwh = q / heat_pump_cop(made, p) / 1000.0 * hours
-        return x1, electricity_price(start + t, p) * kwh, y, T_air[None], ()
+        cost = electricity_price(start + t, p) * kwh
+        cost = cost + stored_heat_cost(x[0], x[1], x1[0], x1[1], p)
+        return x1, jnp.where(inside, cost, 0.0), y, T_air[None], ()
 
     weight = float(p.comfort_price * hours)
     return TaskModel(
@@ -164,4 +186,5 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
 
 def make_hvac_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``hvac_model``."""
-    return Oracle(env, params, "hvac", hvac_model)
+    window = scored_window()
+    return Oracle(env, params, "hvac", lambda env, p: hvac_model(env, p, window=window))

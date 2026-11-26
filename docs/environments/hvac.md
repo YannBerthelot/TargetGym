@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/hvac/pid_output.gif" width="480px"/></p>
 
-Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, and each occupied kelvin-hour of room outside the band or of floor above its limit. Nothing trips.
+Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, each occupied kelvin-hour of room outside the band or of floor above its limit. The evaluation also charges, once, the heat the building's store lost across the scored days, at the cheapest price heat can be stored at. Nothing trips.
 
 ```python
 import target_gym as tg
@@ -110,7 +110,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `A_floor` | 150 | m^2 |
 | `lambda_at` | 4.5 | - |
 | `f_class` | 2.5 | - |
-| `cm_per_area` | 165000 | J/(K m^2) |
+| `cm_per_area` | 110000 | J/(K m^2) |
 | `h_is` | 3.45 | W/(m^2 K) |
 | `h_ms` | 9.1 | W/(m^2 K) |
 | `A_wall` | 120 | m^2 |
@@ -154,14 +154,14 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `floor_surface_max` | 29 | degC |
 | `comfort_tolerance` | 2.5 | K |
 | `precision_floor` | 0.1 | K |
-| `reward_version` | 4 | - |
+| `reward_version` | 5 | - |
 | `price_valle` | 0.139 | EUR/kWh |
 | `price_llano` | 0.184 | EUR/kWh |
 | `price_punta` | 0.263 | EUR/kWh |
+| `T_out_design` | -10 | degC |
 | `productivity_per_K` | 0.02 | 1/K |
 | `occupants_per_m2` | 0.1 | 1/m^2 |
 | `labour_cost` | 31.8 | EUR/h |
-| `comfort_price` | 9.54 | EUR/(K h) |
 | `restart_steps` | 0 | steps |
 | `failure_cost` | 0 | EUR per step |
 

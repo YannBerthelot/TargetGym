@@ -27,8 +27,16 @@ from target_gym.hvac.env import (
 )
 from target_gym.hvac.env_jax import BuildingHVAC
 
-# Published targets for a well-insulated heavyweight dwelling (PHYSICS.md §2).
-TAU_RANGE_H = (30.0, 100.0)
+# The 5R1C mass beside the separate TABS slab is ISO 13790's "light" class
+# (owner, 2026-11-25 and 2026-11-26, the hvac review's finding 5). ISO
+# 13790:2008 Table 12 sets the class capacities per floor area: very light 80,
+# light 110, medium 165 kJ/(m^2 K). On this zone's 150 m^2 and the hand-derived
+# 159.4 W/K (test_hvac_storey_and_storage.py), the light mass's time constant
+# lies strictly between its two neighbours': 80e3 * 150 / 159.4 / 3600 = 20.9 h
+# and 165e3 * 150 / 159.4 / 3600 = 43.1 h, rounded inward so neither neighbour
+# passes. The slab carries the building's heavy store, and test_hvac_reality.py
+# checks its own time constant.
+TAU_RANGE_H = (21.0, 43.0)
 DESIGN_LOAD_RANGE_W_PER_M2 = (25.0, 55.0)
 HEATER_MARGIN_RANGE = (1.3, 2.0)
 
@@ -212,8 +220,9 @@ def test_outdoor_temperature_is_coldest_before_dawn(params):
 # ---------------------------------------------------------------------------
 
 
-def test_building_time_constant_matches_a_heavyweight_dwelling(params):
-    """tau = C_m / H should be tens of hours. This is what makes the task slow."""
+def test_the_mass_beside_the_slab_has_a_light_class_time_constant(params):
+    """tau = C_m / H lies between the very light and the medium classes' at
+    this envelope (ISO 13790 Table 12): the light class, tens of hours."""
     c = zone_conductances(params)
     tau_h = c["C_m"] / total_heat_loss_coefficient(params) / 3600.0
     assert TAU_RANGE_H[0] < tau_h < TAU_RANGE_H[1], f"tau = {tau_h:.1f} h"

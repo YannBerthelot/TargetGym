@@ -18,7 +18,7 @@ from typing import Mapping
 import numpy as np
 
 __all__ = ["LADDER_SEEDS", "Evaluation", "costs", "line_seeds", "of"]
-__all__ += ["saving_interval", "scored_cost", "scored_window"]
+__all__ += ["episode_cost", "saving_interval", "scored_cost", "scored_window"]
 
 #: The seeds every line ran on before a task declared its own (the ladder's, J3).
 LADDER_SEEDS = tuple(range(100, 110))
@@ -33,12 +33,20 @@ class Evaluation:
     spend at the end a stock the next days pay for: an evaluation reads the mean
     cost per step over the ``scored_steps`` between (all the rest when None). Lines
     run on ``seeds``, and on ``extra_seeds`` too in a scenario where the reference's
-    saving over the ceiling is unclear (``line_seeds``)."""
+    saving over the ceiling is unclear (``line_seeds``).
+
+    ``edge_charge`` names an episode quantity holding, after each step, the value
+    of what the plant stores (hvac's ``stored_value``): the value the store lost
+    across the scored window is charged once, spread over its steps, so a policy
+    neither draws on stock bought before the window nor leaves the next days short
+    for free (owner, 2026-11-25, the hvac review's P1 as amended). The reward
+    carries no such charge."""
 
     unscored_steps: int = 0
     scored_steps: int | None = None
     seeds: tuple[int, ...] = LADDER_SEEDS
     extra_seeds: tuple[int, ...] = ()
+    edge_charge: str | None = None
 
 
 def of(spec) -> Evaluation:
@@ -65,11 +73,30 @@ def scored_cost(spec, cost) -> float:
     return float(cost[scored_window(spec, len(cost))].mean())
 
 
+def episode_cost(spec, episode) -> float:
+    """One ``eval.Episode``'s cost per step over ``spec``'s scored window, with
+    the evaluation's edge charge: the store's value after the step before the
+    window less its value after the window's last step, over the scored steps."""
+    window = scored_window(spec, len(episode.cost))
+    cost = scored_cost(spec, episode.cost)
+    name = of(spec).edge_charge
+    if name is None:
+        return cost
+    if window.start == 0:
+        raise ValueError(f"{spec.name}: an edge charge needs a step before the window")
+    if name not in episode.terms:
+        raise KeyError(f"{spec.name}: the episode records no {name!r}")
+    store = np.asarray(episode.terms[name], float)
+    lost = store[window.start - 1] - store[window.stop - 1]
+    return cost + float(lost) / (window.stop - window.start)
+
+
 def costs(runs: Mapping[str, list], spec) -> dict[str, np.ndarray]:
     """Each scenario's cost per step over ``spec``'s scored window, one value per
-    seed (``target_gym.scenarios.costs`` reads the whole episode)."""
+    seed, with its edge charge (``episode_cost``; ``target_gym.scenarios.costs``
+    reads the whole episode)."""
     return {
-        name: np.array([scored_cost(spec, ep.cost) for ep in episodes])
+        name: np.array([episode_cost(spec, ep) for ep in episodes])
         for name, episodes in runs.items()
     }
 
