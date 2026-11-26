@@ -1,0 +1,6 @@
+# zizmor (pre-commit) checks the workflows. Off: self-repository, which asks
+# for a newer spelling of local action paths; the workflows keep the
+# documented ./ form.
+rules:
+  self-repository:
+    disable: true
