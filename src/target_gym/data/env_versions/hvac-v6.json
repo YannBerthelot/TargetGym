@@ -1,5 +1,5 @@
 {
-  "fingerprint": "cba93268284e63b6",
-  "note": "hvac-v6 re-stamped in place, never shipped (owner, 2026-11-25, PR 274): the stored-heat charge leaves the reward for the evaluation's edge charge; env.stored_value recorded on every run",
-  "stamped": "2026-11-25T08:43:28+00:00"
+  "fingerprint": "c563f747e1cb4474",
+  "note": "hvac-v6 re-stamped in place, never shipped (owner, 2026-11-25 and 2026-11-26, PR 274): the stored-heat charge leaves the reward for the evaluation's edge charge, env.stored_value recorded on every run; the roof restored (a top storey, 159.4 W/K) at the light mass",
+  "stamped": "2026-11-26T00:50:16+00:00"
 }

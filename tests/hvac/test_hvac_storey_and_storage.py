@@ -3,10 +3,11 @@ review's findings 1 and 5).
 
 Contract:
 
-- The zone is one storey of a stack of like storeys, so both faces of its TABS
-  slab heat it and it has no roof: its envelope is the walls, the glazing and
-  the ventilation, ``0.28 x 120 + 1.30 x 25 + 0.34 x 0.5 x 150 x 2.6`` = 33.6 +
-  32.5 + 66.3 = 132.4 W/K.
+- The zone is a top storey with its roof (owner, 2026-11-26, restoring the
+  roof after the middle storey failed the slab time-constant and setback
+  reality tests): its envelope is the walls, the roof, the glazing and the
+  ventilation, ``0.28 x 120 + 0.18 x 150 + 1.30 x 25 + 0.34 x 0.5 x 150 x 2.6``
+  = 33.6 + 27.0 + 32.5 + 66.3 = 159.4 W/K.
 - The slab is modelled on its own, so the 5R1C mass is what is left beside it:
   ISO 13790's "light" class, 110 kJ/(m2 K) and A_m = 2.5 A_floor, not the
   "medium" class (165), whose figure counts the floors.
@@ -36,8 +37,8 @@ from target_gym.hvac.env_jax import BuildingHVAC
 P = HVACParams()
 
 
-def test_a_middle_storey_loses_heat_through_its_walls_glazing_and_air_alone():
-    assert float(total_heat_loss_coefficient(P)) == pytest.approx(132.4, abs=0.05)
+def test_a_top_storey_loses_heat_through_its_walls_roof_glazing_and_air():
+    assert float(total_heat_loss_coefficient(P)) == pytest.approx(159.4, abs=0.05)
 
 
 def test_the_mass_beside_the_slab_is_the_light_class():

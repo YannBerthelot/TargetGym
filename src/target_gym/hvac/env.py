@@ -59,8 +59,11 @@ class HVACParams(EnvParams):
     # ---- Envelope (U-values x areas) ----
     A_wall: float = 120.0
     U_wall: float = 0.28  # W/(m^2.K), modern insulated wall
-    # No roof: the zone is one storey of a stack of like storeys, which is why
-    # both faces of its slab heat it (owner, 2026-11-25, review finding 5).
+    # A top storey, with its roof: the middle storey (no roof) failed the slab
+    # time constant [10] and the setback recovery [15] reality tests at the
+    # light mass, the roof restores both (owner, 2026-11-26, review finding 5).
+    A_roof: float = 150.0
+    U_roof: float = 0.18
     A_window: float = 25.0
     U_window: float = 1.30  # double glazing
     g_window: float = 0.55  # solar transmittance
@@ -204,6 +207,8 @@ PARAM_UNITS = {
     "h_ms": "W/(m^2 K)",
     "A_wall": "m^2",
     "U_wall": "W/(m^2 K)",
+    "A_roof": "m^2",
+    "U_roof": "W/(m^2 K)",
     "A_window": "m^2",
     "U_window": "W/(m^2 K)",
     "g_window": "-",
@@ -270,7 +275,7 @@ def zone_conductances(params: HVACParams):
 
     H_tr_is = p.h_is * A_tot
     H_tr_ms = p.h_ms * A_m
-    H_tr_op = p.A_wall * p.U_wall
+    H_tr_op = p.A_wall * p.U_wall + p.A_roof * p.U_roof
     H_tr_w = p.A_window * p.U_window
     H_tr_em = 1.0 / (1.0 / H_tr_op - 1.0 / H_tr_ms)
 
@@ -434,8 +439,9 @@ def slab_conductances(params: HVACParams):
     ``H_water``: supply water to core over the covered area, ``1 / R_t`` [9].
     ``H_slab``: core to room through the floor face (half the slab, the
     carpet, the floor's coefficient) and the ceiling face (half the slab, the
-    ceiling's coefficient): the zone is one storey of a stack, so both faces
-    of a TABS slab heat it, as in [9]'s simulated room.
+    ceiling's coefficient): both faces of a TABS slab heat the zone, as in
+    [9]'s simulated room (an open question on a top storey, which has its
+    roof: owner, 2026-11-26).
     ``m_c``: the water flow's heat capacity rate.
     """
     p = params

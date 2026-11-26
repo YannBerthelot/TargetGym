@@ -67,8 +67,9 @@ T_floor    = T_air + (T_core - T_air) (1 / h_floor) / R_up
 ```
 
 The core couples to the air node, and the air and surface nodes are solved in
-closed form each step. The zone is one storey of a stack of like storeys, so
-both faces of the slab heat it, as in [9]'s simulated room. The plant heats
+closed form each step. Both faces of the slab heat the zone, as in [9]'s
+simulated room (on a top storey, with its roof, an open question sent to the
+owner on 2026-11-26). The plant heats
 only: water below the core gives no heat, since it has no chiller. The slab
 takes no more than the heat source gives (section 4): at that size the water
 the plant makes, `T_made`, is cooler than the valve asks, and it is what the
@@ -114,11 +115,13 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 
 The building around the slab keeps its ISO 13790 envelope: 150 m^2 floor,
 `lambda_at` 4.5, "light" class mass 110 kJ/(K m^2), `h_is` 3.45, `h_ms` 9.1,
-wall and window U-values 0.28 and 1.30 W/(m^2 K), 0.5 air changes per hour; H
-= 132.4 W/K. The zone is one storey of a stack of like storeys, so it has no
-roof, and the slab is a node of its own, so the 5R1C mass beside it is the
-"light" class, whose figure counts no massive floor (owner, 2026-11-25, the
-review's finding 5; before, a 150 m^2 roof at 0.18 and the "medium" class). These, the weather (5 C mean, 5 K daily half swing, 3 K OU deviation
+wall, roof and window U-values 0.28, 0.18 and 1.30 W/(m^2 K) on 120, 150 and
+25 m^2, 0.5 air changes per hour; H = 159.4 W/K. The zone is a top storey,
+with its roof, and the slab is a node of its own, so the 5R1C mass beside it
+is the "light" class, whose figure counts no massive floor (owner, 2026-11-25
+and 2026-11-26, the review's finding 5: a middle storey with no roof failed
+the slab time-constant and setback reality tests at the light mass, and the
+roof restores both; before, the "medium" class). These, the weather (5 C mean, 5 K daily half swing, 3 K OU deviation
 with a 12 h correlation), the solar peak (175 W/m^2, a PVGIS heating-season
 mean over four facades) and the internal gains (8 and 2 W/m^2, over the
 office day of [6]) are **ours**: REALITY.md has no weather statistics.

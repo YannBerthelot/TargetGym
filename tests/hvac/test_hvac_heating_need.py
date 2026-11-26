@@ -6,14 +6,14 @@ cites: ``solar_peak`` is a seasonal mean, not a clear-sky peak.
 - Free gains stay well below the losses. A day of half-sine solar over 12 h at
   175 W/m2 is ``175 * 12 * 2 / pi`` = 1337 Wh/m2, or 18.4 kWh through 25 m2 at g
   0.55. An office's occupancy, 08:00 to 18:00 [6], adds ``(8 * 10 + 2 * 14) *
-  150`` = 16.2 kWh: 34.6 kWh. Holding 20 C over a 5 C day loses ``132.4 * 15 *
-  24`` = 47.7 kWh, so 13.1 kWh is the heater's, about a quarter of the demand.
-- Left off, the zone settles where gains balance losses, ``5 + 1442 / 132.4`` =
-  15.9 C on a day's mean, 5 K under the band.
+  150`` = 16.2 kWh: 34.6 kWh. Holding 20 C over a 5 C day loses ``159.4 * 15 *
+  24`` = 57.4 kWh, so 22.8 kWh is the heater's, two fifths of the demand.
+- Left off, the zone settles where gains balance losses, ``5 + 1442 / 159.4`` =
+  14.0 C on a day's mean, 7 K under the band.
 
-The envelope is a middle storey's, 132.4 W/K with no roof, and the 5R1C mass
-the light class beside the slab (owner, 2026-11-25, the review's finding 5;
-re-derived by hand from the 159.4 W/K and medium-class mass before it).
+The envelope is a top storey's, 159.4 W/K with its roof, and the 5R1C mass the
+light class beside the slab (owner, 2026-11-25 and 2026-11-26, the review's
+finding 5: the roof restored, the light class kept).
 """
 
 import jax
@@ -37,12 +37,12 @@ def _kwh_per_day(gain, params):
     return float(jax.vmap(lambda t: gain(t, params))(times).sum()) * 0.25 / 1000.0
 
 
-def test_a_days_free_gains_leave_a_quarter_of_the_loss_to_the_heater():
+def test_a_days_free_gains_leave_two_fifths_of_the_loss_to_the_heater():
     params = HVACParams()
     free = _kwh_per_day(solar_gain, params) + _kwh_per_day(internal_gain, params)
     loss = float(total_heat_loss_coefficient(params)) * (20.0 - 5.0) * 24.0 / 1000.0
     assert free == pytest.approx(34.6, abs=0.2)
-    assert loss == pytest.approx(47.7, abs=0.1)
+    assert loss == pytest.approx(57.4, abs=0.1)
 
 
 STEPS = 34 * STEPS_PER_DAY
@@ -50,8 +50,8 @@ STEPS = 34 * STEPS_PER_DAY
 
 def test_a_building_left_unheated_settles_at_its_free_running_mean():
     """The last of 34 days. The slab adds 9e7 J/K to the 1.65e7 J/K of the
-    5R1C mass, so the building's time constant is 1.065e8 / 132.4 = 223 h, and
-    34 days is 3.7 of them: 3 % of the 5 K start is left, and the 0.5 % of
+    5R1C mass, so the building's time constant is 1.065e8 / 159.4 = 186 h, and
+    34 days is 4.4 of them: 1 % of the 5 K start is left, and the 0.5 % of
     the gain the standard sends back through the glazing takes 0.05 K. The
     weather is off."""
     params, env = (
@@ -65,4 +65,4 @@ def test_a_building_left_unheated_settles_at_its_free_running_mean():
         return s, s.T_air
 
     _, air = jax.lax.scan(body, state, None, length=STEPS)
-    assert float(np.mean(air[-STEPS_PER_DAY:])) == pytest.approx(15.9, abs=0.3)
+    assert float(np.mean(air[-STEPS_PER_DAY:])) == pytest.approx(14.0, abs=0.3)

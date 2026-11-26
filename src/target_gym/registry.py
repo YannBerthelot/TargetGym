@@ -1187,7 +1187,8 @@ _SPECS: tuple[EnvSpec, ...] = (
         # five seeds and five more where the saving is unclear. And on
         # 2026-11-25 (the hvac review's fixes, owner's decisions): comfort_price
         # derived from its four numbers, stored heat charged at the valle price
-        # over the design COP, no roof and the light mass class beside the slab.
+        # over the design COP and the light mass class beside the slab; on
+        # 2026-11-26 the roof restored (a top storey), re-stamped in place.
         version=6,
     ),
     EnvSpec(

@@ -115,6 +115,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `h_ms` | 9.1 | W/(m^2 K) |
 | `A_wall` | 120 | m^2 |
 | `U_wall` | 0.28 | W/(m^2 K) |
+| `A_roof` | 150 | m^2 |
+| `U_roof` | 0.18 | W/(m^2 K) |
 | `A_window` | 25 | m^2 |
 | `U_window` | 1.3 | W/(m^2 K) |
 | `g_window` | 0.55 | - |

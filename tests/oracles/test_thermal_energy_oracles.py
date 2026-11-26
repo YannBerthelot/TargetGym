@@ -11,7 +11,12 @@ planner's model is exact:
   steam's generation at 3.5 kg/kWh: 2 s / 3.5 / 1000 * 80 = GBP 0.0457 per
   kg/s off the plan past the meter's 0.047 kg/s;
 - hvac: kelvin-hours outside the band at the work-loss price, 0.25 h *
-  0.02 * 0.10 * 150 * 31.8 = EUR 2.385 per K per step, and the electricity;
+  0.02 * 0.10 * 150 * 31.8 = EUR 2.385 per K per step, and the electricity.
+  The reward carries no stored heat; the evaluation charges what the store
+  lost across the scored window (owner, 2026-11-25, P1). The planner charges
+  it a step at a time, which sums to the same charge, so each planned step
+  equals the reward's cost plus the store's value the step drew down:
+  ``planned[t] = -r_t + (store[t-1] - store[t])`` (owner, 2026-11-26);
 - wind_turbine: lost production and pitch wear (the tower's fatigue is not
   planned, PHYSICS.md; the comparison leaves it out on both sides);
 - battery: the plan is the baselines, and the oracle's cost of them is what
@@ -57,12 +62,22 @@ def plan_and_replay(task, model, data_of, moves, start=lambda s: s, **over):
         for t, u in enumerate(moves):
             u = jnp.asarray(u, jnp.float64)
             a = u if tm.action is None else tm.action(s, u)
+            before = s
             _, s, r, _, info = env.step_env(keys[t], s, a, p64)
             assert not bool(info["tripped"])
-            replayed -= float(r)
+            replayed -= float(r) - drawn(env, before, s, p64)
             for k, v in env.reward_terms(s, p64).items():
                 terms[k] = terms.get(k, 0.0) + float(v)
     return planned, replayed, terms
+
+
+def drawn(env, before, after, params):
+    """The store's value a step drew down, for an env whose evaluation charges
+    its store at the window's edges (hvac); 0 for the others."""
+    stored = getattr(env, "stored_value", None)
+    if stored is None:
+        return 0.0
+    return float(stored(before, params) - stored(after, params))
 
 
 def as_called(fn, *args):
@@ -114,7 +129,8 @@ def test_hvac_ceiling_plans_on_the_scored_window_alone():
     """Owner, 2026-11-25 (review finding 1): the ceiling plans on what the task
     scores, the steps of its scored window with the stored heat charged, and
     nothing before or after. A window of steps 38 and 39 from a plan at step 36:
-    the plan pays the env's charge on its third and fourth steps only."""
+    the plan pays the env's charge on its third and fourth steps only, the
+    reward's cost plus the store's value each step drew down."""
     from target_gym.hvac.oracle import ceiling_data, hvac_model
 
     spec = REGISTRY["hvac"]
@@ -136,8 +152,9 @@ def test_hvac_ceiling_plans_on_the_scored_window_alone():
             planned.append(float(c + hinge_costs(tm.hinges, jnp.asarray(y))))
         s, charged = st, []
         for t, u in enumerate(moves):
+            before = s
             _, s, r, _, _ = env.step_env(keys[t], s, jnp.asarray(u, jnp.float64), p64)
-            charged.append(-float(r))
+            charged.append(-float(r) + drawn(env, before, s, p64))
     assert planned[:2] == [0.0, 0.0] and planned[4] == 0.0
     np.testing.assert_allclose(planned[2:4], charged[2:4], rtol=1e-9)
 
