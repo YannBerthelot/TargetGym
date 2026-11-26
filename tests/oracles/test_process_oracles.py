@@ -204,6 +204,34 @@ def test_the_exact_rewrites_replay_on_the_env(name, in_force):
     assert float(cert["output_gap"]) <= 1e-6
 
 
+@pytest.mark.medium
+@pytest.mark.parametrize("start", [283, 300, 955])
+def test_hvacs_replay_charges_what_the_evaluation_charges(start):
+    """Owner, 2026-11-25 (the hvac review's P1, as amended): hvac's oracle plans
+    on its scored window, steps 288 to 960, and charges the heat each step draws
+    from the store, while the reward carries no stored heat and the evaluation
+    charges the store's loss once at the window's edges. The replay (K8) must
+    charge each env step what the evaluation does: its cost and the store's
+    value it drew down inside the window, nothing outside. Ten stages from 283
+    straddle the window's start, from 300 lie inside it, from 955 straddle its
+    end; the plan and the replay then differ only by float64 rounding."""
+    env, params, oracle = _oracle("hvac")
+    with enable_x64():
+        _, state = env.reset_env(jax.random.PRNGKey(100), params)
+        st, m = (
+            float64(state.replace(time=jnp.asarray(start, state.time.dtype))),
+            oracle.model,
+        )
+        hold = jnp.where(jnp.abs(m.hold(st)) < 1.0, m.hold(st), 0.0)
+        wave = 0.05 * jnp.sin(0.7 * jnp.arange(oracle.P))[:, None]
+        moves = jnp.clip(hold + wave, -1.0, 1.0)
+        d = {"task": m.data(st), "end": 10 * oracle.tc}
+        d["widths"] = jnp.zeros_like(jnp.asarray(oracle.widths))
+        cert = oracle._certify(d, st, m.state_x(st), moves, 10)
+    assert float(cert["reward_plan"]) != 0.0, "the stages must reach the window"
+    assert float(cert["replay_gap"]) <= 1e-10
+
+
 def _expert_probes(name, seed=100, every=10):
     """A subset of K5's probes: the expert's states on one training seed."""
     spec = REGISTRY[name]

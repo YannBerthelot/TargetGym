@@ -20,7 +20,9 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   plans on the task's scored window alone (``scenarios.hvac_evaluation``), as
   the task scores its lines, so the ceiling bounds the scored cost. A step
   outside it costs the plan nothing; the stored heat charges the store the
-  window starts with and credits the one it leaves;
+  window starts with and credits the one it leaves. K8's replay charges the
+  env what the evaluation does (``replay_cost``): a step's cost and the
+  store's value it drew down inside the window, nothing outside;
 - smoothed site (T5): the slab heat's two edges in ``slab_heat``, heating
   only (``max(T_sup - T_core, 0)``) and the source's size [13], which enter the
   dynamics and so cannot be epigraph rows: K2's softplus at the solve's width
@@ -55,6 +57,7 @@ from target_gym.hvac.env import (
     source_size,
     split_gains,
     stored_heat_cost,
+    stored_value,
     zone_conductances,
 )
 from target_gym.hvac.scenarios import hvac_evaluation
@@ -151,6 +154,15 @@ def hvac_model(env, p, window=None) -> TaskModel:
         cost = cost + stored_heat_cost(x[0], x[1], x1[0], x1[1], p)
         return x1, jnp.where(inside, cost, 0.0), y, T_air[None], ()
 
+    def replay_cost(s, s1, r):
+        """What the evaluation charges an env step (K8's replay): its cost and
+        the store's value it drew down inside the window, nothing outside."""
+        drawn = stored_value(s, p) - stored_value(s1, p)
+        if window is None:
+            return -r + drawn
+        inside = (s.time >= window[0]) & (s.time < window[1])
+        return jnp.where(inside, -r + drawn, 0.0)
+
     weight = float(p.comfort_price * hours)
     return TaskModel(
         nx=2, nu=1, step=step,
@@ -161,6 +173,7 @@ def hvac_model(env, p, window=None) -> TaskModel:
         resolution=(float(p.precision_floor),),
         hinges=(Hinge(weight=weight), Hinge(weight=weight), Hinge(weight=weight)),
         tie_budget=weight * 0.5 * float(p.precision_floor),
+        replay_cost=replay_cost,
     )  # fmt: skip
 
 
