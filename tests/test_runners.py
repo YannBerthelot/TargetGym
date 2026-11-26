@@ -120,9 +120,9 @@ def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, acti
         assert np.isfinite(float(action)), "MPC action is not finite"
     else:
         arr = np.array(action)
-        assert arr.shape == (
-            action_dim,
-        ), f"Expected shape ({action_dim},), got {arr.shape}"
+        assert arr.shape == (action_dim,), (
+            f"Expected shape ({action_dim},), got {arr.shape}"
+        )
         assert np.all(np.isfinite(arr)), "MPC action contains non-finite values"
 
 

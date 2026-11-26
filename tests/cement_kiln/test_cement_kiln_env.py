@@ -291,12 +291,12 @@ def test_free_lime_lags_a_fuel_change_by_a_residence_time(params):
         return float(np.argmax(np.abs(move) > frac * abs(total))) * dt_min
 
     t50, t90 = time_to(0.5), time_to(0.9)
-    assert (
-        t50 > 0.6 * tau_min
-    ), f"half-response in {t50:.1f} min vs {tau_min:.1f} min residence"
-    assert (
-        t90 > 1.5 * tau_min
-    ), f"90 % response in {t90:.1f} min -- too fast to be transport-limited"
+    assert t50 > 0.6 * tau_min, (
+        f"half-response in {t50:.1f} min vs {tau_min:.1f} min residence"
+    )
+    assert t90 > 1.5 * tau_min, (
+        f"90 % response in {t90:.1f} min -- too fast to be transport-limited"
+    )
 
 
 def test_a_feed_change_takes_a_residence_time_to_show(params):

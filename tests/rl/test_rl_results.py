@@ -24,9 +24,9 @@ def test_result_keys_name_a_registered_environment():
     unknown = {
         k: r.get("env") for k, r in RECORDS.items() if r.get("env") not in REGISTRY
     }
-    assert (
-        not unknown
-    ), f"results recorded for environments that do not exist: {unknown}"
+    assert not unknown, (
+        f"results recorded for environments that do not exist: {unknown}"
+    )
 
 
 @pytest.mark.skipif(not RECORDS, reason="no learned-policy results recorded yet")
@@ -38,8 +38,7 @@ def test_record_is_well_formed(key):
 
     returns = np.asarray(record["returns"], dtype=float)
     assert returns.size == record["n_seeds"], (
-        f"{key}: n_seeds says {record['n_seeds']} but {returns.size} returns are "
-        "stored"
+        f"{key}: n_seeds says {record['n_seeds']} but {returns.size} returns are stored"
     )
     assert np.isfinite(returns).all(), f"{key}: non-finite returns {record['returns']}"
     assert record["episode_steps"] > 0 and record["total_timesteps"] > 0

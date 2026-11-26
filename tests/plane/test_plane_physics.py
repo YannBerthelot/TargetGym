@@ -167,7 +167,7 @@ def test_thrust_exceeds_drag_at_cruise(params):
             rho=rho,
         )
     )
-    assert thrust > drag, f"thrust {thrust/1e3:.1f} kN < drag {drag/1e3:.1f} kN"
+    assert thrust > drag, f"thrust {thrust / 1e3:.1f} kN < drag {drag / 1e3:.1f} kN"
 
 
 # ---------------------------------------------------------------------------
@@ -210,9 +210,9 @@ def test_lift_collapses_beyond_stall(params):
     break_region = [
         _CL(a, 0.3, params) for a in np.linspace(aoa_peak, aoa_peak + 15.0, 40)
     ]
-    assert (
-        min(break_region) < 0.45 * cl_peak
-    ), f"no stall break: lift only fell to {min(break_region)/cl_peak:.0%} of peak"
+    assert min(break_region) < 0.45 * cl_peak, (
+        f"no stall break: lift only fell to {min(break_region) / cl_peak:.0%} of peak"
+    )
     # the flat-plate branch tops out at CL = 1 (sin 2a at 45 deg), so lift must
     # never return to anything like the attached-flow peak
     beyond = [_CL(a, 0.3, params) for a in np.linspace(aoa_peak + 5.0, 90.0, 30)]
@@ -587,25 +587,25 @@ def test_stall_transition_sharpness_is_set_by_the_lift_peak(params):
     k = np.log(99.0) / params.aoa_stall_width
 
     separated_at_stall = 1.0 / (1.0 + np.exp((centre - params.aoa_stall) * k))
-    assert (
-        separated_at_stall < 0.02
-    ), f"{separated_at_stall:.1%} separated at the stall angle would eat CL_max"
+    assert separated_at_stall < 0.02, (
+        f"{separated_at_stall:.1%} separated at the stall angle would eat CL_max"
+    )
 
     # CL_max must survive the blend: the peak is the attached-flow limit
     peak = max(_CL(a, 0.3, params) for a in np.arange(0.0, 25.0, 0.05))
     attached_limit = params.CL_max / np.sqrt(1 - 0.3**2)
-    assert peak == pytest.approx(
-        attached_limit, rel=0.02
-    ), f"blend moved the lift peak: {peak:.3f} vs attached limit {attached_limit:.3f}"
+    assert peak == pytest.approx(attached_limit, rel=0.02), (
+        f"blend moved the lift peak: {peak:.3f} vs attached limit {attached_limit:.3f}"
+    )
 
 
 def test_stall_transition_width_is_physically_plausible(params):
     """A clean transport wing breaks over a few degrees -- not instantly."""
     k = np.log(99.0) / params.aoa_stall_width
     width_10_to_90 = 2 * np.log(9.0) / k
-    assert (
-        2.0 <= width_10_to_90 <= 5.0
-    ), f"stall transition spans {width_10_to_90:.1f} deg; a real wing shows 2-5"
+    assert 2.0 <= width_10_to_90 <= 5.0, (
+        f"stall transition spans {width_10_to_90:.1f} deg; a real wing shows 2-5"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -657,9 +657,9 @@ def test_glide_ratio_becomes_a_flat_plate_past_stall(params):
     ld_plate = _CL(45.0, 0.3, params) / _CD(45.0, 0.3, params)
 
     assert ld_cruise > 8.0, f"cruise L/D is {ld_cruise:.1f}; a jet is well above 8"
-    assert ld_plate == pytest.approx(
-        1.0, abs=0.25
-    ), f"a separated wing at 45 deg has L/D 1 by construction, got {ld_plate:.2f}"
+    assert ld_plate == pytest.approx(1.0, abs=0.25), (
+        f"a separated wing at 45 deg has L/D 1 by construction, got {ld_plate:.2f}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -809,9 +809,9 @@ def test_cruise_fuel_flow_matches_an_a320(params):
     thrust_cruise = params.initial_mass * params.gravity / l_over_d
     kg_per_hour = params.specific_fuel_consumption * 1e-3 * thrust_cruise * 3600.0
 
-    assert (
-        2000.0 < kg_per_hour < 3200.0
-    ), f"cruise fuel flow {kg_per_hour:.0f} kg/h; an A320 burns 2400-2600"
+    assert 2000.0 < kg_per_hour < 3200.0, (
+        f"cruise fuel flow {kg_per_hour:.0f} kg/h; an A320 burns 2400-2600"
+    )
 
 
 def test_burning_fuel_lightens_the_aircraft():

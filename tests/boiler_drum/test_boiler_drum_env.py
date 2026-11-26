@@ -177,16 +177,19 @@ def test_metal_dominates_the_pressure_inertia(params):
     """
     p_bar = params.p_nominal
     eps = 1e-3
-    d = lambda f: (float(f(p_bar + eps, params)) - float(f(p_bar - eps, params))) / (
-        2 * eps * 1e5
+    d = lambda f: (
+        (float(f(p_bar + eps, params)) - float(f(p_bar - eps, params)))
+        / (2 * eps * 1e5)
     )
     V_wt = params.V_wt_nominal
     V_st = params.V_t - V_wt
-    rho_w, rho_s = float(water_density(p_bar, params)), float(
-        steam_density(p_bar, params)
+    rho_w, rho_s = (
+        float(water_density(p_bar, params)),
+        float(steam_density(p_bar, params)),
     )
-    h_w, h_s = float(water_enthalpy(p_bar, params)), float(
-        steam_enthalpy(p_bar, params)
+    h_w, h_s = (
+        float(water_enthalpy(p_bar, params)),
+        float(steam_enthalpy(p_bar, params)),
     )
     metal = params.m_metal * params.C_metal * d(saturation_temperature)
     total = (
@@ -249,7 +252,7 @@ def test_increasing_steam_demand_makes_the_level_rise_first(params):
     Q, q_s = _nominal(params)
     t, lvl, press = _open_loop(params, Q, q_s, q_s + 5.0)
     assert press[-1] < press[0], "steam demand should drop pressure"
-    assert lvl.max() > 0.005, f"no swell: peak level {lvl.max()*100:.2f} cm"
+    assert lvl.max() > 0.005, f"no swell: peak level {lvl.max() * 100:.2f} cm"
     assert lvl[-1] < 0.0, "level should end below normal once mass has left"
     # It must actually reverse, not merely overshoot.
     assert np.argmax(lvl) < np.argmin(lvl)
@@ -278,7 +281,7 @@ def test_adding_feedwater_makes_the_level_dip_first(params):
     Q, q_s = _nominal(params)
     t, lvl, _ = _open_loop(params, Q, q_s + 10.0, q_s)
     early = lvl[t <= 30.0]
-    assert early.min() < -1e-4, f"no shrink: minimum {early.min()*100:.3f} cm"
+    assert early.min() < -1e-4, f"no shrink: minimum {early.min() * 100:.3f} cm"
     assert lvl[-1] > 0.05, "level must rise substantially once the mass arrives"
     assert np.argmin(lvl) < np.argmax(lvl)
 

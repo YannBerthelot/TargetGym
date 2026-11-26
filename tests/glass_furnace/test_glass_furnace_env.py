@@ -219,9 +219,9 @@ def test_regenerator_reaches_realistic_effectiveness():
     eff = (float(state.T_air_preheat) - p.T_ambient) / (
         float(state.T_gas) - p.T_ambient
     )
-    assert (
-        REGEN_EFFECTIVENESS_RANGE[0] < eff < REGEN_EFFECTIVENESS_RANGE[1]
-    ), f"{eff:.2f}"
+    assert REGEN_EFFECTIVENESS_RANGE[0] < eff < REGEN_EFFECTIVENESS_RANGE[1], (
+        f"{eff:.2f}"
+    )
 
 
 def test_air_preheat_and_stack_temperatures_are_realistic():

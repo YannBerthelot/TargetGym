@@ -209,9 +209,9 @@ def test_exceeding_the_stall_angle_reduces_lift(params):
     cl_broken = min(
         cl(a) for a in np.linspace(params.aoa_stall, params.aoa_stall + 15.0, 40)
     )
-    assert (
-        cl_broken < 0.5 * cl_pre
-    ), f"stall must break the lift curve: CL {cl_pre:.2f} -> {cl_broken:.2f}"
+    assert cl_broken < 0.5 * cl_pre, (
+        f"stall must break the lift curve: CL {cl_pre:.2f} -> {cl_broken:.2f}"
+    )
 
 
 def test_a_stalled_wing_cannot_hold_the_aircraft_up_at_stall_speed(params):

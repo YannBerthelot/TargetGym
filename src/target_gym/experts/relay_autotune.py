@@ -459,7 +459,7 @@ def relay_sweep(
 
     for i, target in enumerate(targets):
         if verbose:
-            print(f"  Operating point {i+1}/{n_points}: target={target:.4f}")
+            print(f"  Operating point {i + 1}/{n_points}: target={target:.4f}")
 
         res = relay_experiment(
             env,

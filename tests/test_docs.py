@@ -78,8 +78,7 @@ def test_environment_reference_is_in_sync_with_the_registry():
         cwd=ROOT,
     )
     assert result.returncode == 0, (
-        f"{result.stdout}{result.stderr}\n"
-        "Run: python scripts/generate_env_reference.py"
+        f"{result.stdout}{result.stderr}\nRun: python scripts/generate_env_reference.py"
     )
 
 

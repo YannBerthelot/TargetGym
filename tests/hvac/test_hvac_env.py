@@ -307,9 +307,9 @@ def test_observation_hides_the_thermal_mass(params):
     state = state.replace(T_mass=1234.5, T_surface=6789.0, weather_dev=4321.0)
     obs = env.get_obs(state, params)
     for hidden in (1234.5, 6789.0, 4321.0):
-        assert not bool(
-            jnp.any(jnp.isclose(obs, hidden))
-        ), f"hidden state {hidden} leaked into the observation"
+        assert not bool(jnp.any(jnp.isclose(obs, hidden))), (
+            f"hidden state {hidden} leaked into the observation"
+        )
 
 
 def test_action_maps_to_the_heating_range(params):

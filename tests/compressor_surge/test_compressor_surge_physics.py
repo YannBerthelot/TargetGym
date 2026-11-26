@@ -320,8 +320,10 @@ def test_gravdahl_fig_2_10_throttle_is_stable(params):
         p, u = _throttle_params(params, gain)
         flow, head = _flow_scale(p), _head_scale(p)
         phi = brentq(
-            lambda f: flow * f
-            - float(consumer_flow(head * float(characteristic(f, p, np)), u, p, np)),
+            lambda f: (
+                flow * f
+                - float(consumer_flow(head * float(characteristic(f, p, np)), u, p, np))
+            ),
             0.3,
             0.8,
             xtol=1e-15,
@@ -609,9 +611,7 @@ def test_monotonicity(params):
     the pressure and raises the compressor flow and the surge margin;
     lowering the demand lowers the margin."""
     with enable_x64():
-        eq = lambda N, x, u: float(
-            equilibrium_phi(N, x, u, params, 30, xp=np)
-        )  # noqa: E731
+        eq = lambda N, x, u: float(equilibrium_phi(N, x, u, params, 30, xp=np))  # noqa: E731
 
         def point(N, x, u):
             phi = eq(N, x, u)
@@ -635,9 +635,7 @@ def test_dead_head_speed(params):
     """The shutoff head, rho01 (U_r N)^2 Psi_c(0), equals the consumers'
     static head at N = 0.825: below that speed a compressor pushing no flow
     cannot lift the header to where the consumers take any."""
-    shutoff = lambda N: _head_scale(params, N) * float(
-        characteristic(0.0, params, np)
-    )  # noqa: E731
+    shutoff = lambda N: _head_scale(params, N) * float(characteristic(0.0, params, np))  # noqa: E731
     N = brentq(lambda n: shutoff(n) - params.dp_out, 0.5, 1.0, xtol=1e-14)
     assert N == pytest.approx(0.825, abs=5e-4)
 
@@ -835,8 +833,9 @@ def test_a_short_excursion_does_not_trip(params):
     line within one period (stepping ``compute_next_state``), and the env
     trips on the first step, where the test asks for no trip."""
     phi_eq = 1.05 * 2.0 * params.W
-    m, dp = _flow_scale(params) * phi_eq, _head_scale(params) * float(
-        characteristic(phi_eq, params, np)
+    m, dp = (
+        _flow_scale(params) * phi_eq,
+        _head_scale(params) * float(characteristic(phi_eq, params, np)),
     )
     u = m / float(consumer_flow(dp, 1.0, params, np))
     p = params.replace(demand_sigma=0.0)

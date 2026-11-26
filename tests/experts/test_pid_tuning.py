@@ -94,7 +94,9 @@ def _flatten(gains) -> list[float]:
                 ),
             )
             if n in NAN_TUNERS
-            else pytest.param(n, marks=pytest.mark.medium) if n in MEDIUM_TUNERS else n
+            else pytest.param(n, marks=pytest.mark.medium)
+            if n in MEDIUM_TUNERS
+            else n
         )
         for n in TUNERS
     ],

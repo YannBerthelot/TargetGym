@@ -292,10 +292,12 @@ def compute_reward_v1(state: FormationState, params: FormationParams, xp=jnp):
         xp,
     )
     track = _over_wingmen(
-        lambda v: log_scaled_reward(
-            slot_error(v), params.slot_precision_floor, params.max_slot_error, xp
-        )
-        * heading_alignment(v, params, xp),
+        lambda v: (
+            log_scaled_reward(
+                slot_error(v), params.slot_precision_floor, params.max_slot_error, xp
+            )
+            * heading_alignment(v, params, xp)
+        ),
         state,
     )
     team = params.w_track * xp.mean(track) + params.w_lead * lead_r

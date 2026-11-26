@@ -118,10 +118,12 @@ _TWO_OUTPUTS = {
     # The top and bottom products, the column's last and first stages, against
     # ``e_floor_top`` and ``e_floor_bottom``.
     "distillation": lambda a, b: dict(
-        x=lambda s, p: s.x.at[-1]
-        .set(s.target_yD + a * p.e_floor_top)
-        .at[0]
-        .set(s.target_xB + b * p.e_floor_bottom)
+        x=lambda s, p: (
+            s.x.at[-1]
+            .set(s.target_yD + a * p.e_floor_top)
+            .at[0]
+            .set(s.target_xB + b * p.e_floor_bottom)
+        )
     ),
 }
 

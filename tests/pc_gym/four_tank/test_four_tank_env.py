@@ -260,9 +260,9 @@ def test_every_target_pair_is_jointly_reachable():
     for t1 in _np.linspace(*p.target_h1_range, 6):
         for t2 in _np.linspace(*p.target_h2_range, 6):
             d = _np.min((reach[:, 0] - t1) ** 2 + (reach[:, 1] - t2) ** 2)
-            assert (
-                _np.sqrt(d) < 0.006
-            ), f"target pair ({t1:.3f}, {t2:.3f}) is not jointly reachable"
+            assert _np.sqrt(d) < 0.006, (
+                f"target pair ({t1:.3f}, {t2:.3f}) is not jointly reachable"
+            )
 
 
 def test_targets_leave_voltage_headroom():

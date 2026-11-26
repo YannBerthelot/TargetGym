@@ -563,8 +563,7 @@ def _guard_problems(gain_items, params):
         if not r <= -GUARD_MIN_DECAY
     ]
     problems += [
-        f"equilibrium setpoint at C_a {L:.2f} is {-m:.3f} K outside the "
-        "setpoint window"
+        f"equilibrium setpoint at C_a {L:.2f} is {-m:.3f} K outside the setpoint window"
         for L, row in zip(GUARD_LEVELS, margins)
         for m in row
         if not m > 0.0

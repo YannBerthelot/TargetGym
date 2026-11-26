@@ -309,8 +309,9 @@ def tune_unstable_cstr() -> dict:
 
     def at_rest(L):
         st = reset(jax.random.PRNGKey(100))[1]
-        T, T_c = float(steady_temperature(L, p, np)), float(
-            steady_coolant(L, 0.0, p, np)
+        T, T_c = (
+            float(steady_temperature(L, p, np)),
+            float(steady_coolant(L, 0.0, p, np)),
         )
         return (
             T,
@@ -392,9 +393,7 @@ def tune_four_tank() -> dict:
     env, p, step, reset = _plant("four_tank")
     dt = float(p.delta_t)
     prm = four_tank_decoupled_pi(1.0, 1.0, 1.0, 1.0, np.eye(2), p).params
-    raw = (
-        lambda v: 2 * (np.asarray(v) - p.v_min) / (p.v_max - p.v_min) - 1
-    )  # noqa: E731
+    raw = lambda v: 2 * (np.asarray(v) - p.v_min) / (p.v_max - p.v_min) - 1  # noqa: E731
     g2 = np.sqrt(2 * p.g)
     rests = []
     for s in TRAIN:
@@ -440,8 +439,9 @@ def tune_four_tank() -> dict:
 
     def build(n):
         (k1, a1, th1), (k2, a2, th2) = loops
-        (Kp_1, Ti_1), (Kp_2, Ti_2) = simc_pi(k1, a1, th1, n * th1), simc_pi(
-            k2, a2, th2, n * th2
+        (Kp_1, Ti_1), (Kp_2, Ti_2) = (
+            simc_pi(k1, a1, th1, n * th1),
+            simc_pi(k2, a2, th2, n * th2),
         )
         return four_tank_decoupled_pi(Kp_1, Ti_1, Kp_2, Ti_2, D, p)
 

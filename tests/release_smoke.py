@@ -77,9 +77,9 @@ def _expert_episode(name):
     actions, rewards = np.asarray(actions), np.asarray(rewards)
     assert np.isfinite(rewards).all(), f"{name}: a reward is not finite"
     low, high = np.asarray(space.low), np.asarray(space.high)
-    assert (actions >= low - 1e-6).all() and (
-        actions <= high + 1e-6
-    ).all(), f"{name}: the expert left the action bounds"
+    assert (actions >= low - 1e-6).all() and (actions <= high + 1e-6).all(), (
+        f"{name}: the expert left the action bounds"
+    )
     return float(rewards.sum())
 
 
@@ -99,9 +99,9 @@ def check_core():
     for name in names:
         expected = recorded[name]["pid_returns"][0]
         got = _expert_episode(name)
-        assert np.isclose(
-            got, expected, rtol=RETURN_RTOL
-        ), f"{name}: the expert returns {got:.6g} on seed 0, recorded {expected:.6g}"
+        assert np.isclose(got, expected, rtol=RETURN_RTOL), (
+            f"{name}: the expert returns {got:.6g} on seed 0, recorded {expected:.6g}"
+        )
         print(f"{name}: expert episode {got:.6g} (recorded {expected:.6g})")
 
     gym_env = tg.make_gymnasium("plane")

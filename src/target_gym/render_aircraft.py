@@ -447,17 +447,24 @@ def render_3d_plane(target, cx, cy, R, scale_px, camera_dir, project_fn):
     )
     half = int(max(28.0, scale_px * 34.0) * SUPERSAMPLE)
     canvas = pygame.Surface((2 * half, 2 * half), pygame.SRCALPHA)
-    surf, project_fn = canvas, (
-        lambda pt, sc: (
-            int(
-                half
-                + sc * float(np.asarray(pt, dtype=float) @ basis[:, 0]) * SUPERSAMPLE
-            ),
-            int(
-                half
-                + sc * float(np.asarray(pt, dtype=float) @ basis[:, 1]) * SUPERSAMPLE
-            ),
-        )
+    surf, project_fn = (
+        canvas,
+        (
+            lambda pt, sc: (
+                int(
+                    half
+                    + sc
+                    * float(np.asarray(pt, dtype=float) @ basis[:, 0])
+                    * SUPERSAMPLE
+                ),
+                int(
+                    half
+                    + sc
+                    * float(np.asarray(pt, dtype=float) @ basis[:, 1])
+                    * SUPERSAMPLE
+                ),
+            )
+        ),
     )
 
     # Depth axis index: the axis aligned with camera_dir
@@ -961,7 +968,9 @@ def side_scene(panel_w, panel_h, state, params, positions_history_xz):
     status = (
         ("NOMINAL", GOOD)
         if band < 0.02
-        else ("WATCH", TARGET) if band < 0.08 else ("ALARM", ALERT)
+        else ("WATCH", TARGET)
+        if band < 0.08
+        else ("ALARM", ALERT)
     )
     header(surf, panel_w, state.time, status, time_elapsed)
 

@@ -71,9 +71,9 @@ class TestSteadyWindPhysics:
             climbs.append(float(nxt.z_dot) - float(state.z_dot))
 
         head, still, tail = climbs
-        assert (
-            head > still > tail
-        ), f"headwind must climb hardest: {head:.3f} / {still:.3f} / {tail:.3f}"
+        assert head > still > tail, (
+            f"headwind must climb hardest: {head:.3f} / {still:.3f} / {tail:.3f}"
+        )
 
     def test_wind_changes_trajectory_but_hidden_from_obs(self):
         env = Plane(observe_wind=False)
@@ -288,9 +288,9 @@ class TestImpulseGustsAndLookahead:
         def kurtosis(x):
             return float(((x - x.mean()) ** 4).mean() / max(x.var() ** 2, 1e-12))
 
-        assert kurtosis(ou) == pytest.approx(
-            3.0, abs=1.5
-        ), f"OU turbulence should be near-Gaussian, kurtosis {kurtosis(ou):.1f}"
+        assert kurtosis(ou) == pytest.approx(3.0, abs=1.5), (
+            f"OU turbulence should be near-Gaussian, kurtosis {kurtosis(ou):.1f}"
+        )
         assert kurtosis(impulse) > 3 * kurtosis(ou), (
             f"impulse mode is not heavy-tailed: {kurtosis(impulse):.1f} against "
             f"{kurtosis(ou):.1f} for OU"

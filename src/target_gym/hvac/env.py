@@ -150,9 +150,7 @@ class HVACParams(EnvParams):
     # bounds) costs, per step, twice a 14 K excursion for an hour.
     reward_version: int = 2
     comfort_tolerance: float = 0.5  # K, occupied
-    comfort_price: float = (
-        0.03  # EUR per K^2 per hour, provisional: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016)
-    )
+    comfort_price: float = 0.03  # EUR per K^2 per hour, provisional: twice the gas it takes to remove 1 K for 1 h (H = 159 W/K at EUR 0.10/kWh = EUR 0.016)
     gas_price: float = 0.10  # EUR per kWh
     setback_lower_bound_only: bool = True  # provisional design choice
     tracking_exponent: float = 2.0

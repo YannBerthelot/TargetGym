@@ -155,12 +155,12 @@ def test_version2_reward_has_no_log_shape_and_no_precision_floor(spec):
         ):
             found += 1
             body = ast.unparse(node)
-            assert (
-                "log_scaled_reward" not in body
-            ), f"{spec.name}: {node.name} uses the log shape"
-            assert (
-                "precision_floor" not in body
-            ), f"{spec.name}: {node.name} reads precision_floor"
+            assert "log_scaled_reward" not in body, (
+                f"{spec.name}: {node.name} uses the log shape"
+            )
+            assert "precision_floor" not in body, (
+                f"{spec.name}: {node.name} reads precision_floor"
+            )
     assert found >= 1, f"{spec.name}: no compute_reward_terms function"
 
 

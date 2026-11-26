@@ -179,10 +179,9 @@ def test_every_halving_of_the_error_is_worth_the_same():
         _reward_at(c) - _reward_at(a)
         for a, c in [(1600, 800), (400, 200), (100, 50), (25, 12.5), (6.25, 3.125)]
     ]
-    assert min(gains) > 0.75 * max(
-        gains
-    ), "reward per halving is not scale-free across three decades: " + ", ".join(
-        f"{g:.4f}" for g in gains
+    assert min(gains) > 0.75 * max(gains), (
+        "reward per halving is not scale-free across three decades: "
+        + ", ".join(f"{g:.4f}" for g in gains)
     )
 
 
@@ -198,9 +197,9 @@ def test_precision_stops_paying_below_the_resolution_floor():
     floor = PlaneParams(reward_version=1).precision_floor
     above = _reward_at(floor * 4) - _reward_at(floor * 8)
     below = _reward_at(floor / 8) - _reward_at(floor / 4)
-    assert (
-        below < above / 2
-    ), f"reward still paying below the floor: {below:.5f} vs {above:.5f} above it"
+    assert below < above / 2, (
+        f"reward still paying below the floor: {below:.5f} vs {above:.5f} above it"
+    )
 
 
 def test_reward_still_orders_states_far_from_target():

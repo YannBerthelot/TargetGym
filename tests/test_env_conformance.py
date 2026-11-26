@@ -166,9 +166,9 @@ def test_reset_varies_with_seed(spec):
         for s in range(8)
     ]
     stacked = jnp.stack(obs)
-    assert not jnp.allclose(
-        stacked, stacked[0]
-    ), "every seed produced an identical observation"
+    assert not jnp.allclose(stacked, stacked[0]), (
+        "every seed produced an identical observation"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -527,9 +527,9 @@ def test_reward_is_bounded_over_an_episode(spec):
         if bool(terminated):
             break
     limit = 10.0 * max(1.0, float(params.max_steps_in_episode))
-    assert (
-        np.max(np.abs(rewards)) <= limit
-    ), f"reward magnitude {np.max(np.abs(rewards))}"
+    assert np.max(np.abs(rewards)) <= limit, (
+        f"reward magnitude {np.max(np.abs(rewards))}"
+    )
 
 
 # ---------------------------------------------------------------------------
