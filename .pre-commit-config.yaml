@@ -18,12 +18,21 @@ repos:
         # blocks the accidental checkpoint or full-length render.
         args: [--maxkb=3072]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.11
+  # The locked ruff, the one CI runs: a pinned hook drifts from it, and two
+  # versions format some files differently.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: uv run --frozen --only-group lint ruff check --fix
+        language: system
+        types_or: [python, pyi, jupyter]
+        files: ^(src|tests|scripts)/
       - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen --only-group lint ruff format
+        language: system
+        types_or: [python, pyi, jupyter]
 
   # Workflow security: unpinned actions, token permissions, script injection.
   - repo: https://github.com/zizmorcore/zizmor-pre-commit

@@ -186,6 +186,10 @@ include = ["src/target_gym", "README.md", "LICENSE"]
 line-length = 88
 target-version = "py311"
 
+[tool.ruff.format]
+# Code blocks in the docs keep their hand-aligned comments.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 # A deliberately narrow set, chosen so that what it reports is always worth
 # acting on: real defects (F -- undefined names, unused imports, f-strings
