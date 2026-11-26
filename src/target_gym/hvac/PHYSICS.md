@@ -94,7 +94,7 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `c_water` | 4186 | J/(kg K) | Water |
 | `T_supply_max` | 49 | C | The TABS family's documented maximum, Madrid's [14, Table 1]; Muenster runs 16 to 30 C [13]; screed floors are cut at 55 C [17] |
 | `T_supply_min` | 15 | C | Ours: the valve's lowest setting, which is off |
-| `source_capacity` | 38 | W/m^2 | [13]: Muenster's reversible heat pumps give 530 kW of heat for 14 000 m^2, 37.9 W/m^2. Here 5.7 kW, 1.39 times the design load of 4.1 kW (132.4 W/K over 31 K) |
+| `source_capacity` | 38 | W/m^2 | [13]: Muenster's reversible heat pumps give 530 kW of heat for 14 000 m^2, 37.9 W/m^2. Here 5.7 kW, 1.15 times the design load of 4.9 kW (159.4 W/K over 31 K) |
 | `cop_carnot_fraction` | 0.52 | - | Ours, family range 0.50 to 0.57: brine heat pump datasheets give COP 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at B0/W55 [18]; the model gives 4.58 and 3.10 |
 | `T_brine` | 0 | C | Ours, family range -5 to 5 C: the EN 14511 rating point B0 [18] |
 | `price_valle`, `price_llano`, `price_punta` | 0.139, 0.184, 0.263 | EUR/kWh | [19]: one Spanish 2.0TD offer, valle 00 to 08 h, punta 10 to 14 and 18 to 22 h; Madrid charges its slabs on the night tariff [14] |
@@ -272,21 +272,21 @@ rerun:
 
 | Test | Source | Result |
 |---|---|---|
-| 1. Slab time constant 145 to 462 min, on a step the source can follow (+1 K) | [10], [6] | **Fails, 135 min** since the 2026-11-25 storey and light mass (open finding, sent to the owner) |
-| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 390 min: the source's size cuts the step |
-| 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.79 |
+| 1. Slab time constant 145 to 462 min, on a step the source can follow (+1 K) | [10], [6] | Pass, 165 min (the roof restored at the light mass, 2026-11-26) |
+| 2. Family: an ordinary change (+5 K supply, the size of a curve shift [11]) felt after 60 min or more | [8], [11] | Pass, 435 min: the source's size cuts the step |
+| 3. Curve shift moves the room one for one | [11] | Pass, ratio 0.77 |
 | 4. Slab output falls when gains rise | [7], [9] | Pass |
-| 5. Setback recovery 1 h or more | [15] | Pass, 7.75 h: 8 h with the water off cools the room, and the source at 1.39 times the design load brings it back slowly |
-| 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 25.0 C |
+| 5. Setback recovery 1 h or more | [15] | Pass, 17.0 h: 8 h with the water off cools the room, and the source at 1.15 times the design load brings it back slowly |
+| 6. Family: the steady supply at -8 C lies in the TABS range, above 20 C and at most 30 C | [13] | Pass, 26.0 C |
 | 7. Heating limit 8 to 15 C | [11], [9] | Pass |
-| 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.0 C and 26.6 C |
+| 8. Floor at most 29 C, supply at most 49 C at design | [5], [14] | Pass: 22.2 C and 27.7 C |
 | 9. Morning overshoot after reduced mode | [12] | Pass |
-| 10. Design supply never recovers a setback | [15] | **Fails, 20.55 C after 15 h** (limit 20.5) since the 2026-11-25 storey and light mass (open finding, sent to the owner) |
+| 10. Design supply never recovers a setback | [15] | Pass, 20.40 C after 15 h (limit 20.5) |
 | 11. ASHRAE 55 drift under the curve | [4] | Pass: at most 0.24 K in 15 min and 0.43 K in 1 h |
 
 Test 5 failed (45 min) while the source had no size: full heat was 39 kW into
 a zone whose design load is 4.9 kW. With Muenster's 38 W/m^2 [13] the plant
-recovered in 16.5 h (7.75 h on the 2026-11-25 middle storey), beyond [15]'s 1.0 to 6.9 h, which are for baseboard homes
+recovered in 16.5 h (17.0 h at the light mass since 2026-11-26), beyond [15]'s 1.0 to 6.9 h, which are for baseboard homes
 with boilers at twice the design load; [15] says of a source sized to the load
 that it "may never recover". The fix was a missing piece of the plant (charter
 B6), not a number moved until the test passed.
