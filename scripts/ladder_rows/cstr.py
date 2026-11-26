@@ -2,8 +2,9 @@
 
 What the plant's datasheet and its structure's source say, and nothing read from a
 score (PHYSICS.md section 10). Version 8 is run for what it makes: the reactor
-temperature is held by the fresh cooling water, and the water valve is held short of
-its limit by the feed, valve position control [S13].
+temperature is held by the fresh cooling water, and the feed is cut only while the
+water valve stands past its set point, valve position control as a selector against
+the operator's rate [S13].
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ import math
 
 from reference_ladder import (  # noqa: E402
     Cv,
-    Limit,
     Row,
     Valve,
 )
@@ -52,23 +52,16 @@ def row() -> Row:
         zone=(-band, band, "high"),
         exit_terms=("off_spec",),
     )
-    # The water valve by the feed, held where [S13]'s example holds it, 95 % of its
-    # span (0.9 raw) [S13, p. 438, Fig. 7]. It answers the feed through the closed
-    # temperature loop over about an hour, so its test runs three hours.
-    valve = Valve("valve by feed", lambda o, xp: o[2] / 50.0 - 1.0, 0.9, 1, 0.1, 720)
-    # Shinskey's high-temperature override on the feed [S13, p. 436]: a low select
-    # lets the temperature cut the feed past the band's top, backed off the probe's
-    # resolution (ours, the ceiling's margin). Read on the feed with the water held,
-    # the case it is for, over the temperature loop's window (owner, 2026-11-25).
-    hot = Limit(
-        "T high on feed",
-        lambda o, xp: o[0] - o[4],
-        band - float(p.e_floor),
-        False,
-        1,
-        "T",
-        0.1,
-        window,
+    # The feed cut on the water valve, as a practitioner runs a reactor at the rate
+    # the operator set: the feed stays where the reset left it, and a valve position
+    # loop takes from it only while the water valve stands past [S13]'s 95 % of its
+    # span (0.9 raw) [S13, p. 438, Fig. 7], a low select against that rate [S13,
+    # section 2.3]. It answers the feed through the closed temperature loop over
+    # about an hour, so its test runs three hours. Cut only: a loop free to raise
+    # the feed runs the water at 95 % on the normal day and leaves it no room for
+    # the cooling loss (2026-11-27 diagnosis, PHYSICS.md).
+    valve = Valve(
+        "valve by feed", lambda o, xp: o[2] / 50.0 - 1.0, 0.9, 1, 0.1, 720, True
     )
     # Bump tests from a reset with both valves in mid-range (the water at 80 % of its
     # span), at the middle and at both ends of the feed's temperature range [S1,
@@ -85,7 +78,6 @@ def row() -> Row:
         (T,),
         test={"valve_rest": 0.8},
         points=({"feed_T_range": (lo, lo)}, {"feed_T_range": (hi, hi)}),
-        limits=(hot,),
         valves=(valve,),
         # The reset stands on the steady state of the day's feed temperature, which
         # is hidden: every rung takes over from the valves as the reset left them
@@ -95,5 +87,11 @@ def row() -> Row:
             "feedforward": measured,
             "cascade": measured,
             "decoupler": "one loop and one valve position loop",
+            "override": (
+                "Shinskey's high-temperature override on the feed [S13, p. 436], "
+                "tried 2026-11-25: with the temperature loop on the water it limit "
+                "cycles in both upsets, the feed between its ends about hourly, "
+                "and holds none of them (PHYSICS.md)"
+            ),
         },
     )

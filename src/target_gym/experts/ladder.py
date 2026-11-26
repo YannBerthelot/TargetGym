@@ -216,7 +216,11 @@ class ValvePosition:
     valve's position, in the units of ``setpoint``. A PI moves ``mv`` from where the
     reset left it (the start hold's value, else the bias's), never past ``top``, the
     throughput asked for, and its integral holds while that limits it. ``kc`` has
-    the sign of the watched valve's answer to ``mv`` with the loops closed."""
+    the sign of the watched valve's answer to ``mv`` with the loops closed.
+
+    ``cut_only`` makes the MV's take-over value its top: the throughput the
+    operator set, which the loop only takes from while the watched valve stands
+    past its set point, a selector against the operator's rate [S13, section 2.3]."""
 
     read: Callable
     setpoint: float
@@ -224,6 +228,7 @@ class ValvePosition:
     kc: float
     ti: float
     top: float = 1.0
+    cut_only: bool = False
 
 
 @dataclass(frozen=True)
@@ -309,7 +314,8 @@ def ladder_controller(
             e_v = v.setpoint - v.read(obs, xp)
             i_v = m.vp_integral[n] + e_v * dt
             wanted = base_v + v.kc * (e_v + i_v / v.ti)
-            u[v.mv] = xp.clip(xp.minimum(wanted, v.top), -1.0, 1.0)
+            top = xp.minimum(base_v, v.top) if v.cut_only else v.top
+            u[v.mv] = xp.clip(xp.minimum(wanted, top), -1.0, 1.0)
             vp_i.append(i_v)
             vp_b.append(base_v)
             vp_wanted.append(wanted)
