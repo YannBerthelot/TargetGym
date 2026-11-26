@@ -21,13 +21,14 @@ on:
 permissions:
   contents: read
 
-# A new push to a branch makes the run already in flight for it obsolete.
-# Cancelling it frees the runner immediately, which is what a contributor
-# pushing a fixup actually wants -- their new run starts now, not after the
-# stale one finishes.
+# A new push to a pull request makes the run already in flight for it
+# obsolete: cancelling it frees the runner for the fixup. A push to a branch
+# (a merge into int or main) waits its turn instead, because merges an hour
+# apart kept cancelling the full run before its medium tier reported
+# (2026-11-25). At most one run waits; a newer push replaces it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   UV_VERSION: "0.11.28"
@@ -177,7 +178,7 @@ jobs:
     # Every interpreter in the project's requires-python window. The columns
     # run concurrently, so covering four of them costs runner minutes but not
     # a contributor's wall-clock wait.
-    name: test (py${{ matrix.python-version }}${{ matrix.shard != 0 && format(', {0}/3', matrix.shard) || '' }})
+    name: test (py${{ matrix.python-version }}${{ matrix.shard != 0 && format(', {0}/4', matrix.shard) || '' }})
     # A stale record fails the records job alone, in a few minutes, before
     # three interpreters spend their runner minutes on a tree that needs a
     # re-record first.
@@ -194,15 +195,19 @@ jobs:
         # Every Python of requires-python. uv.lock puts 3.11 to 3.13 on JAX
         # 0.6.2, the floor, and 3.14 on the newest JAX gymnax allows.
         # A pull request into int/amendment3 runs 3.13 alone, the interpreter
-        # that also type-checks and enforces coverage; the push after its merge
-        # runs all four.
-        python-version: ${{ fromJSON(github.base_ref == 'int/amendment3' && '["3.13"]' || '["3.11", "3.12", "3.13", "3.14"]') }}
-        # A pull request into int/amendment3 runs its tests in three shards on
-        # three runners at once (owner, 2026-11-24); 0 is no sharding.
-        shard: ${{ fromJSON(github.base_ref == 'int/amendment3' && '[1, 2, 3]' || '[0]') }}
+        # that also type-checks and enforces coverage. The push after its merge
+        # runs the whole tier on 3.13 and 3.14, the two JAX versions; 3.11 and
+        # 3.12 share 3.13's JAX and run the light job below (owner, 2026-11-25).
+        python-version: ${{ fromJSON(github.base_ref == 'int/amendment3' && '["3.13"]' || github.ref == 'refs/heads/int/amendment3' && '["3.13", "3.14"]' || '["3.11", "3.12", "3.13", "3.14"]') }}
+        # A pull request into int/amendment3 runs its tests in shards on
+        # several runners at once (owner, 2026-11-24), and so does the push
+        # after a merge, which ran past 60 minutes unsplit (owner, 2026-11-25).
+        # Four, balanced by recorded durations (tests/ci_durations.json); 0 is
+        # no sharding.
+        shard: ${{ fromJSON((github.base_ref == 'int/amendment3' || github.ref == 'refs/heads/int/amendment3') && '[1, 2, 3, 4]' || '[0]') }}
     env:
       UV_PYTHON: ${{ matrix.python-version }}
-      TG_SHARD: ${{ matrix.shard != 0 && format('{0}/3', matrix.shard) || '' }}
+      TG_SHARD: ${{ matrix.shard != 0 && format('{0}/4', matrix.shard) || '' }}
       # On the integration branch only, until its one re-record. Every plant
       # compiles from scratch there, and the compiled programs fill a runner on
       # the older JAX, whatever the worker count, so they are freed after each
@@ -240,11 +245,18 @@ jobs:
       # interpreter, and any computation that changed simply misses and is
       # recompiled. Entries are keyed internally by jaxpr, backend and JAX
       # version, so a stale one is never wrongly reused.
-      uses: actions/cache@v4
+      #
+      # One entry per shard: three shards on one key left two unable to save
+      # it. Only a push saves, and even when a test failed (the last step):
+      # 3.11 and 3.14 never passed on the integration branch, so they compiled
+      # cold on every push (run 45655952101). A pull request reads the
+      # entries its base branch saved.
+      uses: actions/cache/restore@v4
       with:
         path: .jax_cache
-        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('src/**/*.py', 'uv.lock') }}
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-s${{ matrix.shard }}-${{ hashFiles('src/**/*.py', 'uv.lock') }}
         restore-keys: |
+          jax-${{ runner.os }}-py${{ matrix.python-version }}-s${{ matrix.shard }}-
           jax-${{ runner.os }}-py${{ matrix.python-version }}-
 
     - name: Install dependencies
@@ -268,18 +280,7 @@ jobs:
       if: matrix.python-version != '3.13'
       run: |
         if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
-        uv run pytest -q -n auto -m "not medium and not large and not records" $INTEGRATION_ARGS
-
-    # Medium tests start other processes, write videos, or compile an aircraft
-    # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
-    # those inside the runner's 16 GB; four of them at once shut runners down
-    # on 2026-10-27. The oldest and the newest Python run them, which are also
-    # the oldest and the newest JAX. After the small tier with coverage, they
-    # would put the 3.13 column past ten minutes whenever the compile cache
-    # misses (14.5 minutes on 2026-10-28).
-    - name: Medium tests
-      if: matrix.python-version == '3.11' || matrix.python-version == '3.14'
-      run: uv run pytest -q -m "medium and not records" -n 2
+        uv run pytest -q -n auto -m "not medium and not large and not records and not solo" --durations=0 --durations-min=3 $INTEGRATION_ARGS
 
     # One column carries the coverage gate, over the small tier (93% on
     # 2026-10-28, without the medium tests' 1.4 points). pytest-cov aggregates
@@ -291,7 +292,18 @@ jobs:
         COVERAGE_CORE: sysmon
       run: |
         if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
-        uv run pytest -q -n auto -m "not medium and not large and not records" --cov=target_gym $INTEGRATION_ARGS
+        uv run pytest -q -n auto -m "not medium and not large and not records and not solo" --cov=target_gym ${{ matrix.shard != 0 && '--cov-fail-under=0' || '' }} --durations=0 --durations-min=3 $INTEGRATION_ARGS
+        if [ "${{ matrix.shard }}" != "0" ]; then mv .coverage "coverage-${{ matrix.shard }}.data"; fi
+
+    # A shard covers a third of the tests, so its coverage is gated once, in
+    # 'tests pass', over the three shards' data combined.
+    - name: Keep this shard's coverage
+      if: matrix.python-version == '3.13' && github.base_ref != 'int/amendment3' && matrix.shard != 0
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.shard }}
+        path: coverage-${{ matrix.shard }}.data
+        include-hidden-files: true
 
     # Owner's rule of 2026-11-24: a pull request into the integration branch
     # runs the test folders of the tasks it changes, the test files it changes
@@ -302,18 +314,193 @@ jobs:
       if: github.base_ref == 'int/amendment3'
       run: |
         if [ -n "$INTEGRATION_ARGS" ]; then ( while sleep 60; do echo "[watch] $(free -m | awk 'NR==2{print "used",$3,"avail",$7}') disk $(df -m . | awk 'NR==2{print $4}') cache $(du -sm .jax_cache | cut -f1) rss $(ps -eo rss= --sort=-rss | head -3 | awk '{printf "%d ", $1/1024}') in $(cat .jax_cache/current-test-* 2>/dev/null | tr '\n' ' ')"; done ) & fi
-        uv run python scripts/ci_select_tests.py --base HEAD^1 -- -q -n auto -m "not medium and not large and not records" $INTEGRATION_ARGS
+        uv run python scripts/ci_select_tests.py --base HEAD^1 -- -q -n auto -m "not medium and not large and not records and not solo" $INTEGRATION_ARGS
+
+    # A small test whose compile fills a runner by itself (marked solo) runs
+    # alone on one worker, after the rest (owner, 2026-11-25). Each shard runs
+    # its own share of them: together they take too long for one runner.
+    - name: Solo tests
+      # Exit code 5 is "no tests collected": a shard may hold none of them.
+      run: uv run pytest -q -n 0 -m "solo and not medium and not large and not records" || test $? -eq 5
+
+    - name: Save the XLA compilation cache
+      if: always() && github.event_name == 'push'
+      uses: actions/cache/save@v4
+      with:
+        path: .jax_cache
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-s${{ matrix.shard }}-${{ hashFiles('src/**/*.py', 'uv.lock') }}
+
+  medium:
+    # The medium tier, in jobs of its own beside the small tier rather than
+    # after it on the same runner, where it put py3.11's shards at 53 to 59 of
+    # their 60 minutes (owner, 2026-11-25). The two JAX versions run it: 3.13
+    # (the floor's, which 3.11 and 3.12 share) and 3.14 (the newest).
+    name: medium (py${{ matrix.python-version }}${{ matrix.shard != 0 && format(', {0}/3', matrix.shard) || '' }})
+    needs: records
+    # Not on a pull request into the integration branch, which runs the small
+    # tests its change selects; on the push after the merge instead.
+    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && github.base_ref != 'int/amendment3' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise' || github.ref == 'refs/heads/int/amendment3') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+        shard: ${{ fromJSON(github.ref == 'refs/heads/int/amendment3' && '[1, 2, 3]' || '[0]') }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      TG_SHARD: ${{ matrix.shard != 0 && format('{0}/3', matrix.shard) || '' }}
+      JAX_PLATFORMS: cpu
+      # As in the test job, until the integration branch lands.
+      FREE_COMPILED_PROGRAMS: ${{ (github.head_ref == 'feat/sensor-noise' || github.ref == 'refs/heads/int/amendment3') && '1' || '' }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Restore the XLA compilation cache
+      # As in the test job: one entry per shard, saved by every push.
+      uses: actions/cache/restore@v4
+      with:
+        path: .jax_cache
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-medium-s${{ matrix.shard }}-${{ hashFiles('src/**/*.py', 'uv.lock') }}
+        restore-keys: |
+          jax-${{ runner.os }}-py${{ matrix.python-version }}-medium-s${{ matrix.shard }}-
+          jax-${{ runner.os }}-py${{ matrix.python-version }}-medium-
+
+    - name: Install dependencies
+      run: uv sync --frozen --group dev
+
+    # Medium tests start other processes, write videos, or compile an aircraft
+    # planner or tuner, which peaks at 2.5 to 5 GB. Two workers keep two of
+    # those inside the runner's 16 GB; four of them at once shut runners down
+    # on 2026-10-27. The oldest and the newest Python run them, which are also
+    # the oldest and the newest JAX. After the small tier with coverage, they
+    # would put the 3.13 column past ten minutes whenever the compile cache
+    # misses (14.5 minutes on 2026-10-28).
+    #
+    # A medium test whose compile fills most of the runner (solo, see
+    # FILLS_A_RUNNER in tests/conftest.py) runs after the rest, on one worker:
+    # two of them at once shut down three shards of push run 45655952101.
+    - name: Medium tests
+      run: |
+        uv run pytest -q -m "medium and not solo and not records" -n 2 --durations=0 --durations-min=3
+        uv run pytest -q -m "medium and solo and not records" -n 0 || test $? -eq 5
+
+    - name: Save the XLA compilation cache
+      if: always() && github.event_name == 'push'
+      uses: actions/cache/save@v4
+      with:
+        path: .jax_cache
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-medium-s${{ matrix.shard }}-${{ hashFiles('src/**/*.py', 'uv.lock') }}
+
+  light:
+    # 3.11 and 3.12 resolve the same JAX as 3.13, which runs the whole tier, so
+    # what they can break alone is the interpreter: they import every test
+    # module, run the documented examples and the public API, and reset and
+    # step every task (owner, 2026-11-25). On the push to the integration
+    # branch; elsewhere the test job still runs all four interpreters.
+    name: light (py${{ matrix.python-version }})
+    needs: records
+    if: ${{ !cancelled() && github.ref == 'refs/heads/int/amendment3' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      JAX_PLATFORMS: cpu
+      FREE_COMPILED_PROGRAMS: "1"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: ${{ env.UV_VERSION }}
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Restore the XLA compilation cache
+      uses: actions/cache/restore@v4
+      with:
+        path: .jax_cache
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-light-${{ hashFiles('src/**/*.py', 'uv.lock') }}
+        restore-keys: |
+          jax-${{ runner.os }}-py${{ matrix.python-version }}-light-
+
+    - name: Install dependencies
+      run: uv sync --frozen --group dev
+
+    - name: Import every test module
+      run: uv run pytest --collect-only -q -m "not records" | tail -3
+
+    - name: Light tests
+      # The two using-the-pids examples compare with records that are stale on
+      # the integration branch, as in the test job.
+      run: >-
+        uv run pytest -q -n 2
+        -m "not medium and not large and not records and not solo"
+        tests/test_docs.py tests/test_public_api.py tests/test_env_conformance.py
+        -k "not test_env_conformance or test_step_env_is_jittable"
+        --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:2]
+        --deselect=tests/test_docs.py::test_documented_example_runs[docs/using-the-pids.md:6]
+
+    - name: Save the XLA compilation cache
+      if: always() && github.event_name == 'push'
+      uses: actions/cache/save@v4
+      with:
+        path: .jax_cache
+        key: jax-${{ runner.os }}-py${{ matrix.python-version }}-light-${{ hashFiles('src/**/*.py', 'uv.lock') }}
 
   tests-pass:
-    # The one check the integration branch requires: every shard of the test
-    # job passed. Its shards' names change with the matrix; this one does not.
+    # The one check the integration branch requires: every shard of the test,
+    # medium and light jobs passed. Their names change with the matrix; this
+    # one does not. A pull request into the branch runs neither the medium nor
+    # the light job.
     name: tests pass
-    needs: test
-    if: ${{ always() && github.base_ref == 'int/amendment3' }}
+    needs: [test, medium, light]
+    if: ${{ always() && (github.base_ref == 'int/amendment3' || github.ref == 'refs/heads/int/amendment3') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-    - run: test "${{ needs.test.result }}" = "success"
+    - run: |
+        test "${{ needs.test.result }}" = "success"
+        for result in "${{ needs.medium.result }}" "${{ needs.light.result }}"; do
+          # An explicit exit: bash -e ignores a failure inside an || list,
+          # and the loop's last test would decide the step's result.
+          test "$result" = "success" || { test "$result" = "skipped" && test "${{ github.event_name }}" = "pull_request"; } || exit 1
+        done
+    # The push's shards each kept their coverage; the floor in
+    # pyproject.toml is enforced here, over all of them.
+    - uses: actions/checkout@v4
+      if: github.ref == 'refs/heads/int/amendment3'
+    - uses: astral-sh/setup-uv@v5
+      if: github.ref == 'refs/heads/int/amendment3'
+      with:
+        version: ${{ env.UV_VERSION }}
+    - uses: actions/download-artifact@v4
+      if: github.ref == 'refs/heads/int/amendment3'
+      with:
+        pattern: coverage-*
+        merge-multiple: true
+    - name: Coverage over the shards
+      if: github.ref == 'refs/heads/int/amendment3'
+      env:
+        UV_PYTHON: "3.13"
+      run: |
+        uv sync --frozen --group dev
+        uv run coverage combine coverage-*.data
+        uv run coverage report
 
   large-test:
     # Closed-loop contracts that still roll the plant out here: PID beats the

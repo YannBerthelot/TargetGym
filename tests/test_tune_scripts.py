@@ -114,6 +114,32 @@ def test_every_energy_recipe_fixes_its_own_tests_length(name):
     assert industrial._params(name).max_steps_in_episode == industrial.TEST_STEPS[name]
 
 
+#: The stack the stored gains were tuned on: the lock's JAX and numpy for
+#: Python 3.12 and 3.13. Elsewhere the fit moves with the numerics: on
+#: 2026-11-25 numpy 2.4.6 (py3.11) moved pH's Ti by 6e-6 (2e-8 relative) and
+#: JAX 0.11.2 (py3.14) moved distillation's Kp_T by 7e-4 relative, cstr's Kv
+#: by 9e-5 and boiler_drum's Kp_level by 1e-5. Off this stack a recipe must
+#: still land within ACROSS_STACKS of what is stored (owner, 2026-11-25).
+RECORDED_STACK = ("0.6.2", "2.5.2")
+ACROSS_STACKS = 1e-3
+
+
+#: On the recorded stack a recipe gives its entry to the 6 decimals ``write``
+#: keeps (1.5e-6 covers the rounding). The column's float32 sums move with the
+#: runner's CPU: on push run 45696120007 (2026-11-25) one GitHub runner gave
+#: Kp_T 0.140781 against the stored 0.140777, and a rerun of the same commit
+#: passed. 1e-5 covers that spread; a change to the recipe moves the gains by far
+#: more (owner, picker, 2026-11-26).
+ON_STACK_ABS = {"distillation": 1e-5}
+
+
+def _on_recorded_stack() -> bool:
+    import jax
+    import numpy
+
+    return (jax.__version__, numpy.__version__) == RECORDED_STACK
+
+
 @pytest.mark.medium
 # battery left with v4: its expert plans a baseline from the reported energy
 # and has no tuned gains (energy/battery/PHYSICS.md, section 9).
@@ -123,7 +149,8 @@ def test_an_energy_recipe_reproduces_what_is_stored(name):
     out = industrial.TUNERS[name]()
     for key, value in out.items():
         if not isinstance(value, dict):
-            assert stored[key] == pytest.approx(value, rel=1e-6), key
+            rel = 1e-6 if _on_recorded_stack() else ACROSS_STACKS
+            assert stored[key] == pytest.approx(value, rel=rel), key
 
 
 @pytest.mark.medium
@@ -135,7 +162,14 @@ def test_a_recipe_reproduces_what_is_stored(name):
     out = process.TUNERS[name]()
     for key, value in out.items():
         if not isinstance(value, dict):
-            assert float(value) == pytest.approx(stored[key], abs=1.5e-6), key
+            if _on_recorded_stack():
+                assert float(value) == pytest.approx(
+                    stored[key], abs=ON_STACK_ABS.get(name, 1.5e-6)
+                ), key
+            else:
+                assert float(value) == pytest.approx(
+                    stored[key], rel=ACROSS_STACKS
+                ), key
 
 
 def _no_store(*args, **kwargs):

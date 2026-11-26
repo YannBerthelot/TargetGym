@@ -3,7 +3,7 @@
 What the plant's datasheet and balances say, and nothing read from a score
 (PHYSICS.md section 10). Two stages in series, each with its own valve and probe:
 stage 1's base valve on its probe, stage 2's trim valve on the discharge probe. The
-discharge is a zone, pH 6 to 8 [P7], cheap side low (less base holds a lower pH).
+discharge is a zone, pH 6 to 9 [P11], cheap side low (less base holds a lower pH).
 The score charges every step outside it as an excursion, the price of a violation,
 so its loop holds the lowest tenth of a pH above 6 at which the reference leaves the
 permit on none of its seeds (J1, owner, 2026-11-23), not 2 sigma above 6; stage 1

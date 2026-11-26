@@ -35,7 +35,7 @@ class PHNeutralization(
 ):
     """pH neutralisation CSTR (reaction-invariant formulation).
 
-    Observation (8,): [pH, q3_pct, setpoint_pH, excursion_min, pH_s1, trim_pct,
+    Observation (8,): [pH, q3_pct, permit_centre, excursion_min, pH_s1, trim_pct,
                        q1, basin_pct]
     Action      (2,): stage-1 base flow and stage-2 trim, raw in [-1, 1]
     """
@@ -147,10 +147,13 @@ class PHNeutralization(
             params.q2_min,
             params.q2_max,
         )
-        target_pH = jnp.asarray(params.setpoint_pH, jnp.float32)
         q3 = jnp.clip(
-            steady_base_flow(target_pH, q2, params), params.q3_min, params.q3_max
+            steady_base_flow(params.setpoint_pH, q2, params),
+            params.q3_min,
+            params.q3_max,
         )
+        centre = 0.5 * (params.permit_low + params.permit_high)
+        target_pH = jnp.asarray(centre, jnp.float32)
         span = params.max_steps_in_episode
 
         def schedule(times_key, levels_key, size):

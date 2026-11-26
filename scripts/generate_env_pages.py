@@ -346,13 +346,15 @@ _PART = {"best_null": "nulls", "reference": "reference", "mpc": "mpc"}
 _PART["ceiling"] = "ceiling"
 
 
-def charter_section(record: dict, stale=()) -> str:
+def charter_section(record: dict, stale=(), reads=()) -> str:
     """A scored task's four lines (charter J3) and its room, from its record.
     A line the record lacks reads "not measured", with the record's reason
     under the table: the MPC line may be missing in this release (owner,
     2026-11-24), and the records tests hold the other three. A line whose part
     is in ``stale`` (``charter.stale_parts``) reads "not current" and gives no
-    number until it is re-recorded (owner, 2026-11-25)."""
+    number until it is re-recorded (owner, 2026-11-25). ``reads`` names the
+    hidden facts the ceiling reads (``charter.CEILING_READS``, owner,
+    2026-11-25), said under the room."""
     record = {k: v for k, v in record.items() if k not in set(stale)}
     lines = charter.j3(record)
     rows = ["| Line | What it is | Cost per step | Trips |", "|---|---|---|---|"]
@@ -401,6 +403,16 @@ def charter_section(record: dict, stale=()) -> str:
             *rows,
             "",
             " ".join([*reasons, said]),
+            *(
+                [
+                    "",
+                    f"The ceiling reads what the policy does not observe: "
+                    f"{'; '.join(reads)}. Part of the room may be out of reach "
+                    "of a policy that reads only the observations.",
+                ]
+                if reads
+                else []
+            ),
         ]
     )
 
@@ -472,6 +484,9 @@ def _baseline_section(spec, row: dict | None, scored: bool, fps: dict) -> str:
             "The recorded comparison was measured on an earlier version of this "
             "task, so it is not shown; it shows again once re-recorded."
         )
+        # What a baseline is stays true without its numbers.
+        if spec.baselines_note:
+            lines.append(f"\n{spec.baselines_note}")
     elif spec.has_mpc:
         lines.append(
             "A PID and an MPC ship with this environment, but no comparison has "
@@ -680,7 +695,11 @@ def page(name: str, spec, recorded: dict) -> tuple[str, str]:
             [
                 "## Reference and ceiling",
                 "",
-                charter_section(record, charter.stale_parts(record, current)),
+                charter_section(
+                    record,
+                    charter.stale_parts(record, current),
+                    charter.CEILING_READS.get(name, ()),
+                ),
                 "",
             ]
             if scored

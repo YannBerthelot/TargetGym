@@ -9,6 +9,15 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Scaled observations and rewards (2026-11-25)
+
+- `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
+  each observation's documented range to [-1, 1] and divides the reward by one
+  fixed constant per task (`scaled.SCALES`, the five scored tasks). The raw
+  reward rides in `info["raw_reward"]`. The score never reads the wrapper, and
+  `scaled.raw_policy` hands `score_policy` a policy trained on scaled
+  observations.
+
 ### Reactor curve book, cycle draw and limits (2026-11-25)
 
 - The reactor's expert reads a measured curve book: the recipe's physics tests at
@@ -60,6 +69,10 @@ The next release is 0.8.0, because these changes break code written for
     page says it was recorded on an earlier version and shows the numbers
     again once it is re-recorded. `records.current_parts` gives the current
     part of an old-format row.
+  - Each scored task's page names the hidden facts its ceiling reads (the
+    true surge line, the acid strength, the weather or load ahead), so part
+    of the room may be out of reach of a policy; the list is
+    `charter.CEILING_READS`.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and

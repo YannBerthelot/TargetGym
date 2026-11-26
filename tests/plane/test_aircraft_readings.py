@@ -10,7 +10,9 @@ the code:
 - Path and slot errors are computed from the readings behind them.
 - Setpoints, slot geometry and the turn schedule stay exact.
 - ``sensor_noise_scale = 0`` gives the stored state, whatever it holds.
-- ``patrol_range_bearing`` reads range at 15 m and azimuth at 0.026 rad. Elevation
+- ``patrol_range_bearing`` reads azimuth at 0.026 rad. The range is seen, not
+  read (the owner, 2026-11-10, in place of TCAS's 15 m): it is the true
+  geometry's, with no scatter and none from the position fixes. Elevation
   has one altitude path with ``lead.z``, the 25 ft Mode S report, rounded and not
   noised, so it scatters by ``25 ft / sqrt(12) / range``: 0.0088 rad at 250 m.
 - A trip stays true: a measured copy is charged the trip it is told about.
@@ -125,7 +127,9 @@ OTHER_SCATTER = {
     "plane3d_circle": {11: 0.27, 12: 0.27},
     "plane3d_racetrack": {11: 0.27, 12: 0.27},
     "patrol": PATROL_RELATIVE,
-    "patrol_range_bearing": {10: 15.0, 11: 0.026},
+    # The range (10) is seen, so it has no scatter to compare a ratio with:
+    # ``test_range_and_azimuth_inherit_no_position_noise`` holds it exact.
+    "patrol_range_bearing": {11: 0.026},
     "formation": {
         16: 0.27 * ROOT2,  # the first wingman's error, in the lead's seat
         17: 0.27 * ROOT2,
@@ -399,11 +403,15 @@ def test_range_is_one_reading_in_both_its_channels():
 
 
 def test_range_and_azimuth_inherit_no_position_noise():
-    """Their whole scatter is the channel's, drawn apart from the fixes: the
-    range is uncorrelated with the slot's own altitude reading."""
-    draws = _unrounded_draws(BO)
+    """The range is the true geometry's on every draw: computed from the fixes
+    it would scatter by the two GNSS positions, 0.27 m x sqrt(2) = 0.38 m
+    (patrol/PHYSICS.md, readings). The azimuth's scatter is its channel's,
+    drawn apart from the fixes, so it is uncorrelated with the wingman's own
+    altitude reading."""
+    true, draws = _task(BO)[3], _unrounded_draws(BO)
+    np.testing.assert_allclose(draws[:, RANGE], true[RANGE], atol=1e-3)
     np.testing.assert_allclose(
-        np.corrcoef(draws[:, RANGE], draws[:, 2])[0, 1], 0.0, atol=0.08
+        np.corrcoef(draws[:, AZIMUTH], draws[:, 2])[0, 1], 0.0, atol=0.08
     )
 
 

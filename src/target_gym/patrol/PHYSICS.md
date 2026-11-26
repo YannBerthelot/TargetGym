@@ -620,9 +620,10 @@ provisional, marked pending a real sensor.** None has been sourced for a wingman
 | azimuth | 0.026 rad | none | TCAS II four-monopole direction-finding antenna | Corrected: the random part, provisional | [Harman 1984](https://archive.ll.mit.edu/mission/aviation/publications/publication-files/ms-papers/Harman_1984_CACA_MS-6526_WW-18698A.pdf) |
 | elevation | 0.0088 rad at 250 m, as 1 / range | through `lead.z` | TCAS relative altitude from Mode S reports | No source: provisional | none opened |
 
-Range and azimuth are channel readings, drawn on the true geometry, because
-computed from the fixes they would inherit GNSS-grade noise. The tracked value
-is that same range reading, not a second instrument.
+Range and azimuth are taken on the true geometry, because computed from the
+fixes they would inherit GNSS-grade noise: the azimuth as a channel reading, the
+range as seen, with no scatter. The tracked value is that same range, not a
+second instrument.
 
 Elevation has no draw of its own. TCAS measures no angle: it takes the lead's
 altitude from a Mode S report coded in 25 ft steps. So on this task `lead.z` is

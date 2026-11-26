@@ -13,7 +13,6 @@ import pytest
 from target_gym.pc_gym.ph_neutralization.env import (
     PHParams,
     PHState,
-    check_is_terminal,
     compute_next_state,
     compute_reward,
     compute_velocity,
@@ -193,38 +192,24 @@ def test_observation_hides_the_invariants_and_the_buffer(params):
         assert not bool(jnp.any(jnp.isclose(obs, hidden)))
 
 
-def test_reward_peaks_on_target(params):
-    env = PHNeutralization()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    on = state.replace(pH=7.0, target_pH=7.0, q3=params.q3_min)
-    off = state.replace(pH=9.0, target_pH=7.0, q3=params.q3_min)
-    assert float(compute_reward(on, params)) == pytest.approx(1.0, abs=1e-6)
-    assert float(compute_reward(on, params)) > float(compute_reward(off, params))
-
-
-def test_reward_saturates_rather_than_inverting(params):
-    """The clip must not let a larger error score better -- see PHYSICS.md §5."""
-    env = PHNeutralization()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    rewards = [
-        float(
-            compute_reward(
-                state.replace(pH=7.0 + e, target_pH=7.0, q3=params.q3_min), params
-            )
-        )
-        for e in (0.0, 0.5, 1.0, 2.0, 4.0, 6.0)
-    ]
-    assert all(a >= b - 1e-9 for a, b in zip(rewards, rewards[1:])), rewards
-
-
-def test_never_trips_because_the_off_spec_limits_are_unreachable(params):
-    """The effluent is a convex mix of the inlet streams, so its pH stays
-    within about 3.1-10.6 whatever the valves do; the 2 / 12 limits document
-    the off-spec range and never fire."""
-    env = PHNeutralization()
-    _, state = env.reset_env(jax.random.PRNGKey(0), params)
-    for pH in (params.pH_min - 0.5, params.pH_max + 0.5, 7.0):
-        assert not bool(check_is_terminal(state.replace(pH=pH), params)[0])
+def test_a_step_is_charged_its_reagent_its_seconds_outside_and_its_diverted_flow():
+    """The scored reward (PHParams, "Score"; owner, 2026-11-25, in place of the
+    retired version-1 tests): the base both valves pass at 1 L per L, 100/60 L
+    per second outside the permit pH 6 to 9 [40 CFR 133.102(c)], and 2 L per
+    litre of outflow diverted below pH 5 [P9]. Values worked by hand."""
+    p = PHParams()
+    _, s = PHNeutralization().reset_env(jax.random.PRNGKey(0), p)
+    s = s.replace(q3=10.0, q3_trim=1.0, excursion=0.0, basin=0.0)
+    reagent = 11.0 * 5.0 / 1000.0  # 11 mL/s for 5 s, in L
+    outside = 100.0 / 60.0 * 5.0  # 8.333 L
+    diverted = 2.0 * (float(s.q1) + float(s.q2) + 11.0) * 5.0 / 1000.0
+    assert float(compute_reward(s.replace(pH=7.0), p)) == pytest.approx(-reagent)
+    assert float(compute_reward(s.replace(pH=9.5), p)) == pytest.approx(
+        -reagent - outside
+    )
+    assert float(compute_reward(s.replace(pH=4.9), p)) == pytest.approx(
+        -reagent - outside - diverted
+    )
 
 
 def test_reset_starts_at_a_consistent_steady_state(params):

@@ -356,7 +356,12 @@ def test_the_records_job_covers_the_five_and_only_them():
         capture_output=True,
         text=True,
         cwd=ROOT,
-        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        # The records job runs unsharded, so its collection must too: a
+        # ``TG_SHARD`` inherited from a sharded CI run would keep a third.
+        env={
+            **{k: v for k, v in os.environ.items() if k != "TG_SHARD"},
+            "PYTHONPATH": str(ROOT / "src"),
+        },
     )
     cases: dict[str, set[str]] = {}
     for test, task in re.findall(r"::(\w+)\[([\w-]+)\]", out.stdout):
