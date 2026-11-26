@@ -124,6 +124,15 @@ RECORDED_STACK = ("0.6.2", "2.5.2")
 ACROSS_STACKS = 1e-3
 
 
+#: On the recorded stack a recipe gives its entry to the 6 decimals ``write``
+#: keeps (1.5e-6 covers the rounding). The column's float32 sums move with the
+#: runner's CPU: on push run 45696120007 (2026-11-25) one GitHub runner gave
+#: Kp_T 0.140781 against the stored 0.140777, and a rerun of the same commit
+#: passed. 1e-5 covers that spread; a change to the recipe moves the gains by far
+#: more (owner, picker, 2026-11-26).
+ON_STACK_ABS = {"distillation": 1e-5}
+
+
 def _on_recorded_stack() -> bool:
     import jax
     import numpy
@@ -154,7 +163,9 @@ def test_a_recipe_reproduces_what_is_stored(name):
     for key, value in out.items():
         if not isinstance(value, dict):
             if _on_recorded_stack():
-                assert float(value) == pytest.approx(stored[key], abs=1.5e-6), key
+                assert float(value) == pytest.approx(
+                    stored[key], abs=ON_STACK_ABS.get(name, 1.5e-6)
+                ), key
             else:
                 assert float(value) == pytest.approx(
                     stored[key], rel=ACROSS_STACKS
