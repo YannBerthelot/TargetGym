@@ -18,14 +18,23 @@ import numpy as np
 from target_gym.experts.pid import Controller
 from target_gym.identification import simc
 
-__all__ = ["Cascade", "Override", "Pi", "Rung", "best_rung", "decoupler"]
+__all__ = ["Cascade", "Override", "Pi", "Rung", "ValvePosition", "best_rung"]
+__all__ += ["decoupler"]
 __all__ += ["ladder_controller", "most_sensitive", "pi_gains"]
 __all__ += ["K_BACKOFF", "cv_sigma", "null_verdict", "zone_setpoint"]
+__all__ += ["ZONE_GRID_STEPS", "first_without_exit", "leaves_only_unheld", "zone_grid"]
 
 #: Charter Amendment 3, rule 22: on a zone the reference sits this many standard
 #: deviations inside the cheap edge, the usual two-sigma give-away, fixed before any
 #: room is seen.
 K_BACKOFF = 2.0
+
+#: Charter J1 (owner, 2026-11-23), for a zone whose exit the score prices as a
+#: violation: the candidate setpoints are the cheap edge and this many equal steps to
+#: the centre. Ten, a tenth of the half-width each: set from the zone alone, before
+#: any room is seen, and no finer, since ten seeds cannot tell closer neighbours
+#: apart.
+ZONE_GRID_STEPS = 10
 
 
 def null_verdict(reference, nulls: dict) -> dict:
@@ -68,6 +77,62 @@ def zone_setpoint(low: float, high: float, sigma: float, cheap, k: float = K_BAC
     return float(point)
 
 
+def zone_grid(low: float, high: float, cheap, steps: int = ZONE_GRID_STEPS) -> tuple:
+    """The candidate setpoints on the zone ``[low, high]``: from the ``cheap`` edge
+    (``"low"`` or ``"high"``) to the centre in ``steps`` equal steps, the edge first
+    and the centre last. A zone with no cheap side holds its centre and has nothing to
+    place; one with an infinite edge has no centre to stop at."""
+    if cheap is None:
+        raise ValueError("a zone with no cheap side holds its centre: no grid")
+    if not (np.isfinite(low) and np.isfinite(high)):
+        raise ValueError("a zone with an infinite edge has no centre")
+    edge = {"low": low, "high": high}[cheap]
+    centre = 0.5 * (low + high)
+    return tuple(float(edge + (centre - edge) * i / steps) for i in range(steps + 1))
+
+
+def first_without_exit(grid, exits_at: Callable) -> tuple:
+    """Charter J1 on a zone priced as a violation: the first setpoint of ``grid``,
+    which runs from the cheap edge, at which the reference leaves the zone on none of
+    its seeds, as ``best_rung`` keeps a rung that trips none. ``exits_at(setpoint)``
+    gives the seeds that leave there, as sortable ids (a seed, or a scenario and a
+    seed); candidates past the kept one are not run.
+
+    Seeds that can be held decide (owner, 2026-11-23): a seed that leaves from every
+    candidate does not constrain the placement. The reference pays for its exits
+    there, and it is returned as unheld for the record to state. Knowing that takes
+    the whole grid, so the grid is run to its end whenever no candidate holds every
+    seed.
+
+    Returns ``(setpoint, scan, unheld)``: ``scan`` the seeds leaving at each
+    candidate run, ``unheld`` those no candidate holds. Two cases keep the last
+    candidate, the centre: no candidate holds every seed that some candidate holds
+    (``scan`` then shows who leaves at the centre), and no seed can be held from any
+    candidate, where the rule has nothing to decide with and ``unheld`` is every
+    seed."""
+    scan = {}
+    for point in grid:
+        scan[point] = tuple(sorted(set(exits_at(point))))
+        if not scan[point]:
+            return float(point), scan, ()
+    leaving = [set(seeds) for seeds in scan.values()]
+    unheld = set.intersection(*leaving)
+    holdable = set.union(*leaving) - unheld
+    if holdable:
+        for point, seeds in scan.items():
+            if not holdable & set(seeds):
+                break
+    return float(point), scan, tuple(sorted(unheld))
+
+
+def leaves_only_unheld(setpoint, scan: dict, unheld) -> bool:
+    """Whether a rung placed by :func:`first_without_exit` leaves its zone on none of
+    the seeds it can hold: at its ``setpoint`` the seeds leaving are all ``unheld``.
+    False where the centre was kept though a seed some candidate holds still leaves
+    there. Takes what :func:`first_without_exit` returns."""
+    return not set(scan[setpoint]) - set(unheld)
+
+
 def pi_gains(k: float, tau, theta: float) -> tuple:
     """``(Kc, Ti)`` by SIMC with ``tc = theta``. ``tau`` None is an integrating loop,
     whose ``k`` is the slope."""
@@ -89,11 +154,18 @@ def most_sensitive(designs: list) -> dict:
     return min(designs, key=lambda d: abs(d["Kc"]))
 
 
-def best_rung(results: dict):
+def best_rung(results: dict, holds: dict | None = None):
     """The rung of lowest median cost that tripped no seed, None if all tripped.
-    ``results`` runs up the ladder, so a tie goes to the simpler rung."""
+    ``results`` runs up the ladder, so a tie goes to the simpler rung.
+
+    ``holds`` (charter J1 on zones priced as a violation, each rung placed on its
+    own) says which rungs leave their zones on none of the seeds they can hold
+    (:func:`leaves_only_unheld`); a rung it marks false is not a reference and is
+    passed over. A rung it does not name has no such zone."""
     best, cost = None, np.inf
     for name, row in results.items():
+        if holds is not None and not holds.get(name, True):
+            continue
         median = float(np.median(row["costs"]))
         if row["trips"] == 0 and median < cost:
             best, cost = name, median
@@ -137,6 +209,24 @@ class Override:
 
 
 @dataclass(frozen=True)
+class ValvePosition:
+    """Hold a loop's valve at ``setpoint`` by another MV, ``mv``, which no loop
+    drives: Shinskey's valve position control, as Reyes-Lua, Zotica and Skogestad
+    lay it out (IFAC ADCHEM 2018, section 2.3). ``read(obs, xp)`` is the watched
+    valve's position, in the units of ``setpoint``. A PI moves ``mv`` from where the
+    reset left it (the start hold's value, else the bias's), never past ``top``, the
+    throughput asked for, and its integral holds while that limits it. ``kc`` has
+    the sign of the watched valve's answer to ``mv`` with the loops closed."""
+
+    read: Callable
+    setpoint: float
+    mv: int
+    kc: float
+    ti: float
+    top: float = 1.0
+
+
+@dataclass(frozen=True)
 class Rung:
     """One step of the ladder. ``mix`` is MVs by loops, the pairing on the rungs
     without a decoupler."""
@@ -146,6 +236,7 @@ class Rung:
     mix: np.ndarray
     cascades: tuple = ()
     overrides: tuple = ()
+    valve_positions: tuple = ()
 
 
 class Memory(NamedTuple):
@@ -159,6 +250,9 @@ class Memory(NamedTuple):
     #: each cascade's rest were off by at the reset. Zero without one.
     trim: object = ()
     inner_trim: object = ()
+    #: Each valve position loop's integral, and the MV as it took it over.
+    vp_integral: object = ()
+    vp_base: object = ()
 
 
 def ladder_controller(
@@ -205,6 +299,20 @@ def ladder_controller(
             base = base + trim
         asked = base + xp.asarray(rung.mix) @ xp.stack(out)
         u = [v for v in xp.clip(asked, -1.0, 1.0)]
+        # Valve position loops set their MVs first, so that an override on the same
+        # MV selects against what the loop asks (Shinskey's high-temperature
+        # override on the feed [S13, p. 436]).
+        vp_i, vp_b, vp_wanted = [], [], []
+        for n, v in enumerate(rung.valve_positions):
+            took = start(obs, xp)[v.mv] if start is not None else u[v.mv]
+            base_v = xp.where(first, m.vp_base[n], took)
+            e_v = v.setpoint - v.read(obs, xp)
+            i_v = m.vp_integral[n] + e_v * dt
+            wanted = base_v + v.kc * (e_v + i_v / v.ti)
+            u[v.mv] = xp.clip(xp.minimum(wanted, v.top), -1.0, 1.0)
+            vp_i.append(i_v)
+            vp_b.append(base_v)
+            vp_wanted.append(wanted)
         resets = []
         for n, o in enumerate(rung.overrides):
             r = xp.where(first, m.reset[n], u[o.mv])
@@ -216,6 +324,12 @@ def ladder_controller(
                 1.0,
             )
             resets.append(r + dt / o.ti * (u[o.mv] - r))
+        # A valve position loop's integral holds while anything else limits its MV:
+        # its top, the actuator's range, or an override.
+        vp_i = [
+            xp.where(u[v.mv] == vp_wanted[n], vp_i[n], m.vp_integral[n])
+            for n, v in enumerate(rung.valve_positions)
+        ]
         action = xp.stack(u)
 
         moved = xp.abs(action - asked) > 0
@@ -234,6 +348,8 @@ def ladder_controller(
             xp.ones_like(m.started),
             trim,
             _stack(trims, xp) if start is not None else m.inner_trim,
+            _stack(vp_i, xp),
+            _stack(vp_b, xp),
         )
 
     n, c, o = len(rung.loops), len(inner), len(rung.overrides)
@@ -246,6 +362,8 @@ def ladder_controller(
         np.zeros(()),
         np.zeros(rung.mix.shape[0]),
         np.zeros(c),
+        np.zeros(len(rung.valve_positions)),
+        np.zeros(len(rung.valve_positions)),
     )
     return Controller(None, zero, step)
 

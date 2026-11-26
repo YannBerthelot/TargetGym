@@ -20,8 +20,15 @@ Contract:
   slab core [7], the return water [12], the supply, the clock, the band, the
   next 24 h's forecast mean outdoor temperature, and the tariff now with the
   hours to its next change.
-- Episode (rule 17): two weeks [11, p. 1], from established operation at the
-  band's heating edge, no setback [7, p. 7], [15]. Established operation meets
+- Episode (rule 17, cut by the owner on 2026-11-24): twelve days from established
+  operation, scored on days 4 to 10 alone. Three unscored days let the slab forget
+  the reset (the cost gap is gone after day 3, hvac review 2026-11-24), and the last
+  two are the ceiling's tail, charged in its plan and read by no line. Seven scored
+  days of the two weeks a heating curve is judged over [11, p. 1]. Lines run on seeds
+  100 to 104, and 105 to 109 too where the saving interval touches 0. The suite is
+  normal, cold snap and shoulder season: the low-gains weeks repeat normal's night
+  charge and the sunny spell the shoulder's heating limit, so their weights fold in.
+- Reset (rule 17): established operation at the band's heating edge, no setback [7, p. 7], [15]. Established operation meets
   the band: held on the reset's supply through a night with no unforecast
   weather, the room is at the 21 C edge when the office opens (owner,
   2026-11-23), or above it where the building needs no heat.
@@ -232,8 +239,6 @@ def test_the_scenarios_are_the_familys_and_each_runs():
         "normal",
         "cold_snap",
         "shoulder_season",
-        "sunny_spell",
-        "low_gains",
     ]
     env = spec.make_env()
     for sc in suite:
@@ -321,8 +326,35 @@ def test_near_the_heating_limit_the_room_opens_at_or_above_the_band(env):
     assert 21.0 - 0.1 <= float(state.T_air) < 24.0
 
 
-def test_the_episode_is_two_weeks(env):
-    assert PARAMS.max_steps_in_episode * PARAMS.delta_t == 14 * 86400.0
+def test_the_episode_is_three_days_burned_in_seven_scored_and_a_two_day_tail(env):
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    day = int(86400.0 / PARAMS.delta_t)
+    spec = REGISTRY["hvac"]
+    assert PARAMS.max_steps_in_episode == 12 * day
+    assert evaluation.scored_window(spec, 12 * day) == slice(3 * day, 10 * day)
+
+
+def test_lines_run_five_seeds_and_five_more_where_the_saving_is_unclear():
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    ev = evaluation.of(REGISTRY["hvac"])
+    assert ev.seeds == tuple(range(100, 105))
+    assert ev.extra_seeds == tuple(range(105, 110))
+
+
+def test_the_folded_weights_are_the_seasons_fortnights():
+    """Thirteen heating fortnights: normal 6 and its low-gains half, the cold snap
+    1, the shoulder 4 and its sunny one and a half."""
+    from target_gym import scenarios
+    from target_gym.registry import REGISTRY
+
+    shares = scenarios.weights(REGISTRY["hvac"])
+    assert shares == pytest.approx(
+        {"normal": 6.5 / 13, "cold_snap": 1 / 13, "shoulder_season": 5.5 / 13}
+    )
 
 
 def test_a_normal_window_weighs_most_and_every_weight_is_positive():

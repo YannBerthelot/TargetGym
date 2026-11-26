@@ -44,8 +44,8 @@ ENVIRONMENTS = [
         JaxCSTR,
         CSTRParams,
         CSTRState,
-        lambda _: 0.5,
-    ),  # cstr
+        lambda _: jnp.array([0.5, 0.5]),
+    ),  # cstr: the water and the feed
 ]
 
 

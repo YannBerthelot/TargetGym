@@ -291,7 +291,7 @@ class Reactor(
             params = self.default_params
 
         keys = jax.random.split(key, 6)
-        key, down_key, hold_key, demand_key, history_key, delay_key = keys
+        key, down_key, hold_key, demand_key, history_key, _delay_key = keys
 
         # The day: when the load starts down, and how long it holds.
         down_at = jax.random.uniform(
@@ -336,11 +336,17 @@ class Reactor(
         I_tilt0 = jnp.where(follow, tilts[row, 0], 0.0)
         Xe_tilt0 = jnp.where(follow, tilts[row, 1], 0.0)
         # Where the core sits in its cycle, drawn evenly, and its boron, moderator
-        # coefficient and boron worth there.
+        # coefficient and boron worth there. A run never reaches the end of the
+        # load-following range (owner, 2026-11-25): the range is cut by what the
+        # run burns at this core's rate, ``max_steps_in_episode`` steps at full
+        # power, a ppm being ``1 / boron_ref`` of the cycle.
+        start, end = params.cycle_range
+        seconds = params.max_steps_in_episode * CONTROL_PERIOD * params.delta_t
+        run = rate * seconds / 86400.0 / params.boron_ref
         cycle0 = jax.random.uniform(
             jax.random.fold_in(key, _CYCLE),
-            minval=params.cycle_range[0],
-            maxval=params.cycle_range[1],
+            minval=start,
+            maxval=jnp.maximum(end - run, start),
         )
         core = core_at(cycle0, params)
         # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
@@ -351,12 +357,9 @@ class Reactor(
         # Critical on boron: the rods stay parked, whatever xenon asks for.
         needed = rod_balance(T_fuel, 0.5 * (T_hot + T_cold), Xe_hat, core)
         boron = core.boron_ref + needed / core.boron_worth
-        delay = jax.random.randint(
-            delay_key,
-            (),
-            params.boron_delay_range[0],
-            params.boron_delay_range[1] + 1,
-        )
+        # The line's delay is the plant's (owner, 2026-11-25). Its key is still split
+        # off above, so every other draw stays where it was.
+        delay = jnp.asarray(params.boron_delay, jnp.int32)
 
         # The draw's precision: float32 as scored, float64 under enable_x64.
         dtype = down_at.dtype
@@ -550,6 +553,12 @@ class Reactor(
         return jax.tree_util.tree_map(
             lambda new, old: jnp.where(due, new, old), fresh, state
         )
+
+    def initial_action(self, state: ReactorState, params: ReactorParams):
+        """The raw action that holds the reset plant: the rods where it parked them,
+        no boron flow, the turbine loading as far as its plan."""
+        rods = 1.0 - 2.0 * state.rod_in
+        return jnp.stack([rods, jnp.zeros_like(rods), jnp.ones_like(rods)])
 
     def action_space(self, params: ReactorParams | None = None) -> spaces.Box:
         return spaces.Box(

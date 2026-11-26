@@ -37,10 +37,10 @@ key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset_env(reset_key, params)
 
 step = jax.jit(env.step_env)
+action = jnp.zeros(env.action_space(params).shape)   # every move at mid-range
 total = 0.0
 for _ in range(params.max_steps_in_episode):
     key, step_key = jax.random.split(key)   # a fresh key every step
-    action = jnp.array([0.0])
     obs, state, reward, terminated, info = step(step_key, state, action, params)
     total += float(reward)
     if bool(terminated):
@@ -71,7 +71,8 @@ def episode_return(key):
 
     def body(carry, step_key):
         state, total = carry
-        _, state, reward, _, _ = env.step_env(step_key, state, jnp.zeros(1), params)
+        action = jnp.zeros(env.action_space(params).shape)
+        _, state, reward, _, _ = env.step_env(step_key, state, action, params)
         return (state, total + reward), None
 
     step_keys = jax.random.split(steps_key, params.max_steps_in_episode)
@@ -81,6 +82,44 @@ def episode_return(key):
 keys = jax.random.split(jax.random.PRNGKey(0), 256)
 returns = jax.jit(jax.vmap(episode_return))(keys)
 print(returns.mean())
+```
+
+## Scaled observations and rewards
+
+Observations come in the plant's own units and rewards in its own money or
+product, orders of magnitude apart between tasks. For training, the optional
+`ScaledEnv` maps each observation's documented range to [-1, 1] and divides
+the reward by one fixed constant per task: one step of the task's main loss
+at its own price. It is a gymnax wrapper, so it jits and vmaps like the env.
+It covers the five scored tasks; `scaled.SCALES` gives each range and
+constant, with its source.
+
+```python
+import jax
+import target_gym as tg
+from target_gym import scaled
+
+env, params = tg.make("cstr")
+train_env = scaled.ScaledEnv(env, "cstr")
+obs, state = train_env.reset(jax.random.PRNGKey(0), params)
+action = env.action_space(params).sample(jax.random.PRNGKey(1))
+obs, state, reward, terminated, truncated, info = train_env.step(
+    jax.random.PRNGKey(2), state, action, params
+)
+info["raw_reward"]  # the env's own reward, the one the score reads
+```
+
+The score never reads the wrapper. `score_policy` and the recorded results run
+the raw env, so scaling changes no number. To score a policy trained on scaled
+observations, hand `score_policy` the policy on the plant's own observations:
+
+```python
+import jax.numpy as jnp
+import target_gym as tg
+from target_gym import scaled
+
+policy = lambda z: jnp.zeros(2)  # your trained policy, on scaled observations
+tg.score_policy("cstr", scaled.raw_policy("cstr", policy), seeds=1)
 ```
 
 ## The Gymnasium interface

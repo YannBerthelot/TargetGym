@@ -17,7 +17,7 @@ import re
 
 import pytest
 
-from target_gym import records, registry
+from target_gym import charter, records, registry, suite
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -55,10 +55,15 @@ def test_the_chart_shows_the_recorded_results(gen):
         assert rows[name]["ceiling"] == recorded["ceiling"]
 
 
-def test_the_page_embeds_the_same_rows(gen):
+def test_the_page_embeds_the_same_rows(gen, monkeypatch):
     """The interactive chart reads its data from the page, so the page must
-    carry exactly the rows the chart is built from."""
+    carry exactly the rows the chart is built from: the scored tasks' rows,
+    since no number is published for a task outside the suite (owner,
+    2026-11-24). Every row is read as current here: a stale one is not
+    published (owner, 2026-11-25, tests/test_current_rows.py)."""
+    monkeypatch.setattr(records, "current_parts", lambda row, fps: dict(row))
     data = records.load("protocol_results")
+    data = {name: row for name, row in data.items() if name in charter.FLAGSHIP}
     block = re.search(
         r'<script type="application/json" id="tg-results-data">(.*?)</script>',
         gen._page(),
@@ -117,14 +122,16 @@ def test_both_images_are_standalone_svg(gen, dark):
 
 
 def test_the_capability_image_draws_the_recorded_profiles(gen):
-    """Worked by hand: on plane (disturbance) the expert holds at 100 and the
-    oracle at 10 against a ceiling of 1, half the two decades, so the oracle
-    sits at radius 0.75 on Hold and the expert on its 0.5 ring; the oracle's
-    moves cost a quarter of the expert's, so it is the best known (radius 1)
-    on Reach."""
-    row = _row("plane", expert=100.0, oracle=10.0, ceiling=1.0)
+    """Worked by hand: on a scored task (pH; one outside the suite moves no
+    spoke, owner, 2026-11-24) the expert holds at 100 and the oracle at 10
+    against a ceiling of 1, half the two decades, so on each of the task's
+    capabilities the oracle sits at radius 0.75 on Hold and the expert on its
+    0.5 ring; the oracle's moves cost a quarter of the expert's, so it is the
+    best known (radius 1) on Reach."""
+    task = "ph_neutralization"
+    row = _row(task, expert=100.0, oracle=10.0, ceiling=1.0)
     row["pid"]["move_cost"], row["mpc"]["move_cost"] = 400.0, 100.0
-    svg = gen.capability_svg({"plane": row})
+    svg = gen.capability_svg({task: row})
     points = {
         (m["radar"], m["who"], m["axis"]): m["r"]
         for m in re.finditer(
@@ -133,11 +140,12 @@ def test_the_capability_image_draws_the_recorded_profiles(gen):
             svg,
         )
     }
+    axes = suite.CAPABILITIES[task]
+    assert axes
+    radii = {("hold", "expert"): "0.50", ("hold", "oracle"): "0.75"}
+    radii |= {("reach", "expert"): "0.50", ("reach", "oracle"): "1.00"}
     assert points == {
-        ("hold", "expert", "disturbance"): "0.50",
-        ("hold", "oracle", "disturbance"): "0.75",
-        ("reach", "expert", "disturbance"): "0.50",
-        ("reach", "oracle", "disturbance"): "1.00",
+        (radar, who, axis): r for (radar, who), r in radii.items() for axis in axes
     }
 
 

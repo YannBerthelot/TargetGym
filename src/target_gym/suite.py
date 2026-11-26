@@ -14,7 +14,9 @@ expert is the 0.5 ring, a policy worse than the expert falls inside it, and 0
 is as far below the expert as the ceiling (or the best known) is above. A task
 with no room (its expert already within the ceiling, or a best known move
 under ``MIN_REACH_ROOM`` times cheaper than the expert's) has no point, and a
-capability is the mean of its tasks' points.
+capability is the mean of its tasks' points. Only a scored task
+(``charter.FLAGSHIP``) has a point: the tags of the others say what they will
+probe when they join.
 
 Profile a policy::
 
@@ -33,38 +35,37 @@ import math
 import numpy as np
 
 from target_gym import scoring
+from target_gym.charter import FLAGSHIP
 
 __all__ = ["AXES", "CAPABILITIES", "LABELS", "plot_profile", "profile"]
 __all__ += ["MIN_REACH_ROOM", "radius", "references", "run_suite"]
 
-#: The capabilities, in their order around the radar.
+#: The capabilities, in their order around the radar. An Extra task carries no
+#: tag (owner, 2026-11-24), so an axis is here only while a core task carries
+#: it: instability and inverse response, which only boiler_drum and four_tank
+#: carried, and multi-agent, which only formation carried, come back when a
+#: core task is shown to carry them.
 AXES = (
     "basic",
-    "instability",
     "nonlinearity",
     "delay",
     "coupling",
-    "inverse_response",
     "disturbance",
     "moving_target",
     "economic",
     "partial_observability",
-    "multi_agent",
     "safety",
 )
 
 LABELS = {
     "basic": "basic",
-    "instability": "instability",
     "nonlinearity": "nonlinearity",
     "delay": "delay and slow",
     "coupling": "coupling",
-    "inverse_response": "inverse response",
     "disturbance": "disturbance",
     "moving_target": "moving target",
     "economic": "economic",
     "partial_observability": "partial observability",
-    "multi_agent": "multi-agent",
     "safety": "safety",
 }
 
@@ -78,9 +79,9 @@ CAPABILITIES = {
     # not control, so it moves no spoke (pc_gym/unstable_cstr/PHYSICS.md).
     "unstable_cstr": (),
     "ph_neutralization": ("nonlinearity", "disturbance"),
-    "four_tank": ("coupling", "inverse_response"),
+    "four_tank": (),  # Extra: a lab rig (pc_gym/four_tank/PHYSICS.md, Status)
     "distillation": ("coupling", "delay"),
-    "boiler_drum": ("inverse_response", "coupling", "safety", "instability"),
+    "boiler_drum": (),  # Extra, as solved (boiler_drum/PHYSICS.md, Status)
     "cement_kiln": ("delay", "partial_observability", "nonlinearity"),
     "glass_furnace": ("delay", "partial_observability"),
     "hvac": ("delay", "economic", "partial_observability"),
@@ -94,13 +95,16 @@ CAPABILITIES = {
     "plane_energy": ("moving_target", "coupling"),
     "plane_sine": ("moving_target",),
     "plane3d_heading": ("coupling",),
-    "plane3d_circle": ("moving_target",),
+    # Extra (owner, 2026-11-24, the aircraft five-task review): circle and
+    # figure8 have no airliner duty, patrol and patrol_range_bearing are solved,
+    # formation is several agents (each package's PHYSICS.md, Status).
+    "plane3d_circle": (),
     "plane3d_racetrack": ("moving_target",),
-    "plane3d_figure8": ("moving_target",),
-    "patrol": ("moving_target",),
-    "patrol_range_bearing": ("moving_target", "partial_observability"),
+    "plane3d_figure8": (),
+    "patrol": (),
+    "patrol_range_bearing": (),
     "wake_surf": ("economic", "safety"),
-    "formation": ("multi_agent", "moving_target"),
+    "formation": (),
 }
 
 _NAN = float("nan")
@@ -135,8 +139,13 @@ def _reach_score(m: dict) -> float:
 def profile(results: dict, tags: dict | None = None) -> dict:
     """``{"hold": {capability: radius}, "reach": {...}}``: per capability, the
     mean radius of its tasks in ``results`` (task -> ``score_policy``'s
-    numbers) that have one; NaN where none has."""
-    tags = CAPABILITIES if tags is None else tags
+    numbers) that have one; NaN where none has. Under the suite's own tags
+    only a scored task counts (``charter.FLAGSHIP``); ``tags`` of your own
+    count every task they name."""
+    counted = tags
+    if tags is None:
+        tags = CAPABILITIES
+        counted = {name: ts for name, ts in tags.items() if name in FLAGSHIP}
     radii = {
         name: {"hold": radius(m["score"]), "reach": radius(_reach_score(m))}
         for name, m in results.items()
@@ -148,7 +157,7 @@ def profile(results: dict, tags: dict | None = None) -> dict:
         for axis in axes:
             vals = [
                 radii[name][which]
-                for name, ts in tags.items()
+                for name, ts in counted.items()
                 if axis in ts and name in radii and not math.isnan(radii[name][which])
             ]
             out[which][axis] = float(np.mean(vals)) if vals else _NAN
@@ -179,19 +188,20 @@ def references(rows: dict | None = None, tags: dict | None = None) -> dict:
     return {"expert": profile(expert, tags), "oracle": profile(oracle, tags)}
 
 
-def run_suite(make_policy, seeds: int = 10, tasks=None) -> dict:
-    """Score ``make_policy(name)`` on every task, or on ``tasks``, with
-    ``scoring.score_policy``, and fold the results into a profile.
+def run_suite(make_policy, seeds: int = 10, tasks=FLAGSHIP) -> dict:
+    """Score ``make_policy(name)`` on the scored tasks, or on ``tasks``, with
+    ``scoring.score_policy``, and fold the results into a profile. Any
+    registered task can be named; one outside the flagship is scored in
+    ``"tasks"`` and moves no spoke.
 
     ``make_policy(name)`` returns a fresh ``policy(obs)`` or
     ``policy(obs, state)`` for task ``name``; it is called once per episode,
     as ``scoring.score_policy`` resets a policy before each one.
     Returns ``{"tasks": {name: numbers}, "profile": profile(numbers)}``.
     """
-    names = list(CAPABILITIES) if tasks is None else list(tasks)
     results = {
         name: scoring._score(name, lambda name=name: make_policy(name), seeds, None)
-        for name in names
+        for name in tasks
     }
     return {"tasks": results, "profile": profile(results)}
 

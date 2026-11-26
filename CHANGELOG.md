@@ -9,11 +9,70 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Scaled observations and rewards (2026-11-25)
+
+- `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
+  each observation's documented range to [-1, 1] and divides the reward by one
+  fixed constant per task (`scaled.SCALES`, the five scored tasks). The raw
+  reward rides in `info["raw_reward"]`. The score never reads the wrapper, and
+  `scaled.raw_policy` hands `score_policy` a policy trained on scaled
+  observations.
+
+### Reactor curve book, cycle draw and limits (2026-11-25)
+
+- The reactor's expert reads a measured curve book: the recipe's physics tests at
+  power (a dilution bump, a calibrated rod bump) at both ends of the load-following
+  range replace the plant's own lines. Its turbine thresholds follow a rule on the
+  measured load wobble.
+- A reactor run's core is drawn so it never reaches the end of its load-following
+  range (reactor-v10, re-stamped in place: it never shipped). Scoring runs build
+  their stream's params with the run's length.
+- The reactor's DNB limit follows NUREG-1431 Rev. 5.0 (ML21259A155), LCO 3.4.1: 2 h
+  to restore, then the turbine unloads along a straight line to MODE 2's 5 % over
+  6 h, and the plant goes to hot standby after 8 h above the limit without a break,
+  where it went at 2 h (`dnb_restore`, `dnb_allowed`, `mode_2_load`).
+- The reactor's rod insertion limit follows NUREG-1431 Rev. 5.0, LCO 3.1.6
+  Conditions B and D: 2 h to restore, then the turbine unloads along a straight
+  line to no load over 6 h, and hot standby after 8 h past the limit
+  (`ril_restore`, `ril_allowed`).
+- The reactor's expert lets its Tavg loop go once Tavg is back inside its free
+  band. Holding the loop's output there kept moving boron for a Tavg nothing
+  charges, which made the expert fragile to its curve book late in the cycle.
+- The reactor's boron line delay is the plant's: `boron_delay` (20 steps on the
+  shipped member) replaces `boron_delay_range`, drawn at every reset, and the
+  family sweep draws it per member, 10 to 30 steps. The expert leads the plan's
+  boron, and pulls in its xenon tool's edges, by the dead time its recipe measures
+  (`theta`, 660 s on the shipped member), where it led by a fixed 600 s.
+
 ### Upgrading from 0.7.0
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **Five tasks are scored, and the other twenty ship registered, not scored.**
+  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
+  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+  - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
+    all 25 names.
+  - Results are published for the scored suite only. The page of a task
+    outside it says where the task stands (under review, Extra or a test
+    fixture) and prints no recorded number. Its recorded rows stay in
+    `src/target_gym/data/` and are no longer kept current.
+  - `suite.run_suite` runs the scored tasks by default, and `suite.profile`
+    counts a task's tags only if it is scored. Name a task in `tasks` to run
+    it anyway.
+  - The capability profile page and its chart are left out of the docs for
+    this release. `target_gym.suite` still works, and the page returns when
+    the radar is rebuilt on the saving over the reference.
+  - The generated pages publish a recorded row only while its fingerprint or
+    version stamp matches the code. A stale row stays in `data/`; its task's
+    page says it was recorded on an earlier version and shows the numbers
+    again once it is re-recorded. `records.current_parts` gives the current
+    part of an old-format row.
+  - Each scored task's page names the hidden facts its ceiling reads (the
+    true surge line, the acid strength, the weather or load ahead), so part
+    of the room may be out of reach of a policy; the list is
+    `charter.CEILING_READS`.
 - **The aircraft family was rebuilt after the 2026-11-10 review, and its ten
   versions went up by one; `wake_surf` is new.** Upgrade notes:
   - The A320's longitudinal airframe is now a swept wing (DATCOM's lift slope and
@@ -42,6 +101,25 @@ The next release is 0.8.0, because these changes break code written for
     `patrol_range_bearing` the range is known from vision: it has no reading.
   - `wake_surf`: an A320 surfing an A320's wake 3 km in trail.
 
+- **`glass_furnace` charges the defects its tank blocks give off, reads them, and
+  has a new oracle without a seed.** `glass_furnace-v6` is unreleased and was
+  re-stamped in place. Upgrade notes:
+  - The plant carries the temperature of the blocks its glass touches. A block at or
+    above 1450 C gives off defects when its temperature rises, and fining still
+    running past the last port is reboil (REALITY.md section 10; the two rates and
+    the 1450 C are ours). On a step that keeps both marks, the reward's lost-glass
+    term charges the plates those defects reject. `PhysicalParams` gains
+    `block_lag`, `block_release_T`, `block_release` and `reboil_plate`, and the
+    plant's fields `block` and `defects`.
+  - The observation has 13 channels, not 12: the last is the defects per plate read
+    at the cold end, 0.3 h late.
+  - The oracle without a seed, which `make_oracle("glass_furnace")` and the runners
+    build, plans every 4 h and prices the chance of a lost step in place of a limit
+    on the fining share; the one it replaces lost a tenth of its steps on this
+    plant. `GlassOracle` takes `spread` and `paths` and no longer `replan_hours`,
+    and `oracle.solve` takes `fining_spread`. With a seed the oracle is unchanged.
+  - Every recorded row of the task predates this plant, except its ceiling
+    (`data/oracle_ceilings/glass_furnace.json`: reference 49.23, ceiling 46.96).
 - **`reactor` has a third action, a core at a drawn point of its fuel cycle, and
   the standard specification's offset limits** (2026-11-15; `reactor-v10`, which no
   release shipped, keeps its number). Upgrade notes:
@@ -94,6 +172,18 @@ The next release is 0.8.0, because these changes break code written for
     turbine on its plan. Its first step of an episode solves for a minute or
     two, and a day takes it a few minutes. `data/oracle_widths/reactor.json` is
     gone with the model it described.
+  - A trickle of boron flow now moves the boron it pays for (2026-11-23). The
+    mixing summed changes smaller than a single-precision boron can hold over a
+    sub-step, so 72 kg of water diluted as 130 kg and 36 kg as none. The sum now
+    carries its rounding (`ReactorState.boron_carry`); large flows are unchanged.
+  - The oracle's first solve of a day also solves from the plan that leaves the
+    rods parked, and keeps the cheaper of the two. From its first guess alone it
+    ended, on baseload days whose xenon dips, on a plan $13 dearer in its own
+    model, and lost those days to the expert.
+  - A reset holds the reactor's own starting move (`Reactor.initial_action`: rods
+    parked, no boron flow, the turbine on its plan). The action held after a reset
+    was the middle of the box, so the charter's "hold reset" null drove the rods
+    to half their stroke. No step, reward or observation changes.
 - **Every task now reads through noisy instruments, and all 24 versions went up
   by one.** Observations report what a plant's sensors would, with their scatter
   and digital steps, so `tg.make(name)` gives different observations, and experts
@@ -143,8 +233,29 @@ The next release is 0.8.0, because these changes break code written for
 - **`consumption_ratio` reads the quantity itself** on `glass_furnace`,
   `cement_kiln`, `boiler_drum`, `distillation`, `ph_neutralization` and
   `compressor_surge`, where the reward clips it at `c_hold`, so a saving shows.
+- **The patrol family's lead engages in trim.** The scripted lead of `patrol`,
+  `patrol_range_bearing` and `wake_surf`, which is part of the plant, and
+  `formation`'s reference lead now start their TECS on the level trim they spawn
+  in, as the A320 tasks' autopilot does (owner, 2026-11-24). They used to start
+  on the airliner's trim constants and sink 11 to 22 m in their first seconds.
+  The versions keep their number (none shipped); the records are re-recorded.
 - **`first_order` has left the capability radar.** It is a sanity fixture, and
   `CAPABILITIES["first_order"]` is now empty.
+- **`boiler_drum` is Extra, as solved, and the radar has ten axes.** Its
+  classical reference costs nothing on normal days, so it leaves
+  `registry.benchmark_specs()` and the headline; its plant, expert and oracle
+  stay (`boiler_drum/PHYSICS.md`, Status). An Extra task now carries no
+  capability tag: `CAPABILITIES` is empty for `boiler_drum` and `four_tank`
+  too, and `"instability"` and `"inverse_response"` are gone from
+  `suite.AXES` and `suite.LABELS` until a core task is shown to carry them.
+- **Five aircraft tasks are Extra, and the radar has nine axes.** By the owner's
+  decisions on the aircraft five-task review (2026-11-24): `patrol` and
+  `patrol_range_bearing` as solved, `formation` as several agents (outside the
+  charter's one plant, one agent), `plane3d_circle` and `plane3d_figure8` as
+  solved with no airliner duty. They leave `registry.benchmark_specs()` and the
+  headline, carry no capability tag, and stay registered and usable (each
+  package's `PHYSICS.md`, Status). `"multi_agent"`, which only `formation`
+  carried, is gone from `suite.AXES` and `suite.LABELS`.
 - **The aircraft tasks clip their actions.** On `plane`, `plane3d`, `patrol` and
   `formation` a raw action past `[-1, 1]` now acts as its bound, as it already
   did on every other task; a raw stick of 100 used to ask for 23.6 rad of
@@ -444,7 +555,11 @@ The next release is 0.8.0, because these changes break code written for
   held to 0.1 %.
 - `scripts/trips_inside_a_step.py`: counts limits crossed and recovered inside
   one control step, on the null-policy gate's runs.
-
+- `target_gym.scoring_runs`: a task scored on its stream pinned to each
+  scenario, from the reset, over a protocol's days, with twin scenarios folded
+  and a stop rule for seeds set before results. The reactor's protocol (owner,
+  2026-11-24): 7 days, baseload, edf_daily, fast_return and krsko_slow, 10 seeds
+  and 10 more where a scenario's room interval contains 1.
 - `tg.make_stream(name)`: the task as a continuing plant, the form an
   average-reward algorithm trains on. It never ends, its scenarios take turns
   by their weights, and the reset key fixes its world.

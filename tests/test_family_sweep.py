@@ -147,3 +147,13 @@ def test_a_reactor_at_rest_needs_nothing_for_a_day():
     cost, trips = sweep.at_rest_cost(Reactor(), ReactorParams())
     assert trips == 0
     assert cost < 1.0
+
+
+def test_the_loading_stop_is_drawn_between_ten_and_twenty_fahrenheit():
+    """The stop's setpoint has no plant document (PHYSICS.md, D14): the family's
+    table stands in for it with 10 to 20 F, 5.556 to 11.111 K (owner, 2026-11-23)."""
+    r = sweep.table("reactor")["ranges"]["loading_stop"]
+    assert r["lo"] == pytest.approx(10.0 / 1.8, abs=1e-3)
+    assert r["hi"] == pytest.approx(20.0 / 1.8, abs=1e-3)
+    drawn = [d["loading_stop"] for d in sweep.draws(sweep.table("reactor"))]
+    assert len(drawn) == 8 and all(r["lo"] <= x <= r["hi"] for x in drawn)

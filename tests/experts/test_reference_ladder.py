@@ -13,6 +13,27 @@ on a seed is the task's ``J``: each scenario's mean cost per step, weighted by i
 of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre, the deviation measured with the
 loop at the centre on the bump-test seeds.
+
+A zone whose exit the score prices as a violation is placed otherwise (J1, owner,
+2026-11-23): the row names the reward terms charged for leaving it, and the loop holds
+the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which the pi rung
+leaves the zone on none of the ladder's seeds in any scenario. Where the plant's
+reset depends on the setpoint, each candidate's episodes start on it, and so do the
+kept one's from then on. A seed of a scenario that leaves from every candidate does
+not constrain the placement and is reported as unheld; when none can be held from
+any candidate, the centre is kept and every one is reported. Each rung is placed on
+its own (owner, the same day): it gets its own first candidate that never leaves,
+and the ladder keeps the cheapest rung that trips no seed and leaves its zone on none
+of the seeds it can hold; ``row.placed``, ``row.scans``, ``row.unheld`` and the start
+in ``row.score`` are the pi rung's until a rung is kept, then the kept one's. On
+``first_order`` the
+band is the tracking term's own: with ``e_tol`` 0.5 around a target pinned at 1.0, it
+charges x outside 0.5 to 1.5 and nothing else is charged.
+
+A valve position loop is bump-tested with
+the row's loops closed (Reyes-Lua, Zotica and Skogestad, IFAC ADCHEM 2018, Fig. 6):
+``closed_loops`` runs each loop's PI from its MV at rest, holding its CV where the
+test found it, and leaves the tested MV alone.
 """
 
 import importlib.util
@@ -205,6 +226,135 @@ def test_a_zone_loop_holds_two_sigma_inside_its_cheap_edge(ladder):
     assert np.std(second_half, ddof=1) == pytest.approx(sigma, rel=0.2)
 
 
+#: ``first_order`` scored with a priced band: the target pinned at 1.0, the tracking
+#: term free within 0.5 of it, the episode starting on the target.
+BAND = {"target_x_range": (1.0, 1.0), "e_tol": 0.5, "start_on_target": 1.0}
+
+
+class Constant:
+    """A policy holding one raw action on every episode."""
+
+    name, oracle = "constant", False
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t):
+        import numpy as np
+
+        return np.full((len(obs), 1), self.raw), carry
+
+
+@pytest.mark.parametrize(
+    "raw, leaving",
+    # The datasheet's gain is 2 per raw action: 0.5 rests x on 1.0, inside the band
+    # on every seed; 0.9 takes it to 1.8, outside on every seed.
+    [(0.5, 0), (0.9, 10)],
+)
+def test_a_seed_leaves_a_zone_when_its_exit_term_is_charged(ladder, raw, leaving):
+    import dataclasses
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    left = ladder.zone_exits("first_order", row, Constant(raw), ("tracking",))
+    # Each is named by its scenario and seed: this plant's one window, the
+    # ladder's seeds 100 to 109.
+    assert left == tuple(("normal", seed) for seed in range(100, 100 + leaving))
+
+
+def test_a_zone_priced_on_exit_holds_the_first_grid_point_that_never_leaves(ladder):
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    row = dataclasses.replace(base, loops=(x,), balance=None, score=BAND)
+    rungs = ladder.build("first_order", row)
+    _, setpoint = row.placed["x on u"]
+    scan = row.scans["x on u"]
+    grid = zone_grid(0.5, 1.5, "high")
+    # The candidates run from the cheap edge, in order, and stop at the kept one.
+    assert list(scan) == pytest.approx(grid[: len(scan)])
+    assert setpoint == pytest.approx(grid[len(scan) - 1])
+    assert all(list(scan.values())[:-1])  # every earlier candidate left somewhere
+    assert row.unheld["x on u"] == {}  # every seed is held at the kept one
+    # Kept: the pi rung is never charged for leaving. The band's term is the only
+    # cost of this plant short of a trip, so every seed costs nothing.
+    kept = ladder.run_rung("first_order", row, "pi", rungs["pi"])
+    assert kept["trips"] == 0
+    assert kept["costs"] == pytest.approx([0.0] * 10, abs=0.0)
+
+
+def test_a_zone_no_seed_can_be_held_in_keeps_its_centre_and_reports_every_seed(
+    ladder,
+):
+    # The loop's zone is 0.5 to 1.5, but the score's band is put at 2.0 to 3.0 (the
+    # target pinned at 2.5): every candidate holds x outside it, so every seed is
+    # charged from every candidate. The rule has nothing to decide with: the centre
+    # is kept, the whole grid was run, and every seed is reported as unheld.
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    away = {**BAND, "target_x_range": (2.5, 2.5)}
+    row = dataclasses.replace(base, loops=(x,), balance=None, score=away)
+    ladder.build("first_order", row)
+    _, setpoint = row.placed["x on u"]
+    assert setpoint == pytest.approx(1.0)
+    assert list(row.scans["x on u"]) == pytest.approx(zone_grid(0.5, 1.5, "high"))
+    assert row.unheld["x on u"] == {"normal": list(range(100, 110))}
+
+
+def test_each_rung_holds_its_own_setpoint_and_a_loose_one_does_not_set_the_others(
+    ladder,
+):
+    # Two rungs on the priced band 0.5 to 1.5. The feedforward's "balance" here asks
+    # three times the actuator's top: the valve sits on its stop (2.0 units at a
+    # gain of 1, the datasheet's), x rests at 2.0 and leaves the band on every seed
+    # from every candidate. The pi rung, around the plant's own rest, holds as it
+    # did alone. Each is placed for itself, and the ladder keeps the pi rung.
+    import dataclasses
+
+    from target_gym.experts.ladder import zone_grid
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    alone = dataclasses.replace(base, loops=(x,), balance=None, score=BAND)
+    ladder.build("first_order", alone)
+    alone_setpoint = alone.placed["x on u"][1]
+
+    def stuck(o, xp):
+        return xp.reshape(xp.asarray(3.0, dtype=xp.float32), (1,))
+
+    row = dataclasses.replace(base, loops=(x,), balance=stuck, score=BAND)
+    rungs = ladder.build("first_order", row)
+    pi, forward = (row.placements[k]["x on u"] for k in ("pi", "feedforward"))
+    grid = zone_grid(0.5, 1.5, "high")
+    # The pi rung: where it sat alone, nothing unheld.
+    assert pi["setpoint"] == pytest.approx(alone_setpoint)
+    assert pi["unheld"] == {} and pi["holds"]
+    # The feedforward: the whole grid run, the centre kept, every seed unheld.
+    assert list(forward["exits"]) == pytest.approx(grid)
+    assert forward["setpoint"] == pytest.approx(1.0)
+    assert forward["unheld"] == {"normal": list(range(100, 110))}
+    # Kept: the pi rung, which costs nothing; the other pays on every seed.
+    results = {k: ladder.run_rung("first_order", row, k, c) for k, c in rungs.items()}
+    assert min(results["feedforward"]["costs"]) > 0.0
+    assert ladder.keep_rung(row, results) == "pi"
+    assert row.placed["x on u"][1] == pytest.approx(pi["setpoint"])
+
+
 def test_a_zones_sigma_is_read_on_the_scored_normal_day(ladder):
     # A row may quiet its bump tests (here, no sensor noise). The zone's spread is
     # still the normal day's, so it matches the spread of a row whose tests are
@@ -293,9 +443,16 @@ def test_a_zones_sigma_is_the_spread_where_its_loop_holds(ladder):
     # loop holds, so it is the spread at the placed setpoint, not at the centre: on
     # pH, the pi rung's discharge spread at its setpoint matches the sigma it was
     # placed with (20 %: ten seeds). Stage 1 follows the discharge's setpoint.
+    # pH's own row is placed by the exit rule now; here its discharge loop is put
+    # back on the 2 sigma rule, which other zones keep.
+    import dataclasses
+
     import numpy as np
 
     row = ladder.ROWS["ph_neutralization"]()
+    stage_1, discharge = row.loops
+    two_sigma = dataclasses.replace(discharge, exit_terms=(), established=None)
+    row.loops = (stage_1, two_sigma)
     rungs = ladder.build("ph_neutralization", row)
     sigma, setpoint = row.placed["pH on trim"]
     held = ladder.cv_traces("ph_neutralization", row, rungs["pi"], 1)
@@ -308,8 +465,11 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
     on the steady state of the day's feed temperature, which no reading shows, so
     its row starts bumpless: on a still feed with the noise off the reactor stays
     on its setpoint, within a fifth of the score's 0.1 K. The same loop without the
-    start hold moves it, because its balance assumes the middle feed temperature.
-    The claim is about the start, so the gains are any stable ones."""
+    start hold moves it: version 8's row has no balance (``row.balance`` is None),
+    so without the hold both valves start from mid-range, not where the reset left
+    them. The claim is about the start, so the gains are any stable ones; the loop
+    is the row's own, temperature (obs 0) on the water (MV 0) against the setpoint
+    (obs 4), with the feed (MV 1) left on its start."""
     import jax
     import numpy as np
 
@@ -320,16 +480,17 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
     env = spec.make_env()
     row = ladder.ROWS["cstr"]()
     assert row.bumpless
+    assert row.balance is None
     p = spec.make_test_params(sensor_noise_scale=0.0, feed_T_period=0.0)
-    rung = Rung("pi", (Pi(0, -0.1, 15.0),), np.eye(1))
+    rung = Rung("pi", (Pi(0, -0.1, 15.0),), np.array([[1.0], [0.0]]))
     plant = jax.jit(env.step_env)
 
     def worst(start):
         ctrl = ladder_controller(
             rung,
             lambda o, xp: xp.stack([o[0]]),
-            lambda o, xp: xp.stack([o[3]]),
-            row.balance,
+            lambda o, xp: xp.stack([o[4]]),
+            lambda o, xp: xp.zeros(2),
             float(p.delta_t),
             start,
         )
@@ -346,6 +507,21 @@ def test_cstrs_rungs_take_over_a_resting_reactor_without_moving_it(ladder):
 
     assert worst(row.rest) < 0.02
     assert worst(None) > 0.1
+
+
+def test_closed_loops_hold_each_cv_at_rest_and_leave_the_tested_mv_alone(ladder):
+    import numpy as np
+
+    from target_gym.experts.ladder import Pi
+
+    actuate = ladder.closed_loops([Pi(0, 2.0, 4.0)], [0], 1.0)
+    # At rest: MV 0 at 0.3, the CV at 1.0, which becomes its set point.
+    u, memory = actuate([0.3, 0.5], [1.0], None)
+    np.testing.assert_allclose(u, [0.3, 0.5])
+    # MV 1 stepped to 0.7 and the CV at 1.1: Kc 2, Ti 4, dt 1 on an error of -0.1
+    # is 2 * (-0.1 - 0.1 / 4) = -0.25 from the 0.3 at rest.
+    u, memory = actuate([0.3, 0.7], [1.1], memory)
+    np.testing.assert_allclose(u, [0.05, 0.7])
 
 
 def test_unstable_cstrs_bump_tests_read_a_quiet_plant(ladder):
@@ -480,3 +656,81 @@ def test_distillations_bottoms_setpoint_fits_the_flow_box(ladder, step):
 
     assert float(p.L_min) < L * feed / float(p.F) < float(p.L_max)
     assert float(p.V_min) < V * feed / float(p.F) < float(p.V_max)
+
+
+# The evaluation window (owner, 2026-11-24; tests/test_scenarios.py has the contract):
+# a rung's cost and a zone's exits read only the steps a task's evaluation scores.
+
+
+class Pulse:
+    """A raw action of 0.9 for the first ``steps`` steps, then 0.5: x leaves the
+    band around 1.0 (2 per raw action, so 1.8) and comes back to rest on 1.0."""
+
+    name, oracle = "pulse", False
+
+    def __init__(self, steps):
+        self.steps = steps
+
+    def reset(self, key, obs, task):
+        return None
+
+    def act(self, carry, obs, t):
+        import numpy as np
+
+        return np.full((len(obs), 1), 0.9 if t < self.steps else 0.5), carry
+
+
+def _windowed(unscored, scored):
+    import dataclasses
+
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    return dataclasses.replace(
+        REGISTRY["first_order"],
+        evaluation=lambda: evaluation.Evaluation(
+            unscored_steps=unscored, scored_steps=scored
+        ),
+    )
+
+
+def test_a_rungs_cost_is_the_mean_over_the_scored_window_alone(ladder):
+    import dataclasses
+
+    import numpy as np
+
+    from target_gym import scenarios
+    from target_gym.benchmark import episodes_of, run_policy, task_info
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    spec = _windowed(60, 60)  # steps 60 to 119 of 150
+    got = ladder.run_suite("first_order", row, Pulse(20), spec=spec)
+    # The same episodes run straight through the benchmark: the window's mean.
+    env = spec.make_env()
+    (normal,) = scenarios.suite(spec)
+    params = scenarios.params_for(
+        spec, normal, **{"sensor_noise_scale": ladder.NOISE, **row.score}
+    )
+    task = task_info("first_order", env, params, len(ladder.SEEDS))
+    eps = episodes_of(run_policy(Pulse(20), env, params, task, seeds=ladder.SEEDS))
+    expected = [float(e.cost[60:120].mean()) for e in eps]
+    np.testing.assert_allclose(got["costs"], expected, rtol=1e-6)
+    whole = [float(e.cost.mean()) for e in eps]
+    assert not np.allclose(expected, whole)
+
+
+def test_a_zone_left_only_before_the_scored_window_is_not_left(ladder):
+    import dataclasses
+
+    row = dataclasses.replace(ladder.ROWS["first_order"](), score=BAND)
+    # Out of the band for the first 20 steps on every seed, back within ten time
+    # constants' worth of steps (tau is 10 steps), so a window from step 60 sees
+    # none of it, and a window from the reset sees all of it.
+    late = ladder.zone_exits(
+        "first_order", row, Pulse(20), ("tracking",), spec=_windowed(60, 90)
+    )
+    early = ladder.zone_exits(
+        "first_order", row, Pulse(20), ("tracking",), spec=_windowed(0, 150)
+    )
+    assert late == ()
+    assert early == tuple(("normal", s) for s in range(100, 110))

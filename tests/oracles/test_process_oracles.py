@@ -41,30 +41,41 @@ from target_gym.oracles.controller import enable_x64, float64
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import pid_policy
 
-FIVE = ("cstr", "first_order", "four_tank", "unstable_cstr", "compressor_surge")
+# cstr left this group with its planner (version 8, owner, 2026-11-24).
+FOUR = ("first_order", "four_tank", "unstable_cstr", "compressor_surge")
 PH = ("ph_neutralization",)
+DIST = ("distillation",)
 #: Exactness is the rewrites', so what a planner leaves out of its plan by
 #: design is held still here: a disturbance it holds over the plan (the
-#: autoclave's feed wander; the CSTR's daily feed cycle, collapsed onto its
-#: middle; the compressor consumers' noise, whose mean path it plans on; the pH
+#: autoclave's feed wander; the compressor consumers' noise, whose mean path it
+#: plans on; the pH
 #: influent's upsets and swings, held at the solve's strength and flow), and
 #: a score term it does not price (the turbine tower's fatigue, which reads
 #: the history's turning points; the compressor's header zone, an indicator
 #: the plan prices as a smooth hinge).
 QUIET = {
     "unstable_cstr": {"feed_T_wander": 0.0},
-    "cstr": {"feed_T_range": (297.15, 297.15)},
     "wind_turbine": {"tower_share": 0.0},
     "compressor_surge": {"demand_sigma": 0.0, "zone_price": 0.0},
     "ph_neutralization": {"window_upsets": 0.0},
+    "distillation": {"feed_step": 0.0, "zF_step": 0.0},
 }
 #: An event already in force at the solve, as the state carries it (certainty
-#: equivalence): the CSTR's catalyst loss and feed build-up, and four_tank's
-#: extra outlet in tank 4, each opened before the reset.
+#: equivalence): four_tank's extra outlet in tank 4, opened before the reset.
 IN_FORCE = {
-    "cstr": ({"k0_drop": 0.4, "feed_rise": 0.1}, {"event_at": -1.0}),
     "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
-}
+    # Both feed steps of [D1, Fig. 18] on since before the reset, rate down 20 %
+    # and composition down 0.1, neither returning: the signs under which the
+    # held moves keep both products in their zones over the ten stages (rate up
+    # takes the bottoms off spec in 6 steps), so the replay charges no off-spec.
+    "distillation": (
+        {},
+        {
+            "feed_step_at": -1, "feed_size": 0.2, "feed_sign": -1.0,
+            "zF_step_at": -1, "zF_size": 0.1, "zF_sign": -1.0,
+        },
+    ),
+}  # fmt: skip
 C2 = (
     "hvac",
     "boiler_drum",
@@ -80,7 +91,7 @@ OWN_PLANNER = ("reactor",)
 # oracle waits on a rebuild (plane/PHYSICS.md); plane_sine still flies the 2D
 # plant on the old cost.
 AIRCRAFT = ("plane_sine",)
-ON_SOLVER = FIVE + PH + C2 + AIRCRAFT
+ON_SOLVER = FOUR + PH + DIST + C2 + AIRCRAFT
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src" / "target_gym"
 
 
@@ -122,6 +133,43 @@ def test_the_four_tank_rig_solves_its_reset_though_it_has_no_trip():
     assert report["solver_failures"] == 0
     assert report["solver_capped"] == 0
     assert report["solver_retries"] == 0
+
+
+@pytest.mark.medium
+def test_the_column_solves_its_reset_to_the_solvers_tolerance():
+    """The column's first solve from training seed 100's reset, a cold start
+    through K7's rungs: converged, inside the cap, with no retry or failure,
+    and its plan replays on the env (K8) within float64 rounding. The window's
+    feed steps are held off: the plan holds the feed of the solve (certainty
+    equivalence), and a step later in its horizon is the plant's, not a
+    rewrite's, gap."""
+    env, params, oracle = _oracle("distillation", **QUIET["distillation"])
+    key = episode_keys(jax.random.PRNGKey(100), 1, 400)[0][0]
+    obs, state = env.reset_env(key, params)
+    oracle.step(obs, state)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0
+    assert report["solver_capped"] == 0
+    assert report["solver_retries"] == 0
+    assert report["solver_max_error"] <= 1e-8
+    # The distillate's range is the plant's (its clip, env.py's ``flows``): a
+    # plan past it draws a negative bottoms that the model would count as
+    # light key recovered. Every planned move keeps D inside it, so K8's
+    # replay meets no crossed guard and matches the plan. The flows are read
+    # in float64, the plan's and the replay's precision: in float32 (JAX's
+    # default outside x64) L and V near 3 round by 2.4e-7, past the solver's
+    # 2e-8 back-off, so a plan on D's bound would read as crossing it.
+    q = oracle.params
+    with enable_x64():
+        moves = np.asarray(oracle.shooting.moves(oracle._plan), dtype=np.float64)
+    L_min, L_max, V_min, V_max = (
+        float(v) for v in (q.L_min, q.L_max, q.V_min, q.V_max)
+    )
+    L = L_min + 0.5 * (moves[:, 0] + 1.0) * (L_max - L_min)
+    V = V_min + 0.5 * (moves[:, 1] + 1.0) * (V_max - V_min)
+    assert np.all((V - L >= float(q.D_min)) & (V - L <= float(q.D_max)))
+    assert report["solver_guard_flags"] == 0
+    assert report["solver_max_replay_gap"] <= 1e-6
 
 
 @pytest.mark.medium
@@ -357,11 +405,12 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
 
 
 def test_the_compressors_planned_surge_limit_is_the_surge_line():
-    """The surge line is Phi = 2W (compressor_surge/PHYSICS.md; env.py's
-    ``psi_surge``). One step from the reset under the held move: the plan's
-    surge margin, its output less the limit's bound, is the env's phi_min
-    less 2W after the same step. Float32 env against the float64 model on
-    a margin of order 0.1: 1e-5."""
+    """The surge line is the machine's own, Phi = 2W (1 + shift)
+    (compressor_surge/PHYSICS.md), which the oracle knows. One step from the
+    reset under the held move: the plan's surge margin, its output less the
+    limit's bound, is the env's phi_min over 1 + shift, less 2W, after the same
+    step: zero exactly on the true line. Float32 env against the float64 model
+    on a margin of order 0.1: 1e-5."""
     env, params, oracle = _oracle("compressor_surge")
     m, (limit,) = oracle.model, oracle.model.limits
     key = jax.random.PRNGKey(0)
@@ -373,7 +422,11 @@ def test_the_compressors_planned_surge_limit_is_the_surge_line():
         d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
         y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
     planned = float(y[0]) - limit.lo
-    assert planned == pytest.approx(float(after.phi_min) - 2.0 * params.W, abs=1e-5)
+    shift = float(state.line_shift)
+    assert abs(shift) > 1e-3  # a machine off its map
+    assert planned == pytest.approx(
+        float(after.phi_min) / (1.0 + shift) - 2.0 * params.W, abs=1e-5
+    )
 
 
 @pytest.mark.parametrize("ramp_s", [1.0, 15.0])
@@ -510,7 +563,7 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
 
 @pytest.mark.parametrize(
     "name, budget",
-    [(name, 0.25) for name in FIVE + AIRCRAFT]
+    [(name, 0.25) for name in FOUR + AIRCRAFT]
     + [(name, 0.25) for name in ("boiler_drum", "cement_kiln")]
     + [
         # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
@@ -519,10 +572,24 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
         # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
         ("hvac", 9.54 * 0.25 * 0.05),
-        # The reagent a step's hold needs for 0.005 pH more at pH 7 on the nominal
-        # streams: q3 15.5497 -> 15.5596 mL/s by bisection on the mix's charge
-        # balance, 0.009907 mL/s over 5 s, in litres.
-        ("ph_neutralization", 0.0099073575 * 5.0 / 1000.0),
+        # The reagent a step's hold needs for 0.005 pH more at the operator's set
+        # point, pH 6.45 (owner, 2026-11-25; 6.5 from #232, 7 before), on the
+        # nominal streams (PHParams: q1 16.6, q2 0.55 mL/s; Wa1 3e-3, Wb1 0;
+        # Wa2 -3e-2, Wb2 3e-2; Wa3 -3.05e-3, Wb3 5e-5 M; pK 6.35, 10.25). At a
+        # fixed pH the charge balance (PHYSICS.md section 1) is linear in the
+        # flows, so the steady base flow is closed form, with
+        # f = (1 + 2*10^(pH-pK2)) / (1 + 10^(pK1-pH) + 10^(pH-pK2)) and
+        # h = 10^(pH-14) - 10^(-pH):
+        #   q3 = -(q1*(Wa1 + Wb1*f) + q2*(Wa2 + Wb2*f) + (q1 + q2)*h)
+        #        / (Wa3 + Wb3*f + h).
+        # In 40-digit decimals: q3(6.455) - q3(6.45) = 14.0750315745
+        # - 14.0588188099 = 0.0162127646 mL/s, over 5 s, in litres. (The same
+        # formula gives 0.0159565404 at 6.5, what Brent's method gave there.)
+        ("ph_neutralization", 0.0162127646 * 5.0 / 1000.0),
+        # In kmol of boilup: half the bottoms analyser's 4e-4 of light key lost
+        # for one minute at the nominal bottoms, 0.5 kmol/min, at 100 kmol of
+        # boilup a kmol: 100 x 0.5 x 2e-4 x 1 = 0.01.
+        ("distillation", 0.01),
     ],
 )
 def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget):
@@ -534,7 +601,7 @@ def test_the_tie_break_costs_half_a_resolution_step_over_an_episode(name, budget
 # state. The running cost counts, because it prices a level. Wind's does not:
 # it prices the pitch command's gap, which a steady state closes.
 PRICED = {
-    "cstr": 1, "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
+    "first_order": 1, "four_tank": 2, "unstable_cstr": 1,
     "compressor_surge": 2,  # header pressure, recycle power
     "hvac": 2,  # comfort, energy
     "boiler_drum": 1,  # steam off the plan; the level is limited, not priced
@@ -542,6 +609,7 @@ PRICED = {
     "cement_kiln": 2,  # free lime, fuel
     "plane": 2, "plane_sine": 2, "plane_energy": 2,  # altitude, speed
     "ph_neutralization": 1,  # reagent; both valves' sum at a steady state
+    "distillation": 2,  # boilup, light key lost
 }  # fmt: skip
 
 

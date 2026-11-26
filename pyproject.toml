@@ -278,6 +278,7 @@ markers = [
     "medium: another process, media files, or a compile that needs gigabytes; CI runs these after the small tier",
     "large: closed-loop or multi-seed behaviour that only shows at the scored length; runs on merges to main",
     "records: reads the rows the re-record label writes; CI runs these in the records job",
+    "solo: compiles so much it fills a CI runner alone (about 11 GB); CI runs these on one worker after the tier",
     "agent: needs the opt-in agent group (stable-baselines3, torch) and skips without it; CI runs these in the agent job",
     "learning: needs the opt-in learning group (ajax-rl, on Python 3.14) and skips without it; CI runs these in the learning job",
 ]

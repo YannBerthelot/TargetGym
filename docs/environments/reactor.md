@@ -17,6 +17,7 @@ env, params = tg.make("reactor")
 | Tracked variable(s) | Tavg (K) |
 | Episode length | 2880 steps of 30 s (24 h) |
 | Cite as | `reactor-v10` |
+| Status | Scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/reactor/PHYSICS.md) |
 
 ## Action space
@@ -71,7 +72,7 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Starting state
 
-`reset` samples the initial condition and the target; state has 48 fields.
+`reset` samples the initial condition and the target; state has 49 fields.
 
 ## Episode end
 
@@ -79,9 +80,24 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Truncation.** After 2880 steps.
 
+## Reference and ceiling
+
+What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
+
+| Line | What it is | Cost per step | Trips |
+|---|---|---|---|
+| Best null policy | the cheapest of the simple policies | not current | |
+| Reference | the controller to beat | not current | |
+| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
+| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+
+Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
+
+The ceiling reads what the policy does not observe: the core's xenon and iodine, top and bottom; the boron in the core now, where the policy reads it 20 min late; the load's frequency-control wobble ahead. Part of the room may be out of reach of a policy that reads only the observations.
+
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
 
 ## Arguments
 
@@ -114,6 +130,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `boration_flow` | 3 | kg/s |
 | `boric_acid_ppm` | 7800 | ppm |
 | `primary_mass` | 250000 | kg |
+| `boron_delay` | 20 | 30 s steps |
 | `alpha_coolant_end` | -0.0006 | 1/K |
 | `boron_worth_end` | -0.000109 | 1/ppm |
 | `turbine_rate` | 0.000833333 | 1/s |
@@ -153,14 +170,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `T_avg_min` | 556 | K |
 | `floor_allowed` | 900 | s |
 | `rod_motion_weight` | 0.02 | - |
-| `reward_band` | 0.03 | - |
 | `load_min` | 0.5 | - |
 | `load_ramp_rate` | 0.000333333 | 1/s |
 | `demand_theta` | 0.00333333 | 1/s |
 | `demand_sigma` | 0.000408 | 1/s^0.5 |
 | `P_electric_GW` | 1 | GW |
 | `spot_price_per_MWh` | 80 | $/MWh |
-| `imbalance_factor` | 3 | - |
 | `initial_tilt_share` | 0.108147 | - |
 | `reward_version` | 2 | - |
 | `e_floor` | 0.05 | K |
@@ -182,9 +197,12 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `ao_limit_allowed` | 1800 | s |
 | `ril_full` | 0.22 |  |
 | `ril_half` | 0.78 |  |
-| `ril_allowed` | 7200 | s |
+| `ril_restore` | 7200 | s |
+| `ril_allowed` | 28800 | s |
 | `dnb_margin` | 2.83333 | K |
-| `dnb_allowed` | 7200 | s |
+| `dnb_restore` | 7200 | s |
+| `dnb_allowed` | 28800 | s |
+| `mode_2_load` | 0.05 | - |
 | `effluent_price` | 0.0628 | $/kg |
 | `failure_cost` | 666.667 | reward |
 | `restart_steps` | 5760 | steps |

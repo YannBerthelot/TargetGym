@@ -44,7 +44,8 @@ standard through its signature (B3).
 - **Reference:** the controller the domain's recipe builds (J1). It is a textbook
   recipe, not a claim about what plants run.
 - **Ceiling:** the best cost an oracle finds with the true model, the true state and the
-  future. It cheats on purpose. It is a limit, never a claim that an agent could reach it.
+  future. It cheats on purpose. It is the best known plan: an achieved cost, not a bound
+  no controller can pass, and never a claim that an agent could reach it.
 - **Cost:** the score of B5 per step, in the source's units, unavoidable cost included,
   as industry reports its savings. `J` is a task's expected cost per step over its
   weighted scenarios (J4).
@@ -52,7 +53,9 @@ standard through its signature (B3).
   defined only when `J_reference` is above its measurement noise; otherwise the task is
   solved (J5).
 - **Room:** the reference's cost divided by the ceiling's. It is reported as unbounded
-  when the ceiling's cost is within its measurement noise of 0.
+  when the ceiling's cost is within its measurement noise of 0. The ceiling reads hidden
+  facts no policy observes, so part of the room may be out of reach; each scored task's
+  page names those facts (owner, 2026-11-25).
 - **Null policy:** the simple policies in `null_policies.py` at the tag: constants, target
   echo, static table, table plus integrator.
 - **Trip:** an end of operation, by the plant's protection or by a timed limit's overrun

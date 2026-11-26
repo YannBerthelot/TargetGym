@@ -101,6 +101,10 @@ def row() -> Row:
         valve=False,
         # PHYSICS.md sec. 4: the comfort band is the zone, its cheap side low.
         zone=(float(scored.band_low), float(scored.band_high), "low"),
+        # Leaving it is charged as lost work (the score's ``comfort`` term), so
+        # each rung holds the lowest set point of the zone's grid at which none
+        # of its seeds leaves (charter J1, owner, 2026-11-23).
+        exit_terms=("comfort",),
     )
     # Rung 3, PHYSICS.md sec. 8: the core's sensor (channel 3) [7, 12] as the
     # inner loop; the room loop sets its setpoint around the balance's core. The

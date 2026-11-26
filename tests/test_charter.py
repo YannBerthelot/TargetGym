@@ -201,6 +201,28 @@ def test_a_ceiling_missing_a_scenario_is_not_measured():
     assert charter.ceiling_line(stored, W) == NM
 
 
+def test_each_lines_seeds_are_the_evaluation_seeds_and_any_extra_the_ceiling_ran():
+    # The seed rule (evaluation.line_seeds) is decided where the ceiling is solved, and
+    # the ceilings file records the seeds solved: the other J3 lines run on the same
+    # ones, so every line is paired with the ceiling seed by seed.
+    import dataclasses
+
+    from target_gym import evaluation
+    from target_gym.registry import REGISTRY
+
+    base, extra = tuple(range(100, 105)), tuple(range(105, 110))
+    spec = dataclasses.replace(
+        REGISTRY["first_order"],
+        evaluation=lambda: evaluation.Evaluation(seeds=base, extra_seeds=extra),
+    )
+    weights = {"normal": 1.0}
+    assert charter.line_seeds(spec, weights, None) == {"normal": base}
+    solved = {"scenarios": {"normal": {"seeds": list(base + extra)}}}
+    assert charter.line_seeds(spec, weights, solved) == {"normal": base + extra}
+    solved = {"scenarios": {"normal": {"seeds": list(base)}}}
+    assert charter.line_seeds(spec, weights, solved) == {"normal": base}
+
+
 # --- schema -------------------------------------------------------------------
 
 
@@ -258,8 +280,9 @@ def test_charter_tasks_are_the_ladder_rows_less_fixtures_plus_reactor(tmp_path):
 def test_charter_tasks_leave_out_extra_tasks(tmp_path):
     """Owner's decision, 2026-11-15: an Extra task (EnvSpec.extra) is never
     scored, so its record is kept but no longer held current. four_tank,
-    battery and unstable_cstr are Extra and have ladder rows."""
-    for stem in ("cstr", "four_tank", "battery", "unstable_cstr"):
+    battery, unstable_cstr and, since 2026-11-24, boiler_drum are Extra and
+    have ladder rows."""
+    for stem in ("cstr", "four_tank", "battery", "unstable_cstr", "boiler_drum"):
         (tmp_path / f"{stem}.py").write_text("")
     assert charter.charter_tasks(tmp_path) == ["cstr", "reactor"]
 

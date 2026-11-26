@@ -1,5 +1,5 @@
 {
-  "fingerprint": "4a3d19774188a7c2",
-  "note": "Re-stamped in place on 2026-11-24 (engine batch, the owner's picks of 2026-11-24): the buffer flow's deviation keeps exp(-theta dt) a step in place of 1 - theta dt. Behaviour moves: its memory is 0.5 % longer; the cost of one noisy 300-step run did not move. integration.py gained the exponential step exp_N and a registry of steppers by name, utils.py gained ou_decay, and tables.py (a smooth table read, used by no plant yet) joined the hashed physics sources. v6 has shipped in no release, so it keeps its number (owner, 2026-11-14). Earlier note: Unreleased versions keep their number (owner, 2026-11-14). Aircraft: one standard atmosphere above the tropopause (density, CAS pressure). hvac, ph_neutralization, cement_kiln, reactor: the disturbance's innovation keeps its stated spread. Every record is redone in the re-record pass.",
-  "stamped": "2026-11-24T01:20:53+00:00"
+  "fingerprint": "7172caac547e040a",
+  "note": "2026-11-25, owner: the permit is 6 to 9 (40 CFR 133.102(c)), the observation's target channel shows the permit's centre instead of the set point, the KPI band is the permit's half-width, and the set point is 6.45, where the reference ladder's rule places it on the 6 to 9 grid (J1, rule 17). A behaviour change on a version no release shipped, so re-stamped in place (unreleased-versions rule).",
+  "stamped": "2026-11-25T08:35:59+00:00"
 }

@@ -416,6 +416,10 @@ def _layout(
         A_crown=jnp.asarray(ex["area"][: g.n_bays]),
         A_load=jnp.asarray(ex["area"][g.n_bays :]),
         A_roof=length / g.n_bays * width,
+        # Block area each cell touches per m^3 of its glass: two side walls, and the
+        # floor under the bottom layer.
+        touch=jnp.asarray(2.0 / wc[None, :] + (np.arange(g.n_depth) == g.n_depth - 1)[:, None] / dz[:, None]),
+        past_ports=jnp.asarray((np.arange(len(dx)) >= nm).astype(float)),
     )  # fmt: skip
 
 
@@ -466,6 +470,17 @@ class PhysicalParams:
     sigma_glass: float = 0.3  # N/m, Table 1 of JCIS2001
     bubble_radius: float = 8.3e-3  # m, top of the lab range in Ch16
     foam_half_life: float = 50.0  # s at 1200 C, soda-lime, Kappel Table 3
+    # What a temperature move costs the glass (REALITY.md section 10). A tank block
+    # follows the glass it touches over ``block_lag`` (ours: the 2 h dwell of Dunkl's
+    # cycles). At or above ``block_release_T`` (1450 C, the coolest his blocks gave off
+    # at) it gives off ``block_release`` defects per plate for each K it rises, per m^2
+    # of block per kg of glass in its cell (ours, PHYSICS.md). Past the last port the
+    # fining still running is reboil: ``reboil_plate`` defects per plate per unit of
+    # the fining share done there (ours).
+    block_lag: float = 7200.0
+    block_release_T: float = 1723.15
+    block_release: float = 270.0
+    reboil_plate: float = 10.5
     # s: the surface current's Courant number reached 1 at 180 s near the batch tip
     # when firing hard, so 120 s, good to about 34 m/h over a 1.8 m column.
     delta_t: float = 120.0
@@ -488,6 +503,8 @@ class Fields:
     q_under: jnp.ndarray  # W/m^2 already taken from the melt into the blanket
     foam: jnp.ndarray  # thickness, melter columns, m
     fining: jnp.ndarray  # share of its sulfate fining each cell's glass has done
+    block: jnp.ndarray  # the tank blocks each cell touches, K
+    defects: jnp.ndarray  # per plate, from the blocks and from reboil, carried
 
 
 def initial_fields(g, p):
@@ -510,6 +527,7 @@ def initial_fields(g, p):
         T_r=jnp.linspace(1300.0, 500.0, N_REGEN_NODES),
         m=jnp.asarray(m), c=jnp.full((a.nm,), 0.25), q_under=jnp.zeros((a.nc,)),
         foam=jnp.zeros((a.nm,)), fining=jnp.zeros_like(jnp.asarray(T)),
+        block=jnp.asarray(T), defects=jnp.zeros_like(jnp.asarray(T)),
     )  # fmt: skip
 
 
@@ -737,15 +755,30 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
 
     # ---- Fining share: carried as the heat is, batch glass arriving with none; then
     # each cell fines for the step at its new temperature.
-    X = s.fining
-    carry = jnp.concatenate(
-        [zero, F[:, 1:-1] * carried(X, u, dt, a.dx), out * X[:, -1:]], 1
-    )
     aa_x = jnp.concatenate([pad, -Wp[1:-1]], 0)
     cc_x = jnp.concatenate([-Wm[1:-1], pad], 0)
     bb_x = dz_ / dt + Wm[:-1] + Wp[1:]
-    rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / plan
-    Xn = fining_after(thomas(aa_x, bb_x, cc_x, rhs_x), Tn, dt, p)
+
+    def carry_on(X):
+        """A share carried one step by the flow, batch glass arriving with none."""
+        carry = jnp.concatenate(
+            [zero, F[:, 1:-1] * carried(X, u, dt, a.dx), out * X[:, -1:]], 1
+        )
+        rhs_x = dz_ / dt * X + (carry[:, :-1] - carry[:, 1:]) / plan
+        return thomas(aa_x, bb_x, cc_x, rhs_x)
+
+    X_in = carry_on(s.fining)
+    Xn = fining_after(X_in, Tn, dt, p)
+
+    # ---- Defects: what the blocks give off as they rise, and reboil past the ports,
+    # both carried as the fining share is; nothing clears them.
+    block = s.block + (Tn - s.block) * (1.0 - jnp.exp(-dt / p.block_lag))
+    rise = jnp.maximum(block - s.block, 0.0) * (block >= p.block_release_T)
+    defects = (
+        carry_on(s.defects)
+        + p.block_release * a.touch / p.rho_glass * rise
+        + p.reboil_plate * jnp.maximum(Xn - X_in, 0.0) * a.past_ports
+    )
 
     # ---- Crown: conduction, the face linearised
     ep = p.eps_surface
@@ -776,6 +809,7 @@ def plant_step(s, fuel, charge, cullet, thickness, cooling, g, p, lhv=0.0):
     new = Fields(
         T=Tn, T_top=top, T_roof=Trn, T_gas=T_g, T_r=s.T_r + rate * (Q_r - loss_r),
         m=m_new, c=c_new, q_under=q_under, foam=foam, fining=Xn,
+        block=block, defects=defects,
     )  # fmt: skip
 
     w_area = plan
@@ -822,7 +856,8 @@ COUPLE_DEPTH, COUPLE_BAY = 0.036, 3  # the crown couple, ours; W2000b's peak at 
 def sensors(s, g, p):
     """What instruments could see, K: the crown's hottest face and its couple in
     ``COUPLE_BAY``; the glass at the floor under that bay and at the melter's end; the
-    canal, which reads the leaving glass by its flow, as does the fining share."""
+    canal, which reads the leaving glass by its flow, as do the fining share and the
+    defects per plate."""
     a = layout(g)
     i, w = reading_cell(COUPLE_DEPTH, g)
     col = COUPLE_BAY * g.cols_per_bay + g.cols_per_bay // 2
@@ -834,4 +869,5 @@ def sensors(s, g, p):
         floor=s.T[-1, a.nm - 1],
         canal=by_flow(s.T),
         fining=by_flow(s.fining),
+        defects=by_flow(s.defects),
     )

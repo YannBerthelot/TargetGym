@@ -111,12 +111,19 @@ load moves power up the core, the direction Krsko describes. Boron enters no `ep
 it is uniform, and the APR1400 paper finds its effect on axial shape negligible.
 
 **Boron** is a feed and bleed of well-mixed coolant. A command joins a queue, and
-reaches the core `boron_delay` control steps later:
+reaches the core `boron_delay` control steps later, a number of the family member
+(owner, 2026-11-25): the line's piping and the flow its operator runs set it, so it
+is the same every day. Until then it was drawn at every reset.:
 
 ```
 d(boron)/dt = Q / M (C_feed - boron)
 Q = 10 kg/s dilution (C_feed 0), 3 kg/s boration (C_feed boric_acid_ppm)
 ```
+
+The law is exact over a sub-step, and its sum carries its own rounding
+(`boron_carry`): a trickle changes the boron by less over 5 s than a
+single-precision number near 1690 ppm can hold (1.2e-4 ppm), and without the
+carry 72 kg of water diluted as 130 kg and 36 kg as none.
 
 The heat path is unchanged: fuel, hot leg, cold leg, steam generator, with the
 turbine taking `P_ref load`. Energy balance fixes steady power at the load. Thermal
@@ -222,7 +229,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | Symbol | Value | Unit | Source | Status |
 |---|---|---|---|---|
 | `beta_i`, `lambda_i` | 6-group | | Keepin (1965) | earlier |
-| `Lambda_gen` | 1e-4 | s | PWR range | earlier |
+| `Lambda_gen` | 1e-4 | s | A thermal reactor's order, a few times a PWR's tens of microseconds (Nuclear Technology, NT13-120); the prompt jump it sets, about 15 ms, settles inside one 5 s sub-step either way. It was labelled "PWR range" until the package review (2026-11-25) | ours |
 | `alpha_fuel` | -3.0e-5 | 1/K | Doppler, PWR range | earlier |
 | `alpha_coolant` | -12e-5 | 1/K | The start-of-cycle MTC (1690 ppm, OAPS's start-of-cycle ramps). It is near zero there and grows more negative as boron falls (NRC GFE PWR 192004, nuclear-power.com): BEAVRS measures the isothermal coefficient, Doppler included, at -1.75 and -1.71 pcm/F at hot zero power and 975 and 1405 ppm, and specifications keep it at or below 0 above 50 % power. No hot-full-power start-of-cycle figure was found; the reviewer's judgment is -9 to -18 pcm/K (physics review, finding 2). The range was 0 to -20 until the family sweep (2026-11-10): at -2.9 to -7 the rods cannot carry a 5 %/min return, so the owner took the reviewer's range. The sweep draws it with `boron_worth`, the most negative MTC with the largest worth | ours, range -9 to -18 pcm/K |
 | `alpha_tilt` | -30e-5 | 1/K | The part-power axial shift's lumped coefficient (moderator and Doppler redistribution), kept at the value that reproduces Krsko's +5 % delta I at half power when the MTC moved | ours |
@@ -242,7 +249,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `relief_accumulation` | 0.03 | of the set pressure | The valves pass the full-power steam this far over their set pressure. The code's accumulation for steam safety valves, from the reviewer's memory, not opened | ours |
 | `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
-| `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
+| `boron_delay` | 20 | steps | 5 to 15 min, OAPS, section 2.1; the member's, the family sweep draws 10 to 30 | read |
 | `boric_acid_ppm` | 7800 | ppm | A vendor's recycling concentrate, seen in a search summary, the PDF would not open | ours |
 | `primary_mass` | 2.5e5 | kg | The water behind `C_coolant` and `C_cold`. 60 ppm of 1690 then takes 9 t, against Krsko fig. 4's 6 t | ours |
 | `sigma_x` | 2.72e-18 | cm2 | Mastroianni, Table III-1 | read |
@@ -334,8 +341,11 @@ reads as obs 2. Boron flow is -1 for full dilution, +1 for full boration. The
 turbine's rate is -1 to unload at 5 %/min, +1 to load at it, 0 to hold; the turbine
 never takes more than the plan, so +1 follows it, and the plan it does not take is
 charged as lost output. The third action joined on 2026-11-15: a policy with two
-outputs must be rebuilt. Xenon, iodine, their tilts, the boron on its way and the
-delay's length are hidden; the power history in obs 10 is what an operator's xenon
+outputs must be rebuilt. A reset holds the plant's own starting move, the rods where
+it parked them (a demand of 1 - 2 x 3/228), no boron flow and the turbine on its plan
+(`initial_action`, 2026-11-24): held all day, it is the do-nothing the charter's
+"hold reset" null runs. Xenon, iodine, their tilts, the boron on its way and the
+line's delay are hidden (the recipe measures the delay); the power history in obs 10 is what an operator's xenon
 tool starts from.
 
 **Limits** (charter rule 14, Amendment 3):
@@ -347,8 +357,8 @@ tool starts from.
 | flux difference outside its band, 5 % of rated delta I either side of a target that scales with power | penalty clock | penalty time counts a second a second at 50 % of rated power and above, half a second a second from 15 % to 50 %, not below; 1 h in 24 h is free; past it, the lost output of a reduction to 50 % | NUREG-1431 Rev. 3.0, Bases B 3.2.3A, Notes 2 and 3 and Required Action C.1; the band's 5 % is EDF's and Krsko's |
 | the same, at 90 % of rated power and above | timed | 30 min outside without a break (15 to restore, 15 to reduce), then the lost output of a reduction to 90 % | the same bases, Required Actions A.1 and B.1 |
 | flux difference outside the acceptable operation limits, from 11 % of rated delta I at 90 % power to 31 % at 50 %, between those powers | timed | 30 min outside without a break, then the lost output of a reduction to 50 % | the same bases, Figure B 3.2.3A-1 ("for illustration only": a plant's core report gives its own) and C.1's completion time |
-| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore, then MODE 2 within 6 h, so hot standby | STS LCO 3.4.1 (US EPR GTS and AP1000 bases, from search summaries); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
-| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; 2 h to restore (STS 3.1.6), then hot standby | KAIST's lead for the points; the family's shape |
+| Tavg above its DNB limit | timed | the full-power program plus 5.1 F (2.83 K) at every power; 2 h to restore; then the turbine unloads along a straight line to MODE 2's 5 % of rated power over 6 h, and hot standby after 8 h above the limit without a break; a parameter restored before then ends the shutdown (hot standby at 2 h until 2026-11-25) | Westinghouse STS, NUREG-1431 Rev. 5.0 (ML21259A155), page 3.4.1-1, LCO 3.4.1 Conditions A and B, LCO 3.0.2, Table 1.1-1 (opened, saved by the owner); the margin from Braidwood's COLR, 588.0 F nominal against 593.1 F (a search summary, not opened: nrc.gov blocks automated reads), the only plant found with both numbers |
+| rod insertion limit | timed | a straight line in power, 22 % of the stroke in at full power to 78 % at half; the rods are the lead bank, so 2 h to restore (Condition B), then MODE 2 with keff < 1.0 within 6 h (Condition D): the turbine unloads along a straight line to no load, and hot standby after 8 h past the limit without a break (hot standby at 2 h until 2026-11-25) | KAIST's lead for the points; the family's shape; Westinghouse STS, NUREG-1431 Rev. 5.0 (ML21259A155), pages 3.1.6-1 and 3.1.6-2 (Condition A covers only banks A, B and C) |
 
 The offset's clock looks back 24 h, in whole control hours: at the start of each
 hour the hour just done is filed and the hour filed a day ago leaves the count, so
@@ -537,9 +547,60 @@ Tavg, fed forward from the day's plan and from the operator's tool for xenon and
 fuel's burnup. The turbine loads at the rate the boron line carries. The owner
 adopted the procedure on 2026-11-08, on condition it keeps the insertion limit.
 
-**From the curve book (2026-11-15).** The reference reads the core's cycle point
-(observation 13) and takes that point's boron worth and moderator coefficient
-(`experts.curve_book`, the plant's own lines of section 1). What it works out for
+**From the curve book (2026-11-15; measured since 2026-11-25).** The reference reads
+the core's cycle point (observation 13) and takes that point's boron worth and
+moderator coefficient off its curve book (`experts.curve_book`). Until 2026-11-25 the
+book was the plant's own lines of section 1, exact core knowledge no operator has.
+Since then the recipe measures it (owner, after the package review), as a reload's
+startup physics tests do (ANSI/ANS-19.6.1), at power at the two ends of the
+load-following range (0 and 90 % of the cycle). A dilution bump at fixed rods reads K
+of Tavg per ppm. A 30-step rod bump at fixed boron, read against the rods' calibrated
+worth curve, reads the feedback `alpha_coolant + alpha_fuel`, since at a fixed power
+the fuel follows the coolant. The worth is `-K x feedback`, and the moderator
+coefficient is the feedback less the fuel's Doppler coefficient, a design value. The
+book is the straight lines through the two ends (`experts.measured`). On the shipped
+plant it reads -11.90 and -55.10 pcm/K (the plant's -12.0 and -55.2) and -7.99 and
+-10.38 pcm/ppm (-8.00 and -10.61). A turbine swing at fixed rods was tried first for
+the moderator coefficient and read it 25 % too negative, because the swing also
+moves the axial tilt's reactivity, which its balance left out.
+
+**Rods on Tavg past its dead band: tried, set aside (2026-11-25).** The package
+review traced a stored trip (fast_return seed 104 on the 2026-11-12 plant) to the
+expert. After a fast return Tavg sat 3 to 5 K above its program for two hours, past
+the DNB margin, with the rods parked on the offset loop and boron alone correcting,
+until the timed limit sent the plant to hot standby. On the current plant it no
+longer trips (4,200 plant-days of 7-day runs), but Tavg still overshoots 3 to 4 K at
+the end of a third of the load-follow days' ramps up. The owner chose rods on Tavg
+past its 1.6 K dead band, and no feedforward boration while the rods carry a ramp
+down. Built and measured on 20 seeds, it lost the offset. On every load-follow day the
+offset spent over an hour outside its band, where the expert kept it inside, because
+the rods are the procedure's only actuator on the offset. Engaging the rods only near
+the limits (the DNB margin, the loading stop) and the ladder's published structure
+(rods always on Tavg, boron on the offset) lost it too, and each tripped a fast
+return. Deferring the boration alone made fast returns run hotter. So none of these
+ships, and the owner decides the next step.
+
+**The turbine's thresholds, by a rule (owner, 2026-11-25).** `on_plan`, `reload_band`
+and `restart_drop` were ours. They are now set by a rule fixed before the recipe's
+run, in standard deviations of the turbine's load read off its plan on a calm day,
+which the recipe measures (0.005025): on its plan within 2, reloading past 10, and a
+restart a fall of the turbine's fastest step (2.5 %) plus 3. That gives 0.0100,
+0.0502 and 0.0401, where they were 0.01, 0.05 and 0.04.
+
+**Where each piece comes from.** From a written procedure: the rod program on Tavg
+(HRTD 8.1 and 5.0); rods on the offset and boron on Tavg (Krsko, NENE 2022; KNS
+18A-534). From the recipe's tests: the two loop gains (bump tests, SIMC), the curve
+book and the turbine's thresholds. Structural, from the family's practice, each
+added after a failure: the rods on Tavg down a fast ramp (2026-11-10, after hot-leg
+trips; Westinghouse automatic rod control, EDF's grey rods), the day's dispatch read
+as it comes and the reloading turbine's feedforward (2026-11-11 and 2026-11-12, after
+trips).
+Ours: the action band on the offset (half the target band, the owner's, fixed before
+any rerun), the back-off of 2 standard deviations (charter J1), the xenon tool's play
+(the rule that a controller acts only on what is charged, no new number, added after
+the null beat the reference on baseload), and the line's lead (the dead time the
+recipe measures, 660 s on the shipped member; until 2026-11-25 a fixed 600 s lead and
+a 900 s longest delay, the middle and end of a delay drawn each day). What it works out for
 boron is in ppm, turned into a flow by the pumps' rates at the boron read, so its
 loops have the same gain diluting and borating, at any point of the cycle. Until
 then its gains and its feedforward were fitted at the start of the cycle.
@@ -547,13 +608,14 @@ then its gains and its feedforward were fitted at the start of the cycle.
 - *The plan's boron.* The program asks `ppm_per_load` of boron per unit of load, the
   power defect on the program over the boron's worth: 205.6 ppm at the start of the
   cycle, 216.7 at 80 % of it. It is counted, not timed: what the load the turbine
-  will take asks for, a lead ahead (600 s, the middle of the line's delay), is added
+  will take asks for, a lead ahead (the line's dead time, `theta`), is added
   to what is still owed, and the line sends what it can of it each step. So a ramp
   faster than the line still gets all its boron.
 - *The Tavg loop.* A SIMC PI past the 1.6 K free band, on what is charged (the
   owner's rule of 2026-11-10): `Kc = 1 / (k 2 theta)` and `Ti = 8 theta`, with `k`
-  the curve book's K of Tavg per ppm and `theta` = 600 s, the boron line's dead time
-  to Tavg from the recipe's bump tests.
+  the curve book's K of Tavg per ppm and `theta` = 660 s, the boron line's dead time
+  to Tavg from the recipe's bump tests: the member's 600 s line and a minute of the
+  plant's lag (600 s while the line's delay was drawn each day).
 - *The operator's tool.* Xenon's rate, and the burnup read off the cycle point (a
   ppm of boron is 1 / 1690 of the cycle), kept as a debt with the play of
   2026-11-10 below. Its edges sit two standard deviations of Tavg inside the free
@@ -562,7 +624,8 @@ then its gains and its feedforward were fitted at the start of the cycle.
   Tavg's error spreads by 0.548 K at the start of the cycle and 0.209 K at 80 %
   (`experts.tavg_spread`; the figure is quasi-static, and the days recorded at the
   start of the cycle show 0.43 K). Each edge is pulled in by what xenon moves Tavg
-  over the line's longest delay, 15 min, since an edge is a limit. The debt starts
+  over the line's dead time, `theta` (until 2026-11-25 the longest drawn delay,
+  15 min, since an edge is a limit). The debt starts
   from where Tavg reads and is corrected toward it at the Tavg loop's integral
   time, so what the plan's boron and the line's delay leave behind does not build
   up unseen.
@@ -641,8 +704,8 @@ shift stays inside Tavg's free zone, the tool does nothing; past it, it moves on
 the excess. The free zone is what the cost leaves free: the 1.6 K dead band on
 either side of the program (on the hot side up to the DNB limit until the physics
 review's finding 1, 2026-11-10). Each edge is pulled in by the
-shift xenon causes over the boron line's lead (600 s, the same lead as the plan's
-feedforward), so the tool acts before the edge, not after it. No new number: the
+shift xenon causes over the boron line's lead (its dead time, the same lead as the
+plan's feedforward), so the tool acts before the edge, not after it. No new number: the
 dead band, the lead and the plant's two worths are all set elsewhere.
 The rods and the Tavg PI are unchanged. Every rung of the ladder uses the same tool,
 so the comparison between rungs stays fair.
@@ -686,7 +749,7 @@ tripping (the re-record pass, step 5, records them again).
 
 | environment | steps | step (s) | episode | action | obs | float state |
 | --- | --- | --- | --- | --- | --- | --- |
-| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 140 |
+| `reactor` | 2880 | 30 | 24.0 h | 3 in [-1, 1] | 16 | 141 |
 
 `float state` counts the scalar and array float fields the state carries,
 `time` excluded; the gap between it and `obs` is what the controller cannot
@@ -711,7 +774,7 @@ which is what the recorded baselines use.
 | `ao_strict_power`, `ao_strict_allowed` | 0.9, 1800 s | at 90 % and above the flux difference must be in its band: 15 min to restore it and 15 min to be under 90 %, then that reduction's lost output (the same bases, Required Actions A.1 and B.1) |
 | `ao_limit_high`, `ao_limit_low`, `ao_limit_allowed` | 0.11, 0.31, 1800 s | the acceptable operation limits between 50 and 90 %: 11 % of rated delta I at 90 % power to 31 % at 50 %, read off Figure B 3.2.3A-1, which is "for illustration only"; outside them 30 min without a break, then a reduction to 50 % (C.1's completion time) |
 | `turbine_rate` | 5 %/min | the third action's full scale; the plan the turbine does not take is lost output at `derate_price_per_MWh`, $666.67 per step per unit of rated load, the trip's own price |
-| `ril_full`, `ril_half`, `ril_allowed` | 0.22, 0.78, 7200 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore (STS 3.1.6) |
+| `ril_full`, `ril_half`, `ril_restore`, `ril_allowed` | 0.22, 0.78, 7200 s, 28800 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore, then 6 h to shut down (STS 3.1.6 Conditions B and D, ML21259A155) |
 | `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
 | `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
 | `restart_steps` | 5760 (48 h) | a scram's dead time, **ours,** inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the restart (KNS 20A-065). The reload after it is played out and charged in tracking |
@@ -770,7 +833,10 @@ so it scatters by 0.045 K over sqrt(2), and shares a draw with the hot-leg chann
   documents on power-range accuracy could not be read.
 
 The expert reads these values, and so does every tuner. The oracle plans and acts
-on the true state, so it stays a full-state bound. `reward`, trips and the score
+on the true state. Its plan is the best one found, with its limits backed off and a
+few solver settings set by hand (`oracle.py`), so its cost is the best known with the
+true state and the future, an achieved cost and not a bound below which no controller
+can go (package review, 2026-11-25). `reward`, trips and the score
 read the true state. `step_env` sums `info["measured_reward"]` over the six
 sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per

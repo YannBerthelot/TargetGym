@@ -144,8 +144,10 @@ class HVACParams(EnvParams):
 
     # ---- Time discretization ----
     delta_t: float = 900.0  # s (15 min)
-    #: Two weeks: a heating curve change is judged over two weeks [11, p. 1].
-    max_steps_in_episode: int = 1344
+    #: Twelve days (owner, 2026-11-24): three burned in, seven scored of the two
+    #: weeks a heating curve is judged over [11, p. 1], and the ceiling's two-day
+    #: tail (``scenarios.hvac_evaluation``).
+    max_steps_in_episode: int = 1152
 
     # ---- Score (rule 15, Amendment 3), euros per step ----
     # Energy: the heat pump's electricity at a three-period tariff, so night

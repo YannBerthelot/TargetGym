@@ -16,6 +16,19 @@ Contract (charter J3, the task's oracle rule; ``glass_furnace/oracle.py``):
 - without that tail, a horizon shorter than the fining's dead time (11.8 h, the ladder
   row's step test) and a canal that its own loop holds let no valve move reach a limit,
   so the cheapest plan is the valve closed to its minimum.
+
+Without a seed (the owner's ruling of 2026-11-16; docs/proposals/glass-furnace-room.md,
+"The fair line"):
+- the oracle is shown no future draw: it plans on the walks' mean path from the true
+  state, a new plan each knot, and when no valve meets the canal's limit or the
+  override's cap, the plan it had goes on;
+- it prices the fining mark instead of limiting it: each planned step is charged, over
+  its fuel and plates, the bill of a lost step times the chance that the fining comes
+  out under its mark, the forecast's error taken as normal with the spread the model's
+  own walks give at that lead (no episode's draws), read at the episode's first plan
+  over the fining's dead time and a knot, past which a later plan can still answer;
+- so the wider the spread, the further over the mark a plan keeps the fining, and the
+  cost a plan reports stays the env's, without the charge.
 """
 
 import jax
@@ -196,3 +209,135 @@ def test_the_oracle_replays_the_keys_the_benchmark_runs_its_seed_on(seed, n):
     reset, keys = O.episode_keys(seed, n)
     np.testing.assert_array_equal(reset, resets[0])
     np.testing.assert_array_equal(keys, steps[:, 0])
+
+
+def test_the_chance_of_a_lost_step_is_the_normal_tail_under_the_mark():
+    # Standard normal table: half on the mark, 0.15866 one spread over it, 0.02275
+    # two, 3.167e-5 four, and all but 0.02275 two spreads under it. Tolerance: the
+    # table's last digit.
+    table = (
+        (0.0, 0.5),
+        (1.0, 0.15866),
+        (2.0, 0.02275),
+        (4.0, 3.167e-5),
+        (-2.0, 0.97725),
+    )
+    for over, chance in table:
+        got = float(O.chance_under(0.5 + over * 0.007, 0.5, 0.007))
+        assert got == pytest.approx(chance, rel=2e-3)
+
+
+def test_the_forecast_spread_is_the_walks_own():
+    # Four hours with the valve held, eight sampled paths. Without walks every path is
+    # the forecast, to float32's rounding of a share. With them the spread shows well
+    # over that rounding. The walks are first order and the fining's answer to them
+    # close to linear at their size, so on the same draws half the walks give about
+    # half the spread (within a fifth, ours: the fining band and the blocks' release
+    # are not linear).
+    env = SPEC.make_env()
+    p = SPEC.make_test_params()
+    reset, _ = O.episode_keys(5, 1)
+    _, state = env.reset_env(reset, p)
+    half = p.replace(walk_sd=tuple(0.5 * s for s in p.walk_sd))
+    none = p.replace(walk_sd=(0.0,) * len(E.WALKS))
+    whole, halved, still = (
+        np.asarray(O.forecast_spread(env, q, state, 120, paths=8)) for q in (p, half, none)
+    )  # fmt: skip
+    assert whole.shape == (120,)
+    np.testing.assert_allclose(still, 0.0, atol=1e-6)
+    assert whole[-1] > 1e-5
+    assert halved[-1] == pytest.approx(0.5 * whole[-1], rel=0.2)
+
+
+def test_a_priced_fining_mark_is_kept_further_the_wider_the_spread():
+    # Six hours on 2 h knots, as above: the plan coasts on the design state's fining
+    # and pays it back in the tail. With the mark limited, the plan keeps it and no
+    # more. With the mark priced, a step two spreads over the mark is still charged
+    # 416.88 EUR * 0.02275 = 9.5 EUR, a fifth of its fuel bill, so the plan stays
+    # further than that, and further the wider the spread. A priced plan meets the
+    # limit's own rows, so on the env's bill it is no cheaper than the limit's plan,
+    # which is the cheapest there. Margin on the bills: 1e-3, as above (ours).
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=180)
+    reset, keys = O.episode_keys(5, 180)
+    _, state = env.reset_env(reset, p)
+    over, bills = {}, {}
+    for spread in (None, 0.002, 0.007):
+        priced = None if spread is None else np.full(1, spread)
+        plan = O.solve(env, p, state, keys, knot_steps=60, fining_spread=priced)
+        episode = _replayed(env, p, 5, plan.valve)
+        assert plan.cost == pytest.approx(
+            episode, rel=1e-5
+        )  # the env's, no charge in it
+        played = O.rollout(env, p, state, keys, jnp.asarray(plan.valve))[2]
+        held, canal, tail = _held_past_the_episode(env, p, state, keys, plan)
+        assert canal.min() >= p.canal_target
+        over[spread] = min(float(played.min()), held.min()) - p.fining_pass
+        bills[spread] = 180 * episode + tail.sum()
+    assert 0.0 <= over[None] < over[0.002] < over[0.007]
+    assert over[0.002] > 2 * 0.002 and over[0.007] > 2 * 0.007
+    assert bills[0.002] > (1.0 - 1e-3) * bills[None]
+    assert bills[0.007] > (1.0 - 1e-3) * bills[None]
+
+
+def _first_plans(oracle, env, p, seed, n):
+    """``oracle`` played ``n`` steps on ``seed``: per step, the plans made so far, the
+    action, and whether the step kept both marks."""
+    reset, keys = O.episode_keys(seed, n)
+    obs, state = env.reset_env(reset, p)
+    step = jax.jit(env.step_env)
+    made, played, kept = [], [], []
+    for t in range(n):
+        action = oracle.step(obs, state)
+        made.append(len(oracle.plans))
+        played.append(action)
+        obs, state, _, _, _ = step(keys[t], state, jnp.asarray([action]), p)
+        read = P.sensors(state.plant, p.grid, p.plant)
+        kept.append(bool(read["fining"] >= p.fining_pass and read["canal"] >= p.canal_target))  # fmt: skip
+    return made, played, kept
+
+
+def test_without_a_seed_the_oracle_plans_again_each_knot():
+    # Forty minutes on 20 min knots: a plan at steps 0 and 10, each played for its
+    # first knot, and the design state's forty minutes keep both marks.
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=20)
+    oracle = SPEC.make_mpc(env, p, knot_hours=1.0 / 3.0, spread=np.full(1, 0.002))
+    made, played, kept = _first_plans(oracle, env, p, 5, 20)
+    assert made == [1] * 10 + [2] * 10
+    firsts = [float(E.to_action(q.knots[0], p)[0]) for q in oracle.plans]
+    np.testing.assert_allclose(played, np.repeat(firsts, 10), atol=1e-6)
+    assert all(kept)
+
+
+def test_when_no_valve_can_meet_the_canal_the_plan_it_had_goes_on():
+    # A bath 20 K colder than the plan left it: the canal is under its target at once
+    # and no fuel reaches it within the forty minutes, so no plan meets the limits.
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=20)
+    oracle = SPEC.make_mpc(env, p, knot_hours=1.0 / 3.0, spread=np.full(1, 0.002))
+    reset, _ = O.episode_keys(5, 20)
+    obs, state = env.reset_env(reset, p)
+    oracle.step(obs, state)
+    had = oracle.plans[0]
+    cold = state.replace(
+        time=state.time + 10, plant=state.plant.replace(T=state.plant.T - 20.0)
+    )
+    action = oracle.step(obs, cold)
+    assert action == pytest.approx(float(E.to_action(had.knots[1], p)[0]))
+    assert oracle.kept == 1
+
+
+def test_the_spread_is_read_from_the_model_at_the_first_plan():
+    # No spread given: the oracle samples the walks from the state it is first shown,
+    # over the fining's dead time and a knot (11.8 h and 20 min: 364 steps). Its plan
+    # is the plan of an oracle handed that spread.
+    env = SPEC.make_env()
+    p = SPEC.make_test_params(max_steps_in_episode=10)
+    reset, _ = O.episode_keys(5, 10)
+    obs, state = env.reset_env(reset, p)
+    spread = O.forecast_spread(env, p, state, 364, paths=4)
+    oracle = SPEC.make_mpc(env, p, knot_hours=1.0 / 3.0, paths=4)
+    handed = SPEC.make_mpc(env, p, knot_hours=1.0 / 3.0, spread=spread)
+    assert oracle.step(obs, state) == pytest.approx(handed.step(obs, state))
+    np.testing.assert_allclose(oracle.plans[0].knots, handed.plans[0].knots, atol=1e-6)

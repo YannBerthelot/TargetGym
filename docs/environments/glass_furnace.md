@@ -1,8 +1,11 @@
 # Glass Furnace
 
+!!! note "Under review"
+    Glass Furnace is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/glass_furnace/pid_output.gif" width="480px"/></p>
 
-Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end, about 18 minutes after the glass leaves; the melt answers a valve move over about two days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far from the defect limit costs fuel, too little loses glass.
+Keep a float furnace's glass fined and at forming temperature where it leaves for the bath, at the least fuel, by setting the fuel valve. Quality is read only at the cold end, about 18 minutes after the glass leaves; the melt answers a valve move over about two days; and gas quality, the batch blanket and the sulfate walk unseen. Backing off too far from the defect limit costs fuel, too little loses glass. Every rise of the bath where it touches its hot blocks, and fining pushed past the last port, costs plates.
 
 ```python
 import target_gym as tg
@@ -13,10 +16,11 @@ env, params = tg.make("glass_furnace")
 | | |
 |---|---|
 | Action space | `Box((1,))`, all actions in [-1, 1] |
-| Observation space | `Box((12,))` |
+| Observation space | `Box((13,))` |
 | Tracked variable(s) | fining share read at the cold end |
 | Episode length | 5040 steps of 120 s (7 days) |
 | Cite as | `glass_furnace-v6` |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/glass_furnace/PHYSICS.md) |
 
 ## Action space
@@ -30,7 +34,7 @@ actuator range inside the environment.
 
 ## Observation space
 
-12 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
+13 values in the plant's own units. The space declares no bounds (it spans the float32 range), so scale them before training. The reward scores `obs[4]` against `obs[5]`.
 
 | # | meaning |
 |---|---|
@@ -46,6 +50,7 @@ actuator range inside the environment.
 | 9 | pull planned `pull_notice_h` ahead, kg/s |
 | 10 | cullet ratio charged |
 | 11 | batch line, m, every 30 min |
+| 12 | defects per plate read at the cold end, 0.3 h late |
 
 ## Rewards
 
@@ -75,7 +80,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 ## Baselines
 
-A PID and an MPC ship with this environment, but no comparison has been recorded for them yet.
+Not measured. A PID and an MPC ship and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
+
+The plant was rebuilt (attempt 3: a float melter in two dimensions, scored in money on fuel and lost glass). The PID is the reference ladder's first rung, a PI on the cold-end fining reading two sigma above its pass mark. The oracle plans the valve on the env's own step and reward, with the episode's walks foreseen when given its seed, by SLSQP, which does not converge on this plant: its plans bound the ceiling from above (glass_furnace/oracle.py).
 
 ## Arguments
 

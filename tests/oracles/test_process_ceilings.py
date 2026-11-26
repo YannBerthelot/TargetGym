@@ -134,18 +134,21 @@ def _compressor(steps=60):
 
 
 def test_the_compressors_ceiling_may_not_plan_left_of_the_surge_line():
-    """The line is the cubic's peak, Phi = 2W = 0.5. A hundredth of Phi left of
-    it the surge margin is -1, on it 0, a hundredth right of it +1."""
+    """The line is the machine's own, which the ceiling knows: the cubic's
+    peak, Phi = 2W (1 + shift), 0.5 on the map's machine and 0.525 on one
+    whose line is 5 % right of its map. A hundredth of Phi left of it the
+    surge margin is -1, on it 0, a hundredth right of it +1."""
     env, p, O, state, _ = _compressor()
     row = O.CEILING_ROWS.index("surge")
 
-    def surge(phi):
-        at = state.replace(phi_min=jnp.float32(phi))
+    def surge(phi, shift):
+        at = state.replace(phi_min=jnp.float32(phi), line_shift=jnp.float32(shift))
         return float(O.ceiling_margins(at, p)[0][row])
 
-    assert surge(0.49) == pytest.approx(-1.0, abs=1e-4)
-    assert surge(0.50) == pytest.approx(0.0, abs=1e-4)
-    assert surge(0.51) == pytest.approx(1.0, abs=1e-4)
+    for shift, line in ((0.0, 0.5), (0.05, 0.525)):
+        assert surge(line - 0.01, shift) == pytest.approx(-1.0, abs=1e-4)
+        assert surge(line, shift) == pytest.approx(0.0, abs=1e-4)
+        assert surge(line + 0.01, shift) == pytest.approx(1.0, abs=1e-4)
 
 
 def test_a_move_past_an_actuators_reach_is_charged_its_excess_in_reaches():

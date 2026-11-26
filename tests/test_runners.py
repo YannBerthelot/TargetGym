@@ -9,20 +9,21 @@ import subprocess
 import sys
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from target_gym import (
     CSTR,
+    BuildingHVAC,
     CSTRParams,
     FirstOrderParams,
     FirstOrderSystem,
     FourTank,
     FourTankParams,
+    HVACParams,
 )
+from target_gym.hvac.oracle import make_hvac_mpc
 from target_gym.oracles.controller import Oracle
-from target_gym.pc_gym.cstr.oracle import make_cstr_mpc
 from target_gym.pc_gym.distillation.oracle import make_distillation_mpc
 from target_gym.pc_gym.first_order.oracle import make_first_order_mpc
 from target_gym.pc_gym.four_tank.oracle import make_four_tank_mpc
@@ -100,7 +101,8 @@ def test_importing_the_runners_keeps_the_callers_matplotlib_backend():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_fn,make_kwargs,action_dim",
     [
-        (CSTR, CSTRParams, make_cstr_mpc, {}, 1),
+        # hvac since cstr-v8, which ships no planner (owner, 2026-11-24).
+        (BuildingHVAC, HVACParams, make_hvac_mpc, {}, 1),
         (FirstOrderSystem, FirstOrderParams, make_first_order_mpc, {}, 1),
         (FourTank, FourTankParams, make_four_tank_mpc, {}, 2),
     ],
@@ -125,33 +127,27 @@ def test_mpc_step_returns_finite(env_cls, params_cls, make_fn, make_kwargs, acti
         assert np.all(np.isfinite(arr)), "MPC action contains non-finite values"
 
 
-# Compiling a gradient planner on the column takes tens of seconds on a cold cache.
+# The column's oracle (the shared solver since 2026-11-14, ad3b6854) compiles
+# its planner on first use: tens of seconds on a cold cache.
 @pytest.mark.medium
-def test_gradient_mpc_step_returns_finite():
-    """GradientMPC.step() returns a finite [L, V] array."""
+def test_the_column_oracle_moves_finitely_and_reset_restarts_it():
+    """The oracle answers a reset state with a finite [L, V] move, and after
+    ``reset()`` it answers that state as a fresh oracle does."""
     spec = REGISTRY["distillation"]
     env, params = spec.make_env(), spec.make_test_params(max_steps_in_episode=N)
-    mpc = make_distillation_mpc(env, params, horizon=3, n_iter=3)
+    obs, state = env.reset_env(jax.random.PRNGKey(0), params)
 
-    key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key, params)
-    action = mpc.step(obs, state)
-    assert np.array(action).shape == (2,), "GradientMPC action should have shape (2,)"
-    assert np.all(np.isfinite(action)), "GradientMPC action contains non-finite values"
+    used = make_distillation_mpc(env, params)
+    first = np.asarray(used.step(obs, state))
+    for _ in range(3):  # move it off its start
+        used.step(obs, state)
+    used.reset()
+    again = np.asarray(used.step(obs, state))
+    fresh = np.asarray(make_distillation_mpc(env, params).step(obs, state))
 
-
-@pytest.mark.medium  # a gradient planner, as above
-def test_mpc_reset_zeroes_actions():
-    """GradientMPC.reset() zeros out the internal action sequence."""
-    spec = REGISTRY["distillation"]
-    env, params = spec.make_env(), spec.make_test_params(max_steps_in_episode=N)
-    mpc = make_distillation_mpc(env, params, horizon=5, n_iter=3)
-
-    key = jax.random.PRNGKey(0)
-    obs, state = env.reset_env(key, params)
-    mpc.step(obs, state)  # populates internal actions
-    mpc.reset()
-    assert jnp.all(mpc._actions == 0.0), "reset() did not zero out action sequence"
+    assert first.shape == (2,)
+    assert np.all(np.isfinite(first))
+    np.testing.assert_allclose(again, fresh, rtol=1e-6, atol=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +184,7 @@ def test_plane_env_make_pid_returns_controller():
 @pytest.mark.parametrize(
     "env_cls,params_cls,make_kwargs,expected_type",
     [
-        (CSTR, CSTRParams, {}, Oracle),
+        (BuildingHVAC, HVACParams, {}, Oracle),
         (FirstOrderSystem, FirstOrderParams, {}, Oracle),
         (FourTank, FourTankParams, {}, Oracle),
     ],

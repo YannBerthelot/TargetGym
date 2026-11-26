@@ -67,11 +67,16 @@ def formation_lead_step(params, state, obs, xp=jnp):
     """The lead seat: course hold on the route's commanded heading with its
     turn rate (``obs[15]``, rad per step) fed forward, and TECS; the bank
     demand moved toward its target at no more than the parade rate of roll,
-    from the bank flown when the autopilot engages."""
+    from the bank flown when the autopilot engages, and TECS engaged on the
+    trim it finds."""
     v_ground = xp.sqrt(obs[0] ** 2 + obs[1] ** 2 + 1e-6)
     turn = obs[15] / params.dt + _wrap_angle(obs[11] - obs[9], xp) / params.tau_hdg
     target = _cruise_speed(params, obs, xp)
-    action, memory = _fly(params, state, obs, xp, obs[10], v_ground * turn, target)
+    # It engages in the trim it finds, the power and pitch it reads (owner,
+    # 2026-11-24): on the airliner's trim constants it sank 14 to 20 m first.
+    action, memory = _fly(
+        params, state, obs, xp, obs[10], v_ground * turn, target, power=obs[12]
+    )
     previous = xp.where(state.tecs.started > 0.0, state.bank, obs[6])
     step = params.parade_roll * params.dt
     bank = xp.clip(action[2] * BANK_DEMAND_MAX, previous - step, previous + step)

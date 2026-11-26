@@ -67,8 +67,9 @@ def draws(table):
             for n in group:
                 r = table["ranges"][n]
                 d[n] = float(r["lo"] + u * (r["hi"] - r["lo"]))
-        if "restart_steps" in d:
-            d["restart_steps"] = int(round(d["restart_steps"]))
+        for n in ("restart_steps", "boron_delay"):  # counts of control steps
+            if n in d:
+                d[n] = int(round(d[n]))
         row = {n: d[n] for n in names}
         for n, expr in table.get("derived", {}).items():
             row[n] = float(eval(expr, {"__builtins__": {}}, dict(d)))
@@ -181,15 +182,18 @@ def at_rest_cost(env, p):
 
 
 def reactor(table):
+    """The reactor's sweep on its scoring runs (``target_gym.scoring_runs``): on each
+    draw, the recipe tuned again and its reference against the do-nothing, rods
+    parked, no boron, the turbine on its plan, on every kept scenario's 7-day runs,
+    as scored. The priced day's end is gone (owner, 2026-11-24)."""
     import reactor_ladder as L
 
-    from target_gym import scenarios
+    from target_gym import scoring_runs as S
     from target_gym.reactor import Reactor, ReactorParams
     from target_gym.reactor.experts import make_reactor_pid_controller
     from target_gym.registry import REGISTRY
 
-    env = Reactor()
-    suite = scenarios.suite(REGISTRY["reactor"])
+    env, spec = Reactor(), REGISTRY["reactor"]
     hold = lambda m, o: (jnp.array([L.PARK, 0.0, 1.0]), m)  # noqa: E731
     report = []
     for i, d in enumerate(draws(table)):
@@ -199,6 +203,9 @@ def reactor(table):
                "at_rest_trips": rest_trips, "scenarios": {}}  # fmt: skip
         try:
             tune, _ = L.bumps(env, p.replace(cycle_range=(0.0, 0.0)))
+            # The member's own curve book and turbine thresholds, measured by the
+            # recipe's physics tests (owner, 2026-11-25).
+            book = L.measured_book(env, p)
         except L.TrippedDuringTest as e:
             # The recipe cannot be run on this member: the property fails here.
             row.update(holds=False, tune_refused=str(e))
@@ -210,19 +217,24 @@ def reactor(table):
             "wd_Ti": float(tune.wd_Ti),
             "theta": float(tune.t_Ti) / 8.0,
         }
+        read.update({k: v for k, v in book.items() if k != "wobble_sd"})
         expert = make_reactor_pid_controller(plant=p, **read)
         act = lambda m, o, e=expert: e.step(e.params, m, o)  # noqa: E731
         row["tune"] = read
-        for sc in suite:
-            q = ReactorParams(**{**sc.overrides, **d})
-            ref = L.rows(env, q, act, expert.init_state)
-            null = L.rows(env, q, hold, jnp.asarray(0.0))
-            row["scenarios"][sc.name] = {
-                "reference_median": float(np.median(ref["cost_by_seed"])),
-                "null_median": float(np.median(null["cost_by_seed"])),
-                "reference_tripped": ref["seeds_tripped"],
-                "beats_null": float(np.median(ref["cost_by_seed"]))
-                < float(np.median(null["cost_by_seed"])),
+        scored = spec.make_test_params(**d)
+        for sc in S.weights("reactor"):
+            seeds = S.seeds("reactor")
+            ref = S.run_functional(
+                "reactor", sc, act, expert.init_state, seeds, params=scored
+            )
+            null = S.run_functional(
+                "reactor", sc, hold, jnp.asarray(0.0), seeds, params=scored
+            )
+            row["scenarios"][sc] = {
+                "reference_median": float(np.median(ref["costs"])),
+                "null_median": float(np.median(null["costs"])),
+                "beats_null": bool(np.median(ref["costs"]) < np.median(null["costs"])),
+                "reference_tripped": int(sum(ref["trips"])),
             }
         row["holds"] = rest < 1.0 and all(
             v["beats_null"] for v in row["scenarios"].values()

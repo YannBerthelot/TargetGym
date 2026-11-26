@@ -5,7 +5,7 @@ See ``PHYSICS.md`` in this directory for the sources, the limits and the
 score, and ``REALITY.md`` for the plant record they come from.
 
 The job (charter Amendments 2 and 3): keep the discharge of a two-stage
-neutralization inside its permit, pH 6 to 8, at the least reagent. An
+neutralization inside its permit, pH 6 to 9, at the least reagent. An
 excursion past 60 min is a violation; effluent below pH 5 is diverted into a
 finite basin and pumped back, and an overrun basin is a violation too.
 
@@ -138,10 +138,11 @@ class PHParams(EnvParams):
     event_hold: float = 1.0e9  # s
 
     # ---- Limits (REALITY.md, "Limits"; charter rule 14) ----
-    # Zone: the permit range, which the guideline sets [P8]. Ours, from the one
-    # range a source prints: the example spec pH 7 +- 1 [P7, p. 2].
+    # Zone: the permit range, which the applicable guideline sets [P8]. Cited:
+    # secondary treatment's "within the limits of 6.0 to 9.0" [P11] (owner,
+    # 2026-11-25, in place of [P7]'s example product spec, pH 7 +- 1).
     permit_low: float = 6.0  # pH
-    permit_high: float = 8.0  # pH
+    permit_high: float = 9.0  # pH
     # Timed: no single excursion outside the range over 60 min [P8], diverted
     # or not (Amendment 3). Past it is a permit violation, the task's trip.
     excursion_limit: float = 3600.0  # s
@@ -162,11 +163,18 @@ class PHParams(EnvParams):
 
     # ---- Episode (charter rules 17 and 20) ----
     # Established operation: both tanks on the steady state at the operator's
-    # set point, pH 7, the centre of the permit range. The set point is the
-    # operator's choice [P3, p. 4] and is not scored. 2 h at 5 s: longer than
-    # the 60 min excursion the permit counts [P8], with room for the upsets.
-    # Ours. The scenario suite (scenarios.py) sets which upsets run.
-    setpoint_pH: float = 7.0
+    # set point. The set point is the operator's choice [P3, p. 4] and is not
+    # scored; reagent is saved by holding it nearer the permit's low limit while
+    # the discharge stays comfortably above it [P3, pp. 4-5]. Ours: 6.45, where
+    # the reference's rule places it, the lowest step of the permit's grid (6.0
+    # to the centre 7.5 in tenths of the way) at which the reference leaves the
+    # permit on none of its seeds (charter J1, owner, 2026-11-23 and 2026-11-25;
+    # scripts/ladder_rows/ph_neutralization.py, PHYSICS.md section 10). An agent
+    # and the reference start the same episodes.
+    # 2 h at 5 s: longer than the 60 min excursion the permit counts [P8], with
+    # room for the upsets. Ours. The scenario suite (scenarios.py) sets which
+    # upsets run.
+    setpoint_pH: float = 6.45
     delta_t: float = 5.0
     max_steps_in_episode: int = 1440
 
@@ -189,8 +197,9 @@ class PHParams(EnvParams):
     #: A violation is charged as another hour (720 steps of 5 s).
     restart_steps: int = 720
     # Read by the benchmark's time-in-band KPI, not by the reward: the permit's
-    # half-width around the set point, so "in band" means inside the permit.
-    e_floor: float = 1.0  # pH
+    # half-width around the target the observation shows, the permit's centre,
+    # so "in band" means inside the permit.
+    e_floor: float = 1.5  # pH
 
 
 #: Units of the PHParams fields, for the generated environment pages.
@@ -247,7 +256,10 @@ class PHState(EnvState):
 
     pH: float  # discharge pH, stage 2's probe
     q3: float  # stage-1 reagent valve, mL/s
-    target_pH: float  # the operator's set point, informational, not scored
+    # The permit's centre, which the observation shows as the target. The
+    # operator's set point (``setpoint_pH``) is the expert's own and never scored,
+    # so the observation does not carry it (owner, 2026-11-25).
+    target_pH: float
 
     # Influent acid strength and flow, as multiples of nominal (acid HIDDEN,
     # flow metered): each ramps from ``levels[i]`` to ``levels[i + 1]`` from
@@ -486,9 +498,9 @@ def compute_next_state(
 # Deliberately not jitted (see the other process tasks): callers that want it
 # fused jit ``step_env``, which traces this inline.
 def get_obs(state: PHState, params: PHParams):
-    """``[pH, q3_pct, setpoint_pH, excursion_min, pH_s1, trim_pct, q1,
+    """``[pH, q3_pct, permit_centre, excursion_min, pH_s1, trim_pct, q1,
     basin_pct]``: the discharge probe on stage 2 [P5, p. 1; P6], the stage-1
-    valve, the set point, the minutes outside the permit in this excursion,
+    valve, the permit's centre, the minutes outside the permit in this excursion,
     which the monitor records [P5, p. 2; P8], the stage-1 probe [P3, pp. 4-5],
     the trim valve, the metered influent flow [P3, Figure 2], and the basin's
     level, which the operator reads (ours).

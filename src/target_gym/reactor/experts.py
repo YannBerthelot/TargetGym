@@ -92,6 +92,22 @@ def rod_control_step(params, state, obs, xp=jnp):
 # ---------------------------------------------------------------------------
 
 
+def measured(plant, ref):
+    """``plant`` with the curve book the recipe measured (``ReferenceParams.book_*``)
+    in place of its design lines: values at the start of the cycle and at
+    ``book_cycle_end``, carried on in a straight line to the cycle's end, the form
+    :func:`curve_book` reads."""
+    to_end = 1.0 / ref.book_cycle_end
+    return plant.replace(
+        alpha_coolant=ref.book_alpha_coolant,
+        alpha_coolant_end=ref.book_alpha_coolant
+        + (ref.book_alpha_coolant_end - ref.book_alpha_coolant) * to_end,
+        boron_worth=ref.book_boron_worth,
+        boron_worth_end=ref.book_boron_worth
+        + (ref.book_boron_worth_end - ref.book_boron_worth) * to_end,
+    )
+
+
 def curve_book(cycle, plant, xp=jnp):
     """The operator's curve book: the plant's parameters with the core's own at
     ``cycle``, the fraction of its cycle burnt (observation 13). The same straight
@@ -149,9 +165,10 @@ class ReferenceParams:
     and the fuel's burnup (:func:`xenon_rate`, with :func:`xenon_play`). The
     turbine loads at the rate the boron line carries.
 
-    Two numbers come from the recipe's bump tests (scripts/reactor_ladder.py): the
-    rods' loop on the offset, and the boron line's dead time to Tavg. The rest is
-    the curve book's and the plant record's. Nothing here was set from a cost.
+    The recipe (scripts/reactor_ladder.py) gives the rods' loop on the offset and
+    the boron line's dead time to Tavg (bump tests), the curve book (physics tests
+    at power) and the turbine's thresholds (a rule on the measured load wobble).
+    The rest is the plant record's. Nothing here was set from a cost.
     """
 
     dt: float = 30.0
@@ -162,9 +179,10 @@ class ReferenceParams:
     # Bump tests: boron to Tavg is an integrator with this dead time, the line's
     # 5 to 15 min and the plant's lag. SIMC with tc = theta gives the boron loop
     # ``Kc = 1 / (k 2 theta)`` and ``Ti = 8 theta``, ``k`` the curve book's K of
-    # Tavg per ppm. The recipe reads 600 s on this plant (2026-11-23); the 615 s
-    # carried until then was the previous plant's.
-    theta: float = 600.0  # s
+    # Tavg per ppm. The recipe reads 660 s on this plant: its line's 600 s and a
+    # minute of the plant's own lag (2026-11-25; 600 s while the line's delay was
+    # drawn at every reset, 615 s on the plant before that).
+    theta: float = 660.0  # s
     ao_ref: float = 0.0
     # The rods' action band: no error while the flux difference is within half its
     # 5 % target band (owner, 2026-11-08; PHYSICS.md section 6).
@@ -174,21 +192,40 @@ class ReferenceParams:
     # edge of its free band, since a Tavg that close predicts a charge. The Tavg
     # loop itself acts only past the edge, on what is charged (owner, 2026-11-10).
     backoff: float = 2.0
-    lead: float = 20.0 * 30.0  # s, the middle of the line's 10 to 30 steps
-    # The tool's play pulls each edge in by what xenon moves Tavg before boron sent
-    # now reaches the core: the line's longest delay, since an edge is a limit.
-    longest: float = 30.0 * 30.0  # s
-    # The turbine reloads after a trip's restart when its load reads this far under
-    # the plan (owner, 2026-11-12): ours, 10 times the frequency wobble's 0.5 % sd.
-    reload_band: float = 0.05
-    # A restart shows as the load falling faster than any plan or turbine moves it,
-    # 2.5 % a step: ours, between that and the 35 % a restart from the day's lowest
-    # plan drops.
-    restart_drop: float = 0.04
-    # The turbine counts as back on its plan within the wobble's two sd: ours.
-    on_plan: float = 0.01
+    # The turbine's thresholds, by the rule the recipe fixed before its run (owner,
+    # 2026-11-25; scripts/reactor_ladder.py, ``ON_PLAN_SD``): in standard
+    # deviations of the load read off its plan on a calm day, measured at 0.005025.
+    # Back on its plan within two; reloading after a trip's restart past ten; a
+    # restart a fall of the turbine's fastest step, 2.5 %, plus three.
+    reload_band: float = 0.05024742800742388
+    restart_drop: float = 0.040074228402227165
+    on_plan: float = 0.010049485601484776
+    # The curve book, measured by the recipe's physics tests at power at the two
+    # ends of the load-following range (owner, 2026-11-25): a dilution bump for K
+    # of Tavg per ppm, a calibrated rod bump for the feedback, the fuel's Doppler
+    # coefficient from the core's design. Straight lines in the cycle between them.
+    book_alpha_coolant: float = -0.00011903199166229578
+    book_alpha_coolant_end: float = -0.0005510221281865029
+    book_boron_worth: float = -7.992096652742475e-05
+    book_boron_worth_end: float = -0.00010381128231529146
+    book_cycle_end: float = 0.9
     park: float = 1.0 - 2.0 * 3.0 / 228.0
     reach: float = 30.0 * 72.0 / 60.0 / 228.0 * 2.0
+
+    @property
+    def lead(self) -> float:
+        """The plan's boron is sent this far ahead: the line's dead time, as the
+        recipe measured it on the member (owner, 2026-11-25; until then a fixed
+        600 s, the middle of a delay drawn each day)."""
+        return self.theta
+
+    @property
+    def longest(self) -> float:
+        """The tool's play pulls each edge in by what xenon moves Tavg before boron
+        sent now reaches the core: the member's own dead time, known now that the
+        line's delay is the plant's (until 2026-11-25 the longest of the drawn
+        delays, 900 s, since an edge is a limit)."""
+        return self.theta
 
 
 @struct.dataclass
@@ -355,6 +392,7 @@ def reference_step(params, state, obs, xp=jnp, book=None):
     from target_gym.reactor.env import ReactorParams, rod_insertion_limit
 
     p, book = params, ReactorParams() if book is None else book
+    book = measured(book, p)
     cycle = obs[..., 13]
     plant = curve_book(cycle, book, xp)
     n, rod, load, T_avg, T_ref = (obs[..., k] for k in (0, 2, 3, 4, 5))
@@ -464,7 +502,10 @@ def reference_step(params, state, obs, xp=jnp, book=None):
     Kc = 1.0 / (tavg_per_ppm(plant) * 2.0 * p.theta)  # ppm/s per K, negative
     Ti = 8.0 * p.theta
     trim = state.trim + Kc * ((e - state.last_e) + p.dt / Ti * e)
-    trim = xp.clip(trim, -dilute, borate)
+    # Back inside the band the loop lets go: its output held there kept borating or
+    # diluting a Tavg nothing charges, which carried it to the band's far edge
+    # (package review, 2026-11-25). The tool below takes over inside the band.
+    trim = xp.where(e == 0.0, 0.0, xp.clip(trim, -dilute, borate))
     # The operator's tool keeps the boron that xenon and the fuel's burnup ask for
     # as a debt, the Tavg it would leave off its program, and moves it only once
     # that Tavg nears the band's edge (the play, with the back-off). Burnup is
@@ -497,11 +538,23 @@ def make_reactor_pid_controller(plant=None, **tuned) -> Controller:
     book, as a :class:`~target_gym.experts.pid.Controller`. :func:`rod_control_step`,
     the published rod program, is a row in the ladder's table beside it.
 
-    ``plant`` is the family member whose curve book the operator reads, and
-    ``tuned`` that member's bump-test numbers (``wd_Kc``, ``wd_Ti``, ``theta``), as
-    the family sweep reads them on each draw. With neither it is the shipped
-    expert, on the shipped member."""
+    ``plant`` is the family member the operator runs, and ``tuned`` that member's
+    recipe numbers (``wd_Kc``, ``wd_Ti``, ``theta``, the measured curve book and
+    the turbine's thresholds, ``scripts/reactor_ladder.py``), as the family sweep
+    reads them on each draw. A member given without its curve book reads its
+    design's. With neither it is the shipped expert, on the shipped member."""
     step = reference_step
     if plant is not None:
         step = functools.partial(reference_step, book=plant)
+        if "book_alpha_coolant" not in tuned:
+            c = ReferenceParams().book_cycle_end
+            tuned = {
+                "book_alpha_coolant": plant.alpha_coolant,
+                "book_alpha_coolant_end": plant.alpha_coolant
+                + (plant.alpha_coolant_end - plant.alpha_coolant) * c,
+                "book_boron_worth": plant.boron_worth,
+                "book_boron_worth_end": plant.boron_worth
+                + (plant.boron_worth_end - plant.boron_worth) * c,
+                **tuned,
+            }
     return Controller(ReferenceParams(**tuned), ReferenceState(), step)

@@ -1000,7 +1000,7 @@ KNOWN_DISCARDED_UNPACKS = {
     ("plane3d/dynamics.py", "_, _, z, theta, phi = positions"),
     ("plane3d/env.py", "_, _, z, theta, phi = positions"),
     ("energy/wind_turbine/oracle.py", "_, v_mean, v_turb, now, gust_t0, _ = task"),
-    ("compressor_surge/oracle.py", "_, demand, clock, drift, ramp = task"),
+    ("compressor_surge/oracle.py", "_, demand, clock, drift, ramp, shift = task"),
     ("reactor/env.py", "T_f, T_h, T_c, _, _, Xe = slow"),
 }
 
@@ -1236,6 +1236,12 @@ KNOWN_SEAMS = {
     "battery": "state-of-charge-dependent power limit binding near soc 0.115",
     "reactor": "fuel-temperature feedback near 718 K",
     "glass_furnace": "advance_blanket: mass floored at 0 -- the blanket running out",
+    # Not a seam: established operation sits on the map's 10 % control line,
+    # where the machine's fade to its own surge line ends (``on_the_map``), so
+    # d m_c / d line_shift there is float32 noise of about 1e-8 either side,
+    # which the jump ratio reads as 1.0 (2026-11-24 diagnosis).
+    "compressor_surge": "line_shift -> m_c at the established point, the end of "
+    "the map's fade: float32 noise, not a join",
 }
 SEAM_LIMIT = 0.5
 

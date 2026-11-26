@@ -111,7 +111,11 @@ _BURN = _SIGMA_X * _PHI_FULL * math.pi / 4.0  # 1/s, cosine flux on cosine xenon
 @struct.dataclass
 class ReactorParams(EnvParams):
     # ---- Kinetics ----
-    Lambda_gen: float = 1e-4  # s — effective mean neutron generation time
+    # The mean neutron generation time: ours, a thermal reactor's order. A PWR's
+    # is reported in tens of microseconds (Nuclear Technology, NT13-120), so this
+    # is a few times longer. The prompt jump it sets (Lambda / beta, about 15 ms)
+    # settles inside one 5 s sub-step either way.
+    Lambda_gen: float = 1e-4  # s
 
     # Thermal feedback coefficients (1/K). Both negative (stabilising).
     alpha_fuel: float = -3.0e-5  # Doppler (prompt, on fuel temperature)
@@ -146,8 +150,12 @@ class ReactorParams(EnvParams):
     boration_flow: float = 3.0  # kg/s, OAPS section 2.1
     boric_acid_ppm: float = 7800.0  # ppm, ours: a recycling unit's concentrate
     primary_mass: float = 2.5e5  # kg, ours, the same water as C_coolant + C_cold
-    # 5 to 15 min, OAPS section 2.1, in 30 s control steps, drawn at reset.
-    boron_delay_range: Tuple[int, int] = (10, 30)
+    #: Control steps from the boron command to the core. The line's 5 to 15 min
+    #: (OAPS section 2.1) are set by the plant's piping and the flow its operator
+    #: runs, so the delay is the family member's, the same every day; the family
+    #: sweep draws it per member (ours.json). The shipped member sits in the middle
+    #: (owner, 2026-11-25; until then it was drawn at every reset).
+    boron_delay: int = 20
 
     # ---- The core's point in its fuel cycle (owner, 2026-11-15) ----
     #: Where a day's core sits, as the fraction of its cycle burnt, drawn evenly at
@@ -257,10 +265,6 @@ class ReactorParams(EnvParams):
 
     # ---- Reward shaping ----
     rod_motion_weight: float = 0.02
-    # Error scale for the MPC's tracking term, not read by ``compute_reward``.
-    # See "Why the MPC does not minimise the reward" in docs/baselines.md. The reward
-    # has not been a Gaussian for some time; this is the planner's scale.
-    reward_band: float = 0.03  # relative flux (3% = tight)
 
     # ---- Load: a daily 100-50-100, plus a small frequency-control wobble ----
     # Ramps at 2 %/min, the top of OAPS's 1 to 2 %/min for Mode A early in a
@@ -278,11 +282,10 @@ class ReactorParams(EnvParams):
     demand_theta: float = 1.0 / 300.0
     demand_sigma: float = 4.08e-4
 
-    # ---- Revenue model (visualisation only — not in reward) ----
-    # 1 GWe plant at spot price. Imbalance penalty = factor × spot.
+    # ---- The plant's output and its price ----
+    # 1 GWe at spot, the prices the cost's terms are read in.
     P_electric_GW: float = 1.0
     spot_price_per_MWh: float = 80.0
-    imbalance_factor: float = 3.0
 
     # ---- Initial state ----
     #: Recent power level the xenon inventory is in equilibrium with at reset:
@@ -375,18 +378,31 @@ class ReactorParams(EnvParams):
     ao_limit_low: float = 0.31
     ao_limit_allowed: float = 1800.0  # s
     # The rod insertion limit, the family's shape: a straight line in power, 22 %
-    # of the stroke in at full power to 78 % at half (KAIST's lead), 2 h to restore
-    # (STS 3.1.6), then hot standby.
+    # of the stroke in at full power to 78 % at half (KAIST's lead). The rods are the
+    # lead bank, so STS LCO 3.1.6 Condition B applies (NUREG-1431 Rev. 5.0,
+    # ML21259A155, pages 3.1.6-1 and 3.1.6-2): 2 h to restore (``ril_restore``),
+    # then Condition D, MODE 2 with keff < 1.0 within 6 h: the turbine unloads along
+    # a straight line to no load, and the plant goes to hot standby at
+    # ``ril_allowed`` (owner, 2026-11-25; hot standby at 2 h until then).
     ril_full: float = 0.22
     ril_half: float = 0.78
-    ril_allowed: float = 7200.0  # s
-    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1: at or below the COLR's
-    # value, restored within 2 h, else MODE 2 within 6 h (hot standby here).
+    ril_restore: float = 7200.0  # s, Condition B
+    ril_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition D's end
+    # Tavg's upper limit, the DNB parameter of STS LCO 3.4.1 (NUREG-1431 Rev. 5.0):
+    # at or below the COLR's value, restored within 2 h (Condition A), else MODE 2
+    # within 6 h (Condition B), and a parameter restored before then ends the
+    # required action (LCO 3.0.2). The plant flies Condition B: past ``dnb_restore``
+    # its turbine unloads along a straight line to MODE 2's ``mode_2_load`` (Table
+    # 1.1-1: at most 5 % of rated power) at ``dnb_allowed``, where it goes to hot
+    # standby (owner, 2026-11-25, from the document, ML21259A155, page 3.4.1-1; it
+    # went to hot standby at 2 h until then).
     # Braidwood's COLR: nominal Tavg at rated power 588.0 F, limit 593.1 F, so 5.1 F
     # above the full-power program at every power (from a search summary; nrc.gov
     # blocks automated reads). The only plant found with both numbers.
     dnb_margin: float = 5.1 / 1.8  # K above the full-power program
-    dnb_allowed: float = 7200.0  # s
+    dnb_restore: float = 7200.0  # s, Condition A
+    dnb_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition B's end
+    mode_2_load: float = 0.05
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
     # MJ/kg, 0.628 kWh, at $100/MWh, ours.
     effluent_price: float = 0.0628  # $/kg
@@ -446,6 +462,7 @@ PARAM_UNITS = {
     "boration_flow": "kg/s",
     "boric_acid_ppm": "ppm",
     "primary_mass": "kg",
+    "boron_delay": "30 s steps",
     "sigma_x": "cm^2",
     "D_diffusion": "cm",
     "alpha_power": "cm^2 s",
@@ -470,9 +487,12 @@ PARAM_UNITS = {
     "derate_price_per_MWh": "$/MWh",
     "ril_full": "",
     "ril_half": "",
+    "ril_restore": "s",
     "ril_allowed": "s",
     "dnb_margin": "K",
+    "dnb_restore": "s",
     "dnb_allowed": "s",
+    "mode_2_load": "-",
     "effluent_price": "$/kg",
     "P_thermal_ref": "W",
     "C_fuel": "J/K",
@@ -495,7 +515,6 @@ PARAM_UNITS = {
     "T_coolant_max": "K",
     "T_avg_min": "K",
     "rod_motion_weight": "-",
-    "reward_band": "-",
     "load_min": "-",
     "load_ramp_rate": "1/s",
     "demand_theta": "1/s",
@@ -506,7 +525,6 @@ PARAM_UNITS = {
     "demand_sigma": "1/s^0.5",
     "P_electric_GW": "GW",
     "spot_price_per_MWh": "$/MWh",
-    "imbalance_factor": "-",
     "reward_version": "-",
     "e_floor": "K",
     "e_tol": "K",
@@ -564,6 +582,9 @@ class ReactorState(EnvState):
     Xe_tilt: float = 0.0  # Xe-135, top half against the mean
     rod_in: float = 3.0 / 228.0  # how far in the rods are, a fraction of the stroke
     boron: float = 1690.0  # ppm in the core
+    #: What rounding has given ``boron`` beyond the exact sum of its changes, ppm:
+    #: taken off the next change, so a trickle is not lost or doubled.
+    boron_carry: float = 0.0
     delta_I: float = 0.0  # power difference, top minus bottom, a fraction of rated
     #: Boron flow commands on their way to the core, newest first.
     boron_queue: jax.Array = struct.field(
@@ -1123,8 +1144,13 @@ def compute_next_state(
         arriving < 0, -arriving * p.dilution_flow, arriving * p.boration_flow
     )
     feed = jnp.where(arriving < 0, 0.0, p.boric_acid_ppm)
-    closes = 1.0 - jnp.exp(-flow / p.primary_mass * p.delta_t)
-    boron = state.boron + (feed - state.boron) * closes
+    closes = -jnp.expm1(-flow / p.primary_mass * p.delta_t)
+    # A trickle changes the boron by less over a sub-step than a single-precision
+    # number near 1690 ppm can hold (1.2e-4 ppm), so the sum carries its rounding
+    # (Kahan): without it 72 kg of water diluted as 130 kg and 36 kg as none.
+    change = (feed - state.boron) * closes - state.boron_carry
+    boron = state.boron + change
+    boron_carry = (boron - state.boron) - change
 
     # Critical boron where the core stood at reset or its last refuelling, and the
     # burnup since, as the boron it is worth (D9).
@@ -1217,6 +1243,20 @@ def compute_next_state(
     rate = jnp.clip(action[2] * p.turbine_rate, -p.turbine_rate, most)
     pickup = jnp.maximum(held + rate * p.delta_t, jnp.minimum(held, p.restart_load))
     pickup = jnp.minimum(pickup, turbine_capacity(state.T_sg, p))
+
+    # LCO 3.4.1 Condition B: past its 2 h to restore Tavg the unit shuts down to
+    # MODE 2 within 6 h, along a straight line (``ReactorParams.dnb_restore``);
+    # LCO 3.1.6 Condition D likewise past the rods' 2 h, to no load (keff < 1).
+    def shutdown(clock, restore, allowed, floor):
+        into = (clock - restore) / (allowed - restore)
+        return into > 0.0, 1.0 - (1.0 - floor) * jnp.clip(into, 0.0, 1.0)
+
+    dnb_on, dnb = shutdown(state.above_dnb, p.dnb_restore, p.dnb_allowed, p.mode_2_load)
+    ril_on, ril = shutdown(state.ril_outside, p.ril_restore, p.ril_allowed, 0.0)
+    line = jnp.minimum(jnp.where(dnb_on, dnb, 1e9), jnp.where(ril_on, ril, 1e9))
+    pickup = jnp.where(
+        dnb_on | ril_on, jnp.minimum(jnp.minimum(day, pickup), line), pickup
+    )
     meets = pickup >= day - ON_PLAN
     pickup = jnp.where(meets, NOT_RELOADING, pickup)
     conditioning = jnp.where(meets, 0.0, state.conditioning)
@@ -1245,6 +1285,7 @@ def compute_next_state(
             Xe_tilt=Xe_tilt,
             delta_I=delta_I,
             boron=boron,
+            boron_carry=boron_carry,
             target_n=new_load,
             T_ref=tavg_program(new_load, p),
             load_wobble=wobble,
@@ -1410,7 +1451,7 @@ def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):
     error is worth the same increment, from the plant's operating envelope down
     to ``precision_floor``, the finest error an ex-core detector can resolve.
 
-    This replaced a Gaussian on ``reward_band``, which was effectively zero --
+    This replaced a Gaussian on a 3 % flux band, which was effectively zero --
     no gradient at all -- beyond about 10% error, and which stopped
     discriminating just where a good controller operates. See
     docs/reward-shaping.md.
@@ -1452,27 +1493,3 @@ def compute_reward(state: ReactorState, params: ReactorParams, xp=jnp):
         R.total(compute_reward_terms(state, params, xp), xp),
         xp,
     )
-
-
-def compute_revenue_rate(state: ReactorState, params: ReactorParams):
-    """
-    Instantaneous revenue rate in k$/hour (for visualisation only).
-
-    revenue  = delivered_power × spot_price
-    penalty  = |deviation| × imbalance_price
-    net_rate = revenue - penalty
-
-    At perfect tracking with n=target=1.0 and 1 GWe @ $80/MWh:
-    revenue = $80k/h.  A 5% error costs an extra $12k/h in imbalance fees.
-    """
-    P_MW = params.P_electric_GW * 1000.0 * state.n
-    revenue = P_MW * params.spot_price_per_MWh  # $/h
-    imbalance_price = params.spot_price_per_MWh * params.imbalance_factor
-    penalty = (
-        jnp.abs(state.n - state.target_n)
-        * params.P_electric_GW
-        * 1000.0
-        * imbalance_price
-    )
-    net = revenue - penalty
-    return net / 1000.0  # k$/h

@@ -55,6 +55,7 @@ import jax
 import numpy as np
 
 from target_gym import records
+from target_gym.charter import FLAGSHIP
 from target_gym.provenance import expert_fingerprint, oracle_fingerprint
 from target_gym.registry import REGISTRY
 from target_gym.runners.runners import (
@@ -397,6 +398,9 @@ WORKER_GB = {
     "plane": 8.5,
     "plane_sine": 8.5,
     "plane_energy": 8.5,
+    # The shared-solver column: 14.5 to 16.1 GB per episode, measured on
+    # Linux (2026-11-17).
+    "distillation": 16.5,
 }
 DEFAULT_WORKER_GB = 2.0
 
@@ -511,9 +515,15 @@ def _run_pids(names: list[str], write: bool) -> int:
     return 1 if moved and not write else 0
 
 
+def default_envs() -> list[str]:
+    """What a run without ``--envs`` records: the scored suite's tasks with
+    both controllers. A task outside the suite is recorded only when named."""
+    return [n for n in FLAGSHIP if REGISTRY[n].has_pid and REGISTRY[n].has_mpc]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--envs", nargs="*", default=None, help="default: all with an MPC")
+    ap.add_argument("--envs", nargs="*", default=None, help="default: the scored suite")
     only = ap.add_mutually_exclusive_group()
     only.add_argument(
         "--pid-only",
@@ -527,9 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    names = args.envs or [
-        n for n, s in REGISTRY.items() if s.has_pid and s.make_mpc is not None
-    ]
+    names = args.envs or default_envs()
     if args.pid_only or args.part == "expert":
         return _run_pids(names, write=args.part == "expert")
     with_pid = args.part is None

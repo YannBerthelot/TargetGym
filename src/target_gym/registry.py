@@ -168,6 +168,11 @@ class EnvSpec:
         Zero-argument callable returning the task's scenario suite
         (``target_gym.scenarios``), kept in the task's own package so the
         fingerprints cover it. ``None`` is one ``normal`` scenario.
+    evaluation:
+        Zero-argument callable returning what an evaluation reads of the
+        task's episodes (``evaluation.Evaluation``: the scored window and the
+        seed rule), kept in the task's own package like ``scenarios``.
+        ``None`` scores every step on the ladder's seeds.
     extra:
         The reason a task is in Extra (charter rule 5): kept in the
         repository and listed with this reason, never scored. ``None`` is a
@@ -213,6 +218,9 @@ class EnvSpec:
     #: a planner uses for its internal model. See ``experts.mpc.plan_params``.
     noise_fields: tuple[str, ...] = ()
     scenarios: Callable[[], tuple] | None = None
+    #: What an evaluation reads (``evaluation.Evaluation``): the scored window and
+    #: the seed rule. None scores every step on the ladder's seeds.
+    evaluation: Callable[[], Any] | None = None
     extra: str | None = None
     disturbance_overrides: dict[str, Any] = field(default_factory=dict)
     fingerprint_sources: tuple[str, ...] = ()
@@ -439,6 +447,13 @@ def _hvac_scenarios():
     from target_gym.scenarios import Scenario
 
     return tuple(Scenario(**row) for row in hvac_scenarios())
+
+
+def _hvac_evaluation():
+    from target_gym.evaluation import Evaluation
+    from target_gym.hvac.scenarios import hvac_evaluation
+
+    return Evaluation(**hvac_evaluation())
 
 
 def _hvac():
@@ -713,6 +728,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="plane3d_circle",
+        extra=(
+            "no airliner duty and solved (2026-11-24, owner's decision, "
+            "aircraft five-task review): no source makes a constant-radius orbit "
+            "a transport duty, 87 % of the reference's cost is its wings-level "
+            "start, and after it the reference holds 0.8 m of height and 0.6 m "
+            "of path (plane3d/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_plane3d_circle,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
@@ -787,6 +809,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="plane3d_figure8",
+        extra=(
+            "no airliner duty and solved (2026-11-24, owner's decision, "
+            "aircraft five-task review): no transport duty and no sourced "
+            "manoeuvre stand behind the pattern, 84 % of the reference's cost "
+            "is its wings-level start, and after it the reference is 1 m from "
+            "the curve (plane3d/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_plane3d_figure8,
         params_cls=_LazyParams("target_gym.plane3d.env", "PlaneParams3D"),
@@ -818,6 +847,13 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="patrol",
+        extra=(
+            "solved (2026-11-24, owner's decision, aircraft five-task review): "
+            "after its start the reference already holds its slot to 4.0 m RMS, "
+            "inside NASA AFF's 10 ft, so a score from that source leaves it near "
+            "0; 63 % of its cost is the start, and its oracle loses to it "
+            "(patrol/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_patrol,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
@@ -852,6 +888,12 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="patrol_range_bearing",
+        extra=(
+            "solved with patrol (2026-11-24, owner's decision, aircraft "
+            "five-task review): patrol's job seen through a range and bearing, "
+            "a third of whose cost is one unsourced azimuth figure "
+            "(patrol/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_patrol_range_bearing,
         params_cls=_LazyParams("target_gym.patrol.env", "PatrolParams"),
@@ -909,9 +951,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_pid=_pid(
             "make_cstr_pid_controller", module="target_gym.pc_gym.cstr.experts"
         ),
-        make_mpc=_mpc("make_cstr_mpc", module="target_gym.pc_gym.cstr.oracle"),
+        make_mpc=None,
+        baselines_note=(
+            "Version 8 (the reactor run for what it makes, owner's decision of "
+            "2026-11-24) ships no oracle: its planner model is not written for "
+            "two moves and the production score, and the owner decided the same "
+            "day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's "
+            "(cstr/oracle.py)."
+        ),
         tuned_gains_key="cstr",
-        oracle_data=_shared_oracle("cstr"),
         # v5 (charter Amendment 3): a PARSEX-like jacketed reactor with the
         # jacket in code, cooling water as the move, a high-temperature
         # interlock, temperature as the job, scenarios.
@@ -920,7 +968,11 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 40 % as a 90 min decay, not a step [S1, p. 6]; the feed follows the
         # room through the day across S1's 23.1 to 24.9 C [S1, Tables 3, 4].
         # v7: re-record pass, 2026-11-12: long strata (#173), stream fixes.
-        version=7,
+        # v8 (owner, 2026-11-24): run for what it makes. The feed is a second
+        # move [S1, Table 1; S13], the score is lost nameplate production with
+        # product off-spec outside 1 K of the setpoint, windows start with the
+        # water valve at 95 % [S13], and a setpoint move is a one-hour ramp.
+        version=8,
         scenarios=_scenarios(
             "cstr_scenarios", module="target_gym.pc_gym.cstr.scenarios"
         ),
@@ -1028,6 +1080,7 @@ _SPECS: tuple[EnvSpec, ...] = (
         make_mpc=_mpc(
             "make_distillation_mpc", module="target_gym.pc_gym.distillation.oracle"
         ),
+        oracle_data=_shared_oracle("distillation"),
         # 400 min ~ two dominant time constants, the length the episode rule asks
         # of the analyser-fed expert. The column is the slowest environment per
         # step (80 states, 16 substeps for stability).
@@ -1123,10 +1176,15 @@ _SPECS: tuple[EnvSpec, ...] = (
         # priced as lost office work, a day-ahead forecast in the observation,
         # and a scenario suite.
         scenarios=_hvac_scenarios,
+        evaluation=_hvac_evaluation,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         # Re-stamped in place on 2026-11-23 (v6 is in no release): the heat
         # source's size, 38 W/m^2 [13], and a reset that meets the band when
-        # the office opens (hvac review; owner's decision).
+        # the office opens (hvac review; owner's decision). Re-stamped in place
+        # again on 2026-11-24 (the evaluation cut, owner's decision): twelve-day
+        # episodes scored on days 4 to 10, three scenarios with the low-gains
+        # and sunny weeks folded into normal and the shoulder season, lines on
+        # five seeds and five more where the saving is unclear.
         version=6,
     ),
     EnvSpec(
@@ -1178,6 +1236,14 @@ _SPECS: tuple[EnvSpec, ...] = (
         scenarios=_boiler_drum_scenarios,
         # v6: re-record pass, 2026-11-12: long strata (#173), stream fixes.
         version=6,
+        extra=(
+            "solved as scored (charter J5, owner's decision of 2026-11-24): the "
+            "classical reference costs nothing on normal and low-load days and "
+            "never trips, the room that remains is worth GBP 90 to 170 a year on "
+            "this unit, and the two redesigns tried, a fuel and air loop and the "
+            "turbine valve as a third move, were measured and dropped "
+            "(boiler_drum/PHYSICS.md, Status)"
+        ),
     ),
     EnvSpec(
         name="wind_turbine",
@@ -1296,6 +1362,17 @@ _SPECS: tuple[EnvSpec, ...] = (
         # 20-second demand blocks, with no effectiveness_overrides.
         tuned_gains_key="compressor_surge",
         oracle_data=_shared_oracle("compressor_surge"),
+        # Owner, 2026-11-25: shipped as a documented finding until a later update.
+        baselines_note=(
+            "The shipped expert fails its own stability check. It is a PI pair "
+            "(speed holds the pressure, the recycle valve holds the surge margin) "
+            "with a backup line and rate action, tuned by its recipe. With the "
+            "valve's 0.15 s dead time the two loops together grow instead of "
+            "settling, so the valve swings open and shut in a limit cycle. It "
+            "keeps its surge margin and does not trip the plant, but it spends "
+            "recycle energy a settled controller would not: read it as a weak "
+            "expert, not a tuned one (compressor_surge/PHYSICS.md, section 7)."
+        ),
         # The OU deviation of the consumers' opening, zero-mean;
         # demand_sigma is its stationary sd.
         disturbance_fields=("demand_dev",),
@@ -1312,6 +1389,11 @@ _SPECS: tuple[EnvSpec, ...] = (
     ),
     EnvSpec(
         name="formation",
+        extra=(
+            "one policy flies three aircraft (2026-11-24, owner's decision, "
+            "aircraft five-task review): several agents, outside the "
+            "charter's one plant, one agent (formation/PHYSICS.md, Status)"
+        ),
         group="aircraft",
         env_factory=_formation,
         params_cls=_LazyParams("target_gym.formation.env", "FormationParams"),

@@ -119,6 +119,9 @@ WIDTH = 0.1
 #: others, and no time counted. A plan from given knots bounds the best cost
 #: from above.
 DISCOVERY_ROOM = 6.0
+#: What the rods' travel costs in a cold solve's second start, as a multiple of
+#: its price: enough that the plan it finds leaves them parked (``_attempt``).
+DEAR_RODS = 100.0
 #: In percent of rated delta I, so the offset's rows are of order one.
 PERCENT = 100.0
 
@@ -147,7 +150,7 @@ def stage_model(env, p, stages: int) -> StageModel:
         flows = u[DILUTE] * p.dilution_flow + u[BORATE] * p.boration_flow
         cost = (
             per_load * seconds * 0.5 * (x[M.SHORT] + x1[M.SHORT])
-            + rod_price * (u[ROD_IN] + u[ROD_OUT])
+            + rod_price * d.get("rods", 1.0) * (u[ROD_IN] + u[ROD_OUT])
             + flow_price * M.planned_flows(d["day"], k) * flows
             + per_K * seconds * M.noisy_excess(error, p.e_tol, spread)
         )
@@ -470,12 +473,12 @@ class DayOracle:
             if cold:
                 self._discover(st, wobble, t, active)
             day = self._day(st, wobble, self._free(t, x0))
-            d = {"day": day, "room": room, "sigma": sigma}
+            d = {"day": day, "room": room, "sigma": sigma, "rods": jnp.asarray(1.0)}
             # The free knots are already counted: this plan carries no clock.
             x0 = x0.at[M.CLOCK].set(0.0)
             self._at = (x0, self._at[1])
             plan = self._attempt(d, active, cold)
-            self.certificates[-1].update(gap, applies=True)
+            self.certificates[self._applied].update(gap, applies=True)
             self._plan = plan
             moves = self.shooting.moves(plan)
             states, rows = self._roll(d["day"], x0, moves)
@@ -510,6 +513,7 @@ class DayOracle:
             "day": self._day(st, wobble),
             "room": jnp.asarray(max(self.room, DISCOVERY_ROOM + TAVG_BACKOFF)),
             "sigma": jnp.asarray(self.sigma),
+            "rods": jnp.asarray(1.0),
         }
         plan = self._segments(d, active, COLD_SEGMENTS)
         _, rows = self._roll(d["day"], self._at[0], self.shooting.moves(plan))
@@ -531,14 +535,41 @@ class DayOracle:
 
     def _attempt(self, d, active: int, cold: bool):
         """One solve, its last plan: warm from the plan being followed, a knot
-        on, or cold from the first guess."""
+        on, or cold, the cheaper of two plans.
+
+        A cold solve has two plans to find. The rods' worth grows with their
+        insertion, so a plan that holds them deep sees no gain in drawing them
+        out a little, and one that leaves them parked none in a first step in.
+        From the first guess the solver ended in the rods' plan on baseload days
+        whose xenon dips, $13 dearer in its own model than boron alone (review
+        of 2026-11-23). So the cold solve also takes the other road: the plan
+        with the rods' travel ``DEAR_RODS`` times dearer, then the task's own
+        problem solved from it. Both are plans of the task's problem at its own
+        prices, and the cheaper one is kept."""
         if cold:
-            return self._segments(d, active, COLD_SEGMENTS)
+            found = [(self._segments(d, active, COLD_SEGMENTS), self._last())]
+            dear = {**d, "rods": jnp.asarray(DEAR_RODS)}
+            parked = self._segments(dear, active, COLD_SEGMENTS)
+            if not bool(parked.certificate.failed):
+                plan = self._segments(d, active, COLD_SEGMENTS, parked)
+                if plan is not parked:  # the solve from it did not fail at once
+                    found.append((plan, self._last()))
+            plan, self._applied = min(
+                found,
+                key=lambda f: (bool(f[0].certificate.failed), float(f[0].cost)),
+            )
+            return plan
         last = self._plan
         for _ in range(self.replan - 1):  # the solve shifts it once more
             z, lam, w = self.shooting.shift(last)
             last = last._replace(z=z, lam=lam, w=w)
-        return self._segments(d, active, WARM_SEGMENTS, last, shift=True)
+        plan = self._segments(d, active, WARM_SEGMENTS, last, shift=True)
+        self._applied = self._last()
+        return plan
+
+    def _last(self) -> int:
+        """Where the latest solve's certificate is kept."""
+        return len(self.certificates) - 1
 
     def _segments(self, d, active: int, most: int, plan=None, shift=False):
         """Up to ``most`` segments of the solver on ``d``, each from the plan the

@@ -508,7 +508,7 @@
   {
     "name": "cstr",
     "group": "process",
-    "version": 7,
+    "version": 8,
     "display_name": "CSTR",
     "params_cls": [
       "target_gym.pc_gym.cstr.env",
@@ -524,15 +524,11 @@
       "target_gym.pc_gym.cstr.experts",
       "make_cstr_pid_controller"
     ],
-    "make_mpc": [
-      "_mpc.<locals>.make",
-      "target_gym.pc_gym.cstr.oracle",
-      "make_cstr_mpc"
-    ],
+    "make_mpc": null,
     "scored_overrides": {},
     "tuned_gains_key": "cstr",
     "gains_keys": [],
-    "baselines_note": null,
+    "baselines_note": "Version 8 (the reactor run for what it makes, owner's decision of 2026-11-24) ships no oracle: its planner model is not written for two moves and the production score, and the owner decided the same day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's (cstr/oracle.py).",
     "disturbance_fields": [],
     "disturbance_overrides": {},
     "effectiveness_overrides": {},
