@@ -47,14 +47,21 @@ class HVACParams(EnvParams):
     # ---- Zone geometry (ISO 13790 simple hourly method) ----
     A_floor: float = 150.0  # m^2 conditioned floor area
     lambda_at: float = 4.5  # A_tot / A_floor (standard value)
-    f_class: float = 2.5  # A_m / A_floor, "medium" construction class
-    cm_per_area: float = 165_000.0  # J/(K.m^2), "medium" class
+    # The TABS slab is a node of its own (below), so the 5R1C mass is what is
+    # left beside it: ISO 13790's "light" class, whose figure does not count
+    # massive floors, not the "medium" class (165 kJ), which does (owner,
+    # 2026-11-25, review finding 5).
+    f_class: float = 2.5  # A_m / A_floor, "light" construction class
+    cm_per_area: float = 110_000.0  # J/(K.m^2), "light" class
     h_is: float = 3.45  # W/(m^2.K) air <-> surface film
     h_ms: float = 9.1  # W/(m^2.K) surface <-> mass
 
     # ---- Envelope (U-values x areas) ----
     A_wall: float = 120.0
     U_wall: float = 0.28  # W/(m^2.K), modern insulated wall
+    # A top storey, with its roof: the middle storey (no roof) failed the slab
+    # time constant [10] and the setback recovery [15] reality tests at the
+    # light mass, the roof restores both (owner, 2026-11-26, review finding 5).
     A_roof: float = 150.0
     U_roof: float = 0.18
     A_window: float = 25.0
@@ -149,14 +156,21 @@ class HVACParams(EnvParams):
     # Energy: the heat pump's electricity at a three-period tariff, so night
     # charging of the slab pays, as Madrid charges its floors on the night
     # tariff [14, p. 14]. Comfort: lost office work while occupied, per
-    # kelvin-hour outside the band or of floor above 29 C.
-    reward_version: int = 4
+    # kelvin-hour outside the band or of floor above 29 C. v5 (owner,
+    # 2026-11-25): the reward's terms are v4's, and the heat the mass and the
+    # slab lose across the scored window is charged once by the evaluation, at
+    # the cheapest price heat can be stored at (``stored_value``,
+    # ``evaluation.Evaluation.edge_charge``).
+    reward_version: int = 5
     #: Spanish 2.0TD energy prices, EUR/kWh, one retailer's offer (REALITY.md
     #: [19]): valle 00:00 to 08:00, llano 08:00 to 10:00, 14:00 to 18:00 and
     #: 22:00 to 24:00, punta 10:00 to 14:00 and 18:00 to 22:00.
     price_valle: float = 0.139
     price_llano: float = 0.184
     price_punta: float = 0.263
+    #: The design point the stored heat is priced at: the supply that holds the
+    #: room at 21 C with -10 C outdoors (the curve's design point [12, p. 7]).
+    T_out_design: float = -10.0
     #: Work lost per kelvin outside the band: 2 % per K above 25 C (Seppanen
     #: and Fisk 2005, REALITY.md [20]); performance peaks near 21.7 C and falls
     #: on both sides [20]. Ours below the band, where no per-K figure was read.
@@ -166,12 +180,21 @@ class HVACParams(EnvParams):
     occupants_per_m2: float = 0.10
     #: EU hourly labour cost, 2023 (Eurostat, REALITY.md [21]).
     labour_cost: float = 31.8  # EUR per person-hour
-    #: Euros per occupied kelvin-hour: productivity_per_K x occupants x labour
-    #: cost, 0.02 x 15 x 31.8.
-    comfort_price: float = 0.02 * 0.10 * 150.0 * 31.8  # EUR per K h
     #: No limit trips this plant (``check_is_terminal``), so a trip costs 0.
     restart_steps: int = 0
     failure_cost: float = 0.0
+
+    @property
+    def comfort_price(self):
+        """Euros per occupied kelvin-hour: the work it loses, productivity_per_K x
+        occupants_per_m2 x A_floor x labour_cost (0.02 x 15 x 31.8 = 9.54 for the
+        member), derived so it follows each of the four."""
+        return (
+            self.productivity_per_K
+            * self.occupants_per_m2
+            * self.A_floor
+            * self.labour_cost
+        )
 
 
 #: Units of the HVACParams fields, for the generated environment pages.
@@ -227,6 +250,7 @@ PARAM_UNITS = {
     "price_valle": "EUR/kWh",
     "price_llano": "EUR/kWh",
     "price_punta": "EUR/kWh",
+    "T_out_design": "degC",
     "productivity_per_K": "1/K",
     "occupants_per_m2": "1/m^2",
     "labour_cost": "EUR/h",
@@ -415,8 +439,9 @@ def slab_conductances(params: HVACParams):
     ``H_water``: supply water to core over the covered area, ``1 / R_t`` [9].
     ``H_slab``: core to room through the floor face (half the slab, the
     carpet, the floor's coefficient) and the ceiling face (half the slab, the
-    ceiling's coefficient): the zone is one storey of a stack, so both faces
-    of a TABS slab heat it, as in [9]'s simulated room.
+    ceiling's coefficient): both faces of a TABS slab heat the zone, as in
+    [9]'s simulated mid-floor room, kept on the top storey (owner,
+    2026-11-26, the review's finding 5).
     ``m_c``: the water flow's heat capacity rate.
     """
     p = params
@@ -741,6 +766,40 @@ def steady_state(params: HVACParams, T_out, T_air, phi_int=None, phi_sol=0.0):
     )
     T_s, T_m, T_c, T_sup = jnp.linalg.solve(A, b)
     return T_m, T_c, T_s, T_sup
+
+
+def stored_heat(T_mass, T_core, params: HVACParams):
+    """The heat held in the 5R1C mass and the slab, J above 0 C."""
+    C_m = zone_conductances(params)["C_m"]
+    return C_m * T_mass + slab_conductances(params)["C_slab"] * T_core
+
+
+def stored_heat_price(params: HVACParams):
+    """Euros per J of stored heat: the cheapest the plant can store it at, the
+    valle tariff over the COP of the design supply (the room at 21 C with
+    ``T_out_design`` outdoors). A run of steps charged at it pays nothing for
+    heat bought ahead of it or left for after it (owner, 2026-11-25, the hvac
+    review's finding 1)."""
+    p = params
+    T_design = steady_state(p, p.T_out_design, p.band_low)[3]
+    return p.price_valle / heat_pump_cop(T_design, p) / 3.6e6
+
+
+def stored_value(state, params: HVACParams):
+    """The store's value in euros: its heat above 0 C at ``stored_heat_price``.
+    An evaluation charges what it lost across the scored window (owner,
+    2026-11-25)."""
+    return stored_heat_price(params) * stored_heat(state.T_mass, state.T_core, params)
+
+
+def stored_heat_cost(T_mass, T_core, T_mass_next, T_core_next, params):
+    """The euros a step pays for the heat it draws from the store (negative for
+    heat it puts in), as a sum of the two nodes' changes, so it stays exact in
+    float32 where the store itself would not."""
+    C_m = zone_conductances(params)["C_m"]
+    C_slab = slab_conductances(params)["C_slab"]
+    drawn = C_m * (T_mass - T_mass_next) + C_slab * (T_core - T_core_next)
+    return stored_heat_price(params) * drawn
 
 
 @struct.dataclass

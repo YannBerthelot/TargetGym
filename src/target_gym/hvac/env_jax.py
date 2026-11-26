@@ -34,6 +34,7 @@ from target_gym.hvac.env import (
     solve_air_and_surface,
     split_gains,
     steady_state,
+    stored_value,
 )
 from target_gym.hvac.rendering import _render
 from target_gym.video import SavesVideo
@@ -94,6 +95,9 @@ class BuildingHVAC(
 
     def reward_terms(self, state, params, tripped=None):
         return compute_reward_terms(state, params, tripped=tripped)
+
+    def stored_value(self, state, params):
+        return stored_value(state, params)
 
     def step_env(
         self,

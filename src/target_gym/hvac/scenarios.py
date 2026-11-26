@@ -80,10 +80,13 @@ def hvac_evaluation() -> dict:
     weeks a heating curve is judged over [11, p. 1]. Days 11 and 12 are the
     ceiling's tail: charged in its plan, read by no line, so it cannot spend the
     slab's charge on the last scored night (day 14 held 11 % of the gap). Lines run
-    on five seeds, and five more where the saving interval touches 0."""
+    on five seeds, and five more where the saving interval touches 0. The heat the
+    slab and the mass lost across the scored days is charged once, at the env's
+    ``stored_value`` (owner, 2026-11-25)."""
     return dict(
         unscored_steps=3 * _DAY,
         scored_steps=7 * _DAY,
         seeds=tuple(range(100, 105)),
         extra_seeds=tuple(range(105, 110)),
+        edge_charge="stored_value",
     )

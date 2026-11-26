@@ -10,6 +10,10 @@ cites: ``solar_peak`` is a seasonal mean, not a clear-sky peak.
   24`` = 57.4 kWh, so 22.8 kWh is the heater's, two fifths of the demand.
 - Left off, the zone settles where gains balance losses, ``5 + 1442 / 159.4`` =
   14.0 C on a day's mean, 7 K under the band.
+
+The envelope is a top storey's, 159.4 W/K with its roof, and the 5R1C mass the
+light class beside the slab (owner, 2026-11-25 and 2026-11-26, the review's
+finding 5: the roof restored, the light class kept).
 """
 
 import jax
@@ -45,9 +49,9 @@ STEPS = 34 * STEPS_PER_DAY
 
 
 def test_a_building_left_unheated_settles_at_its_free_running_mean():
-    """The last of 34 days. The slab adds 9e7 J/K to the 2.5e7 J/K of the
-    5R1C mass, so the building's time constant is 1.15e8 / 159.4 = 200 h, and
-    34 days is four of them: 2 % of the 5 K start is left, and the 0.5 % of
+    """The last of 34 days. The slab adds 9e7 J/K to the 1.65e7 J/K of the
+    5R1C mass, so the building's time constant is 1.065e8 / 159.4 = 186 h, and
+    34 days is 4.4 of them: 1 % of the 5 K start is left, and the 0.5 % of
     the gain the standard sends back through the glazing takes 0.05 K. The
     weather is off."""
     params, env = (

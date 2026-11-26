@@ -159,6 +159,59 @@ def test_scenario_costs_read_the_tasks_window():
     np.testing.assert_allclose(out["normal"], [2.0])
 
 
+# Contract (owner, 2026-11-25, the hvac review's P1 as amended): a task whose plant
+# stores what it buys may name, as ``edge_charge``, an episode quantity holding the
+# store's value after each step. An evaluation charges, once, the value the store
+# lost across the scored window (its value after the step before the window less
+# its value after the window's last step), spread over the scored steps like any
+# other cost; the reward itself carries no such charge.
+
+
+def _stored_episode(cost, store):
+    from target_gym.eval import Episode
+
+    n = len(cost)
+    return Episode(
+        cost=np.asarray(cost, float),
+        in_band=np.ones(n, bool),
+        target_change=np.zeros(n, bool),
+        terms={"store": np.asarray(store, float)},
+    )
+
+
+def test_the_edge_charge_prices_what_the_store_lost_across_the_window():
+    spec = evaluating(unscored_steps=2, scored_steps=2, edge_charge="store")
+    # Window: steps 2 and 3, costs 1 and 3, mean 2. Store after step 1 is 10,
+    # after step 3 is 4: it lost 6, spread over 2 steps adds 3.
+    ep = _stored_episode([5, 5, 1, 3, 5], [0, 10, 7, 4, 100])
+    assert evaluation.episode_cost(spec, ep) == pytest.approx(5.0)
+    np.testing.assert_allclose(evaluation.costs({"n": [ep]}, spec)["n"], [5.0])
+
+
+def test_heat_left_in_the_store_is_credited():
+    spec = evaluating(unscored_steps=2, scored_steps=2, edge_charge="store")
+    # Store after step 1 is 4, after step 3 is 10: it gained 6, a credit of 3.
+    ep = _stored_episode([5, 5, 1, 3, 5], [0, 4, 7, 10, 0])
+    assert evaluation.episode_cost(spec, ep) == pytest.approx(-1.0)
+
+
+def test_a_window_from_the_first_step_reads_the_store_before_any_step():
+    spec = evaluating(scored_steps=2, edge_charge="store")
+    with pytest.raises(ValueError):
+        evaluation.episode_cost(spec, _stored_episode([1, 1, 1], [3, 2, 1]))
+
+
+def test_an_edge_charge_with_no_store_recorded_is_an_error():
+    from target_gym.eval import Episode
+
+    spec = evaluating(unscored_steps=1, scored_steps=1, edge_charge="store")
+    bare = Episode(
+        cost=np.ones(3), in_band=np.ones(3, bool), target_change=np.zeros(3, bool)
+    )
+    with pytest.raises(KeyError):
+        evaluation.costs({"n": [bare]}, spec)
+
+
 #: Student's t at 97.5 % with 4 degrees of freedom (tables: 2.7764).
 T4 = 2.7764
 
