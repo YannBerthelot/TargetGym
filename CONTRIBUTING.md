@@ -16,7 +16,7 @@ uv run pre-commit install    # optional: runs the CI checks on each commit
 ## Running the checks
 
 ```bash
-make ci          # everything CI runs: ruff, black --check, docs, small and medium tests
+make ci          # everything CI runs: ruff, ruff format --check, docs, small and medium tests
 make test        # small tests only, in parallel (the same as a plain `pytest`)
 make test-all    # every tier, including the large closed-loop controller checks
 make mypy        # type-check the enforced modules
@@ -65,8 +65,8 @@ GitHub Release with that entry as its notes.
 
 ## Style
 
-`ruff` and `black`, both enforced in CI and configured in `pyproject.toml`.
-`make format` applies both. The ruff rule set is deliberately narrow (real
+`ruff` lints and formats (`ruff format`), both enforced in CI and configured in
+`pyproject.toml`. `make format` applies both. The ruff rule set is deliberately narrow (real
 defects, import errors and import ordering) so that anything it reports is
 worth acting on; the reasoning for what is excluded is in `pyproject.toml`
 next to the `select` list.

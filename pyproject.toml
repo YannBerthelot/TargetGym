@@ -117,7 +117,6 @@ test = [
 ]
 lint = [
     "ruff>=0.12.11",
-    "black>=25.1.0",
     "mypy>=1.6.1",
 ]
 # Opt-in (``uv sync --group agent``), not part of dev: SB3 brings torch and
@@ -183,11 +182,6 @@ packages = ["src/target_gym"]
 [tool.hatch.build.targets.sdist]
 include = ["src/target_gym", "README.md", "LICENSE"]
 
-[tool.black]
-line-length = 88
-target-version = ["py311"]
-include = '\.pyi?$'
-
 [tool.ruff]
 line-length = 88
 target-version = "py311"
@@ -196,7 +190,7 @@ target-version = "py311"
 # A deliberately narrow set, chosen so that what it reports is always worth
 # acting on: real defects (F -- undefined names, unused imports, f-strings
 # without placeholders), syntax and import errors (E4, E9), and import
-# ordering (I). Formatting is black's job and is not duplicated here.
+# ordering (I). Formatting is `ruff format`'s job.
 #
 # Most of ruff's default style rules are off on purpose rather than by
 # omission. E741 would rename `I` and `l`, which are moment of inertia and

@@ -87,6 +87,10 @@ def check_core():
     loaded = [m for m in EXTRA_MODULES if m in sys.modules]
     assert not loaded, f"importing target_gym loaded {loaded}"
 
+    # Type checkers read the annotations of a package only if it ships this
+    # marker (PEP 561).
+    assert (pathlib.Path(tg.__file__).parent / "py.typed").is_file()
+
     from target_gym.provenance import load_recorded_baselines
 
     recorded = load_recorded_baselines()
