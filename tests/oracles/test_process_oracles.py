@@ -62,6 +62,11 @@ QUIET = {
 }
 #: An event already in force at the solve, as the state carries it (certainty
 #: equivalence): four_tank's extra outlet in tank 4, opened before the reset.
+#: Fields set on the reset before the replay, per task. hvac's oracle plans on
+#: its scored window, steps 288 to 960, so ten stages from the reset's step 0
+#: would cost both sides nothing: they start inside it (owner, 2026-11-26).
+START = {"hvac": {"time": 300}}
+
 IN_FORCE = {
     "four_tank": ({}, {"leak_start": -5, "leak_tank": 1}),
     # Both feed steps of [D1, Fig. 18] on since before the reset, rate down 20 %
@@ -184,8 +189,10 @@ def test_the_exact_rewrites_replay_on_the_env(name, in_force):
     operations a step (2.2e-16 each), so the relative reward gap and the
     output gap, in resolutions, sit many decades under 1e-10 and 1e-6 unless
     a rewrite is not exact. The compressor's sites run exact (width 0). With
-    an event in force at the solve, the plan and the env both hold it."""
+    an event in force at the solve, the plan and the env both hold it. A task
+    in ``START`` starts where its plan charges something."""
     overrides, fields = IN_FORCE[name] if in_force else ({}, {})
+    fields = {**START.get(name, {}), **fields}
     env, params, oracle = _oracle(name, **QUIET.get(name, {}), **overrides)
     with enable_x64():
         _, state = env.reset_env(jax.random.PRNGKey(100), params)
