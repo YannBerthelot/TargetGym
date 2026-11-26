@@ -111,7 +111,9 @@ load moves power up the core, the direction Krsko describes. Boron enters no `ep
 it is uniform, and the APR1400 paper finds its effect on axial shape negligible.
 
 **Boron** is a feed and bleed of well-mixed coolant. A command joins a queue, and
-reaches the core `boron_delay` control steps later:
+reaches the core `boron_delay` control steps later, a number of the family member
+(owner, 2026-11-25): the line's piping and the flow its operator runs set it, so it
+is the same every day. Until then it was drawn at every reset.:
 
 ```
 d(boron)/dt = Q / M (C_feed - boron)
@@ -247,7 +249,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `relief_accumulation` | 0.03 | of the set pressure | The valves pass the full-power steam this far over their set pressure. The code's accumulation for steam safety valves, from the reviewer's memory, not opened | ours |
 | `boron_worth` | -8e-5 | 1/ppm | BEAVRS (Tables 22, 23) measures 10.8 to 10.9 pcm/ppm at hot zero power and 975 to 1405 ppm; boron is worth less at full power and higher boron, and two NRC papers gave 6.73 and 8.15 pcm/ppm (search summaries, not opened) | ours, range -6.7 to -10.9 pcm/ppm |
 | `dilution_flow`, `boration_flow` | 10, 3 | kg/s | OAPS, section 2.1 | read |
-| `boron_delay_range` | 10 to 30 | steps | 5 to 15 min, OAPS, section 2.1, drawn at reset | read |
+| `boron_delay` | 20 | steps | 5 to 15 min, OAPS, section 2.1; the member's, the family sweep draws 10 to 30 | read |
 | `boric_acid_ppm` | 7800 | ppm | A vendor's recycling concentrate, seen in a search summary, the PDF would not open | ours |
 | `primary_mass` | 2.5e5 | kg | The water behind `C_coolant` and `C_cold`. 60 ppm of 1690 then takes 9 t, against Krsko fig. 4's 6 t | ours |
 | `sigma_x` | 2.72e-18 | cm2 | Mastroianni, Table III-1 | read |
@@ -343,7 +345,7 @@ outputs must be rebuilt. A reset holds the plant's own starting move, the rods w
 it parked them (a demand of 1 - 2 x 3/228), no boron flow and the turbine on its plan
 (`initial_action`, 2026-11-24): held all day, it is the do-nothing the charter's
 "hold reset" null runs. Xenon, iodine, their tilts, the boron on its way and the
-delay's length are hidden; the power history in obs 10 is what an operator's xenon
+line's delay are hidden (the recipe measures the delay); the power history in obs 10 is what an operator's xenon
 tool starts from.
 
 **Limits** (charter rule 14, Amendment 3):
@@ -596,8 +598,9 @@ trips).
 Ours: the action band on the offset (half the target band, the owner's, fixed before
 any rerun), the back-off of 2 standard deviations (charter J1), the xenon tool's play
 (the rule that a controller acts only on what is charged, no new number, added after
-the null beat the reference on baseload), and the line's lead and longest delay
-(600 s and 900 s, the middle and end of its documented 10 to 30 steps). What it works out for
+the null beat the reference on baseload), and the line's lead (the dead time the
+recipe measures, 660 s on the shipped member; until 2026-11-25 a fixed 600 s lead and
+a 900 s longest delay, the middle and end of a delay drawn each day). What it works out for
 boron is in ppm, turned into a flow by the pumps' rates at the boron read, so its
 loops have the same gain diluting and borating, at any point of the cycle. Until
 then its gains and its feedforward were fitted at the start of the cycle.
@@ -605,13 +608,14 @@ then its gains and its feedforward were fitted at the start of the cycle.
 - *The plan's boron.* The program asks `ppm_per_load` of boron per unit of load, the
   power defect on the program over the boron's worth: 205.6 ppm at the start of the
   cycle, 216.7 at 80 % of it. It is counted, not timed: what the load the turbine
-  will take asks for, a lead ahead (600 s, the middle of the line's delay), is added
+  will take asks for, a lead ahead (the line's dead time, `theta`), is added
   to what is still owed, and the line sends what it can of it each step. So a ramp
   faster than the line still gets all its boron.
 - *The Tavg loop.* A SIMC PI past the 1.6 K free band, on what is charged (the
   owner's rule of 2026-11-10): `Kc = 1 / (k 2 theta)` and `Ti = 8 theta`, with `k`
-  the curve book's K of Tavg per ppm and `theta` = 600 s, the boron line's dead time
-  to Tavg from the recipe's bump tests.
+  the curve book's K of Tavg per ppm and `theta` = 660 s, the boron line's dead time
+  to Tavg from the recipe's bump tests: the member's 600 s line and a minute of the
+  plant's lag (600 s while the line's delay was drawn each day).
 - *The operator's tool.* Xenon's rate, and the burnup read off the cycle point (a
   ppm of boron is 1 / 1690 of the cycle), kept as a debt with the play of
   2026-11-10 below. Its edges sit two standard deviations of Tavg inside the free
@@ -620,7 +624,8 @@ then its gains and its feedforward were fitted at the start of the cycle.
   Tavg's error spreads by 0.548 K at the start of the cycle and 0.209 K at 80 %
   (`experts.tavg_spread`; the figure is quasi-static, and the days recorded at the
   start of the cycle show 0.43 K). Each edge is pulled in by what xenon moves Tavg
-  over the line's longest delay, 15 min, since an edge is a limit. The debt starts
+  over the line's dead time, `theta` (until 2026-11-25 the longest drawn delay,
+  15 min, since an edge is a limit). The debt starts
   from where Tavg reads and is corrected toward it at the Tavg loop's integral
   time, so what the plan's boron and the line's delay leave behind does not build
   up unseen.
@@ -699,8 +704,8 @@ shift stays inside Tavg's free zone, the tool does nothing; past it, it moves on
 the excess. The free zone is what the cost leaves free: the 1.6 K dead band on
 either side of the program (on the hot side up to the DNB limit until the physics
 review's finding 1, 2026-11-10). Each edge is pulled in by the
-shift xenon causes over the boron line's lead (600 s, the same lead as the plan's
-feedforward), so the tool acts before the edge, not after it. No new number: the
+shift xenon causes over the boron line's lead (its dead time, the same lead as the
+plan's feedforward), so the tool acts before the edge, not after it. No new number: the
 dead band, the lead and the plant's two worths are all set elsewhere.
 The rods and the Tavg PI are unchanged. Every rung of the ladder uses the same tool,
 so the comparison between rungs stays fair.

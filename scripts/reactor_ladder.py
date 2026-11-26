@@ -397,6 +397,10 @@ def design(fits, rule):
 #: At half power a few rod steps move it by tenths, and past this it bends to its clip.
 LINEAR_OFFSET = 0.2
 
+#: The boron line's shortest delay in the family, in control steps: 5 min, OAPS
+#: section 2.1. The bump is sized on it, before the recipe reads its member's.
+SHORTEST_LINE = 10
+
 
 def tavg_bump(q, s):
     """The dilution step for the Tavg bump, sized from the curve book (owner,
@@ -405,14 +409,14 @@ def tavg_bump(q, s):
     never more than ``BORON_BUMP``. Since the plant has its safety valves
     (2026-11-17) the step also keeps the steam under their set temperature, which
     at part load comes first: a bump that lifts the valves reads the valves. That
-    room is counted from the line's shortest delay, so it holds on any day's
-    draw. A ppm moves Tavg ``-boron_worth / (alpha_coolant + alpha_fuel)`` K; a
+    room is counted from the line's shortest delay in the family, 5 min (OAPS
+    section 2.1), since the bump runs before the recipe has read its member's. A ppm moves Tavg ``-boron_worth / (alpha_coolant + alpha_fuel)`` K; a
     unit of dilution takes ``dilution_flow * boron / primary_mass`` ppm a second."""
     per_ppm = -q.boron_worth / (q.alpha_coolant + q.alpha_fuel)
     per_unit = per_ppm * q.dilution_flow * float(s.boron) / q.primary_mass  # K/s
     now = float(tavg(s))
     hour = (BUMP_STEPS - LEAD_STEPS) * DT
-    longest = (BUMP_STEPS - q.boron_delay_range[0]) * DT
+    longest = (BUMP_STEPS - SHORTEST_LINE) * DT
     relief = q.relief_temperature + q.P_thermal_ref * float(s.n) / q.UA_sg - now
     dnb = float(tavg_dnb_limit(q)) - now
     return -min(
@@ -439,7 +443,7 @@ def boron_on_tavg(env, q, s):
     a = jnp.array([rods, step, 1.0])
     tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
     slope, delay = integrator(tavg(tr) - tavg(still))
-    return slope / step, max(delay, float(s.boron_delay) * DT)
+    return slope / step, delay
 
 
 def boron_bump(env, base, read, limit=np.inf):
@@ -455,7 +459,7 @@ def boron_bump(env, base, read, limit=np.inf):
 
         tr = closed(env, q, s, bump, m0, 240)
         slope, delay = integrator(read(tr), limit=limit)
-        return slope / BORON_BUMP, max(delay, float(s.boron_delay) * DT)
+        return slope / BORON_BUMP, delay
 
     return run
 

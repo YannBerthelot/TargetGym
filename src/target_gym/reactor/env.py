@@ -150,8 +150,12 @@ class ReactorParams(EnvParams):
     boration_flow: float = 3.0  # kg/s, OAPS section 2.1
     boric_acid_ppm: float = 7800.0  # ppm, ours: a recycling unit's concentrate
     primary_mass: float = 2.5e5  # kg, ours, the same water as C_coolant + C_cold
-    # 5 to 15 min, OAPS section 2.1, in 30 s control steps, drawn at reset.
-    boron_delay_range: Tuple[int, int] = (10, 30)
+    #: Control steps from the boron command to the core. The line's 5 to 15 min
+    #: (OAPS section 2.1) are set by the plant's piping and the flow its operator
+    #: runs, so the delay is the family member's, the same every day; the family
+    #: sweep draws it per member (ours.json). The shipped member sits in the middle
+    #: (owner, 2026-11-25; until then it was drawn at every reset).
+    boron_delay: int = 20
 
     # ---- The core's point in its fuel cycle (owner, 2026-11-15) ----
     #: Where a day's core sits, as the fraction of its cycle burnt, drawn evenly at
@@ -458,6 +462,7 @@ PARAM_UNITS = {
     "boration_flow": "kg/s",
     "boric_acid_ppm": "ppm",
     "primary_mass": "kg",
+    "boron_delay": "30 s steps",
     "sigma_x": "cm^2",
     "D_diffusion": "cm",
     "alpha_power": "cm^2 s",
