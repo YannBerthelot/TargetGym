@@ -79,9 +79,12 @@ def table(rows: dict) -> str:
                 f"{_fmt(b)}{mark} ({_fmt(t)})" if t is not None else f"{_fmt(b)}{mark}"
             )
 
-        b = pid["hold_tracking"] if pid else float("nan")
-        room = headroom(b, c) if pid else float("nan")
-        s = score(mpc["hold_tracking"], b, c) if (pid and mpc) else float("nan")
+        # A row scored on the job's cost terms has no tracking split: no room.
+        tracked = bool(pid) and "hold_tracking" in pid
+        b = pid["hold_tracking"] if tracked else float("nan")
+        room = headroom(b, c) if tracked else float("nan")
+        both = tracked and bool(mpc) and "hold_tracking" in mpc
+        s = score(mpc["hold_tracking"], b, c) if both else float("nan")
         fail = max((m["failure_rate"] for m in (pid, mpc) if m), default=float("nan"))
         lines.append(
             f"| `{name}` | {_fmt(c)} | {cell(pid)} | {cell(mpc)} | {_fmt(room)} | {_fmt(s)} | "
