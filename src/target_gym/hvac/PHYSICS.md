@@ -68,8 +68,8 @@ T_floor    = T_air + (T_core - T_air) (1 / h_floor) / R_up
 
 The core couples to the air node, and the air and surface nodes are solved in
 closed form each step. Both faces of the slab heat the zone, as in [9]'s
-simulated room (on a top storey, with its roof, an open question sent to the
-owner on 2026-11-26). The plant heats
+simulated mid-floor room, kept on the top storey with its roof (owner,
+2026-11-26, the review's finding 5). The plant heats
 only: water below the core gives no heat, since it has no chiller. The slab
 takes no more than the heat source gives (section 4): at that size the water
 the plant makes, `T_made`, is cooler than the valve asks, and it is what the

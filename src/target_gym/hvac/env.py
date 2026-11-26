@@ -440,8 +440,8 @@ def slab_conductances(params: HVACParams):
     ``H_slab``: core to room through the floor face (half the slab, the
     carpet, the floor's coefficient) and the ceiling face (half the slab, the
     ceiling's coefficient): both faces of a TABS slab heat the zone, as in
-    [9]'s simulated room (an open question on a top storey, which has its
-    roof: owner, 2026-11-26).
+    [9]'s simulated mid-floor room, kept on the top storey (owner,
+    2026-11-26, the review's finding 5).
     ``m_c``: the water flow's heat capacity rate.
     """
     p = params
