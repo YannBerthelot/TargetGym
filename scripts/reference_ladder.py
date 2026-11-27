@@ -173,8 +173,7 @@ class Valve:
     """A valve position loop (``ladder.ValvePosition``): hold ``read``, a loop's
     valve, at ``setpoint`` by MV ``mv``. Its bump test steps ``mv`` by ``du`` with
     every loop of the row closed and reads the valve over ``window`` steps; SIMC
-    then takes ``VALVE_TAU_C`` dead times as its closed-loop time. ``cut_only``: the
-    MV never rises past where the rung took it over (``ladder.ValvePosition``)."""
+    then takes ``VALVE_TAU_C`` dead times as its closed-loop time."""
 
     name: str
     read: object
@@ -182,7 +181,6 @@ class Valve:
     mv: int
     du: float
     window: int
-    cut_only: bool = False
 
 
 @dataclasses.dataclass
@@ -715,11 +713,7 @@ def build(name: str, row: Row, spec=None) -> dict:
                 designs.append({"Kc": kc, "Ti": ti})
             out = most_sensitive(designs)
             print(f"    {v.name}: {out}", flush=True)
-            held.append(
-                ValvePosition(
-                    v.read, v.setpoint, v.mv, out["Kc"], out["Ti"], cut_only=v.cut_only
-                )
-            )
+            held.append(ValvePosition(v.read, v.setpoint, v.mv, out["Kc"], out["Ti"]))
         # A row's overrides ride on its valve position rung too, selecting against
         # the valve position loop's MV: Shinskey's high-temperature override on the
         # feed [S13, p. 436].

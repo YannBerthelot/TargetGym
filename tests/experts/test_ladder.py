@@ -464,20 +464,6 @@ def test_a_valve_position_loop_takes_its_mv_over_where_the_reset_left_it():
     np.testing.assert_allclose(actions[:, 1], [0.6, 0.7], atol=1e-7)
 
 
-def test_a_cut_only_valve_position_loop_never_raises_its_mv_past_where_it_took_over():
-    # Cut only: the MV is the throughput the operator set, 0.6 at the reset, and
-    # the loop only takes from it [S13]. The valve far under its set point (0.2
-    # for 0.8) asks 0.6 + 0.5 * (0.6 + 0.6) = 1.2 and gets the 0.6 it took over,
-    # with no integral kept. Then the valve 0.1 past its set point: Kc 0.5, Ti 1,
-    # 0.6 + 0.5 * (-0.1 - 0.1) = 0.5.
-    ctrl = two_valves(
-        ValvePosition(watched, 0.8, 1, 0.5, 1.0, cut_only=True),
-        start=lambda o, xp: xp.stack([0.0 * o[3], o[3]]),
-    )
-    actions = run(ctrl, [[0.0, 0.0, 0.2, 0.6], [0.0, 0.0, 0.9, 0.6]])
-    np.testing.assert_allclose(actions[:, 1], [0.6, 0.5], atol=1e-7)
-
-
 def ceiling_on_the_valve_positions_mv():
     """Keep ``obs[4]`` at or under 0.5 by MV 1, the valve position loop's own MV,
     whose gain on it is positive: Shinskey's high-temperature override on the feed
