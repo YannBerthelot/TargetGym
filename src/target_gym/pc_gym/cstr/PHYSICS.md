@@ -325,7 +325,7 @@ which is the ladder's rung on its own tests (section 10).
 
 ## 10. What the reference ladder row needs
 
-`scripts/ladder_rows/cstr.py`: the temperature on the water by SIMC, and the
+`src/target_gym/reference/rows/cstr.py`: the temperature on the water by SIMC, and the
 water valve held short of its limit by the feed, the ladder's valve position
 rung [S13]. Bump tests from a reset with both valves in mid-range, at the
 middle and both ends of the feed's temperature range. The rungs start bumpless:

@@ -8,7 +8,7 @@ until the charter's own scripts take it over. Nothing here is recorded.
 
 The plant, its score and its scenarios are the package's (``pc_gym/cstr``); this
 was their prototype until the owner's decision of 2026-11-24. The reference is the
-ladder's valve position rung on the row ``scripts/ladder_rows/cstr.py``. Set
+ladder's valve position rung on the row ``src/target_gym/reference/rows/cstr.py``. Set
 points are placed on a fixed grid by the owner's rule (2026-11-23): the cheapest
 at which no seed of the normal day leaves the band, a seed no set point saves not
 deciding. The ladder's own placement (PR #232) replaces ``place`` once merged.

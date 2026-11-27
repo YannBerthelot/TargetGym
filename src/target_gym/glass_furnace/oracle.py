@@ -133,12 +133,12 @@ KKT_TOL = 1e-3
 #: error (ours: one round sufficed on gas_lean 104, measured 2026-11-10).
 REPAIR_ROUNDS, REPAIR_INSIDE = 5, 1e-3
 #: Hours the last knot is held past the episode, under the limits, its fuel charged: the
-#: fining's dead time (11.8 h, scripts/ladder_rows/glass_furnace.py) plus a knot, with a
+#: fining's dead time (11.8 h, src/target_gym/reference/rows/glass_furnace.py) plus a knot, with a
 #: margin (ours). Without a tail, the plans' end effect spans the last 24 h (measured
 #: 2026-11-09). Industrial MPC predicts past its last move until the moves' effects have
 #: settled (Qin and Badgwell 2003, p. 747); decision D4 lines out at the horizon's end.
 TAIL_HOURS = 24.0
-#: The fining's dead time, h (scripts/ladder_rows/glass_furnace.py, its step test).
+#: The fining's dead time, h (src/target_gym/reference/rows/glass_furnace.py, its step test).
 DEAD_HOURS = 11.8
 #: Sampled paths of the walks the forecast's spread is read from (ours): its estimate
 #: is then within 6 % at one sigma, a quarter of a point of the fining's margin.

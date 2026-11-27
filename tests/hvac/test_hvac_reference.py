@@ -34,7 +34,7 @@ pytestmark = pytest.mark.large
 BAND_LOW, BAND_CENTRE, STEP = 21.0, 23.5, 0.25
 LOOP = "T_air on supply"
 #: The rungs the row has: one room loop, the balance's heating curve, the core's
-#: inner loop (``scripts/ladder_rows/hvac.py``).
+#: inner loop (``src/target_gym/reference/rows/hvac.py``).
 RUNGS = ("pi", "feedforward", "cascade")
 
 

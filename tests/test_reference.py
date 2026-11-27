@@ -40,7 +40,7 @@ def test_every_scored_task_ships_a_frozen_reference():
 
 
 def test_a_task_with_no_frozen_reference_is_refused_with_those_that_have_one():
-    with pytest.raises(KeyError, match="cstr"):
+    with pytest.raises(KeyError, match="hvac"):
         tg.make_reference("plane")
 
 
@@ -49,7 +49,7 @@ def test_an_unregistered_task_is_refused():
         tg.make_reference("plnae")
 
 
-@pytest.mark.parametrize("name", ["cstr", "reactor"])
+@pytest.mark.parametrize("name", ["hvac", "reactor"])
 def test_a_reference_frozen_on_another_plant_is_refused(name, tmp_path):
     frozen = reference.load(name)
     frozen["stamp"] = "0" * 16
@@ -91,6 +91,29 @@ def ladder():
     sys.modules["reference_ladder"] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_freezing_with_no_task_named_freezes_the_scored_suite(ladder):
+    # The re-record's command is ``reference_ladder.py --freeze`` alone: the
+    # scored suite, each ladder task climbed and each expert task's expert kept.
+    tasks, experts = ladder.freeze_targets()
+    assert set(tasks) | set(experts) == set(charter.FLAGSHIP)
+    assert set(experts) == set(charter.FLAGSHIP) & set(charter.EXPERT_REFERENCE)
+    assert ladder.freeze_targets(["hvac"], []) == (["hvac"], [])
+
+
+def test_a_freeze_that_moves_the_comparator_says_so(ladder):
+    # H5: a re-freeze that changes a task's kept rung or a setpoint changes what
+    # every saving is quoted against, so it is announced (and the CHANGELOG says
+    # so). One that keeps both is silent.
+    old = {"rung": "pi", "law": {"setpoints": {"T_air on supply": 22.25}}}
+    same = {"rung": "pi", "law": {"setpoints": {"T_air on supply": 22.25}}}
+    moved = {"rung": "feedforward", "law": {"setpoints": {"T_air on supply": 22.0}}}
+    assert ladder.comparator_change("hvac", old, same) is None
+    assert ladder.comparator_change("hvac", None, moved) is None
+    said = ladder.comparator_change("hvac", old, moved)
+    assert "pi" in said and "feedforward" in said
+    assert "22.25" in said and "22" in said and "CHANGELOG" in said
 
 
 @pytest.mark.records
@@ -206,3 +229,37 @@ def test_a_law_naming_other_loops_than_its_rows_is_refused():
     other = {**LAW, "loops": LAW["loops"] * 2, "mix": [[1.0, 1.0]]}
     with pytest.raises(ValueError, match="row changed"):
         reference.assemble(_row(), other)
+
+
+_INSTALLED = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import target_gym as tg
+from target_gym import charter
+assert not charter.SCRIPTS.exists(), charter.SCRIPTS
+ref = tg.make_reference("hvac")
+print(json.dumps({"rung": ref.rung, "tasks": charter.charter_tasks()}))
+"""
+
+
+@pytest.mark.medium
+@pytest.mark.records
+def test_the_reference_and_the_charters_tasks_need_no_repository(tmp_path):
+    # Outside review C1: from an install, with no scripts/ beside the package,
+    # make_reference rebuilds the frozen rung on its row and charter_tasks lists
+    # the tasks the recorder can run.
+    import shutil
+    import subprocess
+
+    site = tmp_path / "site"
+    shutil.copytree(charter.PKG, site / "target_gym")
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", _INSTALLED, str(site)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    assert out.returncode == 0, out.stderr[-2000:]
+    got = __import__("json").loads(out.stdout.strip().splitlines()[-1])
+    assert got["rung"] == reference.load("hvac")["rung"]
+    assert set(charter.FLAGSHIP) <= set(got["tasks"])
