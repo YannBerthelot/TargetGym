@@ -78,3 +78,14 @@ def ph_neutralization_scenarios() -> tuple[dict, ...]:
             **_upset(events=False),
         ),
     )
+
+
+def ph_neutralization_evaluation() -> dict:
+    """What an evaluation reads (``target_gym.evaluation.Evaluation``; owner,
+    2026-11-28, v1 task pages, item 2): every step but the first, which marks the
+    capacity the tanks start with, and the change in that capacity across the
+    window, charged once at the reagent's price and credited at it when the tanks
+    end fuller (``env.stored_value``). Without it the tanks' capacity was free to
+    spend at the end: both valves shut for the last 5 min saved 4.1 % on the normal
+    day, where the same cut mid-episode cost 344 %."""
+    return dict(unscored_steps=1, edge_charge="stored_value", edge_credit=True)

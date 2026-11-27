@@ -25,6 +25,7 @@ from target_gym.pc_gym.ph_neutralization.env import (
     start_upset,
     steady_base_flow,
     steady_state_invariants,
+    stored_value,
 )
 from target_gym.pc_gym.ph_neutralization.rendering import _render
 from target_gym.video import SavesVideo
@@ -91,6 +92,9 @@ class PHNeutralization(
 
     def reward_terms(self, state, params, tripped=None):
         return compute_reward_terms(state, params, tripped=tripped)
+
+    def stored_value(self, state, params):
+        return stored_value(state, params)
 
     def step_env(
         self,

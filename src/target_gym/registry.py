@@ -449,6 +449,15 @@ def _hvac_scenarios():
     return tuple(Scenario(**row) for row in hvac_scenarios())
 
 
+def _ph_evaluation():
+    from target_gym.evaluation import Evaluation
+    from target_gym.pc_gym.ph_neutralization.scenarios import (
+        ph_neutralization_evaluation,
+    )
+
+    return Evaluation(**ph_neutralization_evaluation())
+
+
 def _hvac_evaluation():
     from target_gym.evaluation import Evaluation
     from target_gym.hvac.scenarios import hvac_evaluation
@@ -1065,6 +1074,7 @@ _SPECS: tuple[EnvSpec, ...] = (
             "ph_neutralization_scenarios",
             module="target_gym.pc_gym.ph_neutralization.scenarios",
         ),
+        evaluation=_ph_evaluation,
     ),
     EnvSpec(
         name="distillation",
