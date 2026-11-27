@@ -11,8 +11,14 @@ write through ``charter.write_ceiling``; a file measured on another plant reads
 "not measured"), ``j2`` (the kept reference and every null on the commit's hash
 seeds, and the family sweep, ``scripts/family_sweep.py``, on the task's
 ``ours.json``) and ``anchor`` (J4: the reference on the
-scoring seeds). J3's lines run on the ladder seeds 100 to 109, as the ceilings do.
-``nulls``, ``j2`` and ``anchor`` read the recorded reference.
+scoring seeds, each seed's actuator travel and reversals beside its cost). J3's
+lines run on the ladder seeds 100 to 109, as the ceilings do. ``nulls``, ``j2`` and
+``anchor`` read the recorded reference.
+
+``--noise-floor`` writes each task's noise floor instead (``charter.noise_floor``,
+the outside review's H3): the shipped expert through its two code paths, the host
+``pid`` slot and the jitted ``make_expert``, on the scoring seeds of every
+scenario. It reads no record and writes ``data/charter/noise_floor/<task>.json``.
 
 The J3 lines (reference, nulls, mpc) run on ``charter.line_seeds``: the task's
 evaluation seeds (``evaluation.Evaluation``), plus the extra seeds of a scenario whose
@@ -300,13 +306,80 @@ def part_j2(t: Task) -> dict:
     }
 
 
+def episodes(t: Task, policy, seeds) -> dict:
+    """``{scenario: (costs, episodes)}`` of ``policy`` on ``seeds``: each scenario's
+    cost per seed as ``run_suite`` or ``scoring_runs.run`` reads it, and the
+    episodes, for the actuators' travel."""
+    from target_gym import evaluation
+    from target_gym.benchmark import episodes_of, run_policy, task_info
+
+    if not t.protocol:
+        return {
+            s: ([evaluation.episode_cost(t.spec, e) for e in eps], eps)
+            for s, eps in t.L._suite_episodes(t.name, t.row, policy, t.spec, seeds)
+        }
+    out = {}
+    for s in t.weights:
+        env, params = t.S.stream(t.name, s)
+        own = t.S.policy(t.name, s, policy) if isinstance(policy, str) else policy
+        task = task_info(t.name, env.env, params, len(seeds))
+        steps = t.S.scored_steps(t.name)
+        eps = episodes_of(
+            run_policy(own, env, params, task, seeds=seeds, n_steps=steps)
+        )
+        out[s] = ([float(e.cost.mean()) for e in eps], eps)
+    return out
+
+
 def part_anchor(t: Task) -> dict:
+    from target_gym import eval as E
+
     seeds = list(charter.ANCHOR_SEEDS)
-    if t.protocol:
-        res = t.suite(t.policy(), seeds)
-    else:
-        res = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
-    return {"seeds": seeds, "line": t.line(res)}
+    runs = episodes(t, t.policy(), seeds)
+    per = {
+        s: {"costs": c, "trips": sum(bool(e.failed.any()) for e in eps)}
+        for s, (c, eps) in runs.items()
+    }
+    line = t.line({"scenarios": per})
+    for s, (_, eps) in runs.items():  # the review's M8, beside the headline
+        line["scenarios"][s]["travel"] = [E.travel(e.actions) for e in eps]
+        line["scenarios"][s]["reversals"] = [E.reversals(e.actions) for e in eps]
+    return {"seeds": seeds, "line": line}
+
+
+def noise_floor(name: str) -> dict:
+    """``name``'s noise floor (``charter.noise_floor``): the shipped expert through
+    the host ``pid`` slot and through the jitted ``make_expert``, on the scoring
+    seeds of every scenario, and each seed's relative gap between the two."""
+    from target_gym.api import as_policy, make_expert
+    from target_gym.benchmark import CallablePolicy, shipped_policy
+    from target_gym.provenance import environment_fingerprint, expert_fingerprint
+
+    t = Task(name, {})
+
+    def jitted(_task):
+        carried = as_policy(make_expert(name))
+        return lambda obs, state=None: carried(obs)
+
+    seeds = list(charter.ANCHOR_SEEDS)
+    slot = "pid" if t.protocol else shipped_policy("pid")
+    a = episodes(t, slot, seeds)
+    b = episodes(t, CallablePolicy(jitted, name="make_expert"), seeds)
+    gaps = {
+        s: [abs(x - y) / abs(y) if y else float(x != y) for x, y in zip(b[s][0], c)]
+        for s, (c, _) in a.items()
+    }
+    return {
+        "floor": max(max(v) for v in gaps.values()),
+        "per_scenario": gaps,
+        "seeds": seeds,
+        "paths": ["the pid slot on the host", "make_expert, jitted"],
+        "stamp": environment_fingerprint(t.spec),
+        "expert_fingerprint": expert_fingerprint(t.spec),
+        "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(
+            timespec="seconds"
+        ),
+    }
 
 
 PARTS = {
@@ -400,7 +473,19 @@ def main(argv=None) -> int:
         help="planner-line pieces from reactor_ceiling.py --kind mpc, merged "
         "instead of running the line in one process",
     )  # fmt: skip
+    ap.add_argument(
+        "--noise-floor", action="store_true",
+        help="measure each task's noise floor (the expert's two code paths) instead",
+    )  # fmt: skip
     args = ap.parse_args(argv)
+    if args.noise_floor:
+        charter.NOISE.mkdir(parents=True, exist_ok=True)
+        for name in args.tasks:
+            floor = noise_floor(name)
+            path = charter.NOISE / f"{name}.json"
+            path.write_text(json.dumps(floor, sort_keys=True) + "\n")
+            print(f"{name} noise floor: {floor['floor']:.3g}", flush=True)
+        return 0
     parts = [p for p in args.parts.split(",") if p]
     unknown = sorted(set(parts) - set(charter.PARTS))
     if unknown:

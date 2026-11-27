@@ -37,6 +37,9 @@ this table, though the older one below still lists them.
 
 On 2026-11-24 the owner also decided: `boiler_drum` goes to Extra as solved, and the
 `cstr` production prototype replaces the tracking task. Neither is done in the code yet.
+On 2026-11-27 the owner took `cstr` out of the scored suite for 0.8.0: it ships
+registered, not scored, and the suite is `reactor`, `hvac`, `compressor_surge` and
+`ph_neutralization`.
 
 Not done for any task: the charter record on the plant as it now stands, and for
 `plane`, the 3D hold and `wake_surf`, an oracle.

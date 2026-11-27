@@ -207,3 +207,78 @@ def test_plane_env_make_mpc_returns_controller():
     env = PlaneSine()
     params = PlaneParams(max_steps_in_episode=N)
     assert isinstance(env.make_mpc(params=params), Oracle)
+
+
+# ---------------------------------------------------------------------------
+# Full-state access is explicit (outside review M3, 2026-11-27)
+#
+# Contract: a policy reads the simulator's true state only when it says so, by
+# being wrapped as ``target_gym.FullState(policy)``. Any other callable gets the
+# observation alone, whatever its signature, and the run records which of the two
+# it was. A callable that needs a second argument but is not wrapped is refused,
+# so it can never be handed the state by accident.
+# ---------------------------------------------------------------------------
+
+
+def _short(name="first_order"):
+    spec = REGISTRY[name]
+    return spec, spec.make_test_params(max_steps_in_episode=N)
+
+
+def test_a_policy_with_an_optional_second_argument_gets_the_observation_alone():
+    spec, params = _short()
+    seen = []
+
+    def policy(obs, deterministic=True):
+        seen.append(deterministic)
+        return np.zeros(1)
+
+    out = R.one_episode(spec, params, policy)
+    assert len(seen) == N
+    assert all(d is True for d in seen)
+    assert out["read_state"] is False
+
+
+def test_a_full_state_policy_is_given_the_true_state():
+    import target_gym as tg
+
+    spec, params = _short()
+    _, reset_state = spec.make_env().reset(jax.random.PRNGKey(0), params)
+    seen = []
+
+    def oracle(obs, state):
+        seen.append(state)
+        return np.zeros(1)
+
+    out = R.one_episode(spec, params, tg.FullState(oracle))
+    assert len(seen) == N
+    assert all(type(s) is type(reset_state) for s in seen)
+    assert out["read_state"] is True
+
+
+def test_a_policy_needing_two_arguments_must_say_it_reads_the_state():
+    spec, params = _short()
+
+    def policy(obs, state):
+        return np.zeros(1)
+
+    with pytest.raises(TypeError, match="FullState"):
+        R.one_episode(spec, params, policy)
+
+
+def test_the_shipped_oracle_reads_the_state_and_the_expert_does_not():
+    import target_gym as tg
+
+    spec, params = _short()
+    assert isinstance(R.baseline_policy(spec, "mpc", params), tg.FullState)
+    assert not isinstance(R.baseline_policy(spec, "pid", params), tg.FullState)
+
+
+def test_an_episode_record_says_whether_its_policy_read_the_state():
+    import target_gym as tg
+    from target_gym import eval as E
+
+    spec, params = _short()
+    plain = E.run_episode(spec, params, lambda obs: np.zeros(1))
+    full = E.run_episode(spec, params, tg.FullState(lambda obs, s: np.zeros(1)))
+    assert (plain.read_state, full.read_state) == (False, True)
