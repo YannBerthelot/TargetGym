@@ -110,15 +110,16 @@ def main() -> None:
         try:
             rate = benchmark_env(env, params, steps=args.steps, batch_size=args.batch)
         except Exception as exc:  # noqa: BLE001 - report and continue
-            print(f"  {name:22s} FAILED: {exc}")
+            print(f"  {name:22s} FAILED: {exc}", flush=True)
             continue
         results[name] = rate
-        print(f"  {name:22s} {rate / 1e6:8.2f} M steps/s")
+        # Four decimals: the slowest plants step tens of thousands a second.
+        print(f"  {name:22s} {rate / 1e6:9.4f} M steps/s", flush=True)
 
     if args.markdown:
         print("\nREADME cells:")
         for name, rate in results.items():
-            print(f"  {name:22s} ~{rate / 1e6:.2f}M")
+            print(f"  {name:22s} ~{rate / 1e6:.3g}M")
 
 
 if __name__ == "__main__":
