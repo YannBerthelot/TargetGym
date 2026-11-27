@@ -34,10 +34,10 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
   weight the score gives each.
 - The reference ladder places a zone's setpoint on seeds 110 to 119, apart from
   every seed a line is read on (J3's 100 to 109, J4's scoring seeds from 200,
-  J2's hash seeds), and the export reports the kept rung's exits on J2's hash
-  seeds. A setpoint placed on the lines' own seeds made the reference's line
-  optimistic there. This can move a task's kept setpoint, so the re-record of
-  the scored suite is a change of the comparator.
+  J2's hash seeds). The export records the kept rung's placement and its exits
+  on J2's hash seeds. A setpoint placed on the lines' own seeds made the
+  reference's line optimistic there. This can move a task's kept setpoint, so
+  the re-record of the scored suite is a change of the comparator.
 - A policy reads the simulator's true state only when it is wrapped as
   `tg.FullState(policy)`. The runners decided it from the signature, so a
   `policy(obs, deterministic=True)` was handed the state as its second argument.

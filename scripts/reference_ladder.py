@@ -982,11 +982,11 @@ def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     }
 
 
-def _climb(name: str) -> tuple:
-    """``(row, rungs, results, kept)``: every rung of ``name``'s row built and run
-    on the ladder's seeds, and the one kept."""
+def _climb(name: str, row=None) -> tuple:
+    """``(row, rungs, results, kept)``: every rung of ``name``'s row (``row``, or
+    its file's) built and run on the ladder's seeds, and the one kept."""
     print(name, flush=True)
-    row = ROWS[name]()
+    row = ROWS[name]() if row is None else row
     rungs, results = build(name, row), {}
     for label, controller in rungs.items():
         results[label] = run_rung(name, row, label, controller)
@@ -1080,19 +1080,45 @@ def _provenance(name: str, kind: str, rung: str) -> dict:
     }
 
 
-def freeze(name: str, root=None) -> pathlib.Path:
+def placement_report(row, rung: str) -> dict:
+    """Each zone loop's placement for rung ``rung``: the exit rule's setpoint, how
+    many episodes left at each candidate run, the seeds no candidate held, by
+    scenario, and whether the rung holds every seed it can; or the 2 sigma rule's
+    sigma and setpoint."""
+    out = {}
+    for loop, own in row.placements.get(rung, {}).items():
+        out[loop] = {
+            "setpoint": own["setpoint"],
+            "left": {
+                f"{point:.6g}": sum(len(v) for v in by.values())
+                for point, by in own["exits"].items()
+            },
+            "unheld": own["unheld"],
+            "holds": own["holds"],
+        }
+    for c in row.loops:
+        if c.zone and not c.exit_terms and c.name in row.placed:
+            sigma, setpoint = row.placed[c.name]
+            out[c.name] = {"sigma": sigma, "setpoint": setpoint}
+    return out
+
+
+def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
     """Charter J1's kept rung of ``name`` as package data (``target_gym.reference``):
     its law, the parameters its episodes run on, and its provenance. Before it is
     written, the rung rebuilt from it on a fresh row must cost on the scoring
     seeds exactly what the ladder's own kept rung cost there; those costs are
-    kept beside it, with its exits on J2's hash seeds (``exits_report``)."""
+    kept beside it, with its placement (``placement_report``) and its exits on
+    J2's hash seeds (``exits_report``). ``make_row`` builds the row in place of
+    its file's, for a test; the rung is then rebuilt on another row it builds."""
     import tempfile
 
     from target_gym import charter
     from target_gym import reference as R
 
     spec = REGISTRY[name]
-    row, rungs, _, kept = _climb(name)
+    shipped = ROWS[name]
+    row, rungs, _, kept = _climb(name, (make_row or shipped)())
     if kept is None:
         raise SystemExit(f"{name}: every rung trips, so there is no reference")
     frozen = _provenance(name, "ladder", kept)
@@ -1100,6 +1126,7 @@ def freeze(name: str, root=None) -> pathlib.Path:
     frozen["law"] = row.frozen[kept]
     if any(c.zone and c.zone[2] is not None for c in row.loops):
         frozen["placed_on"] = list(PLACEMENT_SEEDS)  # a zone with a cheap side
+        frozen["placement"] = placement_report(row, kept)
     ours = Reference(kept, rungs[kept])
     anchor = run_suite(name, row, ours, spec, seeds=charter.ANCHOR_SEEDS)
     frozen["anchor"] = {
@@ -1112,7 +1139,11 @@ def freeze(name: str, root=None) -> pathlib.Path:
     frozen["exits"] = exits_report(name, row, ours, seeds, spec)
     with tempfile.TemporaryDirectory() as tmp:
         R.write(name, frozen, pathlib.Path(tmp))
-        again, _ = R.build(name, pathlib.Path(tmp))
+        if make_row is None:  # rebuilt as make_reference rebuilds it
+            again, _ = R.build(name, pathlib.Path(tmp))
+        else:
+            law = R.load(name, pathlib.Path(tmp))["law"]
+            again = R.assemble(make_row(), law, spec)
     check = run_suite(
         name,
         Row(0, None, score=R.changes(frozen)),

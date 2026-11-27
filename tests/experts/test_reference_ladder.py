@@ -961,3 +961,24 @@ def test_freeze_writes_the_kept_rung_with_its_provenance_and_scoring_costs(
     )
     costs = {s: v["costs"] for s, v in run["scenarios"].items()}
     assert costs == frozen["anchor"]["scenarios"]
+
+
+def test_a_frozen_zone_names_its_placement_and_its_exits_out_of_sample(
+    ladder, tmp_path
+):
+    # The priced band (M5): placed on the placement seeds, every one of them held,
+    # and counted again on J2's hash seeds for the commit, every scenario's own.
+    from target_gym import charter, reference, scenarios
+    from target_gym.registry import REGISTRY
+
+    ladder.freeze("first_order", tmp_path, lambda: _priced_first_order(ladder))
+    frozen = reference.load("first_order", tmp_path)
+    placed = frozen["placement"]["x on u"]
+    assert frozen["placed_on"] == list(ladder.PLACEMENT_SEEDS)
+    assert placed["setpoint"] == frozen["law"]["setpoints"]["x on u"]
+    assert placed["holds"] and placed["unheld"] == {}
+    assert placed["left"][f"{placed['setpoint']:.6g}"] == 0
+    weights = scenarios.weights(REGISTRY["first_order"])
+    seeds = charter.j2_seeds(frozen["commit"], weights)
+    assert frozen["exits"]["seeds"] == {s: list(v) for s, v in seeds.items()}
+    assert frozen["exits"]["episodes"] == sum(len(v) for v in seeds.values())

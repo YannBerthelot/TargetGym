@@ -100,8 +100,9 @@ def test_make_reference_costs_what_the_ladders_rung_cost_on_the_scoring_seeds(
 ):
     # The oracle is the export's run of the ladder's own kept rung on the scoring
     # seeds. Two of them, in every scenario: one is enough to tell another
-    # controller, and every scenario reads its own parameters. Float32 on another
-    # machine's CPU agrees to about 1e-7 of a cost (review, 2026-11-27).
+    # controller, and every scenario reads its own parameters. The same run on
+    # another machine's CPU agrees to 3e-7 of a cost or better (the outside
+    # review's determinism check, 2026-11-27), hence the 1e-5.
     frozen = reference.load(name)
     controller, _ = reference.build(name)
     seeds = tuple(frozen["anchor"]["seeds"][:2])
@@ -129,3 +130,79 @@ def test_a_reference_steps_like_an_expert_under_jit_and_vmap(name):
     np.testing.assert_allclose(np.asarray(batched[1]), np.asarray(one), rtol=1e-6)
     low, high = env.action_space(params).low, env.action_space(params).high
     assert bool(jnp.all((batched >= low) & (batched <= high)))
+
+
+def _row(**changes):
+    """A one-loop row as a ladder row reads: obs 0 held toward obs 1 by MV 0, its
+    feedforward 0.1 plus a tenth of obs 2."""
+    from types import SimpleNamespace
+
+    loop = SimpleNamespace(
+        name="x on u", read=lambda o, xp: o[0], target=lambda o, xp: o[1]
+    )
+    fields = dict(
+        loops=(loop,),
+        cascades=(),
+        limits=(),
+        valves=(),
+        balance=lambda o, xp: xp.reshape(0.1 + 0.1 * o[2], (1,)),
+        rest=None,
+        placed={},
+    )
+    return SimpleNamespace(**{**fields, **changes})
+
+
+LAW = {
+    "rung": "pi",
+    "loops": [{"name": "x on u", "kc": 2.0, "ti": 4.0, "alpha": 1.0}],
+    "mix": [[1.0]],
+    "bias": [0.1],
+    "setpoints": {},
+    "start": False,
+    "dt": 1.0,
+}
+
+
+@pytest.mark.parametrize(
+    "law, want",
+    # One step of the ladder's PI from rest (experts/ladder.py): the reading is
+    # 0.2, so e = 0.5 - 0.2 = 0.3, the integral e * dt = 0.3, and the action
+    # 0.1 + 2 * (0.3 + 0.3 / 4) = 0.85. A placed setpoint of 0.6 replaces the
+    # target: e = 0.4, 0.1 + 2 * (0.4 + 0.4 / 4) = 1.1, held at the actuator's 1.
+    # The row's balance at obs 2 = 2 is 0.1 + 0.2 = 0.3, and with kc 1 the PI adds
+    # 0.3 + 0.3 / 4: 0.675.
+    [
+        (LAW, 0.85),
+        ({**LAW, "setpoints": {"x on u": 0.6}}, 1.0),
+        ({**LAW, "bias": "balance", "loops": [{**LAW["loops"][0], "kc": 1.0}]}, 0.675),
+    ],
+)
+def test_a_law_on_its_row_steps_as_the_ladders_pi(law, want):
+    controller = reference.assemble(_row(), law)
+    obs = jnp.array([0.2, 0.5, 2.0], jnp.float32)
+    action, _ = controller.step(None, controller.init_state, obs, jnp)
+    np.testing.assert_allclose(np.asarray(action), [want], rtol=1e-6)
+
+
+def test_a_bound_setpoint_shows_to_the_row_while_its_rung_steps_alone():
+    # A feedforward that reads the placed setpoint, as pH's does: inside the step it
+    # sees this rung's 0.6, and the row shows nothing once the step is done.
+    seen = []
+    row = _row()
+
+    def balance(o, xp):
+        seen.append(row.placed.get("x on u"))
+        return xp.zeros((1,), xp.float32)
+
+    row.balance = balance
+    law = {**LAW, "bias": "balance", "setpoints": {"x on u": 0.6}, "bound": ["x on u"]}
+    controller = reference.assemble(row, law)
+    controller.step(None, controller.init_state, jnp.zeros(3, jnp.float32), jnp)
+    assert seen == [(None, 0.6)]
+    assert row.placed == {}
+
+
+def test_a_law_naming_other_loops_than_its_rows_is_refused():
+    other = {**LAW, "loops": LAW["loops"] * 2, "mix": [[1.0, 1.0]]}
+    with pytest.raises(ValueError, match="row changed"):
+        reference.assemble(_row(), other)
