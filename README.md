@@ -71,6 +71,8 @@ pip install "git+https://github.com/YannBerthelot/TargetGym"
 ```
 
 Videos and the aircraft dashboards need `pip install 'target-gym[render]'`.
+matplotlib, seaborn and pandas come with every install, as dependencies of
+gymnax, which the environments are built on.
 
 ## Quickstart
 
