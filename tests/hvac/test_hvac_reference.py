@@ -3,8 +3,9 @@
 Contract (owner, 2026-11-23, "lowest with no exit", each rung on its own):
 leaving the comfort band, 21 to 26 C, in office hours is charged as lost work
 (``PHYSICS.md`` sec. 4 and 5). So each rung of the ladder holds the lowest
-candidate of the zone's grid at which it leaves the band on none of the
-ladder's seeds, in any scenario, on the days an evaluation scores (4 to 10,
+candidate of the zone's grid at which it leaves the band on none of its
+placement seeds (110 to 119, apart from every line's: outside review M5), in any
+scenario, on the days an evaluation scores (4 to 10,
 owner, 2026-11-24: the burn-in and the ceiling's tail are read by no line). The grid is set from the zone alone: the cheap
 edge, 21 C, and ten equal steps to the centre, 23.5 C, so 0.25 K apart.
 
@@ -68,8 +69,9 @@ def test_each_rung_is_charged_no_lost_work_on_any_seed(built, rung):
         params = scenarios.params_for(
             spec, scenario, sensor_noise_scale=ladder.NOISE, **row.score
         )
-        task = task_info("hvac", env, params, len(ladder.SEEDS))
-        rollout = run_policy(policy, env, params, task, seeds=ladder.SEEDS)
+        seeds = ladder.PLACEMENT_SEEDS
+        task = task_info("hvac", env, params, len(seeds))
+        rollout = run_policy(policy, env, params, task, seeds=seeds)
         charged = np.asarray(rollout["terms"]["comfort"]) > 0.0  # (seeds, steps)
         charged = charged[:, evaluation.scored_window(spec, charged.shape[1])]
         assert not charged.any(), (scenario.name, int(charged.any(axis=1).sum()))

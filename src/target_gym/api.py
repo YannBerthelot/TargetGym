@@ -25,18 +25,63 @@ def list_envs(group: str | None = None) -> list[str]:
     return [spec.name for spec in specs]
 
 
-def make(name: str, **overrides):
+def make(name: str, scenario: str | None = None, **overrides):
     """``(env, params)`` for task ``name``, like ``gymnax.make``.
 
-    ``params`` is the scored configuration. Keyword ``overrides`` replace
-    single fields of it, e.g. ``make("plane", max_steps_in_episode=500)``.
+    ``params`` is the scored configuration. ``scenario`` takes one of the
+    task's scenarios instead (:func:`list_scenarios`): the scored
+    configuration with that scenario's overrides, e.g.
+    ``make("ph_neutralization", scenario="bad_day")``. Keyword ``overrides``
+    then replace single fields, e.g. ``make("plane", max_steps_in_episode=500)``.
+
+    A task is scored on all its scenarios, weighted by their share of
+    operating time. To train on that mix, step :func:`make_stream`, which
+    rotates the scenarios by weight, or draw ``scenario`` by
+    :func:`list_scenarios`'s shares for each episode.
 
     The environment is shared between calls: environments carry no episode
     state (it all lives in the ``state`` passed through ``reset`` and
     ``step``), and a new instance would be compiled again by JAX.
     """
     spec = registry.get(name)
-    return spec.make_env(), spec.make_test_params(**overrides)
+    if scenario is None:
+        return spec.make_env(), spec.make_test_params(**overrides)
+    from target_gym import scenarios
+
+    suite = {s.name: s for s in scenarios.suite(spec)}
+    if scenario not in suite:
+        raise KeyError(f"{name} has no scenario {scenario!r}; it has {list(suite)}")
+    return spec.make_env(), scenarios.params_for(spec, suite[scenario], **overrides)
+
+
+def list_scenarios(name: str) -> dict[str, float]:
+    """Task ``name``'s scenarios, each with its share of operating time, the
+    weight its score gives it. The shares sum to 1; any name is a ``scenario``
+    for :func:`make`."""
+    from target_gym import scenarios
+
+    return scenarios.weights(registry.get(name))
+
+
+class FullState:
+    """A policy that reads the simulator's true state: ``FullState(policy)``,
+    with ``policy(obs, state) -> action``.
+
+    A deployed controller reads only its observation, and that is what every
+    runner hands a policy unless it is wrapped in this. Wrap an oracle, an MPC
+    on the true state or a debugging probe, never a policy you compare with
+    the reference: a scored result records whether its policy read the state.
+    """
+
+    def __init__(self, policy):
+        self.policy = policy
+
+    def reset(self):
+        if callable(getattr(self.policy, "reset", None)):
+            self.policy.reset()
+
+    def __call__(self, obs, state):
+        return self.policy(obs, state)
 
 
 class Expert:
@@ -133,6 +178,49 @@ def make_expert(name: str, sensor_noise_scale: float | None = None) -> Expert:
     environment made with the same level. None and 1 mean the shipped gains,
     and a level with no stored gains raises."""
     return Expert(registry.get(name).make_pid_controller(sensor_noise_scale))
+
+
+class Reference(Expert):
+    """The charter's reference controller for one scored task, used like
+    :class:`Expert`: ``memory = ref.reset()``, then
+    ``action, memory = ref.step(memory, obs)``.
+
+    It is the rung of the reference ladder the charter kept for the task (a
+    PI by SIMC from bump tests, with feedforward, a cascade or an override
+    where they pay), frozen as package data, or the shipped expert on the
+    reactor. ``rung`` names it. Like the expert it reads the observation only.
+
+    Its line runs on the scored configuration with a few changes, such as the
+    setpoint its episodes start on: ``ref.params(scenario)`` gives that
+    configuration, the one to run a policy on to compare with it seed by seed.
+    """
+
+    def __init__(self, controller, frozen: dict):
+        from target_gym.reference import changes
+
+        super().__init__(controller)
+        self.task, self.rung = frozen["task"], frozen["rung"]
+        self._changes = changes(frozen)
+
+    def params(self, scenario: str | None = None):
+        """The configuration the reference's line runs on, in ``scenario``
+        (:func:`make`'s), or in the scored configuration."""
+        return make(self.task, scenario=scenario, **self._changes)[1]
+
+
+def make_reference(name: str) -> Reference:
+    """The charter's reference for scored task ``name``: see :class:`Reference`.
+
+    Built from its frozen numbers with no bump test. A task with none raises
+    ``KeyError``, and a reference frozen on another plant raises
+    ``target_gym.reference.StaleReference``. Beating it is the charter's
+    headline claim; beating :func:`make_expert` is a weaker one on most tasks,
+    since the shipped expert is not the reference there.
+    """
+    from target_gym import reference
+
+    controller, frozen = reference.build(name)
+    return Reference(controller, frozen)
 
 
 def make_oracle(name: str, params=None):

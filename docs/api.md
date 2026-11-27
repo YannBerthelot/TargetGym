@@ -13,8 +13,11 @@ Every task by its registry name, from the package root:
 
 | Function | Returns |
 |---|---|
-| `make(name, **overrides)` | `(env, params)`: the environment and its scored configuration, with `overrides` replacing single fields |
+| `make(name, scenario=None, **overrides)` | `(env, params)`: the environment and its scored configuration, or one of its scenarios, with `overrides` replacing single fields |
+| `list_scenarios(name)` | Each scenario's share of operating time, the weight the score gives it |
 | `make_expert(name)` | The shipped expert: `memory = expert.reset()`, then `action, memory = expert.step(memory, obs)`, in a Python loop or under `jit` and `vmap`; `expert.params` holds its gains |
+| `make_reference(name)` | A scored task's reference, the controller the charter's headline compares with, stepped as the expert is; `ref.params(scenario)` is the configuration its line runs on |
+| `FullState(policy)` | A `policy(obs, state)` given the simulator's true state; every other policy is called with the observation alone |
 | `make_oracle(name, params=None)` | The full-state MPC, reset and planning on the mean disturbance |
 | `make_gymnasium(name, render_mode=None, stream=False, **overrides)` | A Gymnasium environment on the scored configuration; `stream=True` gives the continuing plant |
 | `make_stream(name, length=None)` | The task as a [continuing plant](continuing-tasks.md): it never ends, and the reset key fixes its world |
