@@ -42,3 +42,14 @@ Given by picker on 2026-11-27:
 | This protocol | "Adopt the protocol" |
 | PPO and SAC numbers | "Reported, not required" |
 | When a task becomes v1 | "Per task, as each passes" |
+
+## The owner's readings
+
+Given by picker on 2026-11-28, on the v1 task pages. They say how four items
+are read.
+
+| Item | Answer | Reading |
+|---|---|---|
+| 5, room | "Observation-only MPC" | The room comes from an MPC on the true model that estimates the hidden state from the observations. An MPC that reads the hidden state does not count; its numbers are context, like the ceiling. |
+| 7, speed | "Per episode in a batch" | The time is one episode's share of a vmapped batch, not one episode run alone. |
+| 2 and 3, score and expert | "Source every price first" | A task waits until every price that trades one goal against another has a published source. The unit a task is scored in is not such a price. Its expert is frozen only after that, since the cost picks the expert's rung. |
