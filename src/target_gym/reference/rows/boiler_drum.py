@@ -9,14 +9,13 @@ raw over ``[0, Q_max]`` and ``[0, q_feed_max]``.
 
 from __future__ import annotations
 
-from reference_ladder import (  # noqa: E402
+from target_gym.identification import Loop
+from target_gym.reference.row import (
     Cv,
     Inner,
     Limit,
     Row,
 )
-
-from target_gym.identification import Loop
 from target_gym.registry import REGISTRY
 
 

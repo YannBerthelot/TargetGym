@@ -3,10 +3,9 @@
 Each scored task's reference is the rung of the reference ladder the charter kept
 for it, or, on the reactor, its shipped expert (``charter.EXPERT_REFERENCE``).
 Its numbers are frozen in ``data/reference/<task>.json`` by the ladder's export
-command, run on the plants as they stand::
+command, run on the plants as they stand, for the scored suite::
 
-    uv run python scripts/reference_ladder.py --tasks cstr hvac --freeze
-    uv run python scripts/reference_ladder.py --expert reactor --freeze
+    uv run python scripts/reference_ladder.py --freeze
 
 :func:`build` rebuilds the controller from that file, with no bump test, and
 ``target_gym.make_reference`` hands it out. A file frozen on another plant is
@@ -65,29 +64,7 @@ def build(task: str, root: pathlib.Path = FROZEN):
 
 
 def _row(task: str):
-    """Task ``task``'s ladder row, as the ladder builds it. The rows live in the
-    repository's ``scripts/ladder_rows`` until they move into the package, so
-    this needs a source checkout until then."""
-    import importlib.util
-    import sys
+    """Task ``task``'s ladder row, as the ladder builds it."""
+    import importlib
 
-    if "reference_ladder" not in sys.modules:
-        from target_gym.charter import SCRIPTS
-
-        script = SCRIPTS / "reference_ladder.py"
-        if not script.is_file():
-            raise FileNotFoundError(
-                f"{script} is absent: the ladder's rows ship in the repository's "
-                "scripts/ for now, so rebuilding a ladder rung needs a source "
-                "checkout"
-            )
-        module_spec = importlib.util.spec_from_file_location("reference_ladder", script)
-        assert module_spec is not None and module_spec.loader is not None
-        module = importlib.util.module_from_spec(module_spec)
-        sys.modules["reference_ladder"] = module  # the rows import it by name
-        try:
-            module_spec.loader.exec_module(module)
-        except BaseException:
-            del sys.modules["reference_ladder"]
-            raise
-    return sys.modules["reference_ladder"].ROWS[task]()
+    return importlib.import_module(f"target_gym.reference.rows.{task}").row()

@@ -719,16 +719,32 @@ def best_known(row: dict) -> dict:
 
 
 def score_policy(name: str, policy, seeds: int = 10, params=None) -> dict:
-    """Run ``policy`` and the expert on seeds ``0 .. seeds - 1`` of the test
-    configuration, ``compare`` them, and add the ``best_known`` moves.
+    """On a scored task (``charter.FLAGSHIP``), the charter's comparison,
+    ``target_gym.score``, on the first ``seeds`` scoring seeds: the saving over
+    the reference with its interval, one row per scenario and the lines. The
+    tracking score and headroom are not returned there (the outside review's
+    M1): a task charged in money has no tracking term to score.
 
-    ``policy(obs) -> action``, or ``policy(obs, state)`` for a full-state
-    controller. One with a ``reset()`` method is reset before each episode.
+    Elsewhere, or with ``params``, the older protocol: ``policy`` and the expert
+    on seeds ``0 .. seeds - 1`` of the test configuration, ``compare``d, with the
+    ``best_known`` moves added.
+
+    ``policy(obs) -> action``, or a ``target_gym.FullState`` given the true
+    state. One with a ``reset()`` method is reset before each episode.
     ``target_gym.make_expert(name)`` works as it is. A factory taking no
-    arguments, the 0.7.0 form, still works and warns.
+    arguments, the 0.7.0 form, still works, on the older protocol, and warns.
     """
+    from target_gym import charter
     from target_gym.api import as_policy
 
+    if (
+        params is None
+        and charter.status(name) == charter.SCORED
+        and not _takes_no_arguments(policy)
+    ):
+        from target_gym.scorecard import score
+
+        return score(name, policy, seeds=charter.ANCHOR_SEEDS[:seeds])
     policy = as_policy(policy)
     if _takes_no_arguments(policy):
         warnings.warn(

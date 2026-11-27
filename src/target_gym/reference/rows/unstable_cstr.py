@@ -13,11 +13,10 @@ from __future__ import annotations
 
 import math
 
-from reference_ladder import (  # noqa: E402
+from target_gym.reference.row import (
     Cv,
     Row,
 )
-
 from target_gym.registry import REGISTRY
 
 #: The unstable mode's time constant at 513 K, s (PHYSICS.md, named property).

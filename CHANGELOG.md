@@ -9,6 +9,33 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The charter's comparison as one call (2026-11-27)
+
+After the outside review of 2026-11-27 (C1, M1, L2, H5) and the owner's pickers
+the same day.
+
+- `tg.score(name, policy)` runs the charter's protocol on a scored task: every
+  scenario at its share of operating time, on the scoring seeds, each episode
+  read over the scored window with its edge charge, the reactor on its pinned
+  7-day streams, and the frozen reference run beside the policy on the same
+  seeds and worlds. It returns `scoring.headline`'s saving with its interval,
+  one row per scenario beside it, the charter record's reference, best null,
+  MPC and ceiling `J` and the room, the reference's exits out of sample, and
+  whether the policy read the state. On the reactor it reports baseload days
+  and load-following days apart (`days`). A list of policies is one per
+  training run.
+- It runs a policy given as `policy(obs) -> action`, or in the experts' form,
+  compiled once for every seed (`scorecard.rollouts`), where the older scorer
+  stepped one episode at a time on the host. A policy that keeps its own Python
+  memory, any with `jit=False`, and a `FullState` still run on the host.
+- The ladder's rows ship in the package, `target_gym.reference.rows`, with what
+  a row is made of in `target_gym.reference.row`, so `tg.make_reference` and
+  `charter.charter_tasks` work from an install. `reference_ladder.py --freeze`
+  with no task named freezes the scored suite, and says when a re-freeze
+  changes a task's kept rung or setpoint: the CHANGELOG then announces it as a
+  change of the comparator (CONTRIBUTING.md).
+- cstr's frozen reference is gone with cstr from the scored suite.
+
 ### Verdict statistics and the RL protocol (2026-11-27)
 
 The outside review's statistics findings (H3, H4, L1, H2, M6, M7, M8, L4, L5),
@@ -54,8 +81,7 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
   ladder's export command, which checks that the rung rebuilt from the file
   costs, seed by seed on the scoring seeds, what the ladder's own rung cost:
 
-      uv run python scripts/reference_ladder.py --tasks cstr hvac ph_neutralization compressor_surge --freeze
-      uv run python scripts/reference_ladder.py --expert reactor --freeze
+      uv run python scripts/reference_ladder.py --freeze
 
   The files in this tree are a working sample on the plants of this date; the
   re-record of the scored suite freezes them again with the same command.
@@ -122,6 +148,17 @@ The next release is 0.8.0, because these changes break code written for
   (`charter.tie_tolerance`: each scored task's noise floor, 1e-3 elsewhere), so
   a controller scored against its own expert no longer wins seeds by rounding.
   pH's `off_spec` share reads its permit, 6 to 9, where it read 6.5 to 8.5.
+- **On a scored task, `score_policy` is the charter's comparison.** With its
+  default arguments on a task of `tg.FLAGSHIP` it returns `tg.score`'s result,
+  on its first `seeds` scoring seeds. Upgrade notes:
+  - Read `saving`, `saving_ci` and `scenarios` where you read `ratio`,
+    `score` and `headroom`: the tracking score is not defined on a task charged
+    in money, and the old fields were NaN or 0 there.
+  - Pass `params` to keep the older protocol against the shipped expert.
+  - The ladder's rows moved from `scripts/ladder_rows/<task>.py` to
+    `target_gym.reference.rows.<task>`, and `Cv`, `Inner`, `Limit`, `Valve`,
+    `Row` and `corners` to `target_gym.reference.row`;
+    `scripts/reference_ladder.py` still offers them by their old names.
 - **A policy is given the simulator's true state only when it says so.** The
   runners (`runners.one_episode`, `eval.run_episode` and the scorers built on
   them) passed `(obs, state)` to any policy whose signature took two arguments.

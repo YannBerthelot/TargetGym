@@ -13,12 +13,12 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from reference_ladder import (  # noqa: E402
+
+from target_gym.reference.row import (
     Cv,
     Limit,
     Row,
 )
-
 from target_gym.registry import REGISTRY
 
 #: The anti-surge control line's margin over the surge line, in flow at speed:

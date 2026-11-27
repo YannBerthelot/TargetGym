@@ -17,15 +17,15 @@ import math
 import jax
 import jax.numpy as jnp
 import numpy as np
-from reference_ladder import (  # noqa: E402
-    Cv,
-    Inner,
-    Row,
-)
 from scipy.optimize import brentq, minimize_scalar
 
 from target_gym.experts.ladder import K_BACKOFF
 from target_gym.oracles.controller import enable_x64
+from target_gym.reference.row import (
+    Cv,
+    Inner,
+    Row,
+)
 from target_gym.registry import REGISTRY
 
 #: Column A's design products [D2], at which the rest and the balance hold it.

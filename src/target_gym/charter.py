@@ -40,7 +40,8 @@ DATA = PKG / "data" / "charter"
 CEILINGS = PKG / "data" / "oracle_ceilings"
 LOG = DATA / "log.jsonl"
 SCRIPTS = REPO / "scripts"
-ROWS_DIR = SCRIPTS / "ladder_rows"
+#: The reference ladder's rows, one module per task (``target_gym.reference.rows``).
+ROWS_DIR = PKG / "reference" / "rows"
 
 PARTS = ("reference", "nulls", "mpc", "ceiling", "j2", "anchor")
 NOT_MEASURED = "not measured"
@@ -62,7 +63,7 @@ VALIDATION_SEEDS = tuple(range(300, 350))
 NOISE = DATA / "noise_floor"
 #: The tie tolerance where no floor is measured: float32 rounding over an episode.
 DEFAULT_TIE = 1e-3
-#: Rows in ladder_rows that are test fixtures, not tasks.
+#: Rows that are test fixtures, not tasks.
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
 EXPERT_REFERENCE = ("reactor",)
@@ -149,10 +150,7 @@ def charter_tasks(rows_dir: pathlib.Path = ROWS_DIR) -> list[str]:
     from target_gym.registry import REGISTRY
 
     if not rows_dir.is_dir():
-        raise FileNotFoundError(
-            f"{rows_dir} is absent: the charter's ladder rows ship in the "
-            "repository's scripts/, so this needs a source checkout"
-        )
+        raise FileNotFoundError(f"{rows_dir} is absent: no ladder rows to read")
     rows = {p.stem for p in rows_dir.glob("*.py") if not p.stem.startswith("_")}
     extra = {name for name, spec in REGISTRY.items() if spec.extra}
     return sorted((rows - set(FIXTURES) - extra) | set(EXPERT_REFERENCE))
@@ -659,6 +657,7 @@ def current(task: str) -> dict:
         ref = _digest(stamp, "expert", P.expert_fingerprint(spec), *runs)
     else:
         ladder = [ROWS_DIR / f"{task}.py", SCRIPTS / "reference_ladder.py"]
+        ladder += [PKG / "reference" / f for f in ("row.py", "frozen.py")]
         ladder += [PKG / "experts" / f for f in ("ladder.py", "pid.py")]
         ref = _digest(
             stamp, "ladder", code(ladder + [PKG / "identification.py"]), *runs

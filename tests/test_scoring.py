@@ -872,11 +872,13 @@ def test_two_sides_that_cost_nothing_are_level():
 def test_score_policy_scores_a_job_scored_task():
     """hvac has no tracked setpoint (``JOB_SCORED``). Its expert against itself
     on the same seed costs the same, so the ratio is 1 and it does not beat
-    itself; the tracking score is unknown."""
+    itself; the tracking score is unknown. hvac is scored, so this is the older
+    protocol, asked for by its ``params`` (the outside review's M1)."""
     import target_gym as tg
 
     assert "hvac" in scoring.JOB_SCORED
-    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1)
+    params = tg.make("hvac")[1]
+    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1, params=params)
     assert m["ratio"] == pytest.approx(1.0)
     assert not m["beats_expert"]
     assert np.isnan(m["score"]) and np.isnan(m["s_max"])
