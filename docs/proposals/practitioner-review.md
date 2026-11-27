@@ -477,6 +477,8 @@ task was validated against.
 | `cstr` | 4 | about 7 at best | Even with a sourced band and an oracle it stays the field's most common plant; replacing it is cheaper than fixing it |
 
 Five excellent tasks will earn a 10 sooner than twenty-five good ones.
+`docs/proposals/release-plan-to-1.0.md` sequences these stages into releases
+that beta-testers can use along the way.
 
 ## What I ran and what I only read
 
