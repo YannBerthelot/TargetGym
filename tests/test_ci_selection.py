@@ -166,7 +166,7 @@ def test_a_tasks_record_reaches_that_task():
 
 
 def test_a_ladder_row_reaches_its_task_and_the_ladder_tests():
-    chosen = selection.select(["scripts/ladder_rows/hvac.py"])
+    chosen = selection.select(["src/target_gym/reference/rows/hvac.py"])
 
     assert not chosen.everything
     assert chosen.tasks == ("hvac",)

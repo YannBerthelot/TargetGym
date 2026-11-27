@@ -223,6 +223,30 @@ def make_reference(name: str) -> Reference:
     return Reference(controller, frozen)
 
 
+def score(name: str, policy, seeds=None, jit: bool = True) -> dict:
+    """The charter's comparison of ``policy`` with scored task ``name``'s
+    reference: the saving ``1 - J_policy / J_reference`` over every scenario,
+    weighted by its share of operating time, with its 95 % interval, and one row
+    per scenario beside it.
+
+    ``policy`` is ``policy(obs) -> action``, compiled with JAX, or an object
+    stepped as :func:`make_expert`'s is, also compiled. One that keeps its own
+    Python memory, or any with ``jit=False``, runs on the host, one episode at a
+    time, and so does a :class:`FullState`, which the result records. A list of
+    policies is one per training run, and the interval then covers the runs.
+
+    The episodes are the charter's: the scoring seeds (``seeds`` replaces them;
+    choose checkpoints on ``charter.VALIDATION_SEEDS``, never on these), each
+    scenario at :meth:`Reference.params`, each read over the task's scored window
+    with its edge charge, and the reactor on its pinned 7-day streams. The
+    reference runs beside the policy on the same seeds and worlds. See
+    ``target_gym.scorecard.score`` for every key of the result.
+    """
+    from target_gym.scorecard import score as run
+
+    return run(name, policy, seeds, jit)
+
+
 def make_oracle(name: str, params=None):
     """The full-state MPC for ``name``, built as the recorded baselines build it.
 

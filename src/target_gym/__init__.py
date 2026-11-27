@@ -11,6 +11,7 @@ from target_gym.api import (
     make_oracle,
     make_reference,
     make_stream,
+    score,
 )
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
@@ -97,6 +98,7 @@ __all__ = (
     "make_stream",
     "list_envs",
     "list_scenarios",
+    "score",
     "score_policy",
     # A policy given the simulator's true state, said explicitly
     "FullState",

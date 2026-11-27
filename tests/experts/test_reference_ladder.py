@@ -8,7 +8,7 @@ row names and kept as tuned where the plant is most sensitive, so adding a less
 sensitive point changes nothing, and adding a more sensitive one tunes as if the plant
 sat there alone.
 
-Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``. A rung's cost
+Each task's row lives in its own module, ``target_gym.reference.rows``. A rung's cost
 on a seed is the task's ``J``: each scenario's mean cost per step, weighted by its share
 of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre, the deviation measured with the
@@ -150,7 +150,7 @@ def test_tuning_follows_the_most_sensitive_operating_point(ladder, points, alone
 
 
 def test_each_row_lives_in_its_own_file(ladder):
-    rows = ROOT / "scripts" / "ladder_rows"
+    rows = ROOT / "src" / "target_gym" / "reference" / "rows"
     files = {p.stem for p in rows.glob("*.py") if not p.stem.startswith("_")}
     assert set(ladder.ROWS) == files
 

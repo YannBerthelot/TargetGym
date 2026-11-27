@@ -332,7 +332,7 @@ def tune_cstr() -> dict:
         paired=True,
     )
     # The valve answers the feed through the closed temperature loop over about
-    # an hour, so its test runs three (scripts/ladder_rows/cstr.py).
+    # an hour, so its test runs three (src/target_gym/reference/rows/cstr.py).
     valve = read_loop(
         closed,
         "valve on feed",

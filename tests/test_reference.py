@@ -215,3 +215,36 @@ def test_a_law_naming_other_loops_than_its_rows_is_refused():
     other = {**LAW, "loops": LAW["loops"] * 2, "mix": [[1.0, 1.0]]}
     with pytest.raises(ValueError, match="row changed"):
         reference.assemble(_row(), other)
+
+
+_INSTALLED = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import target_gym as tg
+from target_gym import charter
+assert not charter.SCRIPTS.exists(), charter.SCRIPTS
+ref = tg.make_reference("hvac")
+print(json.dumps({"rung": ref.rung, "tasks": charter.charter_tasks()}))
+"""
+
+
+@pytest.mark.medium
+def test_the_reference_and_the_charters_tasks_need_no_repository(tmp_path):
+    # Outside review C1: from an install, with no scripts/ beside the package,
+    # make_reference rebuilds the frozen rung on its row and charter_tasks lists
+    # the tasks the recorder can run.
+    import shutil
+    import subprocess
+
+    site = tmp_path / "site"
+    shutil.copytree(charter.PKG, site / "target_gym")
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", _INSTALLED, str(site)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    assert out.returncode == 0, out.stderr[-2000:]
+    got = __import__("json").loads(out.stdout.strip().splitlines()[-1])
+    assert got["rung"] == reference.load("hvac")["rung"]
+    assert set(charter.FLAGSHIP) <= set(got["tasks"])
