@@ -50,7 +50,11 @@ def test_the_pieces_read_as_the_records_ceiling_line():
     assert line["scenarios"]["busy"]["costs"] == [10.0, 30.0]
     assert line["J"] == pytest.approx(7.25)
     assert line["trips"] == 1
-    assert line["converged"] is True
+    # every seed's solves converged; with one start and no recorded stop rule its
+    # agreement is not measured, so as a ceiling it is not converged (shared
+    # rules, 2026-11-27), while as an MPC line (no starts to agree) it is
+    assert line["converged"] is False
+    assert charter.ceiling_line(stored, WEIGHTS, agreement=False)["converged"] is True
 
 
 def test_one_seed_whose_solves_did_not_converge_marks_the_line():

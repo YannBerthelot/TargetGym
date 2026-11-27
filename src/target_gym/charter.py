@@ -296,14 +296,18 @@ def sweep_not_held(draws) -> list[str]:
 
 def stop_rule(starts: dict, floor=None, agree=None, near=None) -> bool:
     """The ceiling's agreement and floor tests: ``starts`` maps each foresight
-    start to the J its plan reaches. The two best agree within ``agree`` of the
-    kept (cheapest) J; one start has nothing to agree. Where ``floor`` is given,
-    the kept J is within ``near`` above it (a plan under it is near it)."""
+    start to the J its plan reaches. True when the two best agree within
+    ``agree`` of the kept (cheapest) J and, where ``floor`` is given, the kept J
+    is within ``near`` above it (a plan under it is near it). With fewer than two
+    starts the agreement is ``NOT_MEASURED``, and so is the verdict: the ceiling
+    is not converged."""
     agree = CEILING_AGREE if agree is None else agree
     near = CEILING_NEAR if near is None else near
-    costs = sorted(float(c) for c in starts.values())
+    costs = sorted(float(c) for c in (starts or {}).values())
+    if len(costs) < 2:
+        return NOT_MEASURED
     kept = costs[0]
-    agrees = len(costs) < 2 or costs[1] - kept <= agree * kept
+    agrees = costs[1] - kept <= agree * kept
     return agrees and (floor is None or kept <= (1.0 + near) * float(floor))
 
 
@@ -311,8 +315,10 @@ def best_known(ceiling, mpc, weights: dict):
     """The ceiling as the cheapest plan known per seed: each seed's cheaper
     untripped run of the foresight ``ceiling`` line and the ``mpc`` line, the
     foresight on a tie, with ``picked`` naming each seed's source. The MPC line
-    joins only where it ran the same seeds in every scenario; convergence stays
-    the foresight's (the MPC line is not in the agreement test)."""
+    joins only where it ran the same seeds in every scenario, and a seed of it
+    only where its line records that run converged (no capped or failed solve,
+    ``converged`` per seed); convergence stays the foresight's (the MPC line is
+    not in the agreement test)."""
     if ceiling == NOT_MEASURED:
         return NOT_MEASURED
     same = mpc != NOT_MEASURED and all(
@@ -324,8 +330,9 @@ def best_known(ceiling, mpc, weights: dict):
         rows = []
         for i, c in enumerate(v["costs"]):
             best = (c, "foresight")
-            if same:
-                m = mpc["scenarios"][s]
+            m = mpc["scenarios"][s] if same else {}
+            ok = (m.get("converged") or [False] * len(v["costs"]))[i] is True
+            if ok:
                 # a line keeps one trip count per scenario: untripped only when 0
                 if not m["trips"] and (bool(v["trips"]) or m["costs"][i] < c):
                     best = (m["costs"][i], "mpc")
@@ -372,6 +379,8 @@ def line(scenarios: dict, weights: dict, converged=None) -> dict:
             "mean": sum(v["costs"]) / len(v["costs"]),
             "trips": int(v["trips"]),
         }
+        # each seed's run converged, where the source records it (best_known)
+        | ({"converged": [bool(x) for x in v["converged"]]} if "converged" in v else {})
         for s, v in scenarios.items()
     }
     return {
@@ -435,10 +444,14 @@ def room(reference, ceiling, weights: dict, noise: dict | None = None):
     }
 
 
-def ceiling_line(stored: dict, weights: dict):
+def ceiling_line(stored: dict, weights: dict, agreement: bool = True):
     """A ``data/oracle_ceilings`` file as a J3 line, or ``NOT_MEASURED`` where it
     holds no per-seed costs. Converged: every seed's solver status 0 or 2 with no
-    cap or fall-back (foresight), or every seed converged (shooting)."""
+    cap or fall-back (foresight), or every seed converged (shooting), and, with
+    ``agreement``, the file's stop rule recorded as converged (the shared rule,
+    2026-11-27: not recorded is not measured, so not converged). A file that
+    records ``per_seed_converged`` carries it on each scenario, which
+    ``best_known`` reads for an MPC line."""
     scenarios, converged = {}, []
     for s, v in stored.get("scenarios", {}).items():
         costs = v.get("ceiling_costs", v.get("ceiling_per_seed"))
@@ -446,6 +459,7 @@ def ceiling_line(stored: dict, weights: dict):
             return NOT_MEASURED
         trips = v.get("ceiling_trips", v.get("replay_trips"))
         solver = v.get("solver") if isinstance(v.get("solver"), dict) else {}
+        each = solver.get("per_seed_converged")
         if "status" in solver:
             ok = all(x in (0, 2) for x in solver["status"])
             converged.append(
@@ -456,10 +470,12 @@ def ceiling_line(stored: dict, weights: dict):
         else:
             converged.append(False)
         scenarios[s] = {"costs": costs, "trips": trips if trips is not None else 0}
+        if isinstance(each, list):
+            scenarios[s]["converged"] = each
     if set(scenarios) != set(weights):
         return NOT_MEASURED
-    # the stop rule's agreement and floor tests, where the file records them
-    converged.append((stored.get("stop_rule") or {}).get("converged", True))
+    if agreement:  # the stop rule's agreement and floor: not recorded, not measured
+        converged.append((stored.get("stop_rule") or {}).get("converged") is True)
     return line(scenarios, weights, converged=all(converged))
 
 

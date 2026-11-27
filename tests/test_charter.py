@@ -186,7 +186,9 @@ def _ceiling(capped=0):
         "ceiling_trips": 0,  # noqa: E731
         "solver": {"status": [0, 2], "capped": capped, "fell_back": 0},
     }
-    return {"scenarios": {"normal": sc([1.0, 2.0]), "storm": sc([2.0, 2.0])}}  # fmt: skip
+    # the starts agree: the shared rule's agreement test (2026-11-27) is recorded
+    stop = {"stop_rule": {"converged": True}}
+    return {"scenarios": {"normal": sc([1.0, 2.0]), "storm": sc([2.0, 2.0])}} | stop  # fmt: skip
 
 
 def test_a_stored_ceiling_reads_as_a_line_and_says_if_it_converged():

@@ -17,8 +17,12 @@ owner's text, not from the code:
    staleness check (a null table fitted to another expert) is rebuilt by its
    recipe before the gates run; a current one is left alone.
 
-Assumed: with one foresight start there is nothing to agree, so agreement
-passes; a tie (0 % edge) is "not held".
+Every ceiling's agreement is checked: with fewer than two recorded foresight
+starts it reads "not measured", and the ceiling is not converged (2026-11-27,
+the coordinating session's fix to the rule). An MPC line's seed is a candidate
+only where that run is known to have had no capped or failed solve.
+
+Assumed: a tie (0 % edge) is "not held".
 """
 
 from __future__ import annotations
@@ -43,14 +47,15 @@ W = {"normal": 0.75, "storm": 0.25}
         # Agree, 2.9 % above a floor; then 3.5 % above it.
         ({"reference": 1.030, "mpc": 1.029}, 1.0, True),
         ({"reference": 1.036, "mpc": 1.035}, 1.0, False),
-        # One start: nothing to agree.
-        ({"reference": 7.0}, None, True),
+        # One start, or none: agreement not measured, never converged.
+        ({"reference": 7.0}, None, charter.NOT_MEASURED),
+        ({}, None, charter.NOT_MEASURED),
     ],
 )
 def test_a_ceiling_converges_when_its_two_best_starts_agree_near_any_floor(
     starts, floor, converged
 ):
-    assert charter.stop_rule(starts, floor) is converged
+    assert charter.stop_rule(starts, floor) == converged
 
 
 def _stored(stop=None, capped=0):
@@ -70,15 +75,31 @@ def test_a_ceiling_whose_starts_disagree_is_not_converged():
     assert charter.ceiling_line(_stored(stop=True, capped=1), W)["converged"] is False
 
 
+def test_a_ceiling_that_records_no_agreement_is_not_converged():
+    assert charter.ceiling_line(_stored(), W)["converged"] is False
+    nm = _stored(stop=charter.NOT_MEASURED)
+    assert charter.ceiling_line(nm, W)["converged"] is False
+
+
 def _line(costs, trips=None):
     trips = trips or {s: 0 for s in costs}
     per = {s: {"costs": c, "trips": trips[s]} for s, c in costs.items()}
     return charter.line(per, W)
 
 
+def _mpc(costs, converged=True, trips=None):
+    """An MPC line whose every seed's run is ``converged`` (a bool, or per
+    scenario a list)."""
+    ln = _line(costs, trips)
+    for sc, v in ln["scenarios"].items():
+        ok = converged[sc] if isinstance(converged, dict) else converged
+        v["converged"] = ok if isinstance(ok, list) else [ok] * len(v["costs"])
+    return ln
+
+
 def test_the_ceiling_takes_the_cheaper_of_foresight_and_the_mpc_line_per_seed():
     foresight = _line({"normal": [1.0, 2.0], "storm": [2.0, 2.0]})
-    mpc = _line({"normal": [1.5, 1.0], "storm": [2.5, 2.0]})
+    mpc = _mpc({"normal": [1.5, 1.0], "storm": [2.5, 2.0]})
     best = charter.best_known(foresight | {"converged": True}, mpc, W)
     assert best["scenarios"]["normal"]["costs"] == [1.0, 1.0]
     assert best["scenarios"]["storm"]["costs"] == [2.0, 2.0]
@@ -96,15 +117,44 @@ def test_the_ceiling_takes_the_cheaper_of_foresight_and_the_mpc_line_per_seed():
 
 def test_a_tripped_seed_never_beats_an_untripped_one():
     foresight = _line({"normal": [3.0], "storm": [2.0]})
-    mpc = _line({"normal": [1.0], "storm": [2.0]}, trips={"normal": 1, "storm": 0})
+    mpc = _mpc({"normal": [1.0], "storm": [2.0]}, trips={"normal": 1, "storm": 0})
     best = charter.best_known(foresight, mpc, W)
     assert best["scenarios"]["normal"]["costs"] == [3.0]
     assert best["picked"]["normal"] == ["foresight"]
 
 
+def test_an_mpc_seed_joins_only_where_its_run_is_known_converged():
+    foresight = _line({"normal": [1.0, 2.0], "storm": [2.0, 2.0]})
+    cheap = {"normal": [0.5, 0.5], "storm": [1.0, 1.0]}
+    # a capped or failed solve on the second normal seed keeps the foresight there
+    mixed = _mpc(cheap, converged={"normal": [True, False], "storm": True})
+    best = charter.best_known(foresight, mixed, W)
+    assert best["scenarios"]["normal"]["costs"] == [0.5, 2.0]
+    assert best["picked"]["normal"] == ["mpc", "foresight"]
+    # a line that does not record its seeds' solver status never joins
+    unknown = charter.best_known(foresight, _line(cheap), W)
+    assert unknown["J"] == foresight["J"]
+
+
+def test_a_reactor_style_mpc_line_carries_each_seeds_convergence_into_the_choice():
+    """An MPC line read from pieces (``record_charter.line_from_pieces``): no
+    starts to agree, each seed's solves recorded."""
+    sc = lambda c, ok: {  # noqa: E731
+        "ceiling_costs": c,
+        "ceiling_trips": 0,
+        "solver": {"converged": sum(ok), "per_seed_converged": ok},
+    }
+    stored = {"scenarios": {"normal": sc([0.5, 0.5], [True, False]), "storm": sc([1.0, 1.0], [True, True])}}  # fmt: skip
+    mpc = charter.ceiling_line(stored, W, agreement=False)
+    assert mpc["converged"] is False  # one normal seed capped
+    foresight = _line({"normal": [1.0, 2.0], "storm": [2.0, 2.0]})
+    best = charter.best_known(foresight, mpc, W)
+    assert best["picked"] == {"normal": ["mpc", "foresight"], "storm": ["mpc", "mpc"]}
+
+
 def test_an_mpc_line_without_a_ceiling_or_on_other_seeds_is_not_mixed_in():
     foresight = _line({"normal": [1.0, 2.0], "storm": [2.0, 2.0]})
-    other = _line({"normal": [0.1], "storm": [0.1]})
+    other = _mpc({"normal": [0.1], "storm": [0.1]})
     assert charter.best_known(foresight, other, W)["J"] == foresight["J"]
     assert charter.best_known(foresight, charter.NOT_MEASURED, W)["J"] == foresight["J"]
     assert charter.best_known(charter.NOT_MEASURED, other, W) == charter.NOT_MEASURED

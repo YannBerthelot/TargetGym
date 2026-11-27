@@ -71,7 +71,7 @@ def ceiling_converged(
     ``worst_margin`` is the smallest held margin over every seed's kept plan
     (``plan_margins``), unchecked where None."""
     holds = worst_margin is None or float(worst_margin) >= -held
-    return charter.stop_rule(starts, floor, agree, near) and holds
+    return charter.stop_rule(starts, floor, agree, near) is True and holds
 
 
 def plan_margins(env, params, seed: int, plan, margins: Callable) -> np.ndarray:

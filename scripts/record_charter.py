@@ -184,7 +184,8 @@ def line_from_pieces(pieces, weights: dict, seeds: dict) -> dict:
     import reactor_ceiling
 
     stored = reactor_ceiling.assemble(pieces, weights, seeds)
-    return charter.ceiling_line(stored, weights)
+    # an MPC line has no foresight starts to agree: its seeds' solves decide
+    return charter.ceiling_line(stored, weights, agreement=False)
 
 
 def part_reference(t: Task) -> dict:

@@ -620,10 +620,12 @@ def _stop_rule(weights, got) -> dict:
     solves carry their starts: each start's J (its planned cost, weighted as the
     suite), the balance floor's J where the rows carry ``floor``, and
     ``pc_gym.foresight.ceiling_converged`` on them."""
-    runs = [r for s in weights for r in got[s]]
-    if not all("starts" in r for r in runs):
-        return {}
+    from target_gym.charter import NOT_MEASURED
     from target_gym.pc_gym.foresight import AGREE, HELD, NEAR, ceiling_converged
+
+    runs = [r for s in weights for r in got[s]]
+    if not all("starts" in r for r in runs):  # one plan: no agreement measured
+        return {"stop_rule": {"starts_J": {}, "converged": NOT_MEASURED}}
 
     names = set.intersection(*(set(r["starts"]) for r in runs))
 
@@ -638,7 +640,8 @@ def _stop_rule(weights, got) -> dict:
     worst = min(held) if held else None
     return {"stop_rule": {"starts_J": starts, "floor_J": floor, "agree": AGREE,
                           "near": NEAR, "held": HELD, "worst_held_margin": worst,
-                          "converged": ceiling_converged(starts, floor, worst)}}  # fmt: skip
+                          "converged": NOT_MEASURED if len(starts) < 2
+                          else ceiling_converged(starts, floor, worst)}}  # fmt: skip
 
 
 def _method(task) -> str:
