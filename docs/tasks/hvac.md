@@ -1,6 +1,6 @@
-# Building HVAC
+# Building HVAC task card
 
-The task card for `hvac` ([its page](../environments/hvac.md), cite as `hvac-v6`).
+`hvac`, cited as `hvac-v6`. Its spaces, reward and arguments are on [its page](../environments/hvac.md).
 
 ## What the task is
 

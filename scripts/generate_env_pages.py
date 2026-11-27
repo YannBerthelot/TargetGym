@@ -837,10 +837,10 @@ def card(name: str, spec) -> str:
     return (
         "\n".join(
             [
-                f"# {display_name(name)}",
+                f"# {display_name(name)} task card",
                 "",
-                f"The task card for `{name}` ([its page](../environments/{name}.md), "
-                f"cite as `{spec.versioned_name}`).",
+                f"`{name}`, cited as `{spec.versioned_name}`. Its spaces, reward and "
+                f"arguments are on [its page](../environments/{name}.md).",
                 "",
                 "## What the task is",
                 "",

@@ -1,6 +1,6 @@
-# Reactor
+# Reactor task card
 
-The task card for `reactor` ([its page](../environments/reactor.md), cite as `reactor-v10`).
+`reactor`, cited as `reactor-v10`. Its spaces, reward and arguments are on [its page](../environments/reactor.md).
 
 ## What the task is
 

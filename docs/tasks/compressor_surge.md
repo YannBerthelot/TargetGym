@@ -1,6 +1,6 @@
-# Compressor Surge
+# Compressor Surge task card
 
-The task card for `compressor_surge` ([its page](../environments/compressor_surge.md), cite as `compressor_surge-v5`).
+`compressor_surge`, cited as `compressor_surge-v5`. Its spaces, reward and arguments are on [its page](../environments/compressor_surge.md).
 
 ## What the task is
 

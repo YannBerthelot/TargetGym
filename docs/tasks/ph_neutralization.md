@@ -1,6 +1,6 @@
-# pH neutralisation
+# pH neutralisation task card
 
-The task card for `ph_neutralization` ([its page](../environments/ph_neutralization.md), cite as `ph_neutralization-v6`).
+`ph_neutralization`, cited as `ph_neutralization-v6`. Its spaces, reward and arguments are on [its page](../environments/ph_neutralization.md).
 
 ## What the task is
 
