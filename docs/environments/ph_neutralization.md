@@ -80,7 +80,7 @@ What an agent is measured against: the expected cost per step over the task's we
 | Best null policy | the cheapest of the simple policies | not current | |
 | Reference | the controller to beat | not current | |
 | MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+| Ceiling | the best known plan with the true model, the true state and the future: an achieved cost, not a bound | not current | |
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
@@ -122,9 +122,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `Wb3` | 5e-05 | mol/L |
 | `pK1` | 6.35 | - |
 | `pK2` | 10.25 | - |
-| `acid_upset_size` | 0.2 | - |
+| `acid_upset_size` | 0 | - |
 | `acid_upset_ramp` | 600 | s |
-| `flow_swing` | 0.2 | - |
+| `flow_swing` | 0 | - |
 | `window_upsets` | 1 | - |
 | `event_hold` | 1e+09 | s |
 | `permit_low` | 6 | pH |
@@ -142,7 +142,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `reagent_price` | 1 | L/L |
 | `excursion_price` | 1.66667 | L/s |
 | `diversion_price` | 2 | L/L |
-| `failure_cost` | 9 | L |
+| `failure_cost` | 13 | L |
 | `restart_steps` | 720 | steps |
 | `e_floor` | 1.5 | pH |
 

@@ -271,7 +271,11 @@ class ReactorParams(EnvParams):
     # cycle, with the ramp and the hold drawn at reset inside the URD's 2 to 10 h.
     load_min: float = 0.5
     load_ramp_rate: float = 0.02 / 60.0  # 1/s
-    ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
+    #: When a window's ramp down starts, s after the reset, drawn at reset. The
+    #: default is the baseload day, the heaviest scenario, whose ramp never comes
+    #: (owner, 2026-11-27, the RL research review's H1); a load-follow scenario
+    #: starts it 0.5 to 2 h in (``scenarios.WINDOW_DAY``).
+    ramp_down_range: Tuple[float, float] = (1.0e6, 1.0e6)  # s
     #: How far ahead the dispatch announces a load-follow day in a stream, where
     #: each day is an event (``Reactor.start_event``): the window's own notice. A
     #: stream sets ``ramp_down_range`` to the past, so it starts with no day.

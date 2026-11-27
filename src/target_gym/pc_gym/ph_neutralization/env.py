@@ -121,14 +121,17 @@ class PHParams(EnvParams):
 
     # ---- Influent upsets (REALITY.md, "A normal day and a bad day") ----
     # Large unknown changes in the influent's strong acid concentration from
-    # production units [P3, p. 4]: two an episode, within +-20 % of nominal,
-    # ramped over 10 min (ours, the "calm to rocking and reeling during one
-    # lunch break" of [P3, p. 8]).
-    acid_upset_size: float = 0.2  # fraction of Wa1
+    # production units [P3, p. 4]: two an episode, within +-acid_upset_size of
+    # nominal, ramped over 10 min. The bad day sets them to +-20 % (ours, the
+    # "calm to rocking and reeling during one lunch break" of [P3, p. 8]); the
+    # default is the normal day, the heaviest scenario, with none (owner,
+    # 2026-11-27, the RL research review's H1).
+    acid_upset_size: float = 0.0  # fraction of Wa1
     acid_upset_ramp: float = 600.0  # s
     # Influent flow swings (Amendment 3), metered [P3, Figure 2]: two an
-    # episode, within +-flow_swing of nominal, ramped like the acid. Ours.
-    flow_swing: float = 0.2  # fraction of q1
+    # episode, within +-flow_swing of nominal, ramped like the acid; +-20 % on
+    # the bad day (ours), none on the normal day.
+    flow_swing: float = 0.0  # fraction of q1
     #: The window's own upsets: 1 runs them as drawn at reset; 0, which only a
     #: stream sets (scenarios.py), leaves the influent at nominal, and the
     #: stream starts its upsets through ``start_event``.
@@ -187,13 +190,16 @@ class PHParams(EnvParams):
     # - diversion_price: a diverted litre is pumped back and treated again,
     #   priced above reagent (Amendment 3): 2 L per L, the reagent it takes
     #   again (about 1 L per L with this dilute base) and the pumping;
-    # - a violation is charged as another hour at the worst surviving step's
-    #   cost, so tripping on purpose never pays.
+    # - a violation is charged as another hour at 13 L a step, 9360 L, above
+    #   the worst episode the plant survives (8879 L on its normal day under
+    #   random actions, tests/test_failure_cost_bound.py), so tripping on
+    #   purpose never pays (owner, 2026-11-27: 9 L a step held only above the
+    #   worst surviving step, and below that episode).
     reward_version: int = 4
     reagent_price: float = 1.0  # per L of reagent
     excursion_price: float = 100.0 / 60.0  # L per s outside the permit
     diversion_price: float = 2.0  # L per L diverted
-    failure_cost: float = 9.0  # L per step, above any surviving step
+    failure_cost: float = 13.0  # L per step, the lump above any surviving episode
     #: A violation is charged as another hour (720 steps of 5 s).
     restart_steps: int = 720
     # Read by the benchmark's time-in-band KPI, not by the reward: the permit's

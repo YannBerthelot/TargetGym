@@ -29,8 +29,9 @@ outdoor temperature with its last-24 h mean and next-24 h forecast, the clock,
 and the tariff with the hours to its next change. Each step is charged, in
 euros, the heat pump's electricity at the tariff, each occupied
 kelvin-hour of room outside the band or of floor above its limit. The
-evaluation also charges, once, the heat the building's store lost across the
-scored days, at the cheapest price heat can be stored at. Nothing trips.
+evaluation also charges, once, any heat the building's store is short at the end
+of the scored days against their start, at the dearest price heat can cost; a
+fuller store earns nothing. Nothing trips.
 
 | obs | meaning |
 |---|---|
@@ -109,7 +110,6 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `precision_floor` | 0.1 | K | The BMS step, ours (Readings) |
 | `max_steps_in_episode` | 1152 | steps | Twelve days: three burned in, seven scored of the two weeks a curve change is judged over [11, p. 1], two of the ceiling's tail (section 5) |
 | `comfort_price` | 9.54 | EUR/(K h) | Derived: `productivity_per_K` x `occupants_per_m2` x `A_floor` x `labour_cost`, 0.02 x 15 occupants x 31.8: the work an occupied kelvin-hour outside the band loses |
-| `T_out_design` | -10 | C | The curve's design point [12, p. 7], where the stored heat's price is read |
 | `restart_steps`, `failure_cost` | 0, 0.0 | - | No limit trips this plant |
 | `delta_t` | 900 | s | Ours: the standard building-simulation step |
 
@@ -230,21 +230,52 @@ what it was.
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
 slab's heat over its COP at the supply temperature, at the tariff; and each
 occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
-work it loses. Every term is a cost, as the shared reward contract asks. The
-evaluation adds one charge at the scored window's edges: the store, `C_m T_mass
-+ C_slab T_core`, at the valle tariff over the COP of the design supply
-(`env.stored_value`, recorded on every run), as it was before the first scored
-step less as it is after the last, spread over the scored steps
-(`evaluation.Evaluation.edge_charge`), so heat bought
-in the unscored burn-in, or run down on the last scored evening, is paid for
-at what storing it costs (owner, 2026-11-25, the review's finding 1: a policy
-at full supply on the last unscored evening and off on the last scored one had
-cut the reference's scored cost 7 to 53 % at no loss of comfort). Night
+work it loses. Every term is a cost, as the shared reward contract asks. Night
 charging pays twice: the night tariff is 0.53 of the peak's, and the slab
 carries the heat into the day. Inside the band being
 nearer its middle earns nothing (rule 15; [20]'s loss inside 21 to 26 C is
 small and is not counted). The floor of the score, in closed form: a room held
 in the band costs only its electricity.
+
+**What is scored, and how it differs from the reward.** The reward is minus the
+step's electricity and lost work, every step of the episode, and nothing else: a
+policy trained on it is never told about the scored window or the store. The
+evaluation reads something else (`scenarios.hvac_evaluation`): the mean of those
+costs over days 4 to 10 alone, plus one charge at the window's edge. The store,
+`E = C_m T_mass + C_slab T_core` (J above 0 C), is valued at the shortfall
+price below (`env.stored_value`, recorded on every run); its value after the step before the
+window less its value after the window's last step, where that is positive, is
+charged once, spread over the scored steps (`evaluation.Evaluation.edge_charge`).
+A store left fuller earns nothing (owner, 2026-11-27, the RL research review's H2,
+"No credit, charge a shortfall"). So ending at the start level is neutral: heat
+bought in the burn-in and run down in the window, or a store run down on the last
+scored evening, is paid for, and heat left over is not bought back. A policy that
+would end short pays the dearest price for it, so topping the store back up with
+cheaper night heat before the window ends pays against being charged: the end
+behaves as a cyclic condition, as a storage plan's does. Before, the store's whole
+change was charged or credited at the valle tariff over the design supply's COP,
+which an agent could game: on the review's protocol a night at full supply on day
+10 scored 0.9 % under the expert while the same night on day 5 or 7 cost 1.1 to
+1.2 % more, and the supply shut after 08:00 on day 10 scored 4.8 % under it
+(`tests/hvac/test_hvac_window_edge.py`). Before that (owner, 2026-11-25, the hvac
+review's finding 1), with no edge at all, a policy at full supply on the last
+unscored evening and off on the last scored one had cut the reference's scored
+cost 7 to 53 % at no loss of comfort.
+
+**The dearest price heat can cost**, the shortfall price (`env.shortfall_price`), is
+read off the plant: the highest tariff over the lowest COP its heat pump reaches in the
+valve's supply range. The COP, `0.52 (T + 273.15) / max(T - T_brine, 5)`, rises
+with the supply up to 5 K over the brine and falls after it, so its lowest on
+the range is at an end: at the top, `T_supply_max` = 49 C, where it is
+0.52 x 322.15 / 49 = 3.4187 (the brine at 0 C; the 15 C bottom gives 9.99). The
+punta tariff, EUR 0.263/kWh, is the highest of the three, so heat costs at most
+0.263 / 3.4187 = EUR 0.07693 per kWh, 2.1369e-8 per J. No heat the plant buys
+costs more (the water the source makes is never hotter than the valve asks), so
+a joule the store runs down saves at most what it is charged: running it down at
+the edge cannot beat ending at the start level, beyond the heat a cooler
+building no longer loses, which the comfort band bounds. For scale, the slab's
+1 K is 90 MJ, EUR 1.92 at that price, and the store is worth about EUR 55 at a
+21 C mass and a 25 C core.
 
 **The published heating curve measured per scenario** (`experts.py`, seeds 100
 to 109, sensor noise on; measured on 2026-11-08, before the source had its
@@ -346,12 +377,16 @@ B6), not a number moved until the test passed.
 ## 9. What the oracle needs
 
 - `oracle.py` plans the v5 score (COP, tariff, occupied hinges at the
-  work-loss price, the stored heat). Its ceiling was first recorded on
+  work-loss price) and the evaluation's edge. Its ceiling was first recorded on
   2026-11-08 (`data/oracle_ceilings/hvac.json`): one plan over the episode,
   with the episode's own weather. Since 2026-11-25 the plan, and the receding
   oracle's, charges the scored days 4 to 10 alone, as the lines are read
-  (`oracle.scored_window`): the stored heat prices the store at both edges, so
-  the ceiling bounds what any line can score there.
+  (`oracle.scored_window`). Since 2026-11-27 it pays the store's shortfall at
+  the window's end, once, at the shortfall price, and nothing for a fuller store: a fourth
+  hinge on the store's value at the window's start, carried as a third planned
+  state, less its value at the end. The receding oracle reads the start's value
+  as the run passes it (`oracle.WindowOracle`). So the ceiling plans the
+  objective the lines are scored on, and bounds what any line can score there.
 - Its horizon must reach across a night to the next occupied day, at least 24
   h (96 steps), for night charging to show; the slab's time constant (150 min
   for its flux) sets how far ahead a supply move pays.

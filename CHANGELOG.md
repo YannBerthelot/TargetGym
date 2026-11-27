@@ -28,6 +28,43 @@ same day.
 - The install notes say matplotlib, seaborn and pandas come with gymnax, which
   requires them; an extra for them would make no install lighter.
 
+### hvac's window edge and the scored defaults (2026-11-27)
+
+Two findings of the outside RL research review, fixed as the owner decided by
+picker on 2026-11-27.
+
+- hvac's evaluation no longer credits a store left fuller at the end of the scored
+  days (H2, "No credit, charge a shortfall"). A store left emptier than it began is
+  charged its shortfall once, at the dearest price heat can cost the plant: the
+  punta tariff over the heat pump's COP at the valve's top supply, EUR 0.0769 per
+  kWh of heat (`hvac.env.shortfall_price`). Ending at the start level is neutral.
+  The old charge, at the night tariff over the design supply's COP, both ways, paid
+  an agent for a night at full supply on the last scored day (0.9 % under the
+  expert) and for the supply shut after 08:00 on that day (4.8 % under it), and its
+  credit made one shoulder-season seed's cost negative. The rule is
+  `evaluation.Evaluation`'s, so any task that names an edge charge has it. The
+  training reward is unchanged and still carries no edge charge (hvac's
+  `PHYSICS.md` section 5 says how the two differ).
+- hvac's oracle plans the same objective: the store's shortfall at the window's end
+  is a fourth hinge, paid once, with the store's value at the window's start
+  carried as a third planned state (`hvac.oracle.WindowOracle`).
+- `tg.make(name)` gives each scored task's heaviest scenario (H1, "Heaviest
+  scenario"): `normal` for `ph_neutralization` and `compressor_surge` (as for
+  `hvac` and `cstr` already), `baseload` for the `reactor`. Every scenario resolves
+  to exactly the parameters it resolved to before, so only a run on the defaults
+  moves (`tests/test_scored_defaults.py`). The reference ladder's pH row reads its
+  bump tests' upset sizes from the bad day, where it read them from the default.
+- Two checks that read only the default now read the heaviest scenarios, and the
+  owner settled what they found (picker, 2026-11-27). On pH's normal day random
+  actions survive an episode at 8879 L, above the 6480 L a trip charged, so
+  `failure_cost` rises from 9 to 13 L a step: a trip charges 9360 L and never
+  pays. At the reactor's baseload with no input the axial offset drifts from the
+  reset's xenon tilt, so the conformance check lists the reactor as open-loop
+  unstable, an uncontrolled axial xenon transient, until the 0.10.0 realism batch
+  reviews axial damping across the fuel cycle.
+- `hvac-v6`, `ph_neutralization-v6`, `compressor_surge-v5` and `reactor-v10`, which
+  no release shipped, are re-stamped in place.
+
 ### The charter's comparison as one call (2026-11-27)
 
 After the outside review of 2026-11-27 (C1, M1, L2, H5) and the owner's pickers
@@ -162,6 +199,31 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **The scored tasks' defaults are their heaviest scenarios** (2026-11-27). A
+  changed default changes what `tg.make(name)` and `env.default_params` give.
+  Upgrade notes:
+  - `ph_neutralization`: `acid_upset_size` and `flow_swing` default to 0, the
+    normal day. The old default, both at 0.2, is the bad day:
+    `tg.make("ph_neutralization", scenario="bad_day")`.
+  - `ph_neutralization`: a trip now charges 13 L of reagent a step for its
+    720-step restart, where it charged 9, so episodes with a trip cost more.
+  - `compressor_surge`: `demand_range` defaults to (0.7, 0.95), the normal day.
+    The old (0.35, 0.95) was the dropped load swings' range, which no scenario
+    scores; pass `demand_range=(0.35, 0.95)` to run it.
+  - `reactor`: `ramp_down_range` defaults to (1e6, 1e6), a baseload day whose ramp
+    never comes. The old default, an EDF daily load follow, is
+    `ramp_down_range=(1800.0, 7200.0)`; each load-follow scenario now sets it.
+  - Every scenario's parameters are unchanged, so nothing scored through
+    `scenarios.params_for` or a stream moves.
+- **hvac's evaluation charges a shortfall and credits nothing at the window's
+  edge** (2026-11-27). Upgrade notes:
+  - A store left fuller at the end of the scored days earns nothing; one left
+    emptier pays its shortfall at `hvac.env.shortfall_price`, EUR 2.137e-8 per J.
+    hvac's scored costs move, and can no longer be negative.
+  - `HVACParams.T_out_design` is gone: it priced the stored heat and nothing else.
+    `hvac.env.stored_heat_price` is replaced by `shortfall_price`, and
+    `hvac.env.stored_heat_cost` is gone.
+  - `env.stored_value` prices the store at the shortfall price.
 - **A win needs more than float noise.** `score_policy`'s `win_rate` and
   `transient_win_rate` count a seed within the task's tie tolerance as not won
   (`charter.tie_tolerance`: each scored task's noise floor, 1e-3 elsewhere), so

@@ -47,10 +47,10 @@ class Stepped:
         return np.asarray(action, float), carry
 
 
-def _both(name, steps, seeds):
+def _both(name, steps, seeds, **over):
     spec = REGISTRY[name]
     env = spec.make_env()
-    params = spec.make_test_params(max_steps_in_episode=steps)
+    params = spec.make_test_params(max_steps_in_episode=steps, **over)
     expert = tg.make_expert(name)
     got = scorecard.rollouts(spec, params, expert, seeds)
     task = task_info(name, env, params, len(seeds))
@@ -58,9 +58,16 @@ def _both(name, steps, seeds):
     return spec, got, want
 
 
-@pytest.mark.parametrize("name", ["compressor_surge", "cstr"])
-def test_the_compiled_episodes_are_the_ones_run_policy_runs(name):
-    _, got, want = _both(name, 40, (200, 201, 202))
+# compressor_surge on the demand range the check was written on, 0.35 to 0.95: the
+# default became the normal day (owner, 2026-11-27, review H1), where the expert's
+# ringing valve (PHYSICS.md section 7) amplifies the rounding between a scan and
+# step-by-step calls until seed 200's two runs part, after 23 steps.
+@pytest.mark.parametrize(
+    "name, over",
+    [("compressor_surge", {"demand_range": (0.35, 0.95)}), ("cstr", {})],
+)
+def test_the_compiled_episodes_are_the_ones_run_policy_runs(name, over):
+    _, got, want = _both(name, 40, (200, 201, 202), **over)
     np.testing.assert_allclose(got["reward"], want["reward"], rtol=1e-4, atol=1e-9)
     np.testing.assert_allclose(
         got["reward"].mean(axis=1), want["reward"].mean(axis=1), rtol=1e-5

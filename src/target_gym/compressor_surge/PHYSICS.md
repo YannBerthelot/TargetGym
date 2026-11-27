@@ -406,7 +406,7 @@ at the end, with their sources.
 | `p_ref_range` | (20, 28) | kPa | TUNED | the hardness depends on the moving setpoint (section 6) | ⚠️ |
 | `setpoint_block_steps` | 300 (30 s) | steps | ours | four blocks per episode | ✅ |
 | `setpoint_ramp_s` | 10.0 | s | ours | linear ramp at the start of every block, from the reset's own pressure in the first: twice the 4.9 s the drive needs for a full 20 to 28 kPa move on the control line (section 4), and under half a block so that the scorer still reads each move | ⚠️ |
-| `demand_range` | (0.35, 0.95) | opening | ours | six levels per episode | ⚠️ |
+| `demand_range` | (0.7, 0.95) | opening | ours | six levels per episode; the normal day's by default, the heaviest scenario (owner, 2026-11-27, the RL research review's H1: the dropped load swings' 0.35 to 0.95 until then), the approaches' lower (scenarios.py) | ⚠️ |
 | `demand_block_steps` | 200 (20 s) | steps | ours | | ✅ |
 | `demand_ramp_s` | 5.0 | s | ours | linear ramp at the start of blocks 2 to 6; section 6 rows at 2 and 10 s | ⚠️ |
 | `demand_clip` | (0.2, 1.0) | opening | ours | total opening after the deviation | ✅ |
@@ -491,7 +491,9 @@ reset reaches 0.568 (derived, `--section reach`).
 
 **Schedules.** Four header-pressure levels, iid uniform in 20 to 28 kPa, held
 30 s each, with a 10 s linear ramp into each; six demand levels, iid
-uniform in 0.35 to 0.95, 20 s each, with a 5 s linear ramp into blocks 2 to 6.
+uniform in the scenario's range (0.7 to 0.95 on the normal day, the default; the
+measurements of this paragraph were taken on 0.35 to 0.95), 20 s each, with a 5 s
+linear ramp into blocks 2 to 6.
 A step cost the pair 94.6 to 99.6 % of its tracking cost in the 10 s after it
 (mean 98.3 %, seeds 200 to 209, past the burn-in, measured), because a move the drive
 cannot follow is paid by everyone and the ranking read the slew. On the same

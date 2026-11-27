@@ -12,13 +12,15 @@ Contract:
   ISO 13790's "light" class, 110 kJ/(m2 K) and A_m = 2.5 A_floor, not the
   "medium" class (165), whose figure counts the floors.
 - Stored heat ``E = C_m T_mass + C_slab T_core``, with C_m = 110 000 x 150 and
-  C_slab = 2400 x 1000 x 0.25 x 150 J/K, is priced at the cheapest heat the
-  plant can store: the valle tariff over the COP at the design supply (-10 C
-  outdoors, the room at 21 C). Every run records the store's value at that price
+  C_slab = 2400 x 1000 x 0.25 x 150 J/K, is priced at the dearest heat can cost
+  the plant: the punta tariff over the COP at the valve's top supply, 49 C
+  (owner, 2026-11-27, the RL research review's H2; it was the valle tariff over
+  the design supply's COP). Every run records the store's value at that price
   after each step, as ``stored_value``, and hvac's evaluation names it as its
-  edge charge: the store lost across the scored window is charged once, out of
-  the reward (owner, 2026-11-25, P1 as amended), so the reward stays minus a sum
-  of non-negative terms.
+  edge charge: a store short of its level at the scored window's start is
+  charged its shortfall once, out of the reward, and a fuller one earns nothing
+  (``test_hvac_window_edge``), so the reward stays minus a sum of non-negative
+  terms.
 """
 
 import jax
@@ -28,7 +30,6 @@ import pytest
 
 from target_gym.hvac.env import (
     HVACParams,
-    steady_state,
     total_heat_loss_coefficient,
     zone_conductances,
 )
@@ -54,14 +55,13 @@ def _store(s):
 
 
 def _price():
-    # The design supply is the steady state's; the COP by hand from its law,
-    # 0.52 of Carnot's between the supply and the brine.
-    T_d = float(steady_state(P, -10.0, 21.0)[3])
-    cop = P.cop_carnot_fraction * (T_d + 273.15) / (T_d - P.T_brine)
-    return P.price_valle / cop / 3.6e6  # EUR per J
+    # The COP by hand from its law, 0.52 of Carnot's between the supply and the
+    # brine, at the valve's top supply, where it is lowest; the punta tariff.
+    cop = 0.52 * (49.0 + 273.15) / (49.0 - 0.0)
+    return 0.263 / cop / 3.6e6  # EUR per J
 
 
-def test_a_run_records_the_store_at_the_price_of_the_cheapest_stored_heat():
+def test_a_run_records_the_store_at_the_dearest_price_heat_can_cost():
     from target_gym.benchmark import run_policy, task_info
 
     class Moves:
@@ -84,8 +84,9 @@ def test_a_run_records_the_store_at_the_price_of_the_cheapest_stored_heat():
         + 2400.0 * 1000.0 * 0.25 * 150.0 * rec["T_core"]
     )
     assert np.ptp(store) > 1e5  # the moves did move the store
-    # float32 states near 2.3e9 J at about 6e-9 EUR/J: 1e-5 EUR covers rounding.
-    np.testing.assert_allclose(rec["stored_value"], _price() * store, rtol=0, atol=1e-5)
+    # The env values the store in float32: near EUR 56 (2.6e9 J at 2.1e-8 EUR/J)
+    # one ulp is 3.8e-6 EUR, and its two products and sum round four times.
+    np.testing.assert_allclose(rec["stored_value"], _price() * store, rtol=0, atol=3e-5)
 
 
 def test_the_reward_carries_no_stored_heat_and_the_evaluation_charges_its_edges():

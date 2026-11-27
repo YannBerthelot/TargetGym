@@ -94,6 +94,8 @@ exclude_docs: |
 
 nav:
   - Home: index.md
+  - Vision: vision.md
+  - Task protocol: task-protocol.md
   - User guide:
       - Getting started: getting-started.md
       - Comparing an agent with the reference: comparing.md
