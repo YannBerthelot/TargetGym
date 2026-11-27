@@ -11,20 +11,13 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ### Docs for comparing an agent, and a beta (2026-11-27)
 
-After the outside review of 2026-11-27 (M2, M4) and the owner's pickers the same
-day.
+After the outside review of 2026-11-27 (M2, M4, L3) and the owner's pickers the
+same day.
 
 - 0.8.0 is labelled a beta in the README, as PyPI's classifier says. A new page,
   [Comparing an agent with the reference](docs/comparing.md), which the README
   links first, shows how to train on the scenarios, where to choose checkpoints
   and how to read `tg.score`. The README's examples run on scored tasks.
-- One task card per scored task (`docs/tasks/`), generated with the task pages:
-  what the task is, its scenarios and their shares, its reference and lines,
-  what its ceiling reads and what it does not model. Each task's `PHYSICS.md`
-  gains a `### Not modelled` list, which the card shows.
-- A [Known limits](docs/known-limits.md) page: the room is an upper bound on what
-  a policy can save, part of it needs information no policy has, and there is no
-  causal line or learned-policy result yet.
 - The docs no longer call the MPC an upper bound, or the ceiling a limit: both
   are achieved costs. The README counts its tasks and their MPCs right.
 - The throughput benchmark (`benchmark_speed`) times gymnax's `step` with its
@@ -32,6 +25,8 @@ day.
   random actions, and everything `step` returns kept, where it kept only the
   state with one key and zero actions. `docs/performance.md` is measured again
   on one named machine.
+- The install notes say matplotlib, seaborn and pandas come with gymnax, which
+  requires them; an extra for them would make no install lighter.
 
 ### The charter's comparison as one call (2026-11-27)
 

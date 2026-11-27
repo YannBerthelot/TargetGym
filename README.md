@@ -30,8 +30,7 @@ reactor, a cement kiln, a grid battery and a wind turbine.
 
 **0.8.0 is a beta.** Four tasks are scored, each against a reference
 controller frozen in the package. To compare an agent with it, start with
-[Comparing an agent with the reference](docs/comparing.md), and read
-[Known limits](docs/known-limits.md) before quoting a result.
+[Comparing an agent with the reference](docs/comparing.md).
 
 - **Four scored tasks.** `reactor`, `hvac`, `compressor_surge` and
   `ph_neutralization` are scored: each has a measured reference to beat and a
@@ -341,7 +340,6 @@ method and lists what each model is validated against.
 | | |
 |---|---|
 | **[Comparing an agent with the reference](docs/comparing.md)** | `tg.score`: the saving over each scored task's reference, and how to read it |
-| **[Known limits](docs/known-limits.md)** | What this release's room, lines and results do not say yet |
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
 | **[Using the PIDs](docs/using-the-pids.md)** | Running the baseline, scoring against it, using it in training |
 | **[Environment reference](docs/environments.md)** | All 25: shapes, tracked variables, baselines, contracts |

@@ -376,17 +376,3 @@ see. Episode lengths are the scored configuration's (`env.default_params`),
 which is what the recorded baselines use.
 
 <!-- END GENERATED FACTS -->
-
-### Not modelled: `hvac`
-
-From the physics contract's known deviations, section 7:
-
-- Cooling. The plant only heats, where slab plants run both ways, so a room
-  above the band can only stop being heated.
-- Forecast error. The 24 h forecast the policy reads is the weather model's own
-  mean, not a real day-ahead forecast with its error.
-- A heat pump whose capacity moves with its supply and brine temperatures. The
-  source has one size whatever water it makes.
-- The radiant share of the slab's exchange. All its heat goes to the room's air.
-- A day's practice of setting the curve once and spreading it over hours. The
-  supply can move every 15 min.

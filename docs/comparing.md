@@ -6,10 +6,11 @@ Four tasks are scored, `tg.FLAGSHIP`: `reactor`, `hvac`, `compressor_surge` and
 the task, each weighted by its share of operating time. `tg.score` computes it the
 way the charter does, so a number from it means the same thing in every paper.
 
-Each task has a card with its scenarios, its lines and what it leaves out:
-[reactor](tasks/reactor.md), [hvac](tasks/hvac.md),
-[compressor_surge](tasks/compressor_surge.md) and
-[ph_neutralization](tasks/ph_neutralization.md).
+Each scored task's page gives its lines and its room:
+[reactor](environments/reactor.md#reference-and-ceiling),
+[hvac](environments/hvac.md#reference-and-ceiling),
+[compressor_surge](environments/compressor_surge.md#reference-and-ceiling) and
+[ph_neutralization](environments/ph_neutralization.md#reference-and-ceiling).
 
 ## The reference
 
@@ -35,9 +36,9 @@ on some of them by a large margin.
 
 ## Train on the scenarios
 
-`tg.make(name)` gives the task's heaviest scenario. The score reads all of them,
-weighted by their share of operating time, which `tg.list_scenarios(name)`
-gives:
+`tg.make(name)` gives the task's scored configuration. The score reads all of
+the task's scenarios, weighted by their share of operating time, which
+`tg.list_scenarios(name)` gives:
 
 ```python
 import target_gym as tg
@@ -104,8 +105,7 @@ then covers the variation between runs as well as between seeds.
   simulator's true state and so is not comparable with the reference.
 
 The room is an upper bound on what a policy can save, since the ceiling knows
-what no policy observes. [Known limits](known-limits.md) says what else to keep
-in mind when quoting a result.
+what no policy observes: each task's page names what its ceiling reads.
 
 ## Outside the scored suite
 

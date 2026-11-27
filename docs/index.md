@@ -93,8 +93,6 @@ policy has something real to beat. The five without one, `plane`, `plane_energy`
 - **Beat the reference**
 
     [Comparing an agent with the reference](comparing.md) ·
-    [Task cards](tasks/reactor.md) ·
-    [Known limits](known-limits.md) ·
     [Baseline results](baseline-results.md) ·
     [RL protocol](rl-protocol.md) ·
     [RL results](rl-baselines.md)
