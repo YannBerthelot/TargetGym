@@ -143,7 +143,11 @@ class CompressorSurgeParams(EnvParams):
     #: needs for the largest move. Under half a block, so that the scorer still
     #: reads each move (``benchmark.target_changes``).
     setpoint_ramp_s: float = 10.0  # s
-    demand_range: Tuple[float, float] = (0.35, 0.95)  # opening
+    #: The consumers' openings the demand blocks are drawn in: the normal day's,
+    #: the heaviest scenario (owner, 2026-11-27, the RL research review's H1;
+    #: the dropped load swings' 0.35 to 0.95 until then). The approaches move it
+    #: down (``scenarios.py``).
+    demand_range: Tuple[float, float] = (0.7, 0.95)  # opening
     demand_block_steps: int = 200  # 20 s
     #: Linear ramp at the start of demand blocks 2 to 6. Must be shorter than
     #: a block (``scheduled_demand``).

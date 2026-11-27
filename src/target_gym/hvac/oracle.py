@@ -14,15 +14,20 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 - objective: the heat pump's electricity at the tariff and the comfort
   hinges through epigraph rows on every occupied state (T2): the room below
   and above the band and the floor above its limit, each linear in
-  kelvin-hours at the work-loss price; the heat each step draws from the
-  store, at the env's price (``env.stored_heat_cost``), linear in the states;
+  kelvin-hours at the work-loss price;
 - window (owner, 2026-11-25, the review's finding 1): the registry's oracle
   plans on the task's scored window alone (``scenarios.hvac_evaluation``), as
   the task scores its lines, so the ceiling bounds the scored cost. A step
-  outside it costs the plan nothing; the stored heat charges the store the
-  window starts with and credits the one it leaves. K8's replay charges the
-  env what the evaluation does (``replay_cost``): a step's cost and the
-  store's value it drew down inside the window, nothing outside;
+  outside it costs the plan nothing. The evaluation's edge charge (owner,
+  2026-11-27, the RL research review's H2) is a fourth hinge, once: the
+  store's value at the window's start (``env.stored_value``, the dearest heat
+  price) less its value at the window's end, or at the plan's end where that
+  comes first. The plan carries the start's value as a third state, read as
+  the plan passes the window's start, or given as ``start_store`` for a plan
+  that starts inside it (the receding oracle reads it as it passes). The
+  hinge is a surrogate: the env never charges it, the evaluation does, so
+  K8's replay compares the reward's cost alone (``replay_cost``), inside the
+  window, nothing outside;
 - smoothed site (T5): the slab heat's two edges in ``slab_heat``, heating
   only (``max(T_sup - T_core, 0)``) and the source's size [13], which enter the
   dynamics and so cannot be epigraph rows: K2's softplus at the solve's width
@@ -51,12 +56,13 @@ from target_gym.hvac.env import (
     internal_gain,
     is_occupied,
     outdoor_temperature,
+    shortfall_price,
     slab_conductances,
     solar_gain,
     solve_air_and_surface,
     source_size,
     split_gains,
-    stored_heat_cost,
+    stored_heat,
     stored_value,
     zone_conductances,
 )
@@ -65,6 +71,8 @@ from target_gym.integration import integrate_dynamics
 from target_gym.oracles.controller import (
     Oracle,
     TaskModel,
+    enable_x64,
+    float64,
     raw_of,
     scored_run,
     softplus_clip,
@@ -103,12 +111,19 @@ def scored_window() -> tuple[int, int]:
     return ev["unscored_steps"], ev["unscored_steps"] + ev["scored_steps"]
 
 
-def hvac_model(env, p, window=None) -> TaskModel:
+def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
     """The plan's model; ``window`` ``(first, end)`` costs only the steps in it
-    (every step when None)."""
+    and the store's shortfall at its end (every step and no edge when None).
+    ``start_store()`` gives the store's value at the window's start, in euros,
+    for a plan that starts inside the window."""
     hours = p.delta_t / 3600.0
     # The deviation's mean per step, a plain float whatever the run's precision.
     decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
+    price = shortfall_price(p)
+
+    def value(T_mass, T_core):
+        """The store's value, as the evaluation reads it (``env.stored_value``)."""
+        return price * stored_heat(T_mass, T_core, p)
 
     def step(d, x, u, t):
         start, deviation, path = d["task"]
@@ -120,7 +135,7 @@ def hvac_model(env, p, window=None) -> TaskModel:
         else:  # the episode's own weather, t + 1 steps after the solve's start
             dev = path[jnp.minimum(t, path.shape[0] - 1)]
         x1, _ = integrate_dynamics(
-            positions=x, delta_t=p.delta_t, method=env.integration_method,
+            positions=x[:2], delta_t=p.delta_t, method=env.integration_method,
             compute_velocity=partial(
                 velocity, action=T_sup, time=start + t, weather_dev=dev,
                 width=width, p=p,
@@ -135,9 +150,17 @@ def hvac_model(env, p, window=None) -> TaskModel:
         T_floor = floor_surface_temperature(x1[1], T_air, p)
         occupied = is_occupied(now, p)
         if window is None:
-            inside = True
+            inside, held, edge = True, x[2], -jnp.ones((), x.dtype)
         else:
             inside = (start + t >= window[0]) & (start + t < window[1])
+            # The store at the window's start, read as the plan passes it, and
+            # its shortfall at the window's end, or at the plan's where that
+            # comes first.
+            stored = value(x1[0], x1[1])
+            held = jnp.where(now <= window[0], stored, x[2])
+            end = d.get("end")
+            last = window[1] if end is None else jnp.minimum(window[1], start + end)
+            edge = jnp.where((now == last) & (now > window[0]), held - stored, -1.0)
         y = jnp.where(
             occupied & inside,
             jnp.stack(
@@ -151,27 +174,43 @@ def hvac_model(env, p, window=None) -> TaskModel:
         made = jnp.minimum(T_sup, x1[1] + q / slab_conductances(p)["H_water"])
         kwh = q / heat_pump_cop(made, p) / 1000.0 * hours
         cost = electricity_price(start + t, p) * kwh
-        cost = cost + stored_heat_cost(x[0], x[1], x1[0], x1[1], p)
+        x1 = jnp.stack([x1[0], x1[1], held])
+        y = jnp.concatenate([y, jnp.reshape(edge, (1,))])
         return x1, jnp.where(inside, cost, 0.0), y, T_air[None], ()
 
+    def state_x(s):
+        """The plan's start: the two nodes and the store's value at the window's
+        start, the value now where the plan starts at or before it."""
+        now = value(s.T_mass, s.T_core)
+        if window is None or int(s.time) <= window[0]:
+            return jnp.stack([s.T_mass, s.T_core, now])
+        if start_store is None or start_store() is None:
+            raise ValueError(
+                f"hvac: a plan from step {int(s.time)}, inside the scored window "
+                f"from step {window[0]}, needs the store's value at the window's "
+                "start (start_store)"
+            )
+        return jnp.stack([s.T_mass, s.T_core, jnp.asarray(start_store(), now.dtype)])
+
     def replay_cost(s, s1, r):
-        """What the evaluation charges an env step (K8's replay): its cost and
-        the store's value it drew down inside the window, nothing outside."""
-        drawn = stored_value(s, p) - stored_value(s1, p)
+        """What K8's replay compares of an env step: its reward's cost inside
+        the window, nothing outside. The edge's shortfall is the evaluation's
+        charge, never the env's, so the plan pays it as a surrogate hinge."""
         if window is None:
-            return -r + drawn
+            return -r
         inside = (s.time >= window[0]) & (s.time < window[1])
-        return jnp.where(inside, -r + drawn, 0.0)
+        return jnp.where(inside, -r, 0.0)
 
     weight = float(p.comfort_price * hours)
     return TaskModel(
-        nx=2, nu=1, step=step,
-        state_x=lambda s: jnp.stack([s.T_mass, s.T_core]),
+        nx=3, nu=1, step=step, state_x=state_x,
         data=lambda s: (s.time, s.weather_dev, None),
         hold=lambda s: raw_of(s.T_supply, p.T_supply_min, p.T_supply_max)[None],
         tracked=lambda s: s.T_air[None],
         resolution=(float(p.precision_floor),),
-        hinges=(Hinge(weight=weight), Hinge(weight=weight), Hinge(weight=weight)),
+        # The comfort rows at the work-loss price, and the store's shortfall in
+        # euros at the dearest heat price.
+        hinges=(Hinge(weight=weight),) * 3 + (Hinge(weight=1.0, surrogate=True),),
         tie_budget=weight * 0.5 * float(p.precision_floor),
         replay_cost=replay_cost,
     )  # fmt: skip
@@ -197,7 +236,31 @@ def ceiling_data(env, p, state, step_keys, run_as=scored_run):
     return state.time, state.weather_dev, path
 
 
+class WindowOracle(Oracle):
+    """The shared solver's receding oracle on a windowed ``hvac_model``. It reads
+    the store's value as the run passes the window's start, so a plan solved
+    inside the window charges its end against it (``start_store``)."""
+
+    def __init__(self, env, params, name, window):
+        self.window, self._start = window, None
+
+        def build(env, p):
+            return hvac_model(env, p, window=window, start_store=lambda: self._start)
+
+        super().__init__(env, params, name, build)
+
+    def reset(self):
+        super().reset()
+        self._start = None
+
+    def step(self, obs, state):
+        if int(state.time) == self.window[0]:
+            with enable_x64():
+                self._start = float(stored_value(float64(state), self.params))
+        return super().step(obs, state)
+
+
 def make_hvac_mpc(env, params) -> Oracle:
-    """Registry factory: the shared solver's oracle on ``hvac_model``."""
-    window = scored_window()
-    return Oracle(env, params, "hvac", lambda env, p: hvac_model(env, p, window=window))
+    """Registry factory: the shared solver's oracle on ``hvac_model``, windowed on
+    the task's scored window."""
+    return WindowOracle(env, params, "hvac", scored_window())

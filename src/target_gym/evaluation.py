@@ -39,8 +39,10 @@ class Evaluation:
     of what the plant stores (hvac's ``stored_value``): the value the store lost
     across the scored window is charged once, spread over its steps, so a policy
     neither draws on stock bought before the window nor leaves the next days short
-    for free (owner, 2026-11-25, the hvac review's P1 as amended). The reward
-    carries no such charge."""
+    for free (owner, 2026-11-25, the hvac review's P1 as amended). A store left
+    fuller earns nothing, so ending at the start level is neutral and no edge
+    pays (owner, 2026-11-27, the RL research review's H2). The reward carries no
+    such charge."""
 
     unscored_steps: int = 0
     scored_steps: int | None = None
@@ -76,7 +78,8 @@ def scored_cost(spec, cost) -> float:
 def episode_cost(spec, episode) -> float:
     """One ``eval.Episode``'s cost per step over ``spec``'s scored window, with
     the evaluation's edge charge: the store's value after the step before the
-    window less its value after the window's last step, over the scored steps."""
+    window less its value after the window's last step where that is positive,
+    over the scored steps."""
     window = scored_window(spec, len(episode.cost))
     cost = scored_cost(spec, episode.cost)
     name = of(spec).edge_charge
@@ -87,8 +90,8 @@ def episode_cost(spec, episode) -> float:
     if name not in episode.terms:
         raise KeyError(f"{spec.name}: the episode records no {name!r}")
     store = np.asarray(episode.terms[name], float)
-    lost = store[window.start - 1] - store[window.stop - 1]
-    return cost + float(lost) / (window.stop - window.start)
+    lost = max(float(store[window.start - 1] - store[window.stop - 1]), 0.0)
+    return cost + lost / (window.stop - window.start)
 
 
 def costs(runs: Mapping[str, list], spec) -> dict[str, np.ndarray]:
