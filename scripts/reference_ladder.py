@@ -99,9 +99,9 @@ from target_gym.registry import REGISTRY  # noqa: E402
 
 SEEDS = tuple(range(100, 110))
 #: The seeds a zone's setpoint is placed on (outside review M5, 2026-11-27): apart
-#: from the ladder's 100 to 109 the J3 lines run on, the scoring seeds from 200 and
-#: J2's hash seeds from 1000, so no line is read on the seeds its reference was
-#: placed on.
+#: from the ladder's 100 to 109 the J3 lines run on, the scoring seeds 200 to 209,
+#: the validation block 300 to 349 and J2's hash seeds from 1000, so no line is
+#: read on the seeds its reference was placed on.
 PLACEMENT_SEEDS = tuple(range(110, 120))
 NOISE = 1.0
 RAW_BAND = DEAD_BAND * 2.0  # a valve's dead band on an action spanning 2

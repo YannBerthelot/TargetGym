@@ -848,8 +848,8 @@ def test_the_night_rungs_trim_stops_at_five_kelvin(ladder):
 
 # A frozen reference (target_gym.reference; outside review C1 and M5, owner's
 # picker 2026-11-27). Contract: a zone priced as a violation is placed on seeds
-# no line is read on (J3's evaluation seeds, J4's scoring seeds and every block
-# the stop rule may add, J2's hash seeds), and the reference's exits are counted
+# no line is read on (J3's evaluation seeds, J4's scoring seeds, the validation
+# block, J2's hash seeds), and the reference's exits are counted
 # on J2's hash seeds, out of sample. A rung's law, frozen through JSON and rebuilt
 # on a fresh row with no bump test, costs seed by seed what the ladder's rung
 # cost; ``--freeze`` writes only a law that does.
@@ -881,8 +881,8 @@ def test_the_ladder_places_a_zone_on_seeds_no_line_runs_on(ladder):
     }
     assert scanned, "no candidate left the zone, so the scan names no seed"
     assert scanned <= set(ladder.PLACEMENT_SEEDS)
-    first = charter.ANCHOR_SEEDS[0]
-    lines = set(range(first, first + charter.STOP_MAX))
+    # The scoring seeds, and the validation block agents choose checkpoints on.
+    lines = set(charter.ANCHOR_SEEDS) | set(charter.VALIDATION_SEEDS)
     for spec in REGISTRY.values():
         ev = evaluation.of(spec)
         lines |= set(ev.seeds) | set(ev.extra_seeds)

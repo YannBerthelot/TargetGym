@@ -107,6 +107,8 @@ def _one(path: str) -> tuple[bool, set, set, bool]:
         return False, set(), set(), True  # pinned data: the cross-task files
     if path.startswith(SRC + "reference/rows/"):
         task = {name[:-3]} & set(_tasks())
+        if not task:  # what every row shares
+            return True, set(), set(), True
         return False, task, set(LADDER), True
     if path.startswith("scripts/"):
         if name == "ci_select_tests.py":
