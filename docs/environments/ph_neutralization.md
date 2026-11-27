@@ -142,7 +142,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `reagent_price` | 1 | L/L |
 | `excursion_price` | 1.66667 | L/s |
 | `diversion_price` | 2 | L/L |
-| `failure_cost` | 9 | L |
+| `failure_cost` | 13 | L |
 | `restart_steps` | 720 | steps |
 | `e_floor` | 1.5 | pH |
 
