@@ -969,6 +969,33 @@ def placement_report(row, rung: str) -> dict:
     return out
 
 
+def comparator_change(name: str, old: dict | None, new: dict) -> str | None:
+    """What a re-freeze changed of ``name``'s comparator: its kept rung or a
+    zone's setpoint, as one line to announce in the CHANGELOG (the outside
+    review's H5); None where neither moved or there was nothing before."""
+    if old is None:
+        return None
+
+    def held(frozen):
+        return frozen["rung"], frozen.get("law", {}).get("setpoints", {})
+
+    (r0, s0), (r1, s1) = held(old), held(new)
+    if (r0, s0) == (r1, s1):
+        return None
+
+    def at(setpoints, loop):
+        return f"{setpoints[loop]:.6g}" if loop in setpoints else "none"
+
+    loops = sorted(k for k in set(s0) | set(s1) if s0.get(k) != s1.get(k))
+    moves = ", ".join(f"{k} {at(s0, k)} -> {at(s1, k)}" for k in loops)
+    return (
+        f"{name}: the comparator changed, {r0} -> {r1}"
+        + (f" ({moves})" if moves else "")
+        + ": say so in the CHANGELOG, as a change of the reference every saving "
+        "is quoted against"
+    )
+
+
 def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
     """Charter J1's kept rung of ``name`` as package data (``target_gym.reference``):
     its law, the parameters its episodes run on, and its provenance. Before it is
@@ -1022,8 +1049,11 @@ def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
             f"{name}: the {kept} rung rebuilt from its law does not run as the "
             "ladder's: nothing written"
         )
+    said = comparator_change(name, R.load(name, root or R.FROZEN), frozen)
     where = R.write(name, frozen, root or R.FROZEN)
     print(f"  froze {kept} in {where}", flush=True)
+    if said:
+        print(f"  {said}", flush=True)
     return where
 
 

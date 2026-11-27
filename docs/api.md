@@ -22,7 +22,8 @@ Every task by its registry name, from the package root:
 | `make_gymnasium(name, render_mode=None, stream=False, **overrides)` | A Gymnasium environment on the scored configuration; `stream=True` gives the continuing plant |
 | `make_stream(name, length=None)` | The task as a [continuing plant](continuing-tasks.md): it never ends, and the reset key fixes its world |
 | `list_envs(group=None)` | Registry names, of every task or of one group |
-| `score_policy(name, policy, seeds=10, params=None)` | `policy(obs) -> action`, or the expert, against the expert and the ceiling (`target_gym.scoring`) |
+| `score(name, policy, seeds=None, jit=True)` | The charter's comparison on a scored task: the saving over the reference with its interval, one row per scenario, and the record's lines and room |
+| `score_policy(name, policy, seeds=10, params=None)` | On a scored task, `score`'s comparison; elsewhere, or with `params`, `policy(obs) -> action` against the expert and the ceiling (`target_gym.scoring`) |
 
 ```python
 import target_gym as tg

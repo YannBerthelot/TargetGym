@@ -334,6 +334,11 @@ as the ladder built it, and rebuilt from the file it is about to write. The
 file is written only if the two cost the same on every seed. A file frozen on
 another plant is refused by `make_reference`, and its `records` tests fail.
 
+A re-freeze that changes a task's kept rung or one of its setpoints changes the
+comparator every saving is quoted against, and the command says so. Announce it
+in the CHANGELOG, per task, as a change of the comparator: the old and the new
+rung and setpoints, and the reason (a plant fix, a recipe change, new seeds).
+
 ### Frozen scoring constants
 
 What a score is measured against does not move with the controllers. Each

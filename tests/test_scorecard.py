@@ -80,7 +80,9 @@ def test_a_plants_store_is_read_as_the_evaluation_reads_it():
     np.testing.assert_allclose(ours, theirs, rtol=1e-5)
 
 
-# ``tg.score`` (charter J4; outside review C1, owner's pickers 2026-11-27). Contract:
+# ``tg.score`` (charter J4; outside review C1, owner's pickers 2026-11-27). These
+# build the shipped frozen references, so they are ``records`` tests: they fail on a
+# plant changed since the last freeze, as the recorded rows' tests do. Contract:
 # the saving is ``1 - J_policy / J_reference`` with ``J = sum_s w_s mean(cost |
 # s)`` over the scenarios' shares of operating time, the policy and the reference
 # run on the same seeds and worlds, each cost read over the scored window; one row
@@ -96,6 +98,7 @@ def expert_on_hvac():
 
 
 @pytest.mark.medium
+@pytest.mark.records
 def test_the_reference_against_itself_saves_nothing_and_ties_every_seed():
     ref = tg.make_reference("hvac")
     out = tg.score("hvac", ref, seeds=SEEDS)
@@ -106,6 +109,7 @@ def test_the_reference_against_itself_saves_nothing_and_ties_every_seed():
 
 
 @pytest.mark.medium
+@pytest.mark.records
 def test_the_scenario_table_adds_up_to_the_headline(expert_on_hvac):
     out = expert_on_hvac
     rows = out["scenarios"]
@@ -123,6 +127,7 @@ def test_the_scenario_table_adds_up_to_the_headline(expert_on_hvac):
 
 
 @pytest.mark.medium
+@pytest.mark.records
 def test_a_pure_policy_costs_the_same_compiled_and_on_the_host():
     def hold(obs):  # both of pH's valves at mid-stroke
         return jnp.zeros(2, jnp.float32)
@@ -134,6 +139,7 @@ def test_a_pure_policy_costs_the_same_compiled_and_on_the_host():
 
 
 @pytest.mark.medium
+@pytest.mark.records
 def test_a_full_state_policy_is_scored_and_said_to_read_the_state():
     probe = tg.FullState(lambda obs, state: np.zeros(2))
     out = tg.score("ph_neutralization", probe, seeds=(200,))
@@ -143,3 +149,35 @@ def test_a_full_state_policy_is_scored_and_said_to_read_the_state():
 def test_a_task_outside_the_scored_suite_is_refused():
     with pytest.raises(ValueError, match="not scored"):
         tg.score("plane", lambda obs: obs[:1])
+
+
+@pytest.mark.medium
+@pytest.mark.records
+def test_score_policy_on_a_scored_task_is_the_charters_comparison():
+    # The outside review's M1: on the scored suite, score_policy's tracking score
+    # and headroom were NaN or 0 while the charter measured room. There it now
+    # returns tg.score's result, on the first ``seeds`` of the scoring seeds.
+    from target_gym import charter
+
+    expert = tg.make_expert("hvac")
+    old = tg.score_policy("hvac", expert, seeds=2)
+    new = tg.score("hvac", expert, seeds=charter.ANCHOR_SEEDS[:2])
+    assert old["saving"] == new["saving"]
+    assert old["scenarios"] == new["scenarios"]
+    assert "score" not in old and "headroom" not in old
+
+
+@pytest.mark.large
+def test_the_reactor_reads_its_baseload_and_load_following_days_apart():
+    # Owner, 2026-11-27: on the reactor the saving on baseload days and on
+    # load-following days are two numbers. Its reference against itself saves
+    # nothing on either, on its pinned 7-day streams.
+    from target_gym import scoring_runs
+
+    out = tg.score("reactor", tg.make_reference("reactor"), seeds=(200,))
+    assert set(out["days"]) == {"baseload", "load_follow"}
+    assert out["days"]["baseload"]["saving"] == 0.0
+    assert out["days"]["load_follow"]["saving"] == 0.0
+    assert {r["scenario"] for r in out["scenarios"]} == set(
+        scoring_runs.weights("reactor")
+    )

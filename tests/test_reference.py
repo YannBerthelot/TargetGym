@@ -102,6 +102,20 @@ def test_freezing_with_no_task_named_freezes_the_scored_suite(ladder):
     assert ladder.freeze_targets(["hvac"], []) == (["hvac"], [])
 
 
+def test_a_freeze_that_moves_the_comparator_says_so(ladder):
+    # H5: a re-freeze that changes a task's kept rung or a setpoint changes what
+    # every saving is quoted against, so it is announced (and the CHANGELOG says
+    # so). One that keeps both is silent.
+    old = {"rung": "pi", "law": {"setpoints": {"T_air on supply": 22.25}}}
+    same = {"rung": "pi", "law": {"setpoints": {"T_air on supply": 22.25}}}
+    moved = {"rung": "feedforward", "law": {"setpoints": {"T_air on supply": 22.0}}}
+    assert ladder.comparator_change("hvac", old, same) is None
+    assert ladder.comparator_change("hvac", None, moved) is None
+    said = ladder.comparator_change("hvac", old, moved)
+    assert "pi" in said and "feedforward" in said
+    assert "22.25" in said and "22" in said and "CHANGELOG" in said
+
+
 @pytest.mark.records
 @pytest.mark.parametrize("name", LADDER)
 def test_make_reference_costs_what_the_ladders_rung_cost_on_the_scoring_seeds(
@@ -229,6 +243,7 @@ print(json.dumps({"rung": ref.rung, "tasks": charter.charter_tasks()}))
 
 
 @pytest.mark.medium
+@pytest.mark.records
 def test_the_reference_and_the_charters_tasks_need_no_repository(tmp_path):
     # Outside review C1: from an install, with no scripts/ beside the package,
     # make_reference rebuilds the frozen rung on its row and charter_tasks lists
