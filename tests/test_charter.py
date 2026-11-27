@@ -363,6 +363,57 @@ def test_one_draw_that_fails_fails_the_sweep():
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
 
 
+def _draw(kept: dict, null: dict) -> dict:
+    """A ladder draw as ``family_sweep.ladder`` prints it: medians per scenario
+    for the kept rung ``"pi"`` and one null, and B7's own unexcepted verdict."""
+    beats = all(kept[s] < null[s] for s in kept)
+    return {
+        "kept": "pi",
+        "rungs": {"pi": kept | {"trips": 0}},
+        "nulls": {"hold": null},
+        "holds": beats,
+    }
+
+
+_CSTR_KEPT = {"normal": 0.27, "feed_buildup": 0.709, "cooling_loss": 0.488}
+
+
+def test_cstrs_sweep_holds_when_a_null_wins_only_its_excepted_feed_buildup():
+    """The owner's J2 exception (2026-11-27): cstr's cooling-only reference
+    cannot act on a feed build-up, so a null winning feed_buildup alone leaves
+    cstr's sweep held, and J2 accepts. Any other task loses the sweep on it."""
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.543}
+    draws = [_draw(_CSTR_KEPT, null)] * 8
+    assert charter.verdict(30, 0, {"hold": 3}, charter.sweep_result(draws, "cstr")) == {
+        "accepted": True,
+        "reasons": [],
+    }
+    assert charter.sweep_result(draws, "hvac") is False
+    assert charter.sweep_result(draws) is False
+
+
+def test_cstrs_exception_does_not_cover_its_other_scenarios():
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.40}
+    assert charter.sweep_result([_draw(_CSTR_KEPT, null)], "cstr") is False
+
+
+def test_cstrs_exception_still_needs_a_kept_rung_and_a_null():
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.543}
+    unkept = _draw(_CSTR_KEPT, null) | {"kept": None}
+    no_null = _draw(_CSTR_KEPT, null) | {"nulls": {}}
+    assert charter.sweep_result([unkept], "cstr") is False
+    assert charter.sweep_result([no_null], "cstr") is False
+
+
+def test_a_j2_exception_names_scenarios_of_its_own_task_and_when_it_was_accepted():
+    from target_gym import scenarios as S
+    from target_gym.registry import REGISTRY
+
+    for task, scenarios in charter.J2_EXCEPTIONS.items():
+        assert set(scenarios) <= set(S.weights(REGISTRY[task])), task
+        assert all("accepted 20" in why for why in scenarios.values()), task
+
+
 def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
     """The ladder rows live in the repository's ``scripts/``, which an installed
     package does not have. Asked there, the list is not silently the

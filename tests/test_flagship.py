@@ -202,6 +202,25 @@ def test_a_scored_page_says_not_measured_for_an_mpc_line_its_record_lacks(monkey
     assert "is 2." in section
 
 
+@pytest.mark.parametrize("task", ["cstr", "hvac"])
+def test_a_scored_page_says_which_scenarios_its_reference_does_not_hold(
+    monkeypatch, task
+):
+    """The owner, 2026-11-27: cstr's page says its reference does not hold
+    feed_buildup against the nulls, and why. A task with no J2 exception says
+    nothing of the kind."""
+    weights = {"normal": 1.0}
+    line = charter.line({"normal": {"costs": [2.0, 2.0], "trips": 0}}, weights)
+    record = {"task": task, "weights": weights, "reference": {"line": line}}
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    section = _script("generate_env_pages").charter_section(record)
+    excepted = charter.J2_EXCEPTIONS.get(task, {})
+    assert ("not held" in section) == bool(excepted)
+    for scenario, why in excepted.items():
+        assert f"`{scenario}` is not held" in section
+        assert why in section
+
+
 def _table(text: str) -> list[dict]:
     """Every row of every Markdown table in ``text``, keyed by its header."""
     rows, header = [], None
