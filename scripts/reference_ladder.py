@@ -64,11 +64,8 @@ from target_gym.benchmark import (  # noqa: E402
     task_info,
 )
 from target_gym.experts.ladder import (  # noqa: E402
-    Cascade,
-    Override,
     Pi,
     Rung,
-    ValvePosition,
     best_rung,
     cv_sigma,
     decoupler,
@@ -90,9 +87,15 @@ from target_gym.identification import (  # noqa: E402
     simc,
     single_run,
 )
+from target_gym.reference.frozen import assemble, constant  # noqa: E402
 from target_gym.registry import REGISTRY  # noqa: E402
 
 SEEDS = tuple(range(100, 110))
+#: The seeds a zone's setpoint is placed on (outside review M5, 2026-11-27): apart
+#: from the ladder's 100 to 109 the J3 lines run on, the scoring seeds from 200 and
+#: J2's hash seeds from 1000, so no line is read on the seeds its reference was
+#: placed on.
+PLACEMENT_SEEDS = tuple(range(110, 120))
 NOISE = 1.0
 RAW_BAND = DEAD_BAND * 2.0  # a valve's dead band on an action spanning 2
 FREE = (-np.inf, np.inf)
@@ -230,6 +233,9 @@ class Row:
     starts: dict = dataclasses.field(default_factory=dict)
     bumpless: bool = False
     schedules: dict = dataclasses.field(default_factory=dict)
+    #: Each rung's law as ``build`` made it (``target_gym.reference.frozen``), by
+    #: rung: what ``--freeze`` writes for the kept one.
+    frozen: dict = dataclasses.field(default_factory=dict)
 
 
 def scheduled(name, row, spec, label, law):
@@ -240,7 +246,12 @@ def scheduled(name, row, spec, label, law):
 
     def exits_at(point):
         left = zone_exits(
-            name, row, Reference("candidate", law(point)), c.exit_terms, spec
+            name,
+            row,
+            Reference("candidate", law(point)),
+            c.exit_terms,
+            spec,
+            seeds=PLACEMENT_SEEDS,
         )
         seeds = len({seed for _, seed in left})
         print(
@@ -258,8 +269,9 @@ def scheduled(name, row, spec, label, law):
         "holds": leaves_only_unheld(setpoint, scan, unheld),
     }
     row.placements[label], row.starts[label] = {c.name: own}, {}
+    row.frozen[label] = {"rung": label, "schedule": setpoint}
     print(f"    {label}, {c.name}: kept setpoint {setpoint:.4g}", flush=True)
-    return law(setpoint)
+    return assemble(row, row.frozen[label], spec)
 
 
 def corners(**ranges) -> tuple:
@@ -384,9 +396,10 @@ def build(name: str, row: Row, spec=None) -> dict:
     env = spec.make_env()
     p = spec.make_test_params(**_test_params(row))
     rungs = {}
-    row.placements, row.starts = {}, {}  # this build's own, per rung
+    row.placements, row.starts, row.frozen = {}, {}, {}  # this build's own, per rung
     if row.published:
-        rungs["published"] = row.published(spec)
+        row.frozen["published"] = {"rung": "published", "published": True}
+        rungs["published"] = assemble(row, row.frozen["published"], spec)
     if not row.loops:
         return rungs
 
@@ -419,10 +432,6 @@ def build(name: str, row: Row, spec=None) -> dict:
 
     def inst_of(tag):
         return Instrument.of(env, p, tag)
-
-    def settled(cv):
-        value = float(np.median(plant._y[:, cv]))
-        return lambda o, xp: value
 
     def tune(label, mv, cv, du, window, inst, db, model="fopdt", room=None, on=None):
         """SIMC at every operating point, kept where the plant is most sensitive."""
@@ -462,8 +471,6 @@ def build(name: str, row: Row, spec=None) -> dict:
     const = np.median(plant.u0, axis=0)
     flat = lambda o, xp: xp.asarray(const, dtype=xp.float32)  # noqa: E731
 
-    start = row.rest if row.bumpless else None
-
     def read(o, xp):
         return xp.stack([c.read(o, xp) for c in row.loops])
 
@@ -472,17 +479,20 @@ def build(name: str, row: Row, spec=None) -> dict:
 
     targets = [c.target for c in row.loops]
     zoned = [i for i, c in enumerate(row.loops) if c.zone]
+    #: Each zone's setpoint by name: the 2 sigma loops' once placed, and the
+    #: centre of each loop priced as a violation until a rung places it.
+    fixed = {}
     if zoned:
         centres = list(targets)
         for i in zoned:
             low, high, _ = row.loops[i].zone
-            centres[i] = _constant(0.5 * (low + high))
+            centres[i] = constant(0.5 * (low + high))
         for i in zoned:
             c = row.loops[i]
             if c.exit_terms:
                 # Placed for each rung on its own, once the rung exists (``make``);
                 # the centre meanwhile, for the row's 2 sigma loops' probes.
-                targets[i] = centres[i]
+                fixed[c.name] = 0.5 * (c.zone[0] + c.zone[1])
                 continue
             setpoint, at = None, list(centres)
             # The spread is the controlled variable's where its loop holds, which on
@@ -493,7 +503,7 @@ def build(name: str, row: Row, spec=None) -> dict:
                 probe = ladder_controller(
                     Rung("pi", tuple(pis), mix), read, stacked(at), flat, dt
                 )
-                held = cv_traces(name, row, probe, i, spec)
+                held = cv_traces(name, row, probe, i, spec, PLACEMENT_SEEDS)
                 sigma = cv_sigma([t[len(t) // 2 :] for t in held])
                 last, setpoint = setpoint, zone_setpoint(*c.zone[:2], sigma, c.zone[2])
                 row.placed[c.name] = (sigma, setpoint)
@@ -503,41 +513,61 @@ def build(name: str, row: Row, spec=None) -> dict:
                 )
                 if last is not None and abs(setpoint - last) <= PLACE_TOLERANCE * sigma:
                     break
-                at[i] = _constant(setpoint)
+                at[i] = constant(setpoint)
             else:
                 print(f"    {c.name}: placement still moving after {PLACE_ROUNDS}")
-            targets[i] = _constant(setpoint)
-    target = stacked(targets)
+            fixed[c.name] = setpoint
     priced = [i for i in zoned if row.loops[i].exit_terms]
 
-    def make(rung, bias):
-        """``rung`` as a controller. Its loops on zones priced as a violation are
-        placed for it alone (J1): each holds the first candidate, from the cheap
-        edge, at which this rung leaves the zone on none of the seeds it can hold."""
+    def law(label, loops, bias, mix=mix, cascades=(), overrides=(), valves=()):
+        """Rung ``label``'s numbers (``target_gym.reference.frozen``): ``bias``
+        ``"flat"`` holds the bump tests' median rest, ``"balance"`` the row's."""
+        return {
+            "rung": label,
+            "loops": [_numbers(c.name, q) for c, q in zip(row.loops, loops)],
+            "mix": np.asarray(mix, float).tolist(),
+            "bias": "balance" if bias == "balance" else [float(u) for u in const],
+            "setpoints": dict(fixed),
+            "bound": [],
+            "cascades": list(cascades),
+            "overrides": list(overrides),
+            "valve_positions": list(valves),
+            "start": bool(row.bumpless),
+            "dt": float(dt),
+        }
+
+    def make(numbers):
+        """The rung of law ``numbers`` (``law``) as a controller, its law kept in
+        ``row.frozen``. Its loops on zones priced as a violation are placed for it
+        alone (J1): each holds the first candidate, from the cheap edge, at which
+        this rung leaves the zone on none of the seeds it can hold."""
+        label = numbers["rung"]
         if not priced:
-            return ladder_controller(rung, read, target, bias, dt, start)
+            row.frozen[label] = numbers
+            return assemble(row, numbers, spec)
         kept, begun, record = {}, {}, {}
 
         def holding(setpoints):
-            aimed = list(targets)
-            for j, value in setpoints.items():
-                aimed[j] = _constant(value)
-            law = ladder_controller(rung, read, stacked(aimed), bias, dt, start)
-            names = {row.loops[j].name: (None, v) for j, v in setpoints.items()}
-            return _bound(row, law, names)
+            """The rung holding each loop of ``setpoints`` there, and its law."""
+            placed = {row.loops[j].name: v for j, v in setpoints.items()}
+            own = {**numbers["setpoints"], **placed}
+            held = {**numbers, "setpoints": own, "bound": list(placed)}
+            return assemble(row, held, spec), held
 
         for i in priced:
             c = row.loops[i]
 
             def exits_at(point, c=c, i=i):
                 # The candidate's episodes start on it; the row's other loops
-                # follow it while its controller steps (``_bound``).
+                # follow it while its controller steps (``frozen.bound``).
                 extra = {**begun, **(c.established(point) if c.established else {})}
-                probe = Reference("candidate", holding({**kept, i: point}))
-                left = zone_exits(name, row, probe, c.exit_terms, spec, extra)
+                probe = Reference("candidate", holding({**kept, i: point})[0])
+                left = zone_exits(
+                    name, row, probe, c.exit_terms, spec, extra, PLACEMENT_SEEDS
+                )
                 seeds = len({seed for _, seed in left})
                 print(
-                    f"    {rung.name}, {c.name}: setpoint {point:.4g}, {len(left)} "
+                    f"    {label}, {c.name}: setpoint {point:.4g}, {len(left)} "
                     f"episodes leave, on {seeds} seeds",
                     flush=True,
                 )
@@ -561,27 +591,26 @@ def build(name: str, row: Row, spec=None) -> dict:
                     else "they do not constrain the placement"
                 )
                 print(
-                    f"    {rung.name}, {c.name}: no candidate holds "
+                    f"    {label}, {c.name}: no candidate holds "
                     f"{record[c.name]['unheld']}: {said}"
                 )
             if not record[c.name]["holds"]:
                 still = _by_scenario(set(scan[setpoint]) - set(unheld))
                 print(
-                    f"    {rung.name}, {c.name}: no candidate holds every seed that "
+                    f"    {label}, {c.name}: no candidate holds every seed that "
                     f"some candidate holds; at the centre {still} leave"
                 )
-            print(
-                f"    {rung.name}, {c.name}: kept setpoint {setpoint:.4g}", flush=True
-            )
-        row.placements[rung.name], row.starts[rung.name] = record, begun
-        return holding(kept)
+            print(f"    {label}, {c.name}: kept setpoint {setpoint:.4g}", flush=True)
+        row.placements[label], row.starts[label] = record, begun
+        controller, row.frozen[label] = holding(kept)
+        return controller
 
     loops = tuple(pis)
-    rungs["pi"] = make(Rung("pi", loops, mix), flat)
-    bias = flat
+    rungs["pi"] = make(law("pi", loops, "flat"))
+    bias = "flat"
     if row.balance:
-        bias = row.balance
-        rungs["feedforward"] = make(Rung("feedforward", loops, mix), bias)
+        bias = "balance"
+        rungs["feedforward"] = make(law("feedforward", loops, bias))
 
     cascades = ()
     if row.cascades:
@@ -627,22 +656,27 @@ def build(name: str, row: Row, spec=None) -> dict:
                 outer,
             )
             tuned[c.loop] = pi_of(c.loop, out, dt)
+        # Each inner loop rests where the row computes it, or where its
+        # reading settled in the test.
         cascades = tuple(
-            Cascade(c.read, c.rest or settled(n + k), q)
+            {
+                **_numbers(c.name, q),
+                "rest": None if c.rest else float(np.median(plant._y[:, n + k])),
+            }
             for k, (c, q) in enumerate(zip(row.cascades, inner))
         )
         loops = tuple(tuned)
-        rungs["cascade"] = make(Rung("cascade", loops, mix, cascades), bias)
+        rungs["cascade"] = make(law("cascade", loops, bias, cascades=cascades))
 
-    for label, law in row.schedules.items():
-        rungs[label] = scheduled(name, row, spec, label, law)
+    for label, schedule in row.schedules.items():
+        rungs[label] = scheduled(name, row, spec, label, schedule)
 
     if row.decouple:
         G = gain_matrix(plant, row, inst_of(row.loops[0].inst), n)
         print(f"    gains: {np.round(G, 4).tolist()}", flush=True)
         D = np.zeros((m, n))
         D[np.ix_([c.mv for c in row.loops], range(n))] = decoupler(G, range(n))
-        rungs["decoupler"] = make(Rung("decoupler", tuple(pis), D), bias)
+        rungs["decoupler"] = make(law("decoupler", tuple(pis), bias, mix=D))
 
     if row.limits:
         over = []
@@ -671,18 +705,15 @@ def build(name: str, row: Row, spec=None) -> dict:
                 out, model = min(designs, key=lambda d: abs(d[0]["Kc"]))
                 print(f"    {o.name}: {out}", flush=True)
             over.append(
-                Override(
-                    o.read,
-                    o.limit,
-                    o.floor,
-                    o.mv,
-                    float(np.sign(model["k"])),
-                    out["Kc"],
-                    out["Ti"],
-                )
+                {
+                    "name": o.name,
+                    "gain_sign": float(np.sign(model["k"])),
+                    "kc": float(out["Kc"]),
+                    "ti": float(out["Ti"]),
+                }
             )
         rungs["override"] = make(
-            Rung("override", loops, mix, cascades, tuple(over)), bias
+            law("override", loops, bias, cascades=cascades, overrides=over)
         )
     if row.valves:
         # Each valve's answer to its MV with the loops closed, as the structure's
@@ -713,40 +744,23 @@ def build(name: str, row: Row, spec=None) -> dict:
                 designs.append({"Kc": kc, "Ti": ti})
             out = most_sensitive(designs)
             print(f"    {v.name}: {out}", flush=True)
-            held.append(ValvePosition(v.read, v.setpoint, v.mv, out["Kc"], out["Ti"]))
+            held.append(
+                {"name": v.name, "kc": float(out["Kc"]), "ti": float(out["Ti"])}
+            )
         # A row's overrides ride on its valve position rung too, selecting against
         # the valve position loop's MV: Shinskey's high-temperature override on the
         # feed [S13, p. 436].
         rungs["valve position"] = make(
-            Rung(
+            law(
                 "valve position",
                 tuple(pis),
-                mix,
-                (),
-                tuple(over) if row.limits else (),
-                tuple(held),
-            ),
-            bias,
+                bias,
+                overrides=over if row.limits else (),
+                valves=held,
+            )
         )
     _show(row, "pi")
     return rungs
-
-
-def _bound(row, controller, placed):
-    """``controller`` with ``row.placed`` showing ``placed`` while it steps, also
-    while it is traced: a row's own closures (a loop following a placed setpoint, a
-    feedforward reading it) then see this rung's setpoints, not another rung's."""
-
-    def step(params, memory, obs, xp=jnp):
-        before = dict(row.placed)
-        row.placed.update(placed)
-        try:
-            return controller.step(params, memory, obs, xp)
-        finally:
-            row.placed.clear()
-            row.placed.update(before)
-
-    return Controller(controller.params, controller.init_state, step)
 
 
 def _show(row, label) -> None:
@@ -789,9 +803,14 @@ def _test_params(row) -> dict:
     return {"sensor_noise_scale": NOISE, "max_steps_in_episode": row.steps, **row.test}
 
 
-def _constant(value):
-    value = float(value)
-    return lambda o, xp: xp.asarray(value, dtype=xp.float32)
+def _numbers(name, pi) -> dict:
+    """A loop's PI as its frozen numbers."""
+    return {
+        "name": name,
+        "kc": float(pi.kc),
+        "ti": float(pi.ti),
+        "alpha": float(pi.alpha),
+    }
 
 
 def _inner_start(plant, row, n):
@@ -841,19 +860,20 @@ class Recorder(Reference):
         return super().act(carry, obs, t)
 
 
-def cv_traces(name, row, controller, i, spec=None) -> list:
-    """Loop ``i``'s reading under ``controller``, one array per bump-test seed, on
-    the scored normal day: the suite's first scenario at the scored parameters, so
-    a disturbance a row quiets for its bump tests still moves it."""
+def cv_traces(name, row, controller, i, spec=None, seeds=SEEDS) -> list:
+    """Loop ``i``'s reading under ``controller``, one array per seed of ``seeds``,
+    on the scored normal day: the suite's first scenario at the scored parameters,
+    so a disturbance a row quiets for its bump tests still moves it. The 2 sigma
+    rule reads it on ``PLACEMENT_SEEDS``."""
     spec = spec or REGISTRY[name]
     env = spec.make_env()
     normal = scenarios.suite(spec)[0]
     params = scenarios.params_for(
         spec, normal, **{"sensor_noise_scale": NOISE, **row.score}
     )
-    task = task_info(name, env, params, len(SEEDS))
+    task = task_info(name, env, params, len(seeds))
     policy = Recorder(row.loops[i].name, controller, row.loops[i].read)
-    rollout = run_policy(policy, env, params, task, seeds=SEEDS)
+    rollout = run_policy(policy, env, params, task, seeds=seeds)
     values = np.asarray(policy.values)  # (steps, seeds)
     lengths = np.asarray(rollout["length"], int)
     return [values[:L, k] for k, L in enumerate(lengths)]
@@ -871,8 +891,7 @@ def _suite_episodes(name, row, policy, spec, seeds=None, extra=None):
     (``Row.starts``), then ``extra``."""
     env = spec.make_env()
     for s in scenarios.suite(spec):
-        own = seeds.get(s.name, SEEDS) if isinstance(seeds, dict) else seeds
-        own = tuple(own or SEEDS)
+        own = _own_seeds(seeds, s.name)
         own_start = row.starts.get(getattr(policy, "name", None), {})
         params = scenarios.params_for(
             spec,
@@ -885,15 +904,24 @@ def _suite_episodes(name, row, policy, spec, seeds=None, extra=None):
         yield s.name, episodes_of(run_policy(policy, env, params, task, seeds=own))
 
 
-def zone_exits(name, row, policy, terms, spec=None, extra=None) -> tuple:
-    """The ladder's seeds on which ``policy`` leaves a zone, each as ``(scenario,
-    seed)``, in order: a step the task's evaluation scores (``evaluation.Evaluation``)
-    charged one of the reward ``terms`` the score prices the exit with, or a trip.
-    ``extra`` joins the row's scored parameters."""
+def _own_seeds(seeds, scenario: str) -> tuple:
+    """A scenario's seeds of ``seeds``: one tuple for every scenario, or
+    ``{scenario: seeds}``; the ladder's where it names none."""
+    own = seeds.get(scenario, SEEDS) if isinstance(seeds, dict) else seeds
+    return tuple(own or SEEDS)
+
+
+def zone_exits(name, row, policy, terms, spec=None, extra=None, seeds=None) -> tuple:
+    """The seeds on which ``policy`` leaves a zone, each as ``(scenario, seed)``, in
+    order: a step the task's evaluation scores (``evaluation.Evaluation``) charged
+    one of the reward ``terms`` the score prices the exit with, or a trip. ``extra``
+    joins the row's scored parameters. ``seeds`` is one tuple or ``{scenario:
+    seeds}``, the ladder's by default; a placement runs on ``PLACEMENT_SEEDS``."""
     spec = spec or REGISTRY[name]
     left = []
-    for scenario, episodes in _suite_episodes(name, row, policy, spec, None, extra):
-        for seed, e in zip(SEEDS, episodes, strict=True):
+    for scenario, episodes in _suite_episodes(name, row, policy, spec, seeds, extra):
+        own = _own_seeds(seeds, scenario)
+        for seed, e in zip(own, episodes, strict=True):
             unknown = sorted(set(terms) - set(e.terms))
             if unknown:
                 raise KeyError(f"{name}: no reward term {unknown}")
@@ -918,8 +946,8 @@ def _keyed(scan: dict) -> dict:
 
 
 def _episodes(spec) -> int:
-    """The episodes of one run over the suite on the ladder's seeds."""
-    return len(SEEDS) * len(scenarios.suite(spec))
+    """The episodes of one placement run over the suite."""
+    return len(PLACEMENT_SEEDS) * len(scenarios.suite(spec))
 
 
 def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
@@ -954,18 +982,25 @@ def run_suite(name, row, policy, spec=None, seeds=None) -> dict:
     }
 
 
-def climb(name: str, nulls: bool = False) -> dict:
-    """The ladder on ``name``: each rung's result and the one kept, and with
-    ``nulls`` the null policies against the kept rung (``check_nulls``)."""
+def _climb(name: str, row=None) -> tuple:
+    """``(row, rungs, results, kept)``: every rung of ``name``'s row (``row``, or
+    its file's) built and run on the ladder's seeds, and the one kept."""
     print(name, flush=True)
-    row = ROWS[name]()
-    results = {}
-    for label, controller in build(name, row).items():
+    row = ROWS[name]() if row is None else row
+    rungs, results = build(name, row), {}
+    for label, controller in rungs.items():
         results[label] = run_rung(name, row, label, controller)
         r = results[label]
         print(f"  {label}: median {np.median(r['costs']):.4g}, {r['trips']} trips")
     kept = keep_rung(row, results)
     print(f"  kept: {kept}", flush=True)
+    return row, rungs, results, kept
+
+
+def climb(name: str, nulls: bool = False) -> dict:
+    """The ladder on ``name``: each rung's result and the one kept, and with
+    ``nulls`` the null policies against the kept rung (``check_nulls``)."""
+    row, _, results, kept = _climb(name)
     placed = {k: {"sigma": v[0], "setpoint": v[1]} for k, v in row.placed.items()}
     for k, scan in row.scans.items():  # the exit rule's candidates, as run
         placed[k]["exits"] = _keyed(scan)
@@ -981,6 +1016,163 @@ def climb(name: str, nulls: bool = False) -> dict:
     if nulls and kept:
         out["nulls"] = check_nulls(name, row, results[kept])
     return out
+
+
+def frozen_params(row, rung: str) -> dict:
+    """The scored parameter changes rung ``rung``'s episodes run on, as
+    ``_suite_episodes`` sets them: the noise scale, the row's, and the rung's own
+    start (``Row.starts``)."""
+    return {"sensor_noise_scale": NOISE, **row.score, **row.starts.get(rung, {})}
+
+
+def exits_report(name, row, policy, seeds, spec=None) -> dict | None:
+    """Where ``policy`` leaves the row's zones priced as a violation on ``seeds``,
+    ``{scenario: seeds}``: the episodes that left, by scenario, out of how many.
+    Run on J2's hash seeds, apart from those a zone was placed on, it is the
+    reference's exits out of sample (outside review M5). None for a row with no
+    such zone."""
+    terms = sorted({t for c in row.loops if c.zone for t in c.exit_terms})
+    if not terms:
+        return None
+    left = zone_exits(name, row, policy, tuple(terms), spec, seeds=seeds)
+    return {
+        "terms": terms,
+        "seeds": {s: [int(x) for x in v] for s, v in seeds.items()},
+        "left": _by_scenario(left),
+        "episodes": sum(len(v) for v in seeds.values()),
+    }
+
+
+def _git() -> tuple[str, bool]:
+    import subprocess
+
+    def git(*a):
+        root = pathlib.Path(__file__).resolve().parent.parent
+        return subprocess.run(["git", *a], cwd=root, capture_output=True, text=True)
+
+    status = git("status", "--porcelain", "--untracked-files=no").stdout
+    return git("rev-parse", "HEAD").stdout.strip(), bool(status.strip())
+
+
+def _provenance(name: str, kind: str, rung: str) -> dict:
+    """What a frozen reference was frozen on: the plant's stamp, the charter's
+    reference fingerprint (``charter.current``) and the commit."""
+    import datetime
+
+    from target_gym import charter
+    from target_gym.provenance import environment_fingerprint
+
+    spec = REGISTRY[name]
+    commit, dirty = _git()
+    return {
+        "task": name,
+        "format": 1,
+        "kind": kind,
+        "rung": rung,
+        "env": f"{name}-v{spec.version}",
+        "stamp": environment_fingerprint(spec),
+        "fingerprint": charter.current(name)["fingerprints"]["reference"],
+        "commit": commit,
+        "dirty": dirty,
+        "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(
+            timespec="seconds"
+        ),
+    }
+
+
+def placement_report(row, rung: str) -> dict:
+    """Each zone loop's placement for rung ``rung``: the exit rule's setpoint, how
+    many episodes left at each candidate run, the seeds no candidate held, by
+    scenario, and whether the rung holds every seed it can; or the 2 sigma rule's
+    sigma and setpoint."""
+    out = {}
+    for loop, own in row.placements.get(rung, {}).items():
+        out[loop] = {
+            "setpoint": own["setpoint"],
+            "left": {
+                f"{point:.6g}": sum(len(v) for v in by.values())
+                for point, by in own["exits"].items()
+            },
+            "unheld": own["unheld"],
+            "holds": own["holds"],
+        }
+    for c in row.loops:
+        if c.zone and not c.exit_terms and c.name in row.placed:
+            sigma, setpoint = row.placed[c.name]
+            out[c.name] = {"sigma": sigma, "setpoint": setpoint}
+    return out
+
+
+def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
+    """Charter J1's kept rung of ``name`` as package data (``target_gym.reference``):
+    its law, the parameters its episodes run on, and its provenance. Before it is
+    written, the rung rebuilt from it on a fresh row must cost on the scoring
+    seeds exactly what the ladder's own kept rung cost there; those costs are
+    kept beside it, with its placement (``placement_report``) and its exits on
+    J2's hash seeds (``exits_report``). ``make_row`` builds the row in place of
+    its file's, for a test; the rung is then rebuilt on another row it builds."""
+    import tempfile
+
+    from target_gym import charter
+    from target_gym import reference as R
+
+    spec = REGISTRY[name]
+    shipped = ROWS[name]
+    row, rungs, _, kept = _climb(name, (make_row or shipped)())
+    if kept is None:
+        raise SystemExit(f"{name}: every rung trips, so there is no reference")
+    frozen = _provenance(name, "ladder", kept)
+    frozen["params"] = frozen_params(row, kept)
+    frozen["law"] = row.frozen[kept]
+    if any(c.zone and c.zone[2] is not None for c in row.loops):
+        frozen["placed_on"] = list(PLACEMENT_SEEDS)  # a zone with a cheap side
+        frozen["placement"] = placement_report(row, kept)
+    ours = Reference(kept, rungs[kept])
+    anchor = run_suite(name, row, ours, spec, seeds=charter.ANCHOR_SEEDS)
+    frozen["anchor"] = {
+        "seeds": list(charter.ANCHOR_SEEDS),
+        "scenarios": {s: v["costs"] for s, v in anchor["scenarios"].items()},
+        "trips": anchor["trips"],
+    }
+    weights = scenarios.weights(spec)
+    seeds = charter.j2_seeds(frozen["commit"], weights)
+    frozen["exits"] = exits_report(name, row, ours, seeds, spec)
+    with tempfile.TemporaryDirectory() as tmp:
+        R.write(name, frozen, pathlib.Path(tmp))
+        if make_row is None:  # rebuilt as make_reference rebuilds it
+            again, _ = R.build(name, pathlib.Path(tmp))
+        else:
+            law = R.load(name, pathlib.Path(tmp))["law"]
+            again = R.assemble(make_row(), law, spec)
+    check = run_suite(
+        name,
+        Row(0, None, score=R.changes(frozen)),
+        Reference(kept, again),
+        spec,
+        seeds=charter.ANCHOR_SEEDS,
+    )
+    if check["scenarios"] != anchor["scenarios"]:
+        raise SystemExit(
+            f"{name}: the {kept} rung rebuilt from its law does not run as the "
+            "ladder's: nothing written"
+        )
+    where = R.write(name, frozen, root or R.FROZEN)
+    print(f"  froze {kept} in {where}", flush=True)
+    return where
+
+
+def freeze_expert(name: str, root=None) -> pathlib.Path:
+    """A task whose reference is its shipped expert (charter.EXPERT_REFERENCE): the
+    expert's fingerprint, so a retuned expert is a stale reference."""
+    from target_gym import reference as R
+    from target_gym.provenance import expert_fingerprint
+
+    frozen = _provenance(name, "expert", "expert")
+    frozen["expert"] = expert_fingerprint(REGISTRY[name])
+    frozen["params"] = {"sensor_noise_scale": NOISE}
+    where = R.write(name, frozen, root or R.FROZEN)
+    print(f"{name}: froze its expert in {where}", flush=True)
+    return where
 
 
 #: A zone's placement stops once its setpoint moves under this many sigma, the 2-sigma
@@ -1099,7 +1291,18 @@ def main() -> None:
     parser.add_argument(
         "--expert", nargs="*", default=[], help="tasks whose reference is the expert"
     )
+    parser.add_argument(
+        "--freeze",
+        action="store_true",
+        help="freeze each kept rung as package data (target_gym.reference)",
+    )
     args = parser.parse_args()
+    if args.freeze:
+        for name in args.expert:
+            freeze_expert(name)
+        for name in [] if args.expert and args.tasks == list(ROWS) else args.tasks:
+            freeze(name)
+        return
     for name in args.expert:
         result = expert_reference(name)
         if args.out:

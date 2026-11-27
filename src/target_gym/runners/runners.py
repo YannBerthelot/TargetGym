@@ -58,16 +58,32 @@ VIDEO_DIR = "videos"
 # ---------------------------------------------------------------------------
 
 
-def _wants_state(policy: Callable) -> bool:
-    """True when *policy* takes ``(obs, state)`` rather than ``(obs,)``.
+def reads_state(policy: Callable) -> bool:
+    """True when ``policy`` is given the simulator's true state: only a
+    ``target_gym.FullState``, never decided from a signature (outside review
+    M3). Any other policy is called with the observation alone, and one that
+    cannot be is refused, so it is never handed the state by accident."""
+    from target_gym.api import FullState
 
-    Decided from the signature: catching a TypeError would also swallow one
-    raised inside a single-argument policy.
-    """
+    if isinstance(policy, FullState):
+        return True
     try:
-        return len(inspect.signature(policy).parameters) >= 2
+        params = inspect.signature(policy).parameters.values()
     except (TypeError, ValueError):  # builtins and C callables have no signature
         return False
+    positional = (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    required = [p for p in params if p.kind in positional and p.default is p.empty]
+    if len(required) > 1:
+        raise TypeError(
+            f"{getattr(policy, '__name__', policy)!r} needs {len(required)} "
+            "arguments, but a policy is called with the observation alone. To "
+            "give it the simulator's true state as its second, wrap it: "
+            "target_gym.FullState(policy)."
+        )
+    return False
 
 
 def _as_tuple(index) -> tuple[int, ...]:
@@ -91,22 +107,26 @@ def one_episode(
     """``benchmark.run_policy``'s one-episode run of ``policy`` on
     ``PRNGKey(seed)``, the loop every helper here runs.
 
-    ``policy`` is called as ``policy(obs)`` or, when it accepts two arguments,
-    ``policy(obs, state)`` -- the MPC baselines need the full state. It gets
-    the NumPy view of the observation: given a JAX array, every operation in a
-    host PID is a separate un-jitted dispatch. ``task`` overrides the
-    :class:`~target_gym.benchmark.TaskInfo` (``eval.run_episode``'s band), and
-    ``record`` names per-step quantities to keep, as ``run_policy`` has it.
+    ``policy`` is called as ``policy(obs)``, or as ``policy(obs, state)`` when
+    it is a ``target_gym.FullState`` (:func:`reads_state`) -- the MPC baselines
+    read the true state. It gets the NumPy view of the observation: given a
+    JAX array, every operation in a host PID is a separate un-jitted dispatch.
+    ``task`` overrides the :class:`~target_gym.benchmark.TaskInfo`
+    (``eval.run_episode``'s band), and ``record`` names per-step quantities to
+    keep, as ``run_policy`` has it. The result's ``read_state`` says whether
+    the policy was given the state.
     """
     from target_gym.benchmark import CallablePolicy, run_policy, task_info
 
     env = spec.make_env()
-    wants_state = _wants_state(policy)
+    wants_state = reads_state(policy)
     call = policy if wants_state else (lambda obs, state: policy(obs))
     adapter = CallablePolicy(lambda _task: call, name="policy", oracle=wants_state)
     task = task_info(spec.name, env, params, 1) if task is None else task
     key = jax.random.PRNGKey(seed)
-    return run_policy(adapter, env, params, task, key, record=record)
+    out = run_policy(adapter, env, params, task, key, record=record)
+    out["read_state"] = wants_state
+    return out
 
 
 def _before_each_step(out: dict, key: str) -> np.ndarray:
@@ -139,13 +159,14 @@ def rollout(spec, params, policy: Callable, seed: int = 0, return_trips: bool = 
 
 
 def baseline_policy(spec, kind: str, params=None) -> Callable | None:
-    """A shipped baseline as one uniform ``(obs, state) -> action`` callable.
+    """A shipped baseline as one ``(obs, state=None) -> action`` callable.
 
     Both kinds take ``(obs, state)``, so one evaluation loop serves either,
     and a learned policy written to the same shape drops in beside them. **The
     PID reads only ``obs``**, as a plant controller does. **The MPC reads only
-    ``state``**, the true simulator state: it is a full-state upper bound, not
-    a peer.
+    ``state``**, the true simulator state, and is returned as a
+    ``target_gym.FullState``: it is given the state, and its runs say so. It
+    is a full-state reference, not a peer.
 
     ``kind`` is ``"pid"`` or ``"mpc"``. Returns ``None`` when the environment
     does not ship that baseline; every registered environment ships both.
@@ -171,7 +192,9 @@ def baseline_policy(spec, kind: str, params=None) -> Callable | None:
             spec.make_env(), plan_params(spec, params), disturbances=params
         )
         mpc.reset()
-        return lambda obs, state: np.atleast_1d(mpc.step(obs, state))
+        from target_gym.api import FullState
+
+        return FullState(lambda obs, state: np.atleast_1d(mpc.step(obs, state)))
 
     raise ValueError(f"kind must be 'pid' or 'mpc', not {kind!r}")
 

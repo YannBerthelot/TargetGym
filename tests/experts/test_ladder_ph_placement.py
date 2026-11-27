@@ -3,7 +3,8 @@
 Contract (charter J1, owner, 2026-11-23): the permit is pH 6 to 9, cheap side low, and
 the score charges every step outside it as an excursion, the price of a violation.
 Each rung holds the first grid step above 6 at which it leaves the permit on none
-of the ladder's seeds in any scenario, each candidate run from episodes started on it,
+of its placement seeds (110 to 119, apart from every line's: outside review M5) in any
+scenario, each candidate run from episodes started on it,
 and the ladder keeps the cheapest rung that trips none and holds every seed it can.
 The plant starts where the kept rung holds (rule 17): the scored configuration's own
 set point is the kept one, so an agent and the reference run the same episodes.
@@ -59,7 +60,10 @@ def test_the_ph_reference_holds_the_lowest_setpoint_that_never_leaves_the_permit
     results = {k: ladder.run_rung(name, row, k, c) for k, c in rungs.items()}
     kept = ladder.keep_rung(row, results)
     reference = ladder.Reference(kept, rungs[kept])
-    assert ladder.zone_exits(name, row, reference, ("excursion",)) == ()
+    placed_on = ladder.PLACEMENT_SEEDS
+    assert (
+        ladder.zone_exits(name, row, reference, ("excursion",), seeds=placed_on) == ()
+    )
     # Every later run starts on it, and so does the task as scored.
     setpoint = row.placements[kept][loop]["setpoint"]
     assert row.placed[loop][1] == pytest.approx(setpoint)
