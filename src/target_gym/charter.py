@@ -201,13 +201,42 @@ def j2_seeds(commit: str, weights: dict) -> dict:
     return out
 
 
-def null_wins(reference: dict, null: dict) -> int:
-    """Seeds, over every scenario, where ``null`` costs strictly less than the
-    reference on the same seed. Both are ``{scenario: costs}``."""
-    return sum(
-        sum(b < a for a, b in zip(reference[s], null[s], strict=True))
+#: The shared gate rules (owner, 2026-11-27, "Shared rules, then ship"). Nulls: a
+#: null that beats the reference by under ``NULL_MARGIN`` of the reference's cost is
+#: "not held", reported, not a failure; a win of ``NULL_MARGIN`` or more fails.
+NULL_MARGIN = 0.01
+#: Ceiling: converged when the kept plans had no capped or failed solve, the two
+#: best foresight starts' J agree within ``CEILING_AGREE`` of the kept J, and, where
+#: the task has a floor, the kept J is within ``CEILING_NEAR`` above it.
+CEILING_AGREE, CEILING_NEAR = 0.01, 0.03
+
+
+def null_edge(reference: float, null: float) -> str:
+    """``"held"`` where the reference costs less than ``null``, ``"not held"``
+    where ``null`` beats it by under ``NULL_MARGIN`` of its cost (a tie
+    included), else ``"fails"``."""
+    if reference < null:
+        return "held"
+    return "not held" if reference - null < NULL_MARGIN * reference else "fails"
+
+
+def _edges(reference: dict, null: dict) -> list[str]:
+    return [
+        null_edge(a, b)
         for s in reference
-    )
+        for a, b in zip(reference[s], null[s], strict=True)
+    ]
+
+
+def null_wins(reference: dict, null: dict) -> int:
+    """Seeds, over every scenario, where ``null`` beats the reference on the same
+    seed by ``NULL_MARGIN`` or more. Both are ``{scenario: costs}``."""
+    return _edges(reference, null).count("fails")
+
+
+def null_not_held(reference: dict, null: dict) -> int:
+    """Seeds where ``null`` beats the reference by under ``NULL_MARGIN``."""
+    return _edges(reference, null).count("not held")
 
 
 def verdict(n_seeds: int, reference_trips: int, wins: dict, sweep) -> dict:
@@ -225,12 +254,94 @@ def verdict(n_seeds: int, reference_trips: int, wins: dict, sweep) -> dict:
     return {"accepted": not reasons, "reasons": reasons}
 
 
+def draw_outcome(draw: dict) -> tuple[bool, list[str]]:
+    """One sweep draw under the null margin: whether the property holds, and the
+    scenarios held only within ``NULL_MARGIN``. A ladder draw (``family_sweep.ladder``)
+    holds when a rung was kept, a null ran, and no null's median beats the kept
+    rung's by the margin in any scenario; a reactor draw (``family_sweep.reactor``)
+    when its recipe ran, the plant rests, and no scenario's null median beats the
+    reference's by it. A draw without its medians keeps its own verdict."""
+    if draw.get("tune_refused"):
+        return False, []
+    if "rungs" in draw:
+        kept, nulls = draw.get("kept"), draw.get("nulls") or {}
+        if kept is None or not nulls:
+            return False, []
+        ref = draw["rungs"][kept]
+        pairs = [(s, ref[s], n[s]) for n in nulls.values() for s in n]
+    elif draw.get("scenarios"):
+        sc = draw["scenarios"].items()
+        pairs = [(s, v["reference_median"], v["null_median"]) for s, v in sc]
+        if draw.get("at_rest_cost", 0.0) >= 1.0:
+            return False, []
+    else:
+        return bool(draw["holds"]), []
+    edges = [(s, null_edge(r, n)) for s, r, n in pairs]
+    held = all(e != "fails" for _, e in edges)
+    return held, sorted({s for s, e in edges if e == "not held"})
+
+
 def sweep_result(draws):
     """B7's outcome for J2: ``NOT_MEASURED`` without a sweep (``draws`` None),
-    else whether the property held on every draw."""
+    else whether the property held on every draw (``draw_outcome``)."""
     if draws is None:
         return NOT_MEASURED
-    return all(d["holds"] for d in draws)
+    return all(draw_outcome(d)[0] for d in draws)
+
+
+def sweep_not_held(draws) -> list[str]:
+    """The scenarios some draw holds only within ``NULL_MARGIN``."""
+    return sorted({s for d in draws or () for s in draw_outcome(d)[1]})
+
+
+def stop_rule(starts: dict, floor=None, agree=None, near=None) -> bool:
+    """The ceiling's agreement and floor tests: ``starts`` maps each foresight
+    start to the J its plan reaches. The two best agree within ``agree`` of the
+    kept (cheapest) J; one start has nothing to agree. Where ``floor`` is given,
+    the kept J is within ``near`` above it (a plan under it is near it)."""
+    agree = CEILING_AGREE if agree is None else agree
+    near = CEILING_NEAR if near is None else near
+    costs = sorted(float(c) for c in starts.values())
+    kept = costs[0]
+    agrees = len(costs) < 2 or costs[1] - kept <= agree * kept
+    return agrees and (floor is None or kept <= (1.0 + near) * float(floor))
+
+
+def best_known(ceiling, mpc, weights: dict):
+    """The ceiling as the cheapest plan known per seed: each seed's cheaper
+    untripped run of the foresight ``ceiling`` line and the ``mpc`` line, the
+    foresight on a tie, with ``picked`` naming each seed's source. The MPC line
+    joins only where it ran the same seeds in every scenario; convergence stays
+    the foresight's (the MPC line is not in the agreement test)."""
+    if ceiling == NOT_MEASURED:
+        return NOT_MEASURED
+    same = mpc != NOT_MEASURED and all(
+        len(mpc["scenarios"].get(s, {}).get("costs", ())) == len(v["costs"])
+        for s, v in ceiling["scenarios"].items()
+    )
+    picked, per = {}, {}
+    for s, v in ceiling["scenarios"].items():
+        rows = []
+        for i, c in enumerate(v["costs"]):
+            best = (c, "foresight")
+            if same:
+                m = mpc["scenarios"][s]
+                # a line keeps one trip count per scenario: untripped only when 0
+                if not m["trips"] and (bool(v["trips"]) or m["costs"][i] < c):
+                    best = (m["costs"][i], "mpc")
+            rows.append(best)
+        picked[s] = [src for _, src in rows]
+        trips = v["trips"] if any(p == "foresight" for p in picked[s]) else 0
+        per[s] = {"costs": [c for c, _ in rows], "trips": trips}
+    return line(per, weights, converged=ceiling.get("converged")) | {"picked": picked}
+
+
+def stale_artefacts(null_table: dict | None, expert_fp: str) -> list[str]:
+    """The stored artefacts a gate reads that fail their own staleness check and
+    must be rebuilt by their recipe first: the null table
+    (``data/null_policies``), fitted to an expert whose fingerprint has moved."""
+    current = (null_table or {}).get("expert_fingerprint") == expert_fp
+    return [] if current else ["null_policies"]
 
 
 # --- J3 and J4 --------------------------------------------------------------
@@ -347,6 +458,8 @@ def ceiling_line(stored: dict, weights: dict):
         scenarios[s] = {"costs": costs, "trips": trips if trips is not None else 0}
     if set(scenarios) != set(weights):
         return NOT_MEASURED
+    # the stop rule's agreement and floor tests, where the file records them
+    converged.append((stored.get("stop_rule") or {}).get("converged", True))
     return line(scenarios, weights, converged=all(converged))
 
 

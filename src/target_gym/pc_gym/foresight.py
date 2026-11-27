@@ -35,6 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.optimize import minimize
 
+from target_gym import charter
 from target_gym.benchmark import (
     episode_keys,
     episodes_of,
@@ -54,7 +55,9 @@ RHO = (1.0, 100.0, 1e4)
 #: a plan that leaves it. Amended 2026-11-27 (owner, picker): ``AGREE`` is taken
 #: between the two best starts, so a start lost in a bad basin (the hold on a
 #: seed that surges) cannot block a ceiling the others agree on.
-AGREE, NEAR, HELD = 0.01, 0.03, 0.1
+#: The agreement and floor tests are the shared rule's (``charter.stop_rule``,
+#: 2026-11-27); the held margin stays the compressor's own.
+AGREE, NEAR, HELD = charter.CEILING_AGREE, charter.CEILING_NEAR, 0.1
 
 
 def ceiling_converged(
@@ -67,9 +70,8 @@ def ceiling_converged(
     plan under the floor is near it.
     ``worst_margin`` is the smallest held margin over every seed's kept plan
     (``plan_margins``), unchecked where None."""
-    kept, second = sorted(float(c) for c in starts.values())[:2]
     holds = worst_margin is None or float(worst_margin) >= -held
-    return (second - kept) <= agree * kept and kept <= (1.0 + near) * floor and holds
+    return charter.stop_rule(starts, floor, agree, near) and holds
 
 
 def plan_margins(env, params, seed: int, plan, margins: Callable) -> np.ndarray:
