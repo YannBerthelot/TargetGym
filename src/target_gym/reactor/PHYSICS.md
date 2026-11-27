@@ -853,3 +853,18 @@ sub-steps as it does `reward`. Each sub-step's true error is shifted by the draw
 in the observation that step returns, because a controller gets one reading per
 step, and any trip comes from the true state. The cost is linear, so noise has no
 floor of the proposal's quadratic form here.
+
+### Not modelled: `reactor`
+
+From the physics contract's known deviations, section 5:
+
+- The secondary side (D1): the turbine's governor, the steam's moisture and the
+  steam generator's level. The load goes straight to heat.
+- Grey rods for deep load following, EDF's Mode G (D8). The reference runs the
+  Westinghouse procedure.
+- Rods from both ends (D3). A bank reaches only the top.
+- Local peaking (D4). The axial offset is scored on its band and clocks, with
+  no link to local power or a trip.
+- A derate after an overrun (D6). It is priced, and the load does not drop.
+- Boronmeter noise (D7) and decay heat after a scram (D5).
+- The axial mode's change through the fuel cycle (D11).

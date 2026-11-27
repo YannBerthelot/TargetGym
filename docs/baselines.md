@@ -53,11 +53,13 @@ true simulator state**, so it is the best known plan rather than a peer to a
 policy that sees what a plant instruments. Its cost is achieved, not a bound: a
 planner backs off its limits and is only as good as its solve.
 
-To compare your own agent, evaluate it on the seeds the baselines were recorded
-on, 0 to 9. The comparison is then paired, and the baseline returns can be read
-from `src/target_gym/data/baseline_returns/` instead of re-run.
-[Using the PIDs](using-the-pids.md) walks through this, and through using the
-PID in training.
+On a scored task, compare your agent with the task's reference, not with the
+expert: `tg.score` runs both on the scoring seeds 200 to 209, as
+[Comparing an agent with the reference](comparing.md) explains. The baselines
+here were recorded on seeds 0 to 9, a separate comparison of the two shipped
+controllers, and the charter's lines on seeds 100 to 109.
+[Using the PIDs](using-the-pids.md) walks through scoring against the expert,
+and through using the PID in training.
 
 ## The PID
 
@@ -109,8 +111,9 @@ That script skips environments already in the file, so naming one with
 
 ## The MPC
 
-The MPC slot holds the best controller we can build for each task, as an upper
-bound for the others. Each task's controller lives in its package's
+The MPC slot holds the best controller we can build for each task with the
+true state, as a line for context. Its cost is achieved, not a bound: it can
+lose to the reference. Each task's controller lives in its package's
 `oracle.py`:
 
 | Implementation | Used by | When it applies |

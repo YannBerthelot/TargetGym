@@ -96,11 +96,18 @@ nav:
   - Home: index.md
   - User guide:
       - Getting started: getting-started.md
+      - Comparing an agent with the reference: comparing.md
+      - Known limits: known-limits.md
       - Continuing tasks: continuing-tasks.md
       - Using the PIDs: using-the-pids.md
       - Rendering: rendering.md
       - Throughput: performance.md
       - API reference: api.md
+  - Task cards:
+      - tasks/reactor.md
+      - tasks/hvac.md
+      - tasks/compressor_surge.md
+      - tasks/ph_neutralization.md
   - Environments:
       - Overview: environments.md
       - Choosing an environment: complexity.md

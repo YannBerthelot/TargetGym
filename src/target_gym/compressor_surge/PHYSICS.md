@@ -1327,3 +1327,14 @@ The credibility check on a sourced real figure has nothing to read here. The own
 accepted a class exception on 2026-11-06: no published figure could be found or opened
 after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
 says what was tried.
+
+### Not modelled: `compressor_surge`
+
+From the physics contract's known deviations, section 9:
+
+- Rotating stall (D1). Left of the peak the characteristic has one branch.
+- Compressibility in the duct (D2). Its density is the suction's, up to 10.6 %
+  off at the largest flows.
+- The plenum's warmer gas (D3). Its speed of sound is the suction's, which puts
+  the Helmholtz frequency about 4 % low.
+- A tight check valve (D5). It passes a little flow at zero pressure drop.

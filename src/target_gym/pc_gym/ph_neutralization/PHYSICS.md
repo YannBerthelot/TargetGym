@@ -494,3 +494,18 @@ The credibility check on a sourced real figure has nothing to read here. The own
 accepted a class exception on 2026-11-06: no published figure could be found or opened
 after two searches with a re-fetch check. The plan in docs/proposals/industrial-fixes.md
 says what was tried.
+
+### Not modelled: `ph_neutralization`
+
+From the physics contract's known deviations, section 9:
+
+- Electrode drift and fouling (D1). The probes stay as fast as new ones, where
+  coated probes turn sluggish and drive overdosing.
+- Buffers other than carbonate (D2), so the titration curve is smoother than a
+  real effluent's.
+- Valve resolution, stick-slip and on-off or timer dosing (D3).
+- An industrial stream. The streams are a bench rig's in tanks sized to the
+  family's retention (D4).
+- Running on after a permit violation, which restarts the plant here (D5).
+- Upsets large enough for the basin, the diversion and the 60 min rule to act
+  on a working controller (D7).

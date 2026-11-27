@@ -28,14 +28,19 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
+**0.8.0 is a beta.** Four tasks are scored, each against a reference
+controller frozen in the package. To compare an agent with it, start with
+[Comparing an agent with the reference](docs/comparing.md), and read
+[Known limits](docs/known-limits.md) before quoting a result.
+
 - **Four scored tasks.** `reactor`, `hvac`, `compressor_surge` and
   `ph_neutralization` are scored: each has a measured reference to beat and a
   ceiling. The other twenty-one run the same way and are not scored yet, so no
   result is published for them. See [Environments](#environments).
-- **Baselines included.** Every environment ships a tuned PID, and all but
-  `wake_surf`, whose oracle is not built yet, an MPC with full state access,
-  which serves as an upper bound. For the scored tasks both are recorded in
-  `src/target_gym/data/`.
+- **Baselines included.** Every environment ships a tuned PID, and all but six
+  an MPC with full state access: a line for context, which can lose to the
+  reference, not a bound. For the scored tasks both are recorded in
+  `src/target_gym/data/`, beside each task's reference.
 - **Validated physics.** Each environment carries a `PHYSICS.md` with a sourced
   parameter table, published validation targets asserted by tests, and its
   documented approximations.
@@ -75,8 +80,8 @@ Also available as a [Colab notebook](https://colab.research.google.com/github/Ya
 import jax
 import target_gym as tg
 
-env, params = tg.make("plane")          # the scored configuration
-expert = tg.make_expert("plane")        # the shipped expert
+env, params = tg.make("hvac")           # the scored configuration
+expert = tg.make_expert("hvac")         # the shipped expert
 
 key, reset_key = jax.random.split(jax.random.PRNGKey(0))
 obs, state = env.reset(reset_key, params)
@@ -97,7 +102,8 @@ print("Expert return:", total)
 `tg.make(name)` returns the environment and the configuration the published
 baselines are scored on, as `gymnax.make` does, and `reset` and `step` follow
 the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
-change single fields, as in `tg.make("plane", max_steps_in_episode=500)`.
+change single fields, as in `tg.make("hvac", max_steps_in_episode=500)`, and
+`tg.make("hvac", scenario="cold_snap")` gives one of the task's scenarios.
 `tg.list_envs()` gives the 25 names, and `tg.FLAGSHIP` the four that are scored.
 
 The expert's memory is its PID's integral and last error. You carry it as
@@ -129,32 +135,38 @@ while True:
 
 </details>
 
-### Comparing against the expert
+### Comparing an agent with the reference
 
-`tg.score_policy` runs your policy and the expert on the same seeds of the
-scored configuration:
+`tg.score` runs your policy and the task's reference on the same seeds of
+every scenario, and gives the saving over the reference, with its interval and
+one row per scenario:
 
 ```python
+# doc: records -- builds a frozen reference
+import jax.numpy as jnp
 import target_gym as tg
 
-policy = tg.make_expert("four_tank")     # stand-in: any policy(obs) -> action
-m = tg.score_policy("four_tank", policy, seeds=3)   # 10 for a result
-print(m["ratio"], m["win_rate"], m["score"], m["headroom"])
+
+def policy(obs):  # your policy(obs) -> action; here both valves at mid-stroke
+    return jnp.zeros(2)
+
+
+m = tg.score("ph_neutralization", policy, seeds=(200,))  # all 10 seeds for a result
+print(f"saving {m['saving']:+.1%} over the reference, interval {m['saving_ci']}")
 ```
 
-`score_policy` works on every registered task. The published results cover the
-scored suite only.
+`tg.make_reference(name)` is that reference, stepped as the expert is.
+Beating `tg.make_expert(name)`, the shipped expert, is a weaker claim, and
+`tg.score_policy` runs any registered task against it.
+[Comparing an agent with the reference](docs/comparing.md) says how to train
+on the scenarios, where to choose checkpoints and how to read the result.
 
-`ratio` is the expert's cost over yours, so above 1 beats the expert. `score`
-runs from 0 at the expert to 1 at the task's ceiling, and `headroom` is the room
-the task leaves beyond the expert, in decades; [docs/rl-protocol.md](docs/rl-protocol.md)
-defines all three.
-
-The expert reads `obs` only, as a plant controller does. The oracle
-(`tg.make_oracle`) reads the full state, including quantities the observation
-withholds, so it shows what a perfect model could do rather than competing with
-a policy; [Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/) gives the
-numbers.
+The expert and the reference read `obs` only, as a plant controller does. The
+oracle (`tg.make_oracle`) reads the full state, including quantities the
+observation withholds, so it shows what a model-based controller could do
+rather than competing with a policy;
+[Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/)
+gives the numbers.
 
 Vectorised rollouts, the registry, the patrol interface and the wind model
 are covered in [docs/getting-started.md](docs/getting-started.md).
@@ -164,7 +176,8 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 ## Environments
 
 25 tasks are registered, and every one of them runs through `tg.make`. Four
-are scored. The rest wait for their review.
+are scored. Of the other twenty-one, eleven are under review, nine are kept as
+Extra and one is a test fixture.
 
 ### The scored suite
 
@@ -250,7 +263,8 @@ can also anchor on the ceiling and gives the numbers.
   <img alt="Each task's oracle hold cost and ceiling relative to its expert, on a log scale" src="https://yannberthelot.github.io/TargetGym/latest/images/results-vs-expert.svg" width="680">
 </picture>
 
-Every environment ships a tuned PID, and all but `wake_surf`, whose oracle is not built yet, an MPC. On `patrol_range_bearing`, which
+Every environment ships a tuned PID, and all but six (`cstr`, `wake_surf`,
+`plane`, `plane_energy`, `plane3d_heading` and `plane3d_racetrack`) an MPC. On `patrol_range_bearing`, which
 withholds the slot error a planner would read, the MPC slot holds `patrol`'s
 oracle reading the true state, labelled a full-state bound.
 
@@ -324,9 +338,11 @@ method and lists what each model is validated against.
 
 | | |
 |---|---|
+| **[Comparing an agent with the reference](docs/comparing.md)** | `tg.score`: the saving over each scored task's reference, and how to read it |
+| **[Known limits](docs/known-limits.md)** | What this release's room, lines and results do not say yet |
 | **[Getting started](docs/getting-started.md)** | Episodes, vectorised rollouts, the registry, Gymnasium |
 | **[Using the PIDs](docs/using-the-pids.md)** | Running the baseline, scoring against it, using it in training |
-| **[Environment reference](docs/environments.md)** | All 24: shapes, tracked variables, baselines, contracts |
+| **[Environment reference](docs/environments.md)** | All 25: shapes, tracked variables, baselines, contracts |
 | **[Choosing an environment](docs/complexity.md)** | Which task to start with for what you want to test |
 | **[Public API](docs/api.md)** | Stable and provisional surface |
 | **[Baseline results](https://yannberthelot.github.io/TargetGym/latest/baseline-results/)** | PID and MPC scores on every environment |
