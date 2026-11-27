@@ -280,20 +280,31 @@ correcting actuator can't defend in time, by the disturbance that builds over th
 actuator's window (K11h, K11a; Amendment 6). Room is reported, never gated, and nothing here estimates what an agent
 could reach.
 
-**J4. The headline.** A task's scenarios are strata, each run on fixed scoring seeds,
-their number set at the tag and kept apart from J2's. Its expected cost per step is
-`J = sum over scenarios of w_s times the mean cost over that scenario's seeds`, with
-`w_s` the scenario's weight. Means are used, not trimmed means, since a bad seed costs
-real money. The headline is the saving over the reference, `1 - J_agent / J_reference`,
-with a 95 % interval from a bootstrap that resamples seeds within each scenario, keeping
-agent and reference paired. Beside it the page publishes the saving in money per hour,
-each scenario's saving, the worst scenario, the trip rate per scenario, and the
-probability of improvement: the weighted share of seeds where the agent costs less. An
-agent beats the reference when the interval lies above 0 and it trips no more than the
-reference in any scenario. Across the flagship, the benchmark reports the probability of
-improvement and the median of the tasks' savings, with the trip rate beside them. Each
-domain weighs equally: a task counts one over the number of flagship tasks in its
-domain. Intervals come from the agent's training runs.
+**J4. The headline.** A task's scenarios are strata, each run on the ten scoring seeds
+200 to 209, the same in every scenario and looked at once: no rule adds seeds after a
+look (owner, 2026-11-27, "Fixed seeds, run-level bootstrap"). They are kept apart from
+J2's and from the validation seeds 300 to 349, on which an agent's checkpoints and
+hyperparameters are chosen. Its expected cost per step is `J = sum over scenarios of w_s
+times the mean cost over that scenario's seeds`, with `w_s` the scenario's weight; a cost
+may be negative. Means are used, not trimmed means, since a bad seed costs real money.
+The headline is the saving over the reference, `1 - J_agent / J_reference`, defined while
+`J_reference` is above 0. An agent is scored as 30 training runs, each on the scoring
+seeds of every scenario: `J_agent` is their mean, and its 95 % interval comes from a
+two-level bootstrap, over the runs and then over the seeds within each scenario, keeping
+agent and reference paired, one draw of seed indices serving every run and every
+scenario that shares the seeds. Each run's own saving is published beside it. One policy
+on its own gets a 95 % t interval on its paired per-seed costs, which a simulation checks
+declares a policy with no real saving cheaper 2.5 % of the time. Beside the headline the
+page publishes the saving in money per hour, each scenario's saving, the worst scenario,
+the trip rate per scenario, the actuators' travel and reversals over the reference's,
+and the probability of improvement: the weighted share of seeds where the agent costs
+less than the reference by more than the task's noise floor, the gap between one
+controller's costs through two code paths, published per task; a seed within it is a
+tie. An agent beats the reference when the interval lies above 0 and it trips no more
+than the reference in any scenario. Across the flagship, the benchmark reports the
+probability of improvement and the median of the tasks' savings, with the trip rate
+beside them. Each domain weighs equally: a task counts one over the number of flagship
+tasks in its domain. docs/rl-protocol.md sets out the same protocol for a researcher.
 
 **J5. Solved tasks, nearly saturated tasks and the flagship.** When the reference costs
 0 on most seeds, the task first searches its family's sources for a cost operators really
@@ -313,8 +324,10 @@ time may exceed 3 times the median over tasks, and no reset or step may run a so
 loop over 100 iterations. A task over the line looks for a simple way to become much
 cheaper. If there is none, it goes to Extra.
 
-**J7. Learning check.** One PPO run per accepted task, with fixed hyperparameters. It is
-reported, never gating, to show the task can be learned and to catch simulator exploits.
+**J7. Learning check.** One PPO run per accepted task, with fixed hyperparameters, every
+flagship task among them. It trains on the measured reward and is read on validation
+seeds. It is reported, never gating, to show the task can be learned and to catch
+simulator exploits.
 
 ## Showing a task
 

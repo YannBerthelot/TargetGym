@@ -190,8 +190,9 @@ on the same seeds. They are folded into the bad day. On the cut suite, under the
 6 to 8 permit then shipped, the reference was placed at 6.5 on every rung, the feedforward is kept, the best null wins 2 seeds
 of 10, and the room on seeds 200 to 209 is 1.167 (1.154 to 1.179), as on the full
 suite (1.167, 1.154 to 1.180). Windows stay 2 h: the permit's 60 min clock is the
-only trip. The scoring seeds follow the stop rule (`charter.stop_seeds`): blocks
-of 10 from seed 200 until the room's 95 % interval excludes 1, at most 50.
+only trip. The scoring seeds are the ten anchor seeds 200 to 209 (owner,
+2026-11-27, "Fixed seeds, run-level bootstrap"): the stop rule that added blocks
+of 10 after each look is dropped.
 
 Probe coating [P5, pp. 2-3; P6] is documented as a bad day but has no sourced
 rate, so it is not a scenario yet (D1).

@@ -9,6 +9,37 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Verdict statistics and the RL protocol (2026-11-27)
+
+The outside review's statistics findings (H3, H4, L1, H2, M6, M7, M8, L4, L5),
+under the owner's decision "Fixed seeds, run-level bootstrap".
+
+- **The scoring seeds are fixed.** J4 reads the ten anchor seeds 200 to 209 in
+  every scenario, once. `charter.stop_seeds`, `charter.paired_interval` and the
+  `STOP_*` constants are removed: the stop rule looked up to five times at an
+  unadjusted interval and declared a false win 10 to 11.5 % of the time.
+- **`scoring.headline` has one verdict statistic, the weighted-mean saving.** One
+  policy gets a t interval on its paired per-seed costs (Fieller's); an agent,
+  whose `"policy"` costs hold one row per training run, a two-level bootstrap over
+  runs and then seeds, with `run_savings` beside it. Scenarios with the same seeds
+  are resampled together. Costs may be negative while `J_reference` is above 0.
+  `tie` makes a seed within the task's noise floor a tie (`ties`), and travel and
+  reversals per seed add `travel_ratio` and `reversal_ratio`, reported only.
+- **Each scored task's noise floor is published** in `data/charter/noise_floor/`
+  (`scripts/record_charter.py --noise-floor`), and `charter.tie_tolerance` reads
+  it. `charter.VALIDATION_SEEDS`, 300 to 349, is where agents choose checkpoints
+  and hyperparameters.
+- The charter record's anchor line records each seed's actuator travel and
+  reversals, so its fingerprint moved: the anchor parts are stale until the
+  re-record.
+- `rl_results.record_result` takes `costs` and `seeds`, each run's cost on each
+  scoring seed of each scenario, stamped with the charter's fingerprints of the
+  reference; a re-record of the reference makes the result stale.
+- `docs/rl-protocol.md` sections 2, 4, 5, 6 and 9 follow the charter: train on
+  `info["measured_reward"]`, 30 runs, validation seeds, the discount
+  `gamma = 1 - 1/(10 T)` with each scored task's `T`. The learning check (J7)
+  covers the five scored tasks.
+
 ### Scaled observations and rewards (2026-11-25)
 
 - `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
@@ -51,6 +82,12 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
+
+- **A win needs more than float noise.** `score_policy`'s `win_rate` and
+  `transient_win_rate` count a seed within the task's tie tolerance as not won
+  (`charter.tie_tolerance`: each scored task's noise floor, 1e-3 elsewhere), so
+  a controller scored against its own expert no longer wins seeds by rounding.
+  pH's `off_spec` share reads its permit, 6 to 9, where it read 6.5 to 8.5.
 
 - **Five tasks are scored, and the other twenty ship registered, not scored.**
   `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
