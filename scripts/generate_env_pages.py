@@ -403,7 +403,7 @@ def charter_section(record: dict, stale=(), reads=()) -> str:
             *rows,
             "",
             " ".join([*reasons, said]),
-            *_not_held(record.get("task")),
+            *_not_held(record),
             *(
                 [
                     "",
@@ -418,14 +418,16 @@ def charter_section(record: dict, stale=(), reads=()) -> str:
     )
 
 
-def _not_held(task) -> list[str]:
-    """The scenarios acceptance (J2) does not hold ``task``'s reference to, each
-    with the owner's written exception (``charter.J2_EXCEPTIONS``)."""
+def _not_held(record: dict) -> list[str]:
+    """The scenarios a null beats the reference in by under 1 % on some draw of
+    the sweep, from the record's J2 (``charter.sweep_not_held``): not held, under
+    the shared null margin (``charter.NULL_MARGIN``, owner, 2026-11-27)."""
+    margin = f"{charter.NULL_MARGIN:.0%}".replace("%", " %")
     return [
-        f"\n`{scenario}` is not held: acceptance (J2) does not require the "
-        f"reference to beat the null policies there. The owner accepted this "
-        f"exception because {why}."
-        for scenario, why in charter.J2_EXCEPTIONS.get(task, {}).items()
+        f"\n`{scenario}` is not held: in the family sweep a null policy beats the "
+        f"reference there by under {margin} of its cost, which acceptance (J2) "
+        "reports instead of failing."
+        for scenario in (record.get("j2") or {}).get("sweep_not_held") or ()
     ]
 
 

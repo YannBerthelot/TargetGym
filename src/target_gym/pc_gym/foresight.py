@@ -35,6 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.optimize import minimize
 
+from target_gym import charter
 from target_gym.benchmark import (
     episode_keys,
     episodes_of,
@@ -51,8 +52,12 @@ RHO = (1.0, 100.0, 1e4)
 #: ``NEAR`` above the task's balance floor. Amended 2026-11-25 (picker): and
 #: every seed's kept plan holds the task's held margin rows to ``-HELD``, in the
 #: rows' own units; a row there is priced, not tripped, so the cost cannot show
-#: a plan that leaves it.
-AGREE, NEAR, HELD = 0.01, 0.03, 0.1
+#: a plan that leaves it. Amended 2026-11-27 (owner, picker): ``AGREE`` is taken
+#: between the two best starts, so a start lost in a bad basin (the hold on a
+#: seed that surges) cannot block a ceiling the others agree on.
+#: The agreement and floor tests are the shared rule's (``charter.stop_rule``,
+#: 2026-11-27); the held margin stays the compressor's own.
+AGREE, NEAR, HELD = charter.CEILING_AGREE, charter.CEILING_NEAR, 0.1
 
 
 def ceiling_converged(
@@ -61,15 +66,12 @@ def ceiling_converged(
     """Whether a ceiling counts as converged: ``starts`` maps each start to the
     J its plan reaches (the suite's weighted cost), ``floor`` is the J no plan
     can beat by more than the plenum's storage. The kept plan is the cheapest;
-    the spread is taken on it. A plan under the floor is near it.
+    the spread is taken between it and the next best start (2026-11-27). A
+    plan under the floor is near it.
     ``worst_margin`` is the smallest held margin over every seed's kept plan
     (``plan_margins``), unchecked where None."""
-    costs = [float(c) for c in starts.values()]
-    kept = min(costs)
     holds = worst_margin is None or float(worst_margin) >= -held
-    return (
-        (max(costs) - kept) <= agree * kept and kept <= (1.0 + near) * floor and holds
-    )
+    return charter.stop_rule(starts, floor, agree, near) is True and holds
 
 
 def plan_margins(env, params, seed: int, plan, margins: Callable) -> np.ndarray:

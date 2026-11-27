@@ -202,23 +202,27 @@ def test_a_scored_page_says_not_measured_for_an_mpc_line_its_record_lacks(monkey
     assert "is 2." in section
 
 
-@pytest.mark.parametrize("task", ["cstr", "hvac"])
+@pytest.mark.parametrize("not_held", [["feed_buildup"], []])
 def test_a_scored_page_says_which_scenarios_its_reference_does_not_hold(
-    monkeypatch, task
+    monkeypatch, not_held
 ):
-    """The owner, 2026-11-27: cstr's page says its reference does not hold
-    feed_buildup against the nulls, and why. A task with no J2 exception says
-    nothing of the kind."""
+    """The shared null margin (2026-11-27): the page lists the scenarios where a
+    null beats the reference by under 1 % in the sweep, from the record's J2, and
+    says nothing of the kind where there are none."""
     weights = {"normal": 1.0}
     line = charter.line({"normal": {"costs": [2.0, 2.0], "trips": 0}}, weights)
-    record = {"task": task, "weights": weights, "reference": {"line": line}}
+    record = {
+        "task": "cstr",
+        "weights": weights,
+        "reference": {"line": line},
+        "j2": {"sweep_not_held": not_held},
+    }
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     section = _script("generate_env_pages").charter_section(record)
-    excepted = charter.J2_EXCEPTIONS.get(task, {})
-    assert ("not held" in section) == bool(excepted)
-    for scenario, why in excepted.items():
+    assert ("not held" in section) == bool(not_held)
+    for scenario in not_held:
         assert f"`{scenario}` is not held" in section
-        assert why in section
+        assert "under 1 %" in section
 
 
 def _table(text: str) -> list[dict]:

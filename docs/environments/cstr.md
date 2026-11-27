@@ -81,8 +81,6 @@ What an agent is measured against: the expected cost per step over the task's we
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
-`feed_buildup` is not held: acceptance (J2) does not require the reference to beat the null policies there. The owner accepted this exception because the reference moves only the cooling water, so it cannot act on a build-up of feed, and hold reset's 0.6 % edge there (median 0.705 against the PI's 0.709) comes from where the PI's set point is placed; a feed cut on the water valve, tuned by S13's rule or SIMC's, wins the build-up only by losing the cooling loss to the nulls (accepted 2026-11-27).
-
 The ceiling reads what the policy does not observe: the composition in the reactor; the feed's temperature; when the scenario's event comes (the setpoint move, the catalyst's loss, the richer feed or the cooling water's failure). Part of the room may be out of reach of a policy that reads only the observations.
 
 ## Baselines
