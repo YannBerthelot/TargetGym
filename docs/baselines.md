@@ -111,10 +111,9 @@ That script skips environments already in the file, so naming one with
 
 ## The MPC
 
-The MPC slot holds the best controller we can build for each task with the
-true state, as a line for context. Its cost is achieved, not a bound: it can
-lose to the reference. Each task's controller lives in its package's
-`oracle.py`:
+The MPC slot holds a controller that plans with the true state, as a line for
+context. Its cost is achieved, not a bound: it can lose to the reference. Each
+task's controller lives in its package's `oracle.py`:
 
 | Implementation | Used by | When it applies |
 |---|---|---|

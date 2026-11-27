@@ -4,9 +4,9 @@ Four tasks are scored, `tg.FLAGSHIP`: `reactor`, `hvac`, `compressor_surge` and
 `ph_neutralization`. On each, a result is a saving over the task's **reference**,
 `1 - J_agent / J_reference`, where `J` is the cost per step over every scenario of
 the task, each weighted by its share of operating time. `tg.score` computes it the
-way the charter does, so a number from it means the same thing in every paper.
+way the charter does, so two results from one release compare.
 
-Each scored task's page gives its lines and its room:
+Each scored task's page gives its lines and its room as last recorded:
 [reactor](environments/reactor.md#reference-and-ceiling),
 [hvac](environments/hvac.md#reference-and-ceiling),
 [compressor_surge](environments/compressor_surge.md#reference-and-ceiling) and
@@ -17,7 +17,7 @@ Each scored task's page gives its lines and its room:
 The reference is a controller built by one fixed recipe on every task: PI loops
 tuned by SIMC from bump tests on the plant, then feedforward from the plant's
 balances, a cascade or an override where they pay, keeping the cheapest rung
-that trips nothing. On the reactor it is the published rod procedure, the
+that trips nothing and stays inside its zones. On the reactor it is the published rod procedure, the
 shipped expert. Its numbers are frozen in the package, so it is the same object
 on every machine:
 
@@ -30,15 +30,15 @@ print(ref.rung)                     # the rung the charter kept
 memory = ref.reset()                # stepped as tg.make_expert's expert is
 ```
 
-Beating `tg.make_expert(name)` is a weaker claim: on the ladder's tasks the
-shipped expert is not the reference, and it costs more than the reference does,
-on some of them by a large margin.
+On hvac, compressor_surge and ph_neutralization the shipped expert,
+`tg.make_expert(name)`, is a different controller from the reference, so beating
+it is not the charter's claim.
 
 ## Train on the scenarios
 
-`tg.make(name)` gives the task's scored configuration. The score reads all of
-the task's scenarios, weighted by their share of operating time, which
-`tg.list_scenarios(name)` gives:
+`tg.make(name)` gives the task's heaviest scenario, its scored configuration.
+The score reads all of the task's scenarios, weighted by their share of
+operating time, which `tg.list_scenarios(name)` gives:
 
 ```python
 import target_gym as tg
@@ -92,8 +92,9 @@ then covers the variation between runs as well as between seeds.
   trips and the room. On the reactor, `days` gives the saving on baseload days
   and on load-following days apart.
 - `travel_ratio` and `reversal_ratio`: how much more the agent moves its
-  actuators than the reference. They are not part of the verdict, but a saving
-  that wears a valve out ten times faster is one a plant would not take.
+  actuators than the reference, not yet on the reactor's streams. They are not
+  part of the verdict, but a saving that wears a valve out ten times faster is
+  one a plant would not take.
 - `lines`: the charter's other lines from the task's record, for context: the
   best null policy, the MPC, which plans with the true state and can lose to the
   reference, and the ceiling, the best known plan with foresight. `room` is the
@@ -104,11 +105,12 @@ then covers the variation between runs as well as between seeds.
 - `read_state`: true for a `tg.FullState` policy, which is given the
   simulator's true state and so is not comparable with the reference.
 
-The room is an upper bound on what a policy can save, since the ceiling knows
-what no policy observes: each task's page names what its ceiling reads.
+The room says how much is left to save. The ceiling knows what no policy
+observes, so on the seeds where its plan converged a policy should save at most
+about `1 - 1 / room`; each task's page names what its ceiling reads.
 
 ## Outside the scored suite
 
 `tg.score` refuses a task that is not scored: its records are not held current.
-`tg.score_policy` still runs any registered task against its shipped expert,
-on the protocol [Using the PIDs](using-the-pids.md#the-protocol-score) describes.
+`tg.score_policy` runs such a task against its shipped expert, on the protocol
+[Using the PIDs](using-the-pids.md#the-protocol-score) describes.

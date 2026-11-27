@@ -156,9 +156,11 @@ m = tg.score("ph_neutralization", policy, seeds=(200,))  # all 10 seeds for a re
 print(f"saving {m['saving']:+.1%} over the reference, interval {m['saving_ci']}")
 ```
 
-`tg.make_reference(name)` is that reference, stepped as the expert is.
-Beating `tg.make_expert(name)`, the shipped expert, is a weaker claim, and
-`tg.score_policy` runs any registered task against it.
+`tg.make_reference(name)` is that reference, stepped as the expert is. On the
+reactor it is the shipped expert; on the other three the shipped expert,
+`tg.make_expert(name)`, is a different controller, so beating it is not the
+charter's claim. Outside the scored suite, `tg.score_policy` runs a task
+against its expert.
 [Comparing an agent with the reference](docs/comparing.md) says how to train
 on the scenarios, where to choose checkpoints and how to read the result.
 
@@ -267,7 +269,7 @@ can also anchor on the ceiling and gives the numbers.
 Every environment ships a tuned PID, and all but six (`cstr`, `wake_surf`,
 `plane`, `plane_energy`, `plane3d_heading` and `plane3d_racetrack`) an MPC. On `patrol_range_bearing`, which
 withholds the slot error a planner would read, the MPC slot holds `patrol`'s
-oracle reading the true state, labelled a full-state bound.
+oracle, which reads the true state, and its page says so.
 
 Controller structure is chosen per plant:
 
