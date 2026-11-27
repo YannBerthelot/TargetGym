@@ -256,6 +256,23 @@ def _part(costs: dict, names, weights: dict, tie: float) -> dict:
     return {k: head[k] for k in ("saving", "saving_ci", "probability_of_improvement")}
 
 
+def _by_scenario(policy, weights) -> dict[str, list]:
+    """Each scenario's runs: one policy or a list for every scenario, or a
+    mapping naming each scenario with its own."""
+    if not isinstance(policy, dict):
+        policy = dict.fromkeys(weights, policy)
+    if set(policy) != set(weights):
+        raise ValueError(
+            f"policies for {sorted(policy)}; the task has {sorted(weights)}"
+        )
+    out = {
+        s: list(p) if isinstance(p, (list, tuple)) else [p] for s, p in policy.items()
+    }
+    if len({len(r) for r in out.values()}) != 1:
+        raise ValueError("every scenario needs the same number of runs")
+    return out
+
+
 def score(name: str, policy, seeds=None, jit: bool = True) -> dict:
     """The charter's comparison of ``policy`` with scored task ``name``'s
     reference (charter J4): ``scoring.headline`` over every scenario, weighted by
@@ -268,7 +285,9 @@ def score(name: str, policy, seeds=None, jit: bool = True) -> dict:
     that keeps its own Python memory (it has ``reset`` but no ``step``), one that
     cannot be compiled (``jit=False``) or a ``FullState`` runs on the host, one
     episode at a time. A list of policies is one per training run; the interval
-    then covers the runs too.
+    then covers the runs too. A mapping gives each scenario its own policy, or
+    its own list, for a controller built on each scenario's model such as an
+    MPC; it names every scenario, with the same number of runs in each.
 
     ``seeds`` defaults to the scoring seeds (``charter.ANCHOR_SEEDS``), read
     once for a final result; choose checkpoints and settings on
@@ -293,18 +312,18 @@ def score(name: str, policy, seeds=None, jit: bool = True) -> dict:
             f"not held current. The scored tasks: {list(charter.FLAGSHIP)}"
         )
     ref = make_reference(name)
-    runs = list(policy) if isinstance(policy, (list, tuple)) else [policy]
     seeds = tuple(int(s) for s in (charter.ANCHOR_SEEDS if seeds is None else seeds))
     protocol = name in scoring_runs.PROTOCOLS
     weights = scoring_runs.weights(name) if protocol else scenarios.weights(spec)
-    forms = [_form(p, jit) for p in runs]
+    by_scenario = _by_scenario(policy, weights)
     costs, table = {}, []
     for s in weights:
+        runs = by_scenario[s]
         params = None if protocol else ref.params(s)
         theirs = _scenario_run(name, spec, s, params, "compiled", ref, seeds, protocol)
         ours = [
-            _scenario_run(name, spec, s, params, form, p, seeds, protocol)
-            for form, p in forms
+            _scenario_run(name, spec, s, params, *_form(p, jit), seeds, protocol)
+            for p in runs
         ]
         one = len(runs) == 1
         row = {
@@ -342,7 +361,9 @@ def score(name: str, policy, seeds=None, jit: bool = True) -> dict:
         "scenarios": table,
         "lines": lines,
         "reference": {"rung": ref.rung, "exits": frozen.get("exits")},
-        "read_state": any(isinstance(p, FullState) for p in runs),
+        "read_state": any(
+            isinstance(p, FullState) for runs in by_scenario.values() for p in runs
+        ),
     }
     if protocol and BASELOAD in weights:
         follow = [s for s in weights if s != BASELOAD]
