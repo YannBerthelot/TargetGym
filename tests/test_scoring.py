@@ -705,7 +705,8 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
         # owner's choice of airframe (2026-11-10), patrol/PHYSICS.md
         ("patrol", [10.0 * 0.3048]),
         ("formation", [20.0, 10.0 * 0.3048, 10.0 * 0.3048]),  # lead, then wingmen
-        ("ph_neutralization", [1.0]),  # the permit range pH 7 +-1 [P7]
+        # the permit, 6 to 9 about its centre (the outside review's M7)
+        ("ph_neutralization", [1.5]),
     ],
 )
 def test_a_published_tolerance_is_the_band(name, band):

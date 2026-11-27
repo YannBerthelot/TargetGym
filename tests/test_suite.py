@@ -190,10 +190,11 @@ def test_the_expert_run_through_the_suite_sits_on_the_half_ring():
     """The expert scored against itself on a scored task: parity on every
     number, so radius 0.5 on each of the task's capabilities. The task is
     scored and tagged, since only a scored task moves a spoke (owner,
-    2026-11-24); it was four_tank, which is Extra and now carries no tag."""
+    2026-11-24); it was four_tank, which is Extra and now carries no tag, then
+    cstr, which left the suite on 2026-11-27."""
     from target_gym.runners.runners import baseline_policy
 
-    task = "cstr"
+    task = "ph_neutralization"
     assert task in FLAGSHIP and suite.CAPABILITIES[task]
 
     def make_policy(name):
@@ -210,9 +211,11 @@ def test_the_expert_run_through_the_suite_sits_on_the_half_ring():
 
 def test_first_order_is_a_fixture_and_leaves_every_aggregate():
     """It has no disturbance, nothing hidden and nothing to learn, so it runs
-    in the suite and its score moves no spoke, even if it ever gains room."""
+    in the suite and its score moves no spoke, even if it ever gains room.
+    Beside a scored task, ph_neutralization (cstr until it left the suite on
+    2026-11-27), a spoke stands where that task alone puts it."""
     assert suite.CAPABILITIES["first_order"] == ()
     high = {"score": 0.9, "transient_ratio": 3.0, "oracle_transient_ratio": 3.0}
-    cstr = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
-    profile = suite.profile({"first_order": high, "cstr": cstr})
-    assert profile["hold"]["basic"] == pytest.approx(suite.radius(0.1))
+    scored = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
+    profile = suite.profile({"first_order": high, "ph_neutralization": scored})
+    assert profile["hold"]["nonlinearity"] == pytest.approx(suite.radius(0.1))

@@ -536,8 +536,10 @@ def finish_step(env, key, state, new_state, params, **info):
       keeps the state. After a trip in continuing mode it is the restart
       state, not the state that tripped.
     - ``tripped`` and ``trip_cost`` (``charged_trip_cost``).
-    - ``measured_reward`` (``measured_reward``), what a learner trains on.
-      ``reward`` stays the true cost, and the score reads it.
+    - ``measured_reward`` (``measured_reward``), what a learner trains on
+      (docs/rl-protocol.md, section 2: the owner's decision of 2026-11-05).
+      ``reward``, which ``step`` returns, stays the true cost: the score and
+      the evaluation read it, and training on it uses readings no plant has.
     - ``applied_action`` (``applied_action``), what the actuator did, from the
       ``state`` ``actuate`` returned.
     - ``reward_terms``, where the environment has them: the terms of this

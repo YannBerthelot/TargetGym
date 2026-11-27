@@ -4,7 +4,7 @@ Twenty-five environments, every one a *target MDP*: the objective is
 to reach and hold a subset of the state space against disturbances, not to reach
 a goal and stop.
 
-Five of them are scored: `reactor`, `hvac`, `cstr`, `compressor_surge` and `ph_neutralization`. A scored task has a measured reference and ceiling on its page,
+4 of them are scored: `reactor`, `hvac`, `compressor_surge` and `ph_neutralization`. A scored task has a measured reference and ceiling on its page,
 and its results are on [Baseline results](baseline-results.md). The others run
 the same way but have no published result: the **Status** column says whether
 a task is under review, Extra (kept with its reason, never scored) or a test
@@ -77,7 +77,7 @@ To pick one by what you want to test, see
 
 | Environment | Cite as | Status | Observation | Action | Tracked | PID | MPC | Physics |
 |---|---|---|---|---|---|---|---|---|
-| `cstr` | `cstr-v8` | Scored | (5,) | (2,) | T (K) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
+| `cstr` | `cstr-v8` | Under review, not scored | (5,) | (2,) | T (K) | yes | no | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 | `first_order` | `first_order-v5` | Test fixture, never scored | (2,) | (1,) | x | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/first_order/PHYSICS.md) |
 | `four_tank` | `four_tank-v7` | Extra, never scored | (6,) | (2,) | h1 (m), h2 (m) | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/four_tank/PHYSICS.md) |
 | `ph_neutralization` | `ph_neutralization-v6` | Scored | (8,) | (2,) | pH | yes | yes | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/ph_neutralization/PHYSICS.md) |
