@@ -16,7 +16,7 @@ on ``cstr``, where a constant is a fair baseline. It does not on ``plane`` or
 ``battery``, where a constant crashes the aircraft or drains the pack, so
 staying alive already beats it.
 
-The tasks are one per registry group and the five scored tasks (charter J7; the
+The tasks are one per registry group and the scored tasks (charter J7; the
 outside review's L4, 2026-11-27). The agent's settings are the same on each, and
 a typical run has to clear the bar, so one unlucky seed is not a bug.
 
@@ -39,7 +39,7 @@ import target_gym as tg
 from target_gym.benchmark import run_policy, task_info
 from target_gym.charter import FLAGSHIP, VALIDATION_SEEDS
 
-TASKS = ("plane", "glass_furnace", "battery", *FLAGSHIP)
+TASKS = tuple(dict.fromkeys(("plane", "cstr", "glass_furnace", "battery", *FLAGSHIP)))
 TRAINING_SEEDS = (0, 1, 2, 3, 4)
 HELD_OUT_SEEDS = VALIDATION_SEEDS[:10]
 CONSTANT_LEVELS = (-1.0, -0.5, 0.0, 0.5, 1.0)

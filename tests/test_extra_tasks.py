@@ -57,14 +57,15 @@ def test_unstable_cstr_is_extra_with_its_reason():
 
 
 def test_unstable_cstr_moves_no_capability_spoke():
-    """Out of the capability claims: its score enters no aggregate. Beside
-    cstr, the nonlinearity spoke stands where cstr alone puts it."""
+    """Out of the capability claims: its score enters no aggregate. Beside a
+    scored task with the tag, ph_neutralization (cstr until it left the suite on
+    2026-11-27), the nonlinearity spoke stands where that task alone puts it."""
     from target_gym import suite
 
     assert suite.CAPABILITIES["unstable_cstr"] == ()
     high = {"score": 0.9, "transient_ratio": 3.0, "oracle_transient_ratio": 3.0}
-    cstr = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
-    profile = suite.profile({"unstable_cstr": high, "cstr": cstr})
+    scored = {"score": 0.1, "transient_ratio": 1.0, "oracle_transient_ratio": 3.0}
+    profile = suite.profile({"unstable_cstr": high, "ph_neutralization": scored})
     assert profile["hold"]["nonlinearity"] == pytest.approx(suite.radius(0.1))
 
 

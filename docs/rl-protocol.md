@@ -95,7 +95,7 @@ outside review's short PPO runs the interquartile mean of per-seed ratios and
 the ratio of means gave opposite signs on pH's bad day. The reference is the
 ladder's kept rung on the scoring seeds, the charter record's anchor line
 (`charter.load(task)["anchor"]`), not the shipped expert, which costs 2 to
-47 % more on four of the five scored tasks.
+47 % more on four of the five tasks the review measured.
 
 **An agent is its training runs.** Train 30 runs, agent seeds 10 to 39 (section
 9). Choose each run's checkpoint on the validation seeds, then score every run
@@ -157,7 +157,6 @@ scenario (`scripts/record_charter.py --tasks <task> --noise-floor`, stored in
 | --- | --- | --- |
 | reactor | 1.1e-3 | 6e-7 |
 | hvac | 1.1e-6 | 6e-8 |
-| cstr | 2.0e-3 | 3e-8 |
 | compressor_surge | 0.19 | 0.02 |
 | ph_neutralization | 2.2e-7 | 4e-8 |
 
@@ -264,17 +263,15 @@ A driver takes `T` from this table and computes `gamma` from it:
 | --- | --- | --- | --- | --- | --- |
 | reactor | 30 s | not measured | 1250 | open | open |
 | hvac | 900 s | 69 | 96 | 96 | 0.99896 |
-| cstr | 15 s | not measured | none | open | open |
 | compressor_surge | 0.1 s | 1599 | none | 1599 | 0.99994 |
 | ph_neutralization | 5 s | 197 | none | 197 | 0.99949 |
 
-Two slow modes are not measured. After a 5 % excursion for a fifth of a
-window, the pairs of cstr (over ten windows) and of the reactor (over six)
-never reconverge in state, and the extra cost the excursion leaves flips sign
-instead of decaying, so the rule gives no `T`: cstr's composition, temperature
-and flows, the reactor's boron line. Their `T` and `gamma` stay open until the
-rule is extended to such a plant, and a result on them states the `gamma` it
-used; the reactor's `T` is at least its 1250-step preview. compressor_surge's
+The reactor's slow mode is not measured. After a 5 % excursion for a fifth of
+a window, its pair never reconverges over six windows (its boron line), and the
+extra cost the excursion leaves flips sign instead of decaying, so the rule
+gives no `T`. Its `T` and `gamma` stay open until the rule is extended to such a
+plant, and a result on it states the `gamma` it used; its `T` is at least its
+1250-step preview. compressor_surge's
 cost forgets its start after 1599 steps while its state never reconverges, as
 its noise floor suggests.
 

@@ -1,19 +1,21 @@
 """The scored suite, the charter's flagship (docs/proposals/task-charter.md,
 Words and J5).
 
-Contract, from the owner's decisions of 2026-11-24 and not from the code:
+Contract, from the owner's decisions of 2026-11-24 and 2026-11-27 and not from
+the code:
 
-- the first scored suite is reactor, hvac, cstr, compressor_surge and
-  ph_neutralization, stated in one place (``charter.FLAGSHIP``, also
-  ``tg.FLAGSHIP``);
+- the scored suite is reactor, hvac, compressor_surge and ph_neutralization,
+  stated in one place (``charter.FLAGSHIP``, also ``tg.FLAGSHIP``): the first
+  suite of 2026-11-24 less cstr, which left it for 0.8.0 on 2026-11-27
+  ("Registered, not scored");
 - every other task ships registered, not scored: it runs through ``tg.make``,
   its page says it is under review and its charter lines are not measured, it
   is out of the results and moves no radar spoke, and its records are not held
-  current, so the records job goes green with only the five recorded;
+  current, so the records job goes green with only the four recorded;
 - ``tg.list_envs()`` still gives every registered name;
 - the old-format rows of the tasks outside the suite stay in the repository,
   and no page prints a number from them;
-- the README shows the five in a table and the others by family;
+- the README shows the four in a table and the others by family;
 - the capability radar is out of the docs for this release, with a line saying
   it returns when it is rebuilt on the saving over the reference; its code
   stays.
@@ -41,9 +43,9 @@ from target_gym import charter, registry, suite
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
-#: The owner's choice of 2026-11-24.
-FIVE = {"reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization"}
-OTHERS = set(registry.REGISTRY) - FIVE
+#: The owner's choice of 2026-11-24, less cstr (2026-11-27).
+FOUR = {"reactor", "hvac", "compressor_surge", "ph_neutralization"}
+OTHERS = set(registry.REGISTRY) - FOUR
 
 
 def _script(name: str):
@@ -63,9 +65,9 @@ def _names(text: str) -> list[str]:
 # --- the list and the status ------------------------------------------------
 
 
-def test_the_flagship_is_the_five_tasks_of_the_decision():
-    assert len(charter.FLAGSHIP) == 5
-    assert set(charter.FLAGSHIP) == FIVE
+def test_the_flagship_is_the_four_tasks_of_the_decisions():
+    assert len(charter.FLAGSHIP) == 4
+    assert set(charter.FLAGSHIP) == FOUR
     assert tg.FLAGSHIP == charter.FLAGSHIP
 
 
@@ -80,6 +82,7 @@ def test_a_scored_task_is_registered_and_neither_extra_nor_a_fixture():
     [
         ("reactor", "scored"),
         ("ph_neutralization", "scored"),
+        ("cstr", "under review"),  # the owner, 2026-11-27
         # The owner, 2026-11-24: glass_furnace joins when its four pieces are
         # done, cement_kiln ships as it is, not scored.
         ("glass_furnace", "under review"),
@@ -94,10 +97,10 @@ def test_a_task_has_the_status_its_place_gives_it(name, status):
     assert charter.status(name) == status
 
 
-def test_every_task_has_one_status_and_five_are_scored():
+def test_every_task_has_one_status_and_four_are_scored():
     statuses = {name: charter.status(name) for name in registry.REGISTRY}
     assert set(statuses.values()) <= {"scored", "under review", "extra", "fixture"}
-    assert {n for n, s in statuses.items() if s == "scored"} == FIVE
+    assert {n for n, s in statuses.items() if s == "scored"} == FOUR
 
 
 def test_an_unregistered_name_has_no_status():
@@ -110,7 +113,7 @@ def test_an_unregistered_name_has_no_status():
 
 def test_list_envs_still_gives_every_registered_task():
     assert tg.list_envs() == registry.env_names()
-    assert FIVE < set(tg.list_envs())
+    assert FOUR < set(tg.list_envs())
 
 
 @pytest.mark.parametrize("name", ["plane", "four_tank", "first_order", "hvac"])
@@ -162,7 +165,7 @@ def test_a_page_outside_the_suite_prints_no_recorded_number(name):
     assert "\n## Reference and ceiling\n" not in text
 
 
-@pytest.mark.parametrize("name", sorted(FIVE))
+@pytest.mark.parametrize("name", sorted(FOUR))
 def test_a_scored_page_shows_the_four_charter_lines(name):
     """Charter J3: the best null policy, the reference, the MPC and the
     ceiling, each with its cost or "not measured"."""
@@ -249,10 +252,10 @@ def test_the_environment_reference_gives_each_task_its_status():
     }
     assert shown == {n: STATUS_ROW[charter.status(n)] for n in registry.REGISTRY}
     intro = text.split("\n## ")[0]
-    assert set(_names(intro.split("scored")[1].split(".")[0])) == FIVE
+    assert set(_names(intro.split("scored")[1].split(".")[0])) == FOUR
 
 
-def test_the_readme_shows_the_five_in_a_table_and_the_others_by_family():
+def test_the_readme_shows_the_four_in_a_table_and_the_others_by_family():
     section = (ROOT / "README.md").read_text().split("\n## Environments\n")[1]
     section = section.split("\n## ")[0]
     scored, others = section.split("\n### Registered, not scored\n")
@@ -266,10 +269,10 @@ def test_the_readme_shows_the_five_in_a_table_and_the_others_by_family():
     assert sorted(listed) == sorted(OTHERS)
 
 
-def test_the_docs_home_names_the_five():
+def test_the_docs_home_names_the_four():
     blocks = (DOCS / "index.md").read_text().split("\n\n")
     (block,) = [b for b in blocks if "are scored" in b]
-    assert set(_names(block)) == FIVE
+    assert set(_names(block)) == FOUR
 
 
 # --- the results page and the radar -----------------------------------------
@@ -296,15 +299,15 @@ def test_the_results_page_has_a_row_for_scored_tasks_only(results, as_if_current
     body, unscored = page.split("\n## Not scored\n")
     linked = set(re.findall(r"^\| \[`(\w+)`\]\(environments/", body, re.MULTILINE))
     plain = {row["task"] for row in _table(body) if "task" in row}
-    assert linked and linked <= FIVE
-    assert plain == FIVE
+    assert linked and linked <= FOUR
+    assert plain == FOUR
     assert set(_names(unscored)) == OTHERS
 
 
 def test_the_readme_chart_draws_scored_tasks_only(results, as_if_current):
     svg = results.outputs()[results.IMAGES[False]]
     drawn = {n for n in registry.REGISTRY if f">{n}<" in svg}
-    assert drawn and drawn <= FIVE
+    assert drawn and drawn <= FOUR
 
 
 def test_a_task_outside_the_suite_moves_no_spoke():
@@ -366,11 +369,11 @@ HELD_CURRENT = {
 }
 #: A baseline row compares the PID with the MPC, so it exists only where both
 #: ship. A scored task may ship no MPC in this release (owner, 2026-11-24).
-WITH_MPC = {name for name in FIVE if registry.get(name).has_mpc}
+WITH_MPC = {name for name in FOUR if registry.get(name).has_mpc}
 
 
 @pytest.mark.medium
-def test_the_records_job_covers_the_five_and_only_them():
+def test_the_records_job_covers_the_four_and_only_them():
     """What CI's ``records`` job collects: no case for a task outside the
     suite, and one per scored task wherever a record is held current."""
     out = subprocess.run(
@@ -391,9 +394,9 @@ def test_the_records_job_covers_the_five_and_only_them():
         cases.setdefault(test, set()).add(task)
     assert HELD_CURRENT <= set(cases), out.stdout[-2000:] + out.stderr[-2000:]
     for test, tasks in cases.items():
-        assert tasks <= FIVE, test
+        assert tasks <= FOUR, test
         if test in HELD_CURRENT:
-            assert tasks == FIVE, test
+            assert tasks == FOUR, test
     assert cases["test_recorded_baseline_still_describes_this_tree"] == WITH_MPC
 
 
@@ -404,7 +407,7 @@ def test_the_stale_list_names_scored_tasks_only(capsys):
 
     assert _script("stale_records").main(["list", "--all"]) in (0, None)
     jobs = json.loads(capsys.readouterr().out)
-    assert {job["env"] for job in jobs} == FIVE
+    assert {job["env"] for job in jobs} == FOUR
 
 
 def test_the_charter_stale_report_covers_the_flagship_by_default():
@@ -415,5 +418,5 @@ def test_the_charter_stale_report_covers_the_flagship_by_default():
 def test_a_recorder_run_without_names_records_the_scored_tasks():
     """The protocol scores every scored task's PID; the baseline returns
     compare the PID with the MPC, so they cover the scored tasks with both."""
-    assert set(_script("evaluate_baselines").default_envs()) == FIVE
+    assert set(_script("evaluate_baselines").default_envs()) == FOUR
     assert set(_script("record_baselines").default_envs()) == WITH_MPC

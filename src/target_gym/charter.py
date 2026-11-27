@@ -84,8 +84,9 @@ _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 #: task outside it ships registered, not scored. A task joins by the bar the
 #: owner set the same day: a review score of 8 or more, a room whose interval
 #: is above 1 from a converged ceiling, J2 and the sweep (B7) passed, and its
-#: plant, reference and tests merged.
-FLAGSHIP = ("reactor", "hvac", "cstr", "compressor_surge", "ph_neutralization")
+#: plant, reference and tests merged. cstr left it for 0.8.0 (owner, picker
+#: 2026-11-27, "Registered, not scored").
+FLAGSHIP = ("reactor", "hvac", "compressor_surge", "ph_neutralization")
 
 #: What each scored task's ceiling reads that its policy does not observe (owner,
 #: picker 2026-11-25, "Report foresight, name it plainly"): the ceiling stays the
@@ -108,14 +109,6 @@ CEILING_READS = {
     # hvac/env.py: weather_dev, an OU draw per step; the policy reads the
     # outdoor temperature now and its next-24 h mean.
     "hvac": ("the outdoor temperature ahead, hour by hour, past its 24 h mean",),
-    # cstr/env_jax.py: C_a, T_feed on a drawn phase, event_at drawn in its window,
-    # the scenario's event sizes.
-    "cstr": (
-        "the composition in the reactor",
-        "the feed's temperature",
-        "when the scenario's event comes (the setpoint move, the catalyst's loss, "
-        "the richer feed or the cooling water's failure)",
-    ),
     # compressor_surge/env.py: line_shift (the machine's surge line off the map),
     # demand_levels drawn per block, demand_dev an OU draw per step.
     "compressor_surge": (

@@ -133,9 +133,10 @@ The next release is 0.8.0, because these changes break code written for
   - `runners.baseline_policy(spec, "mpc")` returns a `FullState`; the private
     `runners._wants_state` is gone (`runners.reads_state` says the same, by the
     wrapper alone).
-- **Five tasks are scored, and the other twenty ship registered, not scored.**
-  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
-  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+- **Four tasks are scored, and the other twenty-one ship registered, not
+  scored.** `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`,
+  `compressor_surge` and `ph_neutralization`. `cstr` left it for 0.8.0 (owner,
+  2026-11-27) and ships registered, not scored. Upgrade notes:
   - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
     all 25 names.
   - Results are published for the scored suite only. The page of a task
