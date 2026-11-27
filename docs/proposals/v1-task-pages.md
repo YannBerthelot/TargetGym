@@ -44,9 +44,11 @@ Given by picker on these pages. The build sessions work from them.
   - hvac: none. Its tariff and comfort price are cited; its scenario weights are
     the project's own, but they are weights, not prices.
 
-The tables below are as judged before these answers. With them, item 5 reads
-"not measured" on all four tasks and the reactor's item 7 passes; the rest
-stands.
+The tables below are as judged before these answers, on int at 874f5fb3. With
+them, item 5 reads "not measured" on all four tasks and the reactor's item 7
+passes; the rest stands. Since then PR 306 has merged (06b82b2a), and so has the
+protocol's own page (PR 315, `docs/task-protocol.md`), which does not yet carry
+these readings of items 2, 3, 5 and 7.
 
 ## The decision in one table
 
