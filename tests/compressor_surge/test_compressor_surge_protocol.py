@@ -23,6 +23,11 @@ A. The ceiling is converged when its two starts (the reference's moves and the
    seed's kept plan holds its surge and zone rows within -0.1 unit (0.01 kPa
    of header pressure, 0.001 of Phi). A plan that leaves its zone or crosses
    the machine's line is priced, not tripped, so its cost alone cannot show it.
+   Amended (owner, picker 2026-11-27): a third start, the oracle MPC's own
+   moves on each seed, as pH's ceiling takes; the best of the three is kept,
+   and the agreement is measured between the two best starts, still within
+   1 % of the kept J. Every start's J is reported. The 3 % floor gap and the
+   held margin are unchanged.
 """
 
 import jax
@@ -126,6 +131,40 @@ def test_the_stop_rule_needs_both_starts_to_agree_and_sit_near_the_floor(
     starts, floor, converged
 ):
     assert ceiling_converged(starts, floor) is converged
+
+
+@pytest.mark.parametrize(
+    "starts, floor, converged",
+    [
+        # The hold lost in a surge basin (seed 107, 2026-11-26): the two best
+        # agree to 0.5 %, 2.9 % above the floor, so converged.
+        ({"hold": 57035.0, "reference": 1.035, "mpc": 1.030}, 1.0, True),
+        # The two best 1.5 % apart: not converged, whatever the third.
+        ({"hold": 57035.0, "reference": 1.045, "mpc": 1.030}, 1.0, False),
+        # The two best agree, but 3.5 % above the floor: not converged.
+        ({"hold": 57035.0, "reference": 1.036, "mpc": 1.035}, 1.0, False),
+    ],
+)
+def test_the_stop_rule_needs_the_two_best_of_three_starts_to_agree(
+    starts, floor, converged
+):
+    assert ceiling_converged(starts, floor) is converged
+
+
+def test_the_ceiling_cannot_be_solved_without_the_mpc_start(tmp_path):
+    """The amendment's third start is the oracle's run on the seed: a solve
+    asked without it is refused before it starts, not silently two-start."""
+    import importlib.util
+    import pathlib
+
+    path = (
+        pathlib.Path(__file__).resolve().parents[2] / "scripts" / "record_ceilings.py"
+    )
+    spec = importlib.util.spec_from_file_location("record_ceilings_under_test", path)
+    rc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rc)
+    with pytest.raises(SystemExit, match="mpc"):
+        rc.solve("compressor_surge", "normal", 100, tmp_path, start="cold")
 
 
 AGREEING = {"reference": 1.954, "hold": 1.960}
