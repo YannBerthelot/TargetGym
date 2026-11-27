@@ -22,6 +22,7 @@ from reference_ladder import (  # noqa: E402
     Row,
 )
 
+from target_gym import scenarios
 from target_gym.registry import REGISTRY
 
 DISCHARGE = "pH on trim"
@@ -127,11 +128,15 @@ def row() -> Row:
     # either, since a plant held on the permit's edge is outside it on the
     # slightest error, and the 60 min excursion clock trips it during the hold.
     buffer_high = q2_nominal + 2.0 * float(p.q2_noise_std)
+    # The sizes are the bad day's: the scored configuration is the normal day, with
+    # none (owner, 2026-11-27, the RL research review's H1).
+    bad = {s.name: s for s in scenarios.suite(spec)}["bad_day"]
+    acid, swing = (float(bad.overrides[k]) for k in ("acid_upset_size", "flow_swing"))
     points = (
-        {"Wa1": float(p.Wa1) * (1.0 - float(p.acid_upset_size))},
-        {"Wa1": float(p.Wa1) * (1.0 + float(p.acid_upset_size))},
-        {"q1": float(p.q1) * (1.0 - float(p.flow_swing))},
-        {"q1": float(p.q1) * (1.0 + float(p.flow_swing))},
+        {"Wa1": float(p.Wa1) * (1.0 - acid)},
+        {"Wa1": float(p.Wa1) * (1.0 + acid)},
+        {"q1": float(p.q1) * (1.0 - swing)},
+        {"q1": float(p.q1) * (1.0 + swing)},
         {"q2_nominal": float(p.q2_min)},
         {"q2_nominal": buffer_high},
     )

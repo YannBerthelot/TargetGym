@@ -9,6 +9,35 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### hvac's window edge and the scored defaults (2026-11-27)
+
+Two findings of the outside RL research review, fixed as the owner decided by
+picker on 2026-11-27.
+
+- hvac's evaluation no longer credits a store left fuller at the end of the scored
+  days (H2, "No credit, charge a shortfall"). A store left emptier than it began is
+  charged its shortfall once, at the dearest price heat can cost the plant: the
+  punta tariff over the heat pump's COP at the valve's top supply, EUR 0.0769 per
+  kWh of heat (`hvac.env.shortfall_price`). Ending at the start level is neutral.
+  The old charge, at the night tariff over the design supply's COP, both ways, paid
+  an agent for a night at full supply on the last scored day (0.9 % under the
+  expert) and for the supply shut after 08:00 on that day (4.8 % under it), and its
+  credit made one shoulder-season seed's cost negative. The rule is
+  `evaluation.Evaluation`'s, so any task that names an edge charge has it. The
+  training reward is unchanged and still carries no edge charge (hvac's
+  `PHYSICS.md` section 5 says how the two differ).
+- hvac's oracle plans the same objective: the store's shortfall at the window's end
+  is a fourth hinge, paid once, with the store's value at the window's start
+  carried as a third planned state (`hvac.oracle.WindowOracle`).
+- `tg.make(name)` gives each scored task's heaviest scenario (H1, "Heaviest
+  scenario"): `normal` for `ph_neutralization` and `compressor_surge` (as for
+  `hvac` and `cstr` already), `baseload` for the `reactor`. Every scenario resolves
+  to exactly the parameters it resolved to before, so only a run on the defaults
+  moves (`tests/test_scored_defaults.py`). The reference ladder's pH row reads its
+  bump tests' upset sizes from the bad day, where it read them from the default.
+- `hvac-v6`, `ph_neutralization-v6`, `compressor_surge-v5` and `reactor-v10`, which
+  no release shipped, are re-stamped in place.
+
 ### Scaled observations and rewards (2026-11-25)
 
 - `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
@@ -51,6 +80,30 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
+
+- **The scored tasks' defaults are their heaviest scenarios** (2026-11-27). A
+  changed default changes what `tg.make(name)` and `env.default_params` give.
+  Upgrade notes:
+  - `ph_neutralization`: `acid_upset_size` and `flow_swing` default to 0, the
+    normal day. The old default, both at 0.2, is the bad day:
+    `tg.make("ph_neutralization", acid_upset_size=0.2, flow_swing=0.2)`.
+  - `compressor_surge`: `demand_range` defaults to (0.7, 0.95), the normal day.
+    The old (0.35, 0.95) was the dropped load swings' range, which no scenario
+    scores; pass `demand_range=(0.35, 0.95)` to run it.
+  - `reactor`: `ramp_down_range` defaults to (1e6, 1e6), a baseload day whose ramp
+    never comes. The old default, an EDF daily load follow, is
+    `ramp_down_range=(1800.0, 7200.0)`; each load-follow scenario now sets it.
+  - Every scenario's parameters are unchanged, so nothing scored through
+    `scenarios.params_for` or a stream moves.
+- **hvac's evaluation charges a shortfall and credits nothing at the window's
+  edge** (2026-11-27). Upgrade notes:
+  - A store left fuller at the end of the scored days earns nothing; one left
+    emptier pays its shortfall at `hvac.env.shortfall_price`, EUR 2.137e-8 per J.
+    hvac's scored costs move, and can no longer be negative.
+  - `HVACParams.T_out_design` is gone: it priced the stored heat and nothing else.
+    `hvac.env.stored_heat_price` is replaced by `shortfall_price`, and
+    `hvac.env.stored_heat_cost` is gone.
+  - `env.stored_value` prices the store at the shortfall price.
 
 - **Five tasks are scored, and the other twenty ship registered, not scored.**
   `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,

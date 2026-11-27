@@ -129,7 +129,8 @@ class Reactor(
     @property
     def default_params(self) -> ReactorParams:
         # The scored configuration: env steps of 30 s (``control_period``
-        # physics sub-steps each) over the 24 h of a load-follow day.
+        # physics sub-steps each) over the 24 h of a baseload day, the
+        # heaviest scenario (owner, 2026-11-27, the RL research review's H1).
         return ReactorParams()
 
     def compute_reward(self, state, params):

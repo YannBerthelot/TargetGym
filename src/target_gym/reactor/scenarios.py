@@ -56,6 +56,10 @@ DEFAULT_DAY = {
     "load_ramp_rate": 0.02 / 60.0,
     "hold_range": (3.0 * HOUR, 8.0 * HOUR),
 }
+#: A load-follow window's ramp down starts 0.5 to 2 h after its reset, drawn at
+#: reset. ``ReactorParams`` holds the baseload day, the heaviest scenario (owner,
+#: 2026-11-27, the RL research review's H1), so each load-follow row sets it.
+WINDOW_DAY = {"ramp_down_range": (1800.0, 7200.0)}
 
 
 def _outlasts(lo, hi):
@@ -98,10 +102,16 @@ def _one_day_a_visit(row):
 
 
 def suite():
-    # Each load-follow row draws its days faster than one a visit, by its own day's
-    # shape, so that it delivers one a visit (``_one_day_a_visit``).
+    # Each load-follow row starts its window's day 0.5 to 2 h in (``WINDOW_DAY``),
+    # and draws its days faster than one a visit, by its own day's shape, so that
+    # it delivers one a visit (``_one_day_a_visit``).
     return tuple(
-        _one_day_a_visit(row) if row["events_per_h"] else row for row in _rows()
+        (
+            _one_day_a_visit({**row, "overrides": {**WINDOW_DAY, **row["overrides"]}})
+            if row["events_per_h"]
+            else row
+        )
+        for row in _rows()
     )
 
 

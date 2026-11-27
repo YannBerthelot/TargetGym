@@ -121,14 +121,17 @@ class PHParams(EnvParams):
 
     # ---- Influent upsets (REALITY.md, "A normal day and a bad day") ----
     # Large unknown changes in the influent's strong acid concentration from
-    # production units [P3, p. 4]: two an episode, within +-20 % of nominal,
-    # ramped over 10 min (ours, the "calm to rocking and reeling during one
-    # lunch break" of [P3, p. 8]).
-    acid_upset_size: float = 0.2  # fraction of Wa1
+    # production units [P3, p. 4]: two an episode, within +-acid_upset_size of
+    # nominal, ramped over 10 min. The bad day sets them to +-20 % (ours, the
+    # "calm to rocking and reeling during one lunch break" of [P3, p. 8]); the
+    # default is the normal day, the heaviest scenario, with none (owner,
+    # 2026-11-27, the RL research review's H1).
+    acid_upset_size: float = 0.0  # fraction of Wa1
     acid_upset_ramp: float = 600.0  # s
     # Influent flow swings (Amendment 3), metered [P3, Figure 2]: two an
-    # episode, within +-flow_swing of nominal, ramped like the acid. Ours.
-    flow_swing: float = 0.2  # fraction of q1
+    # episode, within +-flow_swing of nominal, ramped like the acid; +-20 % on
+    # the bad day (ours), none on the normal day.
+    flow_swing: float = 0.0  # fraction of q1
     #: The window's own upsets: 1 runs them as drawn at reset; 0, which only a
     #: stream sets (scenarios.py), leaves the influent at nominal, and the
     #: stream starts its upsets through ``start_event``.

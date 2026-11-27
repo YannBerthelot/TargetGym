@@ -75,8 +75,8 @@ family's documented range, or ours with a reason.
 | `q3_trim_max` | 2.2 | mL/s | ours, family: a tenth of stage 1's, as the 1 and 0.1 GPM final elements of [P4, p. 2] |
 | `q2_noise_std`, `BUFFER_OU_THETA` | 0.35, 2e-3 | mL/s, 1/s | ours: buffering changes are sourced [P1; P2], their size and rate are not |
 | `q2_min`, `q2_max` | 0, 2.5 | mL/s | ours: keeps the buffer flow physical |
-| `acid_upset_size`, `acid_upset_ramp` | 0.2, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not |
-| `flow_swing` | 0.2 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found |
+| `acid_upset_size`, `acid_upset_ramp` | 0, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not. 0.2 on the bad day; none by default, the normal day, the heaviest scenario (owner, 2026-11-27, the RL research review's H1) |
+| `flow_swing` | 0 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found. 0.2 on the bad day, none by default |
 | `event_hold` | 2 | h (stream) | ours: how long an influent upset holds before it ramps back, until the producing unit's batch ends; no source gives it; a window never sets it, so its upsets never return |
 | `window_upsets` | 1, 0 | - | the window's own upsets on (1), or off in a stream (0), which starts its own |
 | `permit_low`, `permit_high` | 6, 9 | pH | cited: secondary treatment, "within the limits of 6.0 to 9.0" [P11] (owner, 2026-11-25; was [P7]'s example product spec, pH 7 +- 1) |

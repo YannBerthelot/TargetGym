@@ -122,9 +122,9 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `Wb3` | 5e-05 | mol/L |
 | `pK1` | 6.35 | - |
 | `pK2` | 10.25 | - |
-| `acid_upset_size` | 0.2 | - |
+| `acid_upset_size` | 0 | - |
 | `acid_upset_ramp` | 600 | s |
-| `flow_swing` | 0.2 | - |
+| `flow_swing` | 0 | - |
 | `window_upsets` | 1 | - |
 | `event_hold` | 1e+09 | s |
 | `permit_low` | 6 | pH |
