@@ -131,6 +131,7 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `boric_acid_ppm` | 7800 | ppm |
 | `primary_mass` | 250000 | kg |
 | `boron_delay` | 20 | 30 s steps |
+| `cycle_stratum` | -1 | - |
 | `alpha_coolant_end` | -0.0006 | 1/K |
 | `boron_worth_end` | -0.000109 | 1/ppm |
 | `turbine_rate` | 0.000833333 | 1/s |
