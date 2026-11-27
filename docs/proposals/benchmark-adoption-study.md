@@ -4,6 +4,8 @@ What made classic control, MuJoCo and Atari the standard RL benchmarks, the bar 
 
 *A research session wrote this report on 2026-11-27. It was read-only: nothing in the code changed and nothing was published.*
 
+**Status, 2026-11-27.** The owner adopted a [vision](../vision.md) and a [task protocol](../task-protocol.md) that take up this study's recommendation. They differ from section 7 in one way: each task becomes v1 on its own, in a fresh namespace, as it passes the protocol, instead of a suite frozen at the 0.8.0 tag.
+
 ## 1. Summary
 
 Classic control, MuJoCo locomotion and Atari became RL's defaults without being realistic; this study rates all three 1 to 2 on a five-point scale. Each arrived with a paper or a long pedigree, and MuJoCo and Atari came with reference agents or a landmark result, such as DQN's 49 Atari games. Gym, now Gymnasium, carried all three, and every RL library checked runs them. Their task sets stayed fixed, with changes under new version names. Runs were cheap, or a cheap protocol grew beside the costly one, as Atari 100k did beside 200M frames. Realistic suites such as Tennessee Eastman, the wastewater BSMs and BOPTEST became standards only inside their own fields, through a frozen plant and institutional care. None appears in a general RL library.
