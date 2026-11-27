@@ -9,6 +9,24 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The learning check is reported (2026-11-27)
+
+The owner's decision of 2026-11-27, "Report-only", as charter J7 says.
+
+- **`tests/rl/test_learning.py` reports and no longer gates.** Each task's run
+  records its five trained policies' mean returns, the best constant action's and
+  the shipped expert's on validation seeds 300 to 309. `TG_LEARNING_REPORT` names
+  a folder for one JSON file per task, and CI's learning job tables them in its
+  summary. The test fails only on a return that is not finite.
+- **A stale record no longer stops CI's learning job.** It still runs after
+  `records`, whatever that job found, on every push and on pull requests into
+  main, so its numbers stay visible on the integration branch.
+- Why: the 200k-step PPO lost to the best constant on all eight tasks. Each task's
+  result changed with its own plant's rebuild (plane, battery and glass_furnace on
+  2026-11-06), and neither a squashed policy nor 64 times the steps cleared the bar
+  on cstr or battery. glass_furnace turns NaN under a constant full fuel valve on
+  seed 209 (#310).
+
 ### Verdict statistics and the RL protocol (2026-11-27)
 
 The outside review's statistics findings (H3, H4, L1, H2, M6, M7, M8, L4, L5),
