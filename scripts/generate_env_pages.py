@@ -331,8 +331,8 @@ _LINES = (
     (
         "ceiling",
         "Ceiling",
-        "the best known plan with the true model, the true state and the "
-        "future: an achieved cost, not a bound",
+        "the best cost found with the true model, the true state and the "
+        "future: a limit, not a target",
     ),
 )
 
