@@ -753,6 +753,47 @@ that beats it has not beaten good industrial practice. It ships as a
 documented finding until a later update; `test_shipped_gains_pass_the_guard`
 stays a strict xfail and says why.
 
+### Decoupling the loops, tried (owner, 2026-11-27)
+
+The owner chose to decouple the two loops by a sourced recipe, fixed before it
+ran. Compressor Controls' practice [C10, pp. 15 to 17]: decoupling adds "a portion
+of the output of controller A" to the output of controller B, ideally "just
+enough to cancel" the disturbance A's move causes (p. 15); for a variable-speed
+machine, "a portion of the antisurge output is added" to the speed controller's
+response (p. 17, Figure 18). The recipe, written down before it ran:
+
+1. The points are the pair's rests on its control line (`settled_point` at the
+   stored `surge_line`), at each training seed's last setpoint and demand (seeds
+   100 to 109, demand drawn over 0.35 to 0.95, as the pair's recipe ran), kept
+   where the valve is open (above 0.02): the decoupler acts only while the
+   anti-surge valve moves.
+2. At each, demand and sensors quiet, in manual: bump the speed and, apart, the
+   recycle by raw 0.02 and read the header pressure's steady change as the mean
+   of the last 50 of 400 steps, the pair's own RGA test. A rest whose test reads
+   nan gives no data, as in that RGA (stored as nan).
+3. The gain is minus the pressure's change on the valve over its change on the
+   speed, the move that cancels the valve's pressure at steady state; one value,
+   the median over the rests.
+4. The pair adds the gain times the anti-surge command to the speed command, its
+   speed integral starting bumpless. No other gain moves.
+
+It gave 1.04, 1.08 and 1.12 raw per raw at the three rests whose tests read (seeds
+100, 104 and 109; the other six read nan): 0.379 of rated speed per full
+opening. It does not remove the cycle. The guard's five points still grow, at 1.10
+to 1.47 /s against the pair's 1.20 to 1.57, the battery's valve still travels 0.78
+to 0.85 over its last 10 s, and on the normal day of the training seeds the valve
+is open on 46 % of the steps after 10 s with or without it (measured 2026-11-27
+with `closed_loop_decay`, `battery_report` and the RGA test's bumps). Switching one
+loop off at a time, to locate the cycle and to keep nothing: with the speed loop
+frozen the linear growth goes (decay 0) but the battery's valve still rings
+(0.85); with the anti-surge loop frozen the pressure loop grows at no point. So
+the growing mode is the loops' coupling, which a static decoupler barely moves:
+it is dynamic, the drive's 3 %/s and 1 s lag against the valve's 0.15 s dead time
+and 2 s stroke. The ring is the anti-surge loop's own, on its rate-limited valve,
+which no decoupler reaches. The pair ships unchanged, and
+`tests/compressor_surge/test_compressor_surge_limit_cycle.py` holds the owner's
+acceptance as a strict xfail: the valve near shut and still on the normal day.
+
 ### The pair
 
 The arrangement industrial anti-surge systems use (Mirsky et al. 2015,
