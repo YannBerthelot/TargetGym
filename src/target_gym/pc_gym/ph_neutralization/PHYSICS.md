@@ -89,7 +89,7 @@ family's documented range, or ours with a reason.
 | `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
 | `diversion_price` | 2 | L/L | ours: above reagent (Amendment 3): a diverted litre is pumped back and treated again, about 1 L of this dilute base per litre, plus the pumping |
-| `failure_cost` | 9.0 | L | ours: above the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L) |
+| `failure_cost` | 13.0 | L | ours: the 720-step restart's 9360 L is above the worst episode the plant survives, 8879 L on its normal day under random actions (`tests/test_failure_cost_bound.py`; owner, 2026-11-27). 9 L, the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L), held for a step but not for that episode |
 | `restart_steps` | 720 | steps | ours: a violation is charged another hour; no fine found |
 | `e_floor` | 1.5 | pH | cited: the permit's half-width [P11], around its centre, which the observation shows; read by the time-in-band KPI only |
 | `precision_floor`, `pH_min`, `pH_max`, `reagent_cost_weight` | 0.01, 2, 12, 0 | - | the retired version-1 reward only |

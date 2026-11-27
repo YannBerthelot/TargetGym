@@ -1218,6 +1218,14 @@ KNOWN_OPEN_LOOP_UNSTABLE: dict[str, str] = {
         "stepping the env, test_unstable_cstr_env.py::"
         "test_unforced_error_grows_at_the_saddle_rate"
     ),
+    "reactor": (
+        "an uncontrolled axial xenon transient (owner, 2026-11-27): at baseload, "
+        "its default, the unforced axial offset drifts from the reset's xenon "
+        "tilt, and over 600 steps the iodine estimate I_hat's increments grow "
+        "28x and the offset clock ao_far's 72x, against 2.8x and 0 on edf_daily, "
+        "whose early load ramp hid it; the release plan's 0.10.0 realism batch "
+        "reviews axial damping across the fuel cycle"
+    ),
 }
 
 

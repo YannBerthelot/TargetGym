@@ -190,13 +190,16 @@ class PHParams(EnvParams):
     # - diversion_price: a diverted litre is pumped back and treated again,
     #   priced above reagent (Amendment 3): 2 L per L, the reagent it takes
     #   again (about 1 L per L with this dilute base) and the pumping;
-    # - a violation is charged as another hour at the worst surviving step's
-    #   cost, so tripping on purpose never pays.
+    # - a violation is charged as another hour at 13 L a step, 9360 L, above
+    #   the worst episode the plant survives (8879 L on its normal day under
+    #   random actions, tests/test_failure_cost_bound.py), so tripping on
+    #   purpose never pays (owner, 2026-11-27: 9 L a step held only above the
+    #   worst surviving step, and below that episode).
     reward_version: int = 4
     reagent_price: float = 1.0  # per L of reagent
     excursion_price: float = 100.0 / 60.0  # L per s outside the permit
     diversion_price: float = 2.0  # L per L diverted
-    failure_cost: float = 9.0  # L per step, above any surviving step
+    failure_cost: float = 13.0  # L per step, the lump above any surviving episode
     #: A violation is charged as another hour (720 steps of 5 s).
     restart_steps: int = 720
     # Read by the benchmark's time-in-band KPI, not by the reward: the permit's

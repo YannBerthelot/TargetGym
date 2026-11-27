@@ -35,6 +35,14 @@ picker on 2026-11-27.
   to exactly the parameters it resolved to before, so only a run on the defaults
   moves (`tests/test_scored_defaults.py`). The reference ladder's pH row reads its
   bump tests' upset sizes from the bad day, where it read them from the default.
+- Two checks that read only the default now read the heaviest scenarios, and the
+  owner settled what they found (picker, 2026-11-27). On pH's normal day random
+  actions survive an episode at 8879 L, above the 6480 L a trip charged, so
+  `failure_cost` rises from 9 to 13 L a step: a trip charges 9360 L and never
+  pays. At the reactor's baseload with no input the axial offset drifts from the
+  reset's xenon tilt, so the conformance check lists the reactor as open-loop
+  unstable, an uncontrolled axial xenon transient, until the 0.10.0 realism batch
+  reviews axial damping across the fuel cycle.
 - `hvac-v6`, `ph_neutralization-v6`, `compressor_surge-v5` and `reactor-v10`, which
   no release shipped, are re-stamped in place.
 
@@ -87,6 +95,8 @@ The next release is 0.8.0, because these changes break code written for
   - `ph_neutralization`: `acid_upset_size` and `flow_swing` default to 0, the
     normal day. The old default, both at 0.2, is the bad day:
     `tg.make("ph_neutralization", acid_upset_size=0.2, flow_swing=0.2)`.
+  - `ph_neutralization`: a trip now charges 13 L of reagent a step for its
+    720-step restart, where it charged 9, so episodes with a trip cost more.
   - `compressor_surge`: `demand_range` defaults to (0.7, 0.95), the normal day.
     The old (0.35, 0.95) was the dropped load swings' range, which no scenario
     scores; pass `demand_range=(0.35, 0.95)` to run it.
