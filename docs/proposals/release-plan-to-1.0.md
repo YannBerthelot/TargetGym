@@ -1,9 +1,17 @@
 # Release plan to 1.0
 
-A proposal, 2026-11-27, from the practitioner review
+A plan, 2026-11-27, from the practitioner review
 (`docs/proposals/practitioner-review.md`). It sequences that review's nine
 fixes and its path to 10 into five releases, each one usable on its own by
-beta-testers. The owner decides what to adopt.
+beta-testers.
+
+**Adopted by the owner on 2026-11-27 as the roadmap to 1.0,** with these
+answers to its open decisions: the four additions proposed for 0.8.0 beside
+the comparison API already in flight go in before the re-record
+(compressor_surge's reference decoupled by a sourced, fixed recipe with no
+sweep; the reactor's cycle point stratified across the scoring seeds; task
+cards and a known-limits page; the beta label); cstr is registered, not
+scored, in 0.8.0; and scored tasks change only in one realism batch, 0.10.0.
 
 Two rules shape it:
 
