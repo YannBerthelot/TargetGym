@@ -23,8 +23,7 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
   ladder's export command, which checks that the rung rebuilt from the file
   costs, seed by seed on the scoring seeds, what the ladder's own rung cost:
 
-      uv run python scripts/reference_ladder.py --tasks cstr hvac ph_neutralization compressor_surge --freeze
-      uv run python scripts/reference_ladder.py --expert reactor --freeze
+      uv run python scripts/reference_ladder.py --freeze
 
   The files in this tree are a working sample on the plants of this date; the
   re-record of the scored suite freezes them again with the same command.

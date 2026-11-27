@@ -3,10 +3,9 @@
 Each scored task's reference is the rung of the reference ladder the charter kept
 for it, or, on the reactor, its shipped expert (``charter.EXPERT_REFERENCE``).
 Its numbers are frozen in ``data/reference/<task>.json`` by the ladder's export
-command, run on the plants as they stand::
+command, run on the plants as they stand, for the scored suite::
 
-    uv run python scripts/reference_ladder.py --tasks cstr hvac --freeze
-    uv run python scripts/reference_ladder.py --expert reactor --freeze
+    uv run python scripts/reference_ladder.py --freeze
 
 :func:`build` rebuilds the controller from that file, with no bump test, and
 ``target_gym.make_reference`` hands it out. A file frozen on another plant is

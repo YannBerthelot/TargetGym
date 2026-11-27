@@ -40,7 +40,7 @@ def test_every_scored_task_ships_a_frozen_reference():
 
 
 def test_a_task_with_no_frozen_reference_is_refused_with_those_that_have_one():
-    with pytest.raises(KeyError, match="cstr"):
+    with pytest.raises(KeyError, match="hvac"):
         tg.make_reference("plane")
 
 
@@ -49,7 +49,7 @@ def test_an_unregistered_task_is_refused():
         tg.make_reference("plnae")
 
 
-@pytest.mark.parametrize("name", ["cstr", "reactor"])
+@pytest.mark.parametrize("name", ["hvac", "reactor"])
 def test_a_reference_frozen_on_another_plant_is_refused(name, tmp_path):
     frozen = reference.load(name)
     frozen["stamp"] = "0" * 16
@@ -91,6 +91,15 @@ def ladder():
     sys.modules["reference_ladder"] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_freezing_with_no_task_named_freezes_the_scored_suite(ladder):
+    # The re-record's command is ``reference_ladder.py --freeze`` alone: the
+    # scored suite, each ladder task climbed and each expert task's expert kept.
+    tasks, experts = ladder.freeze_targets()
+    assert set(tasks) | set(experts) == set(charter.FLAGSHIP)
+    assert set(experts) == set(charter.FLAGSHIP) & set(charter.EXPERT_REFERENCE)
+    assert ladder.freeze_targets(["hvac"], []) == (["hvac"], [])
 
 
 @pytest.mark.records

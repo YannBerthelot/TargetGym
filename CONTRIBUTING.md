@@ -322,9 +322,12 @@ it from a git checkout, since the exits it counts are on J2's seeds for the
 commit:
 
 ```bash
-uv run python scripts/reference_ladder.py --tasks cstr hvac ph_neutralization compressor_surge --freeze
-uv run python scripts/reference_ladder.py --expert reactor --freeze
+uv run python scripts/reference_ladder.py --freeze
 ```
+
+With no task named it freezes the scored suite (`charter.FLAGSHIP`): each
+ladder task's kept rung, and the reactor's expert. `--tasks` and `--expert` name
+others.
 
 Each ladder task is one climb, then the kept rung on the scoring seeds twice:
 as the ladder built it, and rebuilt from the file it is about to write. The

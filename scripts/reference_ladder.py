@@ -1283,9 +1283,20 @@ ROWS = {
 }
 
 
+def freeze_targets(tasks=None, experts=None) -> tuple[list, list]:
+    """``(ladder tasks, expert tasks)`` that ``--freeze`` freezes: those named, or
+    with none named the scored suite (``charter.FLAGSHIP``), each by its kind."""
+    from target_gym import charter
+
+    if tasks is None and experts is None:
+        experts = [t for t in charter.FLAGSHIP if t in charter.EXPERT_REFERENCE]
+        tasks = [t for t in charter.FLAGSHIP if t not in experts]
+    return list(tasks or []), list(experts or [])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--tasks", nargs="*", default=list(ROWS))
+    parser.add_argument("--tasks", nargs="*", default=None)
     parser.add_argument("--out", type=pathlib.Path, default=None)
     parser.add_argument("--nulls", action="store_true", help="J2 against the kept rung")
     parser.add_argument(
@@ -1298,11 +1309,17 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.freeze:
-        for name in args.expert:
+        named = args.tasks is not None or args.expert
+        tasks, experts = freeze_targets(
+            args.tasks if named else None, args.expert if named else None
+        )
+        for name in experts:
             freeze_expert(name)
-        for name in [] if args.expert and args.tasks == list(ROWS) else args.tasks:
+        for name in tasks:
             freeze(name)
         return
+    if args.tasks is None:
+        args.tasks = list(ROWS)
     for name in args.expert:
         result = expert_reference(name)
         if args.out:
