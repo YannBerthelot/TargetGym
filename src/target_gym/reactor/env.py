@@ -162,6 +162,12 @@ class ReactorParams(EnvParams):
     #: reset: a core burns at a steady rate, and EDF's units keep their full
     #: load-following range up to 90 % of the cycle (REALITY.md section 8, [S17]).
     cycle_range: Tuple[float, float] = (0.0, 0.9)
+    #: Which tenth of that range the reset draws the core from: -1 draws it over
+    #: the whole range, as a user's or a training run's reset does; 0 to 9 draws it
+    #: inside tenth k. The scoring protocol sets it from the seed
+    #: (``Reactor.params_for_seed``), so any ten consecutive seeds hold one core per
+    #: tenth, as the compressor holds one machine per tenth (owner, 2026-11-27).
+    cycle_stratum: int = -1
     #: One coordinate moves the core's boron, moderator coefficient and boron worth
     #: together (``core_at``). ``boron_ref``, ``alpha_coolant`` and ``boron_worth``
     #: above are the start of the cycle's; these are the end's, at 0 ppm, with
@@ -445,6 +451,7 @@ class ReactorParams(EnvParams):
 #: Units of the ReactorParams fields, for the generated environment pages.
 PARAM_UNITS = {
     "cycle_range": "-",
+    "cycle_stratum": "-",
     "alpha_coolant_end": "1/K",
     "boron_worth_end": "1/ppm",
     "refuels": "-",

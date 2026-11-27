@@ -58,8 +58,18 @@ def _digest(params) -> str:
         a = np.asarray(v)
         return (a.astype(np.float32) if a.dtype.kind == "f" else a).tolist()
 
-    rows = [f"{k}={plain(v)!r}" for k, v in sorted(vars(params).items())]
+    rows = [
+        f"{k}={plain(v)!r}"
+        for k, v in sorted(vars(params).items())
+        if k not in ADDED_SINCE
+    ]
     return hashlib.sha256("\n".join(rows).encode()).hexdigest()[:16]
+
+
+#: Fields added after the pins below were taken, each at a value no scenario
+#: overrides and that changes no draw: the reactor's ``cycle_stratum`` (-1 draws
+#: the core over its whole range, as before; 2026-11-27).
+ADDED_SINCE = frozenset({"cycle_stratum"})
 
 
 # Characterization (TESTING.md section 7): pins the parameters each scenario

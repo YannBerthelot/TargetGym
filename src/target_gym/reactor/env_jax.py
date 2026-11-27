@@ -56,6 +56,8 @@ from target_gym.video import SavesVideo
 _REFUEL = 0x52454655
 #: Fold for the cycle point's draw at reset, beside the burnup's and the tilts'.
 _CYCLE = 11
+#: The tenths ``cycle_stratum`` picks from (owner, 2026-11-27).
+CYCLE_STRATA = 10
 
 # Number of physics sub-steps per control step. Constant so JIT can treat it
 # as static in `lax.scan(length=...)`. Change here only — `env.py` reads it
@@ -344,11 +346,14 @@ class Reactor(
         start, end = params.cycle_range
         seconds = params.max_steps_in_episode * CONTROL_PERIOD * params.delta_t
         run = rate * seconds / 86400.0 / params.boron_ref
-        cycle0 = jax.random.uniform(
-            jax.random.fold_in(key, _CYCLE),
-            minval=start,
-            maxval=jnp.maximum(end - run, start),
-        )
+        top = jnp.maximum(end - run, start)
+        cycle_key = jax.random.fold_in(key, _CYCLE)
+        anywhere = jax.random.uniform(cycle_key, minval=start, maxval=top)
+        # A scoring seed's tenth of the range (``cycle_stratum``), the same draw
+        # placing the core inside it (owner, 2026-11-27).
+        stratum = params.cycle_stratum
+        tenth = (stratum + jax.random.uniform(cycle_key)) / CYCLE_STRATA
+        cycle0 = jnp.where(stratum < 0, anywhere, start + tenth * (top - start))
         core = core_at(cycle0, params)
         # K: at a fixed power the fuel cools with the coolant, so both feedbacks.
         shift = carried * core.boron_worth / (core.alpha_coolant + core.alpha_fuel)
@@ -554,6 +559,13 @@ class Reactor(
         return jax.tree_util.tree_map(
             lambda new, old: jnp.where(due, new, old), fresh, state
         )
+
+    def params_for_seed(self, params: ReactorParams, seed: int):
+        """The protocol's parameters for seed ``seed``: its core from tenth
+        ``seed mod 10`` of the cycle range it is drawn over (``cycle_stratum``).
+        The protocol calls it through ``benchmark.seed_params`` wherever it resets
+        a seed, a scoring run's stream included."""
+        return params.replace(cycle_stratum=int(seed) % CYCLE_STRATA)
 
     def initial_action(self, state: ReactorState, params: ReactorParams):
         """The raw action that holds the reset plant: the rods where it parked them,

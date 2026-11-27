@@ -224,15 +224,19 @@ def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) 
     import jax
     import jax.numpy as jnp
 
-    from target_gym.benchmark import episode_keys
+    from target_gym.benchmark import episode_keys, seed_params
 
     s, params = stream(name, scenario, steps, params)
     T = scored_steps(name) if steps is None else int(steps)
     keys = jnp.stack(
         [episode_keys(jax.random.PRNGKey(int(x)), 1, 1)[0][0] for x in seeds]
     )
+    # Each seed's params as the protocol places it (``benchmark.seed_params``: the
+    # reactor's cycle tenth), as ``run`` passes them through ``run_policy``.
+    rows = [seed_params(s, params, int(x)) for x in seeds]
+    per_seed = jax.tree.map(lambda *v: jnp.stack([jnp.asarray(x) for x in v]), *rows)
 
-    def one(key):
+    def one(key, params):
         obs, state = s.reset_env(key, params)
 
         def step(carry, _):
@@ -244,7 +248,7 @@ def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) 
         _, (cost, tripped) = jax.lax.scan(step, (obs, state, memory), None, length=T)
         return cost.mean(), tripped.any()
 
-    cost, tripped = jax.jit(jax.vmap(one))(keys)
+    cost, tripped = jax.jit(jax.vmap(one))(keys, per_seed)
     return {
         "seeds": [int(x) for x in seeds],
         "costs": [float(c) for c in np.asarray(cost)],

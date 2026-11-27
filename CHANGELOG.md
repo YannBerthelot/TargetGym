@@ -9,6 +9,23 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The reactor's scoring seeds cover its fuel cycle (2026-11-27)
+
+- A reactor reset with `cycle_stratum` k (0 to 9) draws its core's cycle point
+  inside tenth k of the range it draws over, and the scoring protocol sets seed s
+  to tenth s mod 10 (`Reactor.params_for_seed`, read through
+  `benchmark.seed_params`), as compressor_surge already places its machine. So the
+  ten scoring seeds hold one core per tenth of the cycle, where seeds 100 to 109
+  fell in eight of the ten tenths, three in one of them (a 7-day run at 3.3 ppm a
+  day). A reset with no stratum, a user's or a
+  training run's, draws as before (owner, picker, from a practitioner review's
+  release plan).
+- A stream hands its plant's `params_for_seed` on (`StreamEnv.params_for_seed`),
+  so the reactor's scored streams are spread as its episodes are, and
+  `scoring_runs.run_functional` runs each seed on its own parameters, as
+  `scoring_runs.run` does. `reactor-v10`, which no release shipped, is re-stamped
+  in place.
+
 ### hvac's window edge and the scored defaults (2026-11-27)
 
 Two findings of the outside RL research review, fixed as the owner decided by
@@ -80,6 +97,12 @@ picker on 2026-11-27.
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
+
+- **A reactor scoring seed draws its core from its own tenth of the cycle**
+  (2026-11-27). Upgrade notes:
+  - Reactor results scored on seeds before this change are not comparable with
+    results after it: seed s now draws its core in tenth s mod 10.
+  - `ReactorParams` gains `cycle_stratum` (-1 by default, the whole range).
 
 - **The scored tasks' defaults are their heaviest scenarios** (2026-11-27). A
   changed default changes what `tg.make(name)` and `env.default_params` give.

@@ -170,6 +170,14 @@ class StreamEnv(environment.Environment):
         return self._base
 
     @property
+    def params_for_seed(self):
+        """The plant's ``params_for_seed``, where it has one (``benchmark.seed_params``):
+        a scoring run's seed then names the same plant in a stream as in an episode
+        (the reactor's cycle tenth, owner, 2026-11-27). A plant with none has none
+        here either: the attribute is missing, as ``hasattr`` expects."""
+        return self.env.params_for_seed
+
+    @property
     def name(self) -> str:
         return f"Stream({getattr(self.env, 'name', type(self.env).__name__)})"
 
