@@ -69,9 +69,7 @@ def test_an_edit_stales_only_the_parts_that_read_the_file(
         text = read(path, *args, **kwargs)
         return text + "\n_edited = 1\n" if path == target else text
 
-    change = lambda: monkeypatch.setattr(
-        pathlib.Path, "read_text", edited
-    )  # noqa: E731
+    change = lambda: monkeypatch.setattr(pathlib.Path, "read_text", edited)  # noqa: E731
     assert _moved(REGISTRY[name], change) == parts
 
 

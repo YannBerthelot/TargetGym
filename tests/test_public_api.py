@@ -64,9 +64,9 @@ def test_environment_class_is_importable_under_its_own_name(name):
 @pytest.mark.parametrize("name", sorted(REGISTRY))
 def test_params_class_is_importable_under_its_own_name(name):
     cls = REGISTRY[name].params_cls().__class__.__name__
-    assert hasattr(
-        target_gym, cls
-    ), f"{name}: parameters class {cls!r} is not importable from target_gym"
+    assert hasattr(target_gym, cls), (
+        f"{name}: parameters class {cls!r} is not importable from target_gym"
+    )
 
 
 def test_version_is_a_string():

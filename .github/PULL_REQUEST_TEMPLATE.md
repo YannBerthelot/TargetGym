@@ -5,7 +5,7 @@
 
 ## Checks
 
-- [ ] `make ci` passes (ruff, black, the fast tests)
+- [ ] `make ci` passes (ruff lint and format, the fast tests)
 - [ ] New or changed behaviour is covered by a test
 
 If this touches an environment's dynamics, reward or termination:

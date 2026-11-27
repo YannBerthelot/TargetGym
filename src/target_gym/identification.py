@@ -409,8 +409,9 @@ class Plant:
             len(seeds),
         )
         self.limits, self.mv_range, self.direction = list(limits), mv_range, direction
-        self.expert_mv, self._actuate = expert_mv or {}, actuate or (
-            lambda u, y, m: (u, m)
+        self.expert_mv, self._actuate = (
+            expert_mv or {},
+            actuate or (lambda u, y, m: (u, m)),
         )
         self._keys = jax.vmap(jax.random.PRNGKey)(jnp.asarray(seeds))
         n = self.n_ep

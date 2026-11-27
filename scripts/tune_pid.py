@@ -1007,14 +1007,14 @@ TUNERS = {
     "glass_furnace": (_tune_glass_furnace_search, "GlassFurnace"),
     "reactor": (_tune_reactor, "Reactor"),
     "plane": (
-        lambda n_points=0, tuning_rule="", _k="plane_cascaded", _e="plane", **kw: _tune_aircraft_search(
-            _e, _k, **kw
+        lambda n_points=0, tuning_rule="", _k="plane_cascaded", _e="plane", **kw: (
+            _tune_aircraft_search(_e, _k, **kw)
         ),
         "Airplane2D",
     ),
     "plane3d_heading": (
-        lambda n_points=0, tuning_rule="", _k="plane3d_heading", _e="plane3d_heading", **kw: _tune_aircraft_search(
-            _e, _k, **kw
+        lambda n_points=0, tuning_rule="", _k="plane3d_heading", _e="plane3d_heading", **kw: (
+            _tune_aircraft_search(_e, _k, **kw)
         ),
         "Plane3DHeading",
     ),
@@ -1131,7 +1131,7 @@ def main():
             )
             continue
         tuner_fn, display = TUNERS[env_name]
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Tuning {display}  (n_points={args.n_points}, rule={args.tuning_rule})")
         print("=" * 60)
         # Some controllers read a different key than their environment name --

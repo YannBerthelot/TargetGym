@@ -68,9 +68,9 @@ def test_pid_acts_on_its_environment(name):
 
     assert np.all(np.isfinite(action)), f"{name}: non-finite action"
     expected = env.action_space(params).shape or (1,)
-    assert (
-        action.shape == expected
-    ), f"{name}: produced {action.shape}, environment takes {expected}"
+    assert action.shape == expected, (
+        f"{name}: produced {action.shape}, environment takes {expected}"
+    )
 
 
 @pytest.mark.parametrize("name", WITH_PID)

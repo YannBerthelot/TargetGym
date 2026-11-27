@@ -90,7 +90,7 @@ for name, spec in REGISTRY.items():
         "episode": n,
     }
     print(
-        f"  {name:20s} {dt:8.2f} {tau:10.1f} {tau/dt if tau==tau else float('nan'):7.1f}  {shape}"
+        f"  {name:20s} {dt:8.2f} {tau:10.1f} {tau / dt if tau == tau else float('nan'):7.1f}  {shape}"
     )
 
 print("\n  gamma = 1 - 1/N per the protocol; five time constants must fit in N:")

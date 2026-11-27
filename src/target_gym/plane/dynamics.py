@@ -513,12 +513,12 @@ def compute_acceleration(
     accelerations = xp.array([F_x / m, F_z / m, M_y / params.I])
 
     if clip:
-        assert (
-            min_clip_boundaries is not None
-        ), "Clipped without providing min_clip_boundaries"
-        assert (
-            max_clip_boundaries is not None
-        ), "Clipped without providing max_clip_boundaries"
+        assert min_clip_boundaries is not None, (
+            "Clipped without providing min_clip_boundaries"
+        )
+        assert max_clip_boundaries is not None, (
+            "Clipped without providing max_clip_boundaries"
+        )
         accelerations = jnp.clip(
             accelerations,
             jnp.array(min_clip_boundaries),

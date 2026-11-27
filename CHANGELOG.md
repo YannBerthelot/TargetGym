@@ -144,6 +144,8 @@ The next release is 0.8.0, because these changes break code written for
 
 ### Added
 
+- **A `py.typed` marker** (PEP 561), so mypy and pyright check calls into
+  TargetGym against its annotations.
 - **What an owner asks, beside the ratio.** `score_policy` and `compare` now
   report `beats_expert`, `expert_trips` and `policy_trips`, and each side's
   actuator `travel` and `reversals`. `score_policy` also reports each side's

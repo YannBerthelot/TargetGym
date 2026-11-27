@@ -130,14 +130,14 @@ def test_every_environment_renders(name):
     assert frames, f"{name}: rendered no frames in {RENDER_STEPS} steps"
 
     first = np.asarray(frames[0])
-    assert (
-        first.ndim == 3 and first.shape[2] == 3
-    ), f"{name}: frame is {first.shape}, expected (height, width, 3)"
+    assert first.ndim == 3 and first.shape[2] == 3, (
+        f"{name}: frame is {first.shape}, expected (height, width, 3)"
+    )
     # A GIF cannot be assembled from frames of differing size, so a renderer
     # whose layout depends on the data is broken even though it draws.
-    assert all(
-        np.asarray(f).shape == first.shape for f in frames
-    ), f"{name}: frame sizes differ across the episode"
+    assert all(np.asarray(f).shape == first.shape for f in frames), (
+        f"{name}: frame sizes differ across the episode"
+    )
     values = first.astype(np.int64)
     assert values.min() >= 0 and values.max() <= 255, f"{name}: pixels out of range"
     # A renderer that silently draws nothing still returns a frame, and every

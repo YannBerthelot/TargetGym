@@ -183,6 +183,6 @@ def test_run_n_steps_dummy(n_steps, max_steps):
     mean_return = run_n_steps(env, dummy_policy, params, n_steps=n_steps, seed=0)
     expected = expected_mean_return(n_steps, max_steps)
 
-    assert jnp.isclose(
-        mean_return, expected
-    ), f"Mean return {mean_return} != expected {expected}"
+    assert jnp.isclose(mean_return, expected), (
+        f"Mean return {mean_return} != expected {expected}"
+    )

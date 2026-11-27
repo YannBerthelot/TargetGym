@@ -186,6 +186,6 @@ def test_gradient_tuning_reduces_the_tracking_loss():
     assert np.isfinite(before) and np.isfinite(after)
     assert after <= before, f"tuning made the loss worse: {before:.4f} -> {after:.4f}"
     # Sign is documented as preserved through the log-magnitude parametrisation.
-    assert all(
-        np.sign(t) == np.sign(i) for t, i in zip(tuned, init)
-    ), f"gain signs flipped during tuning: {init} -> {tuned}"
+    assert all(np.sign(t) == np.sign(i) for t, i in zip(tuned, init)), (
+        f"gain signs flipped during tuning: {init} -> {tuned}"
+    )

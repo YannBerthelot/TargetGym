@@ -29,9 +29,9 @@ ci: ci-lint ci-format-check ci-docs ci-test  ## Full local CI (matches .github/w
 ci-lint:  ## Ruff over the tree, the same set CI enforces
 	uv run --frozen --only-group lint ruff check src/ tests/ scripts/
 
-ci-format-check:  ## Black --check on the whole tree
-	# --only-group lint installs black alone: formatting needs no runtime deps.
-	uv run --frozen --only-group lint black --check .
+ci-format-check:  ## ruff format --check on the whole tree
+	# --only-group lint installs the linters alone: formatting needs no runtime deps.
+	uv run --frozen --only-group lint ruff format --check .
 
 ci-docs:  ## Generated pages are current and the site builds with no dangling links
 	uv run python scripts/generate_env_reference.py --check
@@ -118,13 +118,11 @@ lint:  ## Ruff over src/ and tests/ (rule set lives in pyproject.toml)
 format:
 	# Sort imports
 	uv run ruff check --select I $(LINT_PATHS) --fix
-	# Reformat using black
-	uv run black $(LINT_PATHS)
+	uv run ruff format $(LINT_PATHS)
 
 check-codestyle:
 	# Sort imports
 	uv run ruff check --select I ${LINT_PATHS}
-	# Reformat using black
-	uv run black --check ${LINT_PATHS}
+	uv run ruff format --check ${LINT_PATHS}
 
 commit-checks: format type lint

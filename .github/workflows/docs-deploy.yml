@@ -70,11 +70,13 @@ jobs:
       VERSION: ${{ inputs.version || 'dev' }}
       ALIAS: ${{ inputs.alias }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
+        # This job pushes, so it keeps the token.
+        persist-credentials: true # zizmor: ignore[artipacked]
         ref: ${{ inputs.ref || github.sha }}
         fetch-depth: 0
-    - uses: astral-sh/setup-uv@v5
+    - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
       with:
         version: ${{ env.UV_VERSION }}
         enable-cache: true
@@ -153,12 +155,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
+        persist-credentials: false
         ref: gh-pages
         path: site
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
+        persist-credentials: false
         sparse-checkout: scripts/docs_redirects.py
         sparse-checkout-cone-mode: false
         path: tools
@@ -166,11 +170,11 @@ jobs:
       run: python3 tools/scripts/docs_redirects.py site
     # One artifact name per attempt: re-running this job uploads into the same
     # run, and deploy-pages refuses a run holding two artifacts of one name.
-    - uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
       with:
         path: site
         name: github-pages-${{ github.run_attempt }}
     - id: deployment
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
       with:
         artifact_name: github-pages-${{ github.run_attempt }}

@@ -85,6 +85,6 @@ def test_observation_hides_unmeasurable_states():
     state = _make_state(**sentinels)
     obs = env.get_obs(state)
     for hidden in (1234.5, 5678.9, 4321.0, 8765.0, 2468.0):
-        assert not bool(
-            jnp.any(jnp.isclose(obs, hidden))
-        ), f"hidden state {hidden} leaked into the observation"
+        assert not bool(jnp.any(jnp.isclose(obs, hidden))), (
+            f"hidden state {hidden} leaked into the observation"
+        )

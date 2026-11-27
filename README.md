@@ -349,7 +349,7 @@ welcome.
 git clone https://github.com/YannBerthelot/TargetGym.git
 cd TargetGym
 uv sync --group dev
-make ci                # ruff, black --check, docs, fast tests
+make ci                # ruff, ruff format --check, docs, fast tests
 ```
 
 Further targets: `make test`, `make test-all`, `make figures`, `make videos`,

@@ -174,7 +174,7 @@ def _draw_loop(ax, state, params):
     )
     rk.caption(
         ax,
-        "swell: falling pressure expands the bubbles, so level rises " "as mass leaves",
+        "swell: falling pressure expands the bubbles, so level rises as mass leaves",
     )
 
 

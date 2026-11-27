@@ -1,0 +1,25 @@
+# Monthly pull requests that refresh uv.lock and the pinned actions.
+# pyproject.toml's ranges stay as written: they change by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # Wait a week after a release: most bad releases are pulled within days.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    # Wait a week after a release: most bad releases are pulled within days.
+    cooldown:
+      default-days: 7
+    versioning-strategy: lockfile-only
+    groups:
+      dependencies:
+        patterns: ["*"]

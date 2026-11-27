@@ -82,8 +82,7 @@ GUARDS = {
         ":409, :410, :475, :476; the limits and the speed box keep them off",
     },
     "compressor_surge": {
-        "characteristic": "compressor_surge/env.py:314, the tangent past "
-        "phi_join (K9)"
+        "characteristic": "compressor_surge/env.py:314, the tangent past phi_join (K9)"
     },
 }
 

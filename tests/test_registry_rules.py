@@ -345,8 +345,7 @@ def test_imports_stay_inside_the_fingerprint():
                     )
                 ):
                     problems.append(
-                        f"{where}: imports its package's controllers outside a "
-                        "function"
+                        f"{where}: imports its package's controllers outside a function"
                     )
     assert not problems, "\n".join(problems)
 

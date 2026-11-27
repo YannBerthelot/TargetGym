@@ -81,17 +81,13 @@ def run_n_steps(env, policy, params, n_steps=10_000, seed=0):
                 lambda _: env.reset_env(key, params),
                 lambda _: (obs, new_state),
                 operand=None,
-            )[
-                0
-            ],  # new obs
+            )[0],  # new obs
             jax.lax.cond(
                 done,
                 lambda _: env.reset_env(key, params),
                 lambda _: (obs, new_state),
                 operand=None,
-            )[
-                1
-            ],  # new state
+            )[1],  # new state
             key,
         )
 

@@ -99,4 +99,4 @@ second = by_err[1]
 for k in FORMS:
     total = tight[2][k] - loose[2][k]
     last = tight[2][k] - second[2][k]
-    print(f"  {k:28s} {total:13.4f} {last:16.4f} {(last/total if total else 0):7.1%}")
+    print(f"  {k:28s} {total:13.4f} {last:16.4f} {(last / total if total else 0):7.1%}")

@@ -196,9 +196,9 @@ def test_rods_can_hold_every_power_in_the_target_range(params):
     """The required worth is an output of the model, not something tuned."""
     for n in np.linspace(params.target_n_range[0], params.target_n_range[1], 9):
         need = _rod_worth_needed(float(n), params)
-        assert (
-            params.rho_ext_min <= need <= params.rho_ext_max
-        ), f"n={n:.2f} needs {need * 1e5:.0f} pcm, outside the rod range"
+        assert params.rho_ext_min <= need <= params.rho_ext_max, (
+            f"n={n:.2f} needs {need * 1e5:.0f} pcm, outside the rod range"
+        )
 
 
 def test_full_power_leaves_almost_no_rod_margin(params):

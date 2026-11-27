@@ -417,10 +417,9 @@ def _circle_reward_at(cross_track):
 def _assert_scale_free(reward_at, pairs, axis):
     """Every halving of the error must be worth about the same."""
     gains = [reward_at(b) - reward_at(a) for a, b in pairs]
-    assert min(gains) > 0.75 * max(
-        gains
-    ), f"{axis} reward per halving is not scale-free: " + ", ".join(
-        f"{g:.4f}" for g in gains
+    assert min(gains) > 0.75 * max(gains), (
+        f"{axis} reward per halving is not scale-free: "
+        + ", ".join(f"{g:.4f}" for g in gains)
     )
 
 
@@ -461,13 +460,13 @@ class TestRewardKeepsPayingForPrecision:
     def test_metre_scale_tracking_is_visible(self):
         """A tenfold improvement must move the reward by more than rounding."""
         alt_gain = _heading_reward_at(alt_err=1.0) - _heading_reward_at(alt_err=10.0)
-        assert (
-            alt_gain > 0.1
-        ), f"altitude reward barely sees a 10 m -> 1 m improvement: {alt_gain:.4f}"
+        assert alt_gain > 0.1, (
+            f"altitude reward barely sees a 10 m -> 1 m improvement: {alt_gain:.4f}"
+        )
         track_gain = _circle_reward_at(1.0) - _circle_reward_at(10.0)
-        assert (
-            track_gain > 0.1
-        ), f"cross-track reward barely sees a 10 m -> 1 m improvement: {track_gain:.4f}"
+        assert track_gain > 0.1, (
+            f"cross-track reward barely sees a 10 m -> 1 m improvement: {track_gain:.4f}"
+        )
 
     def test_reward_still_orders_states_far_from_the_path(self):
         """A drifting agent must still be able to tell it is drifting.
@@ -514,9 +513,9 @@ class TestLemniscateDistanceResolution:
                     state.replace(z=state.z + offset), params
                 )[3]
             )
-            assert dist == pytest.approx(
-                offset, rel=0.01
-            ), f"{offset} m vertical offset measured as {dist:.3f} m"
+            assert dist == pytest.approx(offset, rel=0.01), (
+                f"{offset} m vertical offset measured as {dist:.3f} m"
+            )
 
 
 _FIGURE8_PATH_XFAIL = (

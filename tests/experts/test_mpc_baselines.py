@@ -105,14 +105,14 @@ def test_registered_mpc_builds_and_controls(name):
         obs = env.get_obs(state, params)
         action = np.atleast_1d(np.asarray(mpc.step(obs, state), dtype=float))
 
-        assert (
-            action.shape == expected
-        ), f"{name}: MPC returned {action.shape}, action space is {expected}"
+        assert action.shape == expected, (
+            f"{name}: MPC returned {action.shape}, action space is {expected}"
+        )
         assert np.all(np.isfinite(action)), f"{name}: non-finite action at step {i}"
         low, high = _bounds(space, action.shape)
-        assert np.all(action >= low - 1e-6) and np.all(
-            action <= high + 1e-6
-        ), f"{name}: action {action} outside [{low}, {high}] at step {i}"
+        assert np.all(action >= low - 1e-6) and np.all(action <= high + 1e-6), (
+            f"{name}: action {action} outside [{low}, {high}] at step {i}"
+        )
 
         _, state, reward, terminated, _ = step(key, state, jnp.asarray(action), params)
         assert np.isfinite(float(reward)), f"{name}: non-finite reward at step {i}"
@@ -120,9 +120,9 @@ def test_registered_mpc_builds_and_controls(name):
             break
 
     for leaf in jax.tree_util.tree_leaves(state):
-        assert np.all(
-            np.isfinite(np.asarray(leaf))
-        ), f"{name}: MPC drove the plant to a non-finite state"
+        assert np.all(np.isfinite(np.asarray(leaf))), (
+            f"{name}: MPC drove the plant to a non-finite state"
+        )
 
 
 def test_every_environment_without_an_mpc_says_why():
@@ -132,9 +132,9 @@ def test_every_environment_without_an_mpc_says_why():
         for name, spec in REGISTRY.items()
         if not spec.has_mpc and not spec.baselines_note
     ]
-    assert (
-        not undocumented
-    ), f"environments with no MPC and no baselines_note: {undocumented}"
+    assert not undocumented, (
+        f"environments with no MPC and no baselines_note: {undocumented}"
+    )
 
 
 # ─── The quality contract ───────────────────────────────
