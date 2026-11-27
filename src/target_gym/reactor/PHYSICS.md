@@ -564,6 +564,17 @@ plant it reads -11.90 and -55.10 pcm/K (the plant's -12.0 and -55.2) and -7.99 a
 the moderator coefficient and read it 25 % too negative, because the swing also
 moves the axial tilt's reactivity, which its balance left out.
 
+**The rod bump's size (owner, 2026-11-27).** A bump test must not carry the process
+past an operating limit (Instrumentation Tools, "Process Control Loop Testing",
+2019). So the operator watches Tavg against its floor during each rod bump
+(`reactor_ladder.rod_bump`). A bump that crosses the floor is stopped there and
+repeated from the lined-out plant at half its size, at most three times, then
+refused. The rule was written after the family sweep's draw 5 tripped at half load:
+its MTC of -9.2 pcm/K, the weakest drawn, let 30 steps take Tavg 11 K under the floor
+for longer than its 1006 s allowance. On the shipped member and the other seven draws
+no bump crosses the floor (the closest stays 1.1 K above it), so they run at full
+size and read what they read before.
+
 **Rods on Tavg past its dead band: tried, set aside (2026-11-25).** The package
 review traced a stored trip (fast_return seed 104 on the 2026-11-12 plant) to the
 expert. After a fast return Tavg sat 3 to 5 K above its program for two hours, past
