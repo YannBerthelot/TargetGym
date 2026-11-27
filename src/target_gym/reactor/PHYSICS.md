@@ -271,7 +271,7 @@ tied to the period, so it stayed, and the old test fails on it. Reported, not mo
 | `T_avg_min`, `floor_allowed` | 556 K, 900 s | | The minimum temperature for criticality, 541 F at Salem, a limit with 15 min to act, not a trip. No EDF figure is public; the NRC copies could not be opened | ours |
 | `load_ramp_rate` | 2 %/min | | Top of OAPS's Mode A range | read |
 | `load_min`, `hold_range` | 0.5, 3 to 8 h | | The URD's cycle, Chari and Rohr (1997) | earlier |
-| `ramp_down_range` | 0.5 to 2 h | s | | ours |
+| `ramp_down_range` | 0.5 to 2 h on a load-follow day, never on the default baseload day | s | The default is the heaviest scenario, baseload (owner, 2026-11-27, the RL research review's H1); each load-follow scenario sets 0.5 to 2 h (`scenarios.WINDOW_DAY`) | ours |
 | `demand_theta`, `demand_sigma` | 300 s, 0.5 % | | A small frequency-control wobble | ours |
 | `burnup_range` | 2.3 to 3.3 | ppm/day | BEAVRS (MIT), Table 24: letdown 623 to 0 ppm over 52 to 326 EFPD in cycle 1 (2.27 a day), 918 to 104 ppm over 13 to 257 EFPD in cycle 2 (3.34 a day) | read |
 | `initial_tilts`, `initial_tilt_share` | ten pairs, 0.108 | | Yesterday's end-of-day iodine and xenon tilts, from the reference on training seeds, drawn on load following's share of days | derived |

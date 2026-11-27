@@ -161,10 +161,10 @@ class HVACParams(EnvParams):
     # charging of the slab pays, as Madrid charges its floors on the night
     # tariff [14, p. 14]. Comfort: lost office work while occupied, per
     # kelvin-hour outside the band or of floor above 29 C. v5 (owner,
-    # 2026-11-25): the reward's terms are v4's, and the heat the mass and the
-    # slab lose across the scored window is charged once by the evaluation, at
-    # the cheapest price heat can be stored at (``stored_value``,
-    # ``evaluation.Evaluation.edge_charge``).
+    # 2026-11-25): the reward's terms are v4's. The heat the mass and the slab
+    # are short at the scored window's end against its start is charged once by
+    # the evaluation, at the dearest price heat can cost (``stored_value``,
+    # ``evaluation.Evaluation.edge_charge``; owner, 2026-11-27).
     reward_version: int = 5
     #: Spanish 2.0TD energy prices, EUR/kWh, one retailer's offer (REALITY.md
     #: [19]): valle 00:00 to 08:00, llano 08:00 to 10:00, 14:00 to 18:00 and
@@ -172,9 +172,6 @@ class HVACParams(EnvParams):
     price_valle: float = 0.139
     price_llano: float = 0.184
     price_punta: float = 0.263
-    #: The design point the stored heat is priced at: the supply that holds the
-    #: room at 21 C with -10 C outdoors (the curve's design point [12, p. 7]).
-    T_out_design: float = -10.0
     #: Work lost per kelvin outside the band: 2 % per K above 25 C (Seppanen
     #: and Fisk 2005, REALITY.md [20]); performance peaks near 21.7 C and falls
     #: on both sides [20]. Ours below the band, where no per-K figure was read.
@@ -254,7 +251,6 @@ PARAM_UNITS = {
     "price_valle": "EUR/kWh",
     "price_llano": "EUR/kWh",
     "price_punta": "EUR/kWh",
-    "T_out_design": "degC",
     "productivity_per_K": "1/K",
     "occupants_per_m2": "1/m^2",
     "labour_cost": "EUR/h",
@@ -785,32 +781,26 @@ def stored_heat(T_mass, T_core, params: HVACParams):
     return C_m * T_mass + slab_conductances(params)["C_slab"] * T_core
 
 
-def stored_heat_price(params: HVACParams):
-    """Euros per J of stored heat: the cheapest the plant can store it at, the
-    valle tariff over the COP of the design supply (the room at 21 C with
-    ``T_out_design`` outdoors). A run of steps charged at it pays nothing for
-    heat bought ahead of it or left for after it (owner, 2026-11-25, the hvac
-    review's finding 1)."""
+def shortfall_price(params: HVACParams):
+    """Euros per J of heat: the dearest heat can cost the plant, the highest
+    tariff over the lowest COP its heat pump reaches in the valve's supply range.
+    The COP rises with the supply up to 5 K over the brine and falls after, so
+    its lowest is at an end of the range: at ``T_supply_max`` here. No heat the
+    plant buys costs more, so a store left short at this price never pays (owner,
+    2026-11-27, the RL research review's H2; PHYSICS.md section 5)."""
     p = params
-    T_design = steady_state(p, p.T_out_design, p.band_low)[3]
-    return p.price_valle / heat_pump_cop(T_design, p) / 3.6e6
+    dearest = jnp.maximum(jnp.maximum(p.price_valle, p.price_llano), p.price_punta)
+    cop = jnp.minimum(
+        heat_pump_cop(p.T_supply_min, p), heat_pump_cop(p.T_supply_max, p)
+    )
+    return dearest / cop / 3.6e6
 
 
 def stored_value(state, params: HVACParams):
-    """The store's value in euros: its heat above 0 C at ``stored_heat_price``.
-    An evaluation charges what it lost across the scored window (owner,
-    2026-11-25)."""
-    return stored_heat_price(params) * stored_heat(state.T_mass, state.T_core, params)
-
-
-def stored_heat_cost(T_mass, T_core, T_mass_next, T_core_next, params):
-    """The euros a step pays for the heat it draws from the store (negative for
-    heat it puts in), as a sum of the two nodes' changes, so it stays exact in
-    float32 where the store itself would not."""
-    C_m = zone_conductances(params)["C_m"]
-    C_slab = slab_conductances(params)["C_slab"]
-    drawn = C_m * (T_mass - T_mass_next) + C_slab * (T_core - T_core_next)
-    return stored_heat_price(params) * drawn
+    """The store's value in euros: its heat above 0 C at ``shortfall_price``. An
+    evaluation charges what it is short at the scored window's end against the
+    window's start, and nothing for a fuller store (owner, 2026-11-27)."""
+    return shortfall_price(params) * stored_heat(state.T_mass, state.T_core, params)
 
 
 @struct.dataclass

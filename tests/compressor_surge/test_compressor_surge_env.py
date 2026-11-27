@@ -303,7 +303,10 @@ def test_observed_margin_matches_the_state(env, params):
     observation, ``surge_margin_from_obs``, equals m_c / (surge flow at
     rated x N) - 1 from the state, and ``pair_init``'s integrators equal the
     state's drive setpoint and valve, to float32 rounding (1e-6 relative)."""
-    params = params.replace(sensor_noise_scale=0.0)
+    # A day whose demand swings from low to high, so the recycle travels: the
+    # default until the normal day became it (owner, 2026-11-27, review H1),
+    # whose high demand keeps the recycle near shut.
+    params = params.replace(sensor_noise_scale=0.0, demand_range=(0.35, 0.95))
     key = jax.random.PRNGKey(3)
     init, policy = _policy("pair")
 
