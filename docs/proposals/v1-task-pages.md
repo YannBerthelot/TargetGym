@@ -15,6 +15,39 @@ figure, tripping never pays, the expert beats doing nothing, deterministic runs,
 `jit` and `vmap`; (7) an episode in under a second on a CPU; (8) one card and a
 Gymnasium ID; (9) frozen as `TargetGym/<task>-v1` with a CI guard.
 
+## The owner's answers, 2026-11-28
+
+Given by picker on these pages. The build sessions work from them.
+
+- **Build all four scored tasks**, each with the work its page proposes.
+- **Item 5: "Observation-only MPC".** Room must come from an MPC on the true
+  model that estimates the hidden state from the observations. No task has one
+  yet, so item 5 now reads "not measured" on all four. The full-state MPC
+  numbers on these pages (the reactor's 61 %, pH's 16 %) become context, like the
+  ceiling. Each task needs an estimator and an MPC on it (M each). The
+  compressor's surge margin (finding 1) and hvac's forecast (its page) belong to
+  that build.
+- **Item 7: "Per episode in a batch".** The reactor keeps its 7-day streams. Its
+  episode costs about 0.2 s in a batch of 256, so item 7 passes, and the 2-day
+  option is dropped.
+- **Items 2 and 3: "Source every price first".** A task waits until each of its
+  trade-off prices has a published source. Its reference is frozen (W2) only
+  after that, since the ladder picks its rung, and pH its set point, by cost.
+  The prices each task lists as its own (`ours.json`), beyond the unit it is
+  scored in:
+  - reactor: effluent ($0.0628/kg), rod wear ($1 a rod step), and the trip's
+    48 h dead time (a range is cited: APR1400's 22 to 70 h);
+  - compressor_surge: the pressure zone (1,000 kJ/s), a surge (2,000 kJ), and
+    the trip (2,200 kJ a step over 9,000 steps);
+  - ph_neutralization: an excursion (1.667 L/s), diversion (2 L/L), and the trip
+    (13 L a step over 720 steps, with PR 306);
+  - hvac: none. Its tariff and comfort price are cited; its scenario weights are
+    the project's own, but they are weights, not prices.
+
+The tables below are as judged before these answers. With them, item 5 reads
+"not measured" on all four tasks and the reactor's item 7 passes; the rest
+stands.
+
 ## The decision in one table
 
 | Task | Proposal | Work of its own, beyond the shared work below |
