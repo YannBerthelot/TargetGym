@@ -77,10 +77,14 @@ PINNED = {
         "feed_buildup": ("fc427daa4327129f", "3a6e57c611c211ba"),
         "cooling_loss": ("228fc3689e999b7a", "384a121be391bbd6"),
     },
+    # Re-pinned 2026-11-27: failure_cost rose from 9 to 13 L a step in every pH
+    # scenario (owner, the trip-cost bound on the normal day). With it at 9 the
+    # rows hashed as at dceb2537 (normal: 3cd97449cacdb87a), so the defaults' move
+    # itself changed no pH scenario.
     "ph_neutralization": {
-        "normal": ("3cd97449cacdb87a", "7890f9a21bb6017a"),
-        "bad_day": ("7f50ac76ebcdd4ef", "fe447c46fc34d6fe"),
-        "buffer_loss": ("2d37842511b0744d", "eb506f50188d23e7"),
+        "normal": ("4e538f469a48f1ea", "64208a761c3e5741"),
+        "bad_day": ("9ecffe7f547fcd17", "8b8fc309455ea3a7"),
+        "buffer_loss": ("98c4cb57f4771a1a", "c58d10ff758de030"),
     },
     "compressor_surge": {
         "normal": ("d66dc620b4b69509", "d66dc620b4b69509"),
