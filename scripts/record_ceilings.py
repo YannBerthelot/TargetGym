@@ -39,8 +39,10 @@ The protocols are the ones the ceilings were first measured with (2026-11-08 to
   L-BFGS-B from the reset's hold (the reference's first move held) and the kept
   reference's moves, each through the oracle's ``ceiling_start`` where it has one, the
   cheaper untripped plan kept. compressor_surge (owner, 2026-11-24, ruling A) takes
-  exactly those two starts (its ``CEILING_STARTS``), and the file records the stop
-  rule: converged when the two starts' J agree within 1 % and the kept J is within 3 %
+  those two starts (its ``CEILING_STARTS``) and, amended 2026-11-27, the oracle's
+  moves (``--start mpc``, ``REQUIRED_STARTS``), and the file records the stop rule
+  with every start's J: converged when the two best starts' J agree within 1 % and
+  the kept J is within 3 %
   of the balance floor, and (2026-11-25) every seed's kept plan holds its zone and surge
   rows to -0.1 unit (``pc_gym.foresight.ceiling_converged``). Its first records
   (2026-11-09) also started from the midpoint, each start restarted twice.
@@ -454,13 +456,19 @@ def solve_reactor(task, scenario, seed, warm=None):
 
 
 R_CAP = 600
+#: Starts a task's ceiling must take (``--start``): compressor_surge's third,
+#: the oracle's own moves (owner, picker 2026-11-27, ruling A amended).
+REQUIRED_STARTS = {"compressor_surge": ("mpc",)}
 
 
 def solve(task, scenario, seed, out_dir, start="cold"):
+    opts = set(start.split("+"))
+    missing = [k for k in REQUIRED_STARTS.get(task, ()) if k not in opts]
+    if missing:
+        raise SystemExit(f"{task}: the ceiling needs --start {'+'.join(missing)}")
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    opts = set(start.split("+"))
     mpc = oracle_run(task, scenario, seed) if "mpc" in opts else None
     expert = expert_run(task, scenario, seed) if "expert" in opts else None
     warm = None if mpc is None else mpc["moves"]
