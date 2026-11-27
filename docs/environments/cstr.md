@@ -1,5 +1,8 @@
 # CSTR
 
+!!! note "Under review"
+    CSTR is registered and runs like every other task, but it is not scored in this release. It is under review, so its reference, its ceiling and its room are not measured and no result is published for it. It can join the scored suite in a later release, once it passes the bar the scored tasks passed.
+
 <p align="center"><img src="../../videos/cstr/pid_output.gif" width="480px"/></p>
 
 Run a jacketed exothermic reactor for what it makes, with two moves: the cooling water and the feed. Each step is charged the production lost against the reactor's nameplate, and all of it while the temperature is more than 1 K from its setpoint, where the product is off spec. The policy reads the reactor and jacket temperatures, its two flows and the setpoint, and never the composition. A reactor that reaches 75 C trips its interlock, charged as 4 h of lost production. The reference keeps the band on the normal day and through a setpoint move, but not in the three upsets (catalyst loss, a richer feed, a short loss of cooling): there it leaves the band on every seed, and their rooms are reported as measured.
@@ -17,7 +20,7 @@ env, params = tg.make("cstr")
 | Tracked variable(s) | T (K) |
 | Episode length | 960 steps of 15 s (4 h) |
 | Cite as | `cstr-v8` |
-| Status | Scored |
+| Status | Under review, not scored |
 | Physics | [contract](https://github.com/YannBerthelot/TargetGym/blob/main/src/target_gym/pc_gym/cstr/PHYSICS.md) |
 
 ## Action space
@@ -68,24 +71,9 @@ See [Reward shaping](../reward-shaping.md) for how each cost is built.
 
 **Truncation.** After 960 steps.
 
-## Reference and ceiling
-
-What an agent is measured against: the expected cost per step over the task's weighted scenarios, on seeds 100 to 109, lower is better. An agent's result is its saving over the reference, `1 - cost_agent / cost_reference`.
-
-| Line | What it is | Cost per step | Trips |
-|---|---|---|---|
-| Best null policy | the cheapest of the simple policies | not current | |
-| Reference | the controller to beat | not current | |
-| MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
-
-Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
-
-The ceiling reads what the policy does not observe: the composition in the reactor; the feed's temperature; when the scenario's event comes (the setpoint move, the catalyst's loss, the richer feed or the cooling water's failure). Part of the room may be out of reach of a policy that reads only the observations.
-
 ## Baselines
 
-The recorded comparison was measured on an earlier version of this task, so it is not shown; it shows again once re-recorded.
+Not measured. A PID ships and run, but this task is outside the scored suite, so its recorded numbers are not kept current and none is shown.
 
 Version 8 (the reactor run for what it makes, owner's decision of 2026-11-24) ships no oracle: its planner model is not written for two moves and the production score, and the owner decided the same day that 0.8.0 does not need it. The ceiling is pc_gym.foresight's (cstr/oracle.py).
 

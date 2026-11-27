@@ -136,13 +136,15 @@ def test_a_task_page_shows_its_baseline_row_only_while_it_is_current(
     monkeypatch, current
 ):
     """cstr's page published v7's "PID -5038" under v8: a row recorded on
-    another tree is not shown, one recorded on this tree is."""
+    another tree is not shown, one recorded on this tree is. Checked on a scored
+    task's page, since cstr left the suite on 2026-11-27."""
     gen = _script("generate_env_pages", monkeypatch)
-    spec = REGISTRY["cstr"]
+    name = "ph_neutralization"
+    spec = REGISTRY[name]
     fps = provenance.fingerprints(spec)
     row = _row(fps["expert"] if current else "an earlier tree", fps.get("oracle"))
     row["steps"] = int(spec.make_test_params().max_steps_in_episode)
-    text, _ = gen.page("cstr", spec, {"cstr": row})
+    text, _ = gen.page(name, spec, {name: row})
     baselines = text.split("\n## Baselines\n")[1].split("\n## ")[0]
     assert ("-5038" in baselines) == current
     if not current:

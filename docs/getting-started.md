@@ -91,7 +91,7 @@ product, orders of magnitude apart between tasks. For training, the optional
 `ScaledEnv` maps each observation's documented range to [-1, 1] and divides
 the reward by one fixed constant per task: one step of the task's main loss
 at its own price. It is a gymnax wrapper, so it jits and vmaps like the env.
-It covers the five scored tasks; `scaled.SCALES` gives each range and
+It covers the four scored tasks and `cstr`; `scaled.SCALES` gives each range and
 constant, with its source.
 
 ```python

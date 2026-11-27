@@ -28,9 +28,9 @@ disturbances, rather than to reach a goal state once. The environments model
 real plants, including an A320-like aircraft, a glass furnace, a nuclear
 reactor, a cement kiln, a grid battery and a wind turbine.
 
-- **Five scored tasks.** `reactor`, `hvac`, `cstr`, `compressor_surge` and
+- **Four scored tasks.** `reactor`, `hvac`, `compressor_surge` and
   `ph_neutralization` are scored: each has a measured reference to beat and a
-  ceiling. The other twenty run the same way and are not scored yet, so no
+  ceiling. The other twenty-one run the same way and are not scored yet, so no
   result is published for them. See [Environments](#environments).
 - **Baselines included.** Every environment ships a tuned PID, and all but
   `wake_surf`, whose oracle is not built yet, an MPC with full state access,
@@ -98,7 +98,7 @@ print("Expert return:", total)
 baselines are scored on, as `gymnax.make` does, and `reset` and `step` follow
 the [gymnax](https://github.com/RobertTLange/gymnax) API. Keyword arguments
 change single fields, as in `tg.make("plane", max_steps_in_episode=500)`.
-`tg.list_envs()` gives the 25 names, and `tg.FLAGSHIP` the five that are scored.
+`tg.list_envs()` gives the 25 names, and `tg.FLAGSHIP` the four that are scored.
 
 The expert's memory is its PID's integral and last error. You carry it as
 you carry `state`, so the same `expert.step` also runs under `jit`, `vmap`
@@ -163,20 +163,19 @@ are covered in [docs/getting-started.md](docs/getting-started.md).
 
 ## Environments
 
-25 tasks are registered, and every one of them runs through `tg.make`. Five
+25 tasks are registered, and every one of them runs through `tg.make`. Four
 are scored. The rest wait for their review.
 
 ### The scored suite
 
 A scored task has a measured reference to beat, a ceiling and the room between
 them on its page, and its numbers are kept current with the code. Results are
-published for these five only.
+published for these four only.
 
 | Task | Family | Plant |
 |---|---|---|
 | [`reactor`](docs/environments/reactor.md) | Industrial / Energy | A pressurised water reactor following a day's load plan |
 | [`hvac`](docs/environments/hvac.md) | Industrial / Energy | An office heated through a concrete slab |
-| [`cstr`](docs/environments/cstr.md) | Process Control | A jacketed exothermic reactor |
 | [`compressor_surge`](docs/environments/compressor_surge.md) | Industrial / Energy | A variable-speed compressor held off its surge line |
 | [`ph_neutralization`](docs/environments/ph_neutralization.md) | Process Control | A two-stage acid neutralisation kept inside its discharge permit |
 
@@ -190,7 +189,7 @@ page, and `first_order` is a test fixture.
 | Family | Tasks |
 |---|---|
 | **Aircraft** | `plane`, `plane_energy`, `plane_sine`, `plane3d_heading`, `plane3d_circle`, `plane3d_racetrack`, `plane3d_figure8`, `patrol`, `patrol_range_bearing`, `wake_surf`, `formation` |
-| **Process Control** | `first_order`, `four_tank`, `distillation`, `unstable_cstr` |
+| **Process Control** | `cstr`, `first_order`, `four_tank`, `distillation`, `unstable_cstr` |
 | **Industrial / Energy** | `glass_furnace`, `cement_kiln`, `boiler_drum` |
 | **Renewable Energy** | `wind_turbine`, `battery` |
 
