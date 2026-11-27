@@ -27,19 +27,27 @@ Both are run. They are reported separately and never averaged together.
 
 ## 2. What every comparison holds fixed
 
-A number is only comparable to the PID and MPC beside it if it was produced
+A number is only comparable to the reference beside it if it was produced
 under the same conditions:
 
-- the same reward, unmodified — no auxiliary shaping, no reward scaling;
-- the same episode length, the environment's scored configuration
-  (`env.default_params`);
-- the same evaluation episodes, so differences can be paired per seed;
+- the same reward. A learner trains on `info["measured_reward"]`, the cost a
+  plant could compute from its own sensors, and is scored on the true cost,
+  the reward `step` returns, which the score reads (the owner's decision of
+  2026-11-05, "learners train on measured reward, and scoring uses the true
+  cost"). Training on the true reward would feed the agent readings no plant
+  has. No auxiliary shaping; how rewards are scaled is section 6's;
+- the scored configuration: every scenario of the task's suite at its weight
+  (charter J4), each episode read over the task's scored window with its edge
+  charge (`evaluation.episode_cost`);
+- the same evaluation episodes, so differences are paired per seed: the scoring
+  seeds 200 to 209 in every scenario, on which the reference's anchor line was
+  recorded (section 4);
 - a deterministic policy at evaluation (the distribution's mean action), because
-  the PID and MPC are deterministic and a stochastic policy would be scored on a
+  the reference is deterministic and a stochastic policy would be scored on a
   different object than it is compared against.
 
 Any deviation makes the row incomparable, and `tests/rl/test_rl_results.py`
-rejects the two that can be checked mechanically.
+rejects the ones that can be checked mechanically.
 
 ## 3. The information asymmetry, stated up front
 
@@ -47,7 +55,7 @@ These three controllers do not see the same thing:
 
 | controller | sees | has a model |
 | --- | --- | --- |
-| PID | observations | no |
+| reference (charter J1) | observations | no |
 | **learned policy** | **observations** | no |
 | MPC | **true environment state** | **yes, exact** |
 
@@ -57,121 +65,156 @@ observed — the glass furnace hides 6 of 9 dynamic states, the reactor 7 of 11,
 the kiln 64 behind 8 measurements — so on those the MPC is solving a materially
 easier problem than the one the agent faces.
 
-Therefore: **the PID is the learned policy's peer, and the MPC is the best known
-plan, with more information.** Beating the PID is the result. Approaching the MPC is
+Therefore: **the reference is the learned policy's peer, and the MPC is the best
+known plan, with more information.** The reference is the ladder's kept rung, a
+textbook recipe of PI loops built from bump tests (on the reactor, the published
+rod procedure the shipped expert follows), not the shipped expert of every task.
+Beating it is the result. Approaching the MPC is
 interesting. Beating the MPC would be a claim requiring explanation, not a
 victory lap, and the first hypothesis should be a simulator exploit rather than
 superior control.
 
 ## 4. Metrics
 
-Three questions, three numbers, all from `target_gym.scoring`, whose
-`score_policy` runs a policy and the expert on the same seeds. Costs are per
-step and lower is better: `x` is the policy's, `b` the expert's (today the
-shipped PID) and `c` the ceiling's.
+The verdict is the charter's headline (J4), `scoring.headline`, and one
+statistic decides it: the weighted-mean saving over the reference. This
+protocol and the charter are the same protocol (owner, 2026-11-27, "Fixed seeds,
+run-level bootstrap"). Costs are per step, in the task's money, and lower is
+better.
 
-**Against the expert: `b / x`** per seed, on identical evaluation episodes,
-with the share of seeds the policy wins. Pairing removes the variance from
-initial conditions and targets, which on these tasks is large: the circle
-task's radius alone moved the PID's return by a factor of two. It covers the
-whole episode from the reset on, with the first reach, consumption, target
-changes and trips included.
+**The saving.** Each scenario is a stratum with its weight `w_s`, its share of
+operating time. `J = sum over scenarios of w_s times the mean cost in s`, over
+the scoring seeds and, for an agent, over its training runs:
 
-**The verdict is `beats_expert`:** the ratio is more than 1% above 1, past what
-separates two recordings of one row, and the policy tripped no more than the
-expert. The ratio alone is not enough. Its interquartile mean trims the worst
-seeds, so a policy that trips on 2 of 10 seeds can keep its ratio. `expert_trips`
-and `policy_trips` give the counts per episode.
+    saving = 1 - J_agent / J_reference
 
-**Across environments: the score `S = log(b / x) / log(b / c)`**, on the
-tracking cost while holding. It is 0 at the expert, 1 at the ceiling and never
-above, and negative below the expert. The ceiling is every tracked quantity
-within its instrument's resolution, at the reward's price: as good as a real
-plant can verify. Being a ratio of logarithms, `S` has no units and does not
-change with the tracking exponent, so a plant priced in euros compares with
-one scored in floor-widths. A linear share of the cost gap fails both tests:
-costs span orders of magnitude between controllers, so it put almost any
-working policy near 1.
+0 at the reference, above 0 cheaper, defined while `J_reference` is above 0. A
+seed's cost may be negative (an edge credit) and still counts. Means are used,
+not trimmed or interquartile means: a bad seed costs real money, and on the
+outside review's short PPO runs the interquartile mean of per-seed ratios and
+the ratio of means gave opposite signs on pH's bad day. The reference is the
+ladder's kept rung on the scoring seeds, the charter record's anchor line
+(`charter.load(task)["anchor"]`), not the shipped expert, which costs 2 to
+47 % more on four of the five scored tasks.
 
-**Room to grow: `H = log10(b / c)`**, the decades between the expert's hold and
-the ceiling. 0 means the expert already tracks within the resolution, and the
-task has nothing left to score.
+**An agent is its training runs.** Train 30 runs, agent seeds 10 to 39 (section
+9). Choose each run's checkpoint on the validation seeds, then score every run
+once on the scoring seeds 200 to 209 of every scenario, with a deterministic
+policy. The interval is a two-level bootstrap: resample the runs, then the seeds
+within each scenario. Every run and the reference ran the same seeds, so one
+draw of seed indices serves them all, and every scenario that shares the seeds;
+resampling seeds apart for each run would leave out the spread the runs share,
+and declared 29 % false wins in a simulation where the seeds carry the spread.
+The percentiles are expanded so that one level reproduces a t interval
+(Hesterberg's expanded percentile), since a plain percentile bootstrap
+under-covers at ten seeds.
 
-The hold starts after a settle fixed per plant and, where a controller previews
-the schedule, stops a fixed lead before each move, so every controller is scored
-over the same steps. Beside the score, `consumption_ratio` compares the fuel,
-energy or wear, which no resolution bounds. `s_max` is the most of the score the
-task's best known hold allows.
+**The verdict.** An agent beats the reference when the 95 % interval of its
+saving lies above 0 and it trips, per run on average, no more than the
+reference in any scenario. Publish each run's own saving (`run_savings`) beside
+the headline, as the 30 points or their quartiles: it shows whether a result is
+the method or one lucky run. One policy on its own (a checkpoint, a classical
+controller) gets a 95 % t interval on its paired per-seed costs instead,
+Fieller's, which excludes a saving of 0 exactly when a paired t test would.
 
-**What a win costs, and whether it matters:** three more numbers come for both
-sides, none of them part of the verdict.
+**Seeds are fixed.** Ten scoring seeds per scenario, looked at once. No rule
+adds seeds after a look: the stop rule of 2026-11-24 looked up to five times and
+declared a false win 10 to 11.5 % of the time against a nominal 2.5 %, and a
+percentile bootstrap at ten seeds 5.5 %. With no real saving and a 5 % spread
+per seed, one look with the t interval declares a false win 2.5 % of the time
+within Monte Carlo error where paired differences are normal, and 2.1 % on the
+review's design, whose differences grow with the seed's cost. The two-level
+bootstrap stays at 2.1 to 2.5 % whether the runs or the seeds carry the spread
+(`tests/rl/test_verdict_statistics.py`).
 
-- `expert_travel` and `policy_travel`: full strokes of the actuators per episode.
-- `expert_reversals` and `policy_reversals`: changes of direction per episode,
-  past a dead band of 0.25% of the span, about what a digital valve positioner
-  can resolve.
-- `expert_off_spec` and `policy_off_spec`: the share of the hold outside the
-  task's tolerance (`scoring.spec_band`). NaN on `hvac`, whose band is one-sided
-  at night.
+**Selection never sees the scoring seeds.** Checkpoints, hyperparameters and
+early stopping are chosen on the validation block, seeds 300 to 349 in every
+scenario (`charter.VALIDATION_SEEDS`). The scoring seeds are run once, at the
+end. A result chosen on them carries the bias of its choice.
 
-A published tolerance sets the band where one was read: 65 ft on altitude from
-the RVSM rule, the 8.5 m slot, and a pH 6 to 9 permit. The other tasks use ten
-floors. That rule is ours and no plant's figure. `scoring.SPEC_BAND` shows which
-tasks have a tolerance and how far each was sourced.
+**Beside the headline**, none of them part of the verdict:
 
-**Reaching new targets: `transient_ratio`**, the expert's cost over the
-settle after each move divided by the policy's, per seed, with its own win
-rate. A move is the reset or a target change, and a restart after a trip is
-neither, so a trip adds no move of its own. `first_order` and `cstr`,
-whose expert already holds within the resolution, are scored on reaching.
-`settling_ratio` says how much sooner the policy's tracking cost enters the
-plant's band and stays. Moves have no ceiling; the oracle's recorded ratio is
-shown as the best known, for information. The capability profile, a radar of
-both kinds of score per kind of difficulty, is not published in this release:
-it was drawn from the tracking score, which the scored tasks priced in money
-do not have. It returns when it is rebuilt on the saving over the reference.
+- each scenario's saving and the worst scenario;
+- the trip rate per scenario;
+- the probability of improvement: the weighted share of seeds where the agent
+  costs less than the reference by more than the task's noise floor (below),
+  with the share within it reported as `ties`;
+- `travel_ratio` and `reversal_ratio`: the agent's full strokes and changes of
+  direction per episode over the reference's, from each scenario's per-seed
+  `travel` and `reversals` (the anchor line records the reference's). A win
+  that wears a valve out twenty times faster is a different claim: the
+  review's PPO runs moved pH's valves 10 to 20 times further than the expert.
 
-**One number per training seed: `seed_scores`.** A test that compares trained
-agents, such as AdaStop, needs one number per seed, defined on every task. This
-is the expert's ratio again, on the whole episode with no burn-in, averaged in
-logs over each seed's episodes:
+**The noise floor.** One controller run through two code paths, the host `pid`
+slot and the jitted `make_expert`, does not cost exactly the same on every seed.
+A seed within that gap is a tie, never a win (`charter.tie_tolerance`), in the
+probability of improvement and in `score_policy`'s win rates. Each scored task's
+floor is the largest relative gap per seed over the scoring seeds of every
+scenario (`scripts/record_charter.py --tasks <task> --noise-floor`, stored in
+`data/charter/noise_floor/`):
 
-    s = mean over episodes e of clip(log10(max(b_e, c) / max(x_e, c)), -3, +3)
+| task | noise floor | median gap per seed |
+| --- | --- | --- |
+| reactor | 1.1e-3 | 6e-7 |
+| hvac | 1.1e-6 | 6e-8 |
+| cstr | 2.0e-3 | 3e-8 |
+| compressor_surge | 0.19 | 0.02 |
+| ph_neutralization | 2.2e-7 | 4e-8 |
 
-Above 0 beats the expert. All three costs are per step: `b_e` and `x_e` are the
-mean cost per step over every step of episode `e`, on the same episode, and `c`
-is the task's ceiling. Passing an episode's summed cost would put the floor a
-whole episode length too low.
+compressor_surge amplifies rounding: one controller through its two code paths
+ends up 0.7 to 8 % apart per seed (the median in each scenario), 19 % at most,
+and after a small excursion its state never reconverges with an undisturbed run
+(section 6). A per-seed win on it means little below that, so read its
+probability of improvement with care; its saving, a mean over every seed, is
+not biased by it.
 
-Averaging logs per episode stops one large-target episode from dominating, which
-a ratio of mean costs does not. The floor stops a cost near zero from reading as
-300 decades. It sits on both sides, so two costs within the resolution tie at 0
-and an expert below the ceiling is scored from the ceiling. The clip is there because one
-trip can cost more decades than a good policy gains on a whole episode, which
-also means the score alone cannot say how many trips there were. Pass `trips`
-and `seed_scores` adds `trip_rate`, the trips per episode for each seed, read
-from the counts and untouched by the clip.
+**Recording a result.** `rl_results.record_result(..., costs=..., seeds=...)`
+keeps each run's cost on each scoring seed of each scenario, stamped with the
+charter's fingerprints of the reference it is read against, so a re-record of
+the reference marks it stale. The headline reads it against the anchor line:
 
-**Report the interquartile mean with a 95% stratified bootstrap confidence
-interval**, plus the win rate against the expert. Not the mean alone. This is
-standard practice after Agarwal et al. (2021), and this repository has its own
-evidence for it: an earlier battery MPC scored `+14.0` on the mean and `−4.1`
-on the median, winning 1 seed in 10. A mean alone would have published the
-opposite of what happened.
+```python
+import numpy as np
+
+from target_gym import charter, scoring
+
+task = "ph_neutralization"
+record = charter.load(task)
+anchor = record["anchor"]["line"]["scenarios"]  # the reference on seeds 200 to 209
+# One row per training run, one cost per scoring seed, in every scenario. Here a
+# stand-in: 30 runs, each the reference's costs times a factor of its own.
+rng = np.random.default_rng(0)
+costs = {
+    s: {
+        "policy": np.outer(rng.uniform(0.97, 1.01, 30), v["costs"]),
+        "reference": v["costs"],
+    }
+    for s, v in anchor.items()
+}
+h = scoring.headline(costs, record["weights"], tie=charter.tie_tolerance(task))
+low, high = h["saving_ci"]
+print(f"saving {h['saving']:.2%}, 95 % interval {low:.2%} to {high:.2%}")
+print("each run:", np.round(h["run_savings"], 3))
+```
+
+### The tracking numbers, outside the scored suite
+
+`scoring.score_policy` scores a policy against the shipped expert on one
+configuration, for the tasks scored on tracking. Its `ratio` (`b / x` per seed,
+an interquartile mean) and `win_rate`, the holding score
+`S = log(b / x) / log(b / c)` against the ceiling `c` of every tracked quantity
+within its instrument's resolution, the room `H = log10(b / c)`, the transient
+and settling ratios, the travel, reversals and off-spec share, and
+`seed_scores`' clipped log ratio per training seed are described in the module's
+docstring. They are reported, never the verdict on a scored task: there the
+headline above is the one statistic, and its `run_savings` give one number per
+training run to any further test across agents, such as AdaStop. The capability
+profile, a radar of both kinds of score per kind of difficulty, is not published
+in this release: it was drawn from the tracking score, which the scored tasks
+priced in money do not have. It returns when it is rebuilt on the saving over the
+reference.
 
 ## 5. Algorithms
-
-!!! warning "Sections 5 and 6 predate the continuing tasks"
-    From 0.8.0 a task is a plant that runs without end, scored on its average
-    cost per step, so there is no episode length `N` and the rule
-    `gamma = 1 - 1/N` below is retired (decided 2026-11-10). Its replacement:
-    SAC and PPO use `gamma = 1 - 1/(c T)` with `c = 10`, where `T` is the
-    longer of the task's slowest mode and the longest preview in its
-    observation; `gamma` is never searched; `c = 5` and `c = 20` are reported
-    as a check; and one average-reward agent (APO) runs in the same table, on
-    the same budget and scoring. Each task's `T` comes with its charter
-    record, which is not published yet. Until these sections are rewritten,
-    read the table below as each plant's open-loop response time only.
 
 **Headline: SAC and PPO.** One off-policy and one on-policy, so that a poor
 result cannot be pinned on the quirks of a single family. Both are standard,
@@ -180,138 +223,69 @@ default choice for continuous control with dense rewards; PPO is the robust
 on-policy reference and benefits most from the massively parallel environments
 JAX makes cheap.
 
-**Secondary study: an average-reward agent (ASAC or APO).** This is not
-exoticism for its own sake. These tasks are *continuing* — reach a setpoint and
-hold it indefinitely — and are ended by a time limit, not by achieving anything.
-Discounted RL imposes an effective horizon that corresponds to nothing in the
-task, and average-reward formulations are the theoretically correct fit. If the
-discounted agents underperform, this distinguishes "RL cannot do this" from "the
-discounted formulation was the wrong tool", which is a distinction the headline
-result needs.
+**In the same table: an average-reward agent, APO on Ajax's PPO.** A task is a
+plant that runs without end, scored on its average cost per step (charter J4),
+so the average-reward formulation is the natural fit, and a discount imposes a
+horizon the task does not have. The agent runs on the same budget, seeds and
+scoring. If the discounted agents fall short, it tells "RL cannot do this" from
+"the discounted formulation was the wrong tool". Which agents form the headline
+was fixed before any result (decided 2026-11-10,
+`docs/proposals/long-strata.md`, S4).
 
 Not used for headline numbers: REDQ, AVG, UDRL, TD3. They are fine algorithms
 and each invites "why that one?", which is a question a benchmark should not have
 to answer.
 
-## 6. Discount factor, fixed by rule and checked against physics
+## 6. Discount factor and the window T
 
-A single `gamma` across this suite would be indefensible: `delta_t` ranges from
-0.05 s to 900 s, so `gamma = 0.99` means a five-second horizon in one
-environment and a twenty-five-hour one in another.
+`gamma` belongs to the learner, not to the task: the task's objective is J4's
+average cost per step, whatever the algorithm. SAC and PPO set it by one rule,
+fixed before any result (decided 2026-11-10, long strata S4), in control steps:
 
-A rule based on the plant's own time constant fails here: the reactor's flux
-answers the control rod in one step, so five time constants would be a
-five-step horizon on a task held for 2880 steps. The wind turbine and battery
-are the same shape.
+    gamma = 1 - 1 / (c * T),   c = 10,   T = max(t_s, the longest preview in the observation)
 
-**The rule is the episode:**
+- `t_s` is the task's slow mode: how long the plant takes to forget where it
+  started under the reference, the decay time of the extra cost a run from
+  another state the plant visits still pays (`scripts/slow_modes.py`, rule R1).
+  It replaces the open-loop step response `tau`, which is one step on the
+  reactor's rods and misses hidden states such as cstr's composition.
+- A preview is what the observation announces ahead: hvac's next-24 h outdoor
+  mean, the reactor's planned ramps, up to 10.4 h from the dispatch's notice to
+  the end of a day's hold. The horizon covers what the agent is told about.
+- `gamma` is never searched. `c = 5` and `c = 20` are run as a check and
+  reported beside the headline.
+- With `gamma` this close to 1, values are roughly `J / (1 - gamma)`, so
+  rewards are scaled, never shaped, the same way for every agent: by a running
+  estimate of the return's spread, as the learning check (charter J7) runs.
 
-    gamma = 1 - 1/N          (N = the environment's own episode length)
+A driver takes `T` from this table and computes `gamma` from it:
 
-Two reasons. Evaluation scores the *undiscounted* return over exactly N steps,
-so setting the effective horizon to N aligns what the agent optimises with what
-it is measured on; any shorter and the agent is deliberately blind to part of
-its own score. And it removes `gamma` as a free parameter — it cannot be tuned
-to flatter one side, which matters for a comparison whose result is the point.
+| task | step | t_s (steps) | longest preview (steps) | T (steps) | gamma |
+| --- | --- | --- | --- | --- | --- |
+| reactor | 30 s | not measured | 1250 | open | open |
+| hvac | 900 s | 69 | 96 | 96 | 0.99896 |
+| cstr | 15 s | not measured | none | open | open |
+| compressor_surge | 0.1 s | 1599 | none | 1599 | 0.99994 |
+| ph_neutralization | 5 s | 197 | none | 197 | 0.99949 |
 
-`gamma` is **not** in the hyperparameter search for that reason.
+Two slow modes are not measured. After a 5 % excursion for a fifth of a
+window, the pairs of cstr (over ten windows) and of the reactor (over six)
+never reconverge in state, and the extra cost the excursion leaves flips sign
+instead of decaying, so the rule gives no `T`: cstr's composition, temperature
+and flows, the reactor's boron line. Their `T` and `gamma` stay open until the
+rule is extended to such a plant, and a result on them states the `gamma` it
+used; the reactor's `T` is at least its 1250-step preview. compressor_surge's
+cost forgets its start after 1599 steps while its state never reconverges, as
+its noise floor suggests.
 
-**A driver computes `gamma` from the task's params, as
-`1 - 1 / params.max_steps_in_episode`, and never copies it from the table
-below.** The table shows what the rule gives today, for reading alongside tau.
+`t_s` here was measured on 2026-11-27, on the plants of `int/amendment3` at
+`dceb2537`, with `scripts/slow_modes.py --bias --offset 0.05 --pre 0.2`; a task
+version that changes its plant measures it again. The tasks outside the scored
+suite have no `T` yet: their slow modes predate their rebuilds.
 
-### What the measurement is still for
-
-The physics check has not gone away, it has changed job: it verifies that the
-horizon covers the plant's open-loop response, measured as the actuator-to-output
-step response (time to 63.2% of the total change, the quantity relay tuning
-assumes). Where it does not, that is a property of the environment worth knowing
-before reading any result from it.
-
-The four tasks rebuilt under the charter's Amendment 2 on 2026-11-08 (hvac,
-battery, boiler_drum, wind_turbine) have new plants and episodes; their tau has
-not been remeasured. The aircraft taus predate the 2026-11-10 review, which
-changed the A320's aerodynamics, moved patrol and formation onto the F/A-18 and
-added `wake_surf`, whose tau has not been measured.
-
-| environment | N | tau (steps) | 5·tau | gamma |
-| --- | --- | --- | --- | --- |
-| cstr | 960 | 5 | 25 | 0.99896 |
-| first_order | 150 | 10 | 50 | 0.99333 |
-| hvac | 1152 | not remeasured | not remeasured | 0.99913 |
-| plane | 1800 | 23 | 115 | 0.99944 |
-| plane_energy | 1800 | 23 | 115 | 0.99944 |
-| plane_sine | 480 | 23 | 115 | 0.99792 |
-| plane3d_heading | 600 | 14 | 70 | 0.99833 |
-| plane3d_circle | 600 | 14 | 70 | 0.99833 |
-| plane3d_figure8 | 1000 | 38 | 190 | 0.99900 |
-| plane3d_racetrack | 1200 | 14 | 70 | 0.99917 |
-| patrol | 200 | 13 | 65 | 0.99500 |
-| patrol_range_bearing | 200 | 12 | 60 | 0.99500 |
-| distillation | 400 | 8 | 40 | 0.99750 |
-| glass_furnace | 5040 | 1368 | 6838 | 0.99980 |
-| cement_kiln | 700 | 58 | 290 | 0.99857 |
-| battery | 14400 | not remeasured | not remeasured | 0.99993 |
-| boiler_drum | 1800 | not remeasured | not remeasured | 0.99944 |
-| wind_turbine | 2400 | not remeasured | not remeasured | 0.99958 |
-| four_tank | 3300 | 38 | 190 | 0.99970 |
-| ph_neutralization | 1440 | 14 | 70 | 0.99931 |
-| reactor | 2880 | 1 | 5 | 0.99965 |
-| unstable_cstr | 1800 | 6.3 to 14.4 | 32 to 72 | 0.99944 |
-| compressor_surge | 1200 | 49.3 | 247 | 0.99917 |
-| formation | 200 | 36 | 180 | 0.99500 |
-| wake_surf | 1800 | not measured | not measured | 0.99944 |
-
-Three rows are filled by hand. `unstable_cstr` has no step response to fit (it
-runs away open loop), so its tau is the unstable time constant, the time an
-uncontrolled error takes to grow e-fold over its five targets
-(`scripts/unstable_cstr_numbers.py --section targets`). `compressor_surge`'s
-is the slowest header-pressure response to its actuator steps
-(`scripts/compressor_surge_numbers.py --section steady`). `glass_furnace`'s is the
-fining share's 63 % time on a 1 % valve step from the settled state, 41.8 h of lag
-plus 3.8 h of dead time (`scripts/glass_slow_props.py step`). Seven days cover 3.7
-tau, not 5: the glass leaving the tank keeps answering a move for longer than an
-episode.
-
-### How long an episode has to be
-
-Two time scales bind, and an episode has to clear both.
-
-**Settling.** This library is about reaching a target *and holding it*, so
-for holding to be what the score measures, the episode needs room for both:
-**a floor of 10 tau**, roughly five to arrive and five to hold.
-
-**Period.** For a path-following or periodic task the binding scale is the
-task's own period, and the requirement is **one lap**. These tasks start the
-aircraft on the path, so an episode shorter than a lap cannot tell a controller
-that holds the path from one that flies straight ahead. `plane_sine` keeps two
-periods, because it is a frequency probe: the first sheds the initial
-transient.
-
-    N >= max(10 * tau_actuator, 1 * T_period)
-
-**The actuator clause applies only where a settling time exists**, which is
-about a third of the suite. Nine plants integrate (a tank level, a drum level,
-an aircraft altitude under a held stick), the aircraft oscillate in the
-phugoid, the glass furnace does not settle on the episode timescale, and the
-unstable CSTR runs away. For those the episode is set by laps, by the
-disturbance timescale (reactor, turbine, battery, boiler drum) or by the
-setpoint schedule (furnace, building, kiln, unstable CSTR). So the
-criterion is a design rule, not a test: measuring tau inside the episode under
-judgement would make it circular.
-
-### A second, separate shortfall: slow dynamics that never move
-
-Settling asks whether a controller can demonstrate holding. A separate question
-is whether the slow dynamics a task advertises happen inside its episode.
-
-- **Reactor.** The scored episode is a 24 h day of load follow, so the xenon
-  swing after the cut and the return to power both happen inside it. Read
-  reactor results as load follow with xenon management.
-- **Distillation.** The 200-step episode covers about 63% of the column's
-  194-minute dominant mode, a deliberate cost compromise for the slowest
-  environment per step. Read its results as product-composition tracking on an
-  ill-conditioned plant, not as profile management.
+The window an episode scores is the task's own (charter J4: its evaluation's
+burn-in and scored window, or the reactor's 7-day scoring runs), never set
+from `gamma`.
 
 ## 7. Hyperparameters, and why they must be tuned
 
@@ -407,12 +381,22 @@ Wall-clock and total environment steps are recorded alongside every result.
 Two distinct axes, routinely conflated:
 
 - the **agent seed** — network initialisation, exploration, batch order;
-- the **episode seed** — initial condition and target, which is what the shipped
-  baselines vary.
+- the **episode seed** — a scenario's draw: its start, its disturbances and its
+  events.
 
-Variation is reported over **agent seeds**, at least 30 of them. Each trained
-agent is then evaluated on the **same fixed set of episodes** the PID and MPC
-were measured on, which is what makes the comparison paired.
+Variation is reported over **agent seeds**: 30 training runs, agent seeds 10 to
+39 (0 to 2 tune, section 7). Each is evaluated once on the **same fixed set of
+episodes** the reference was recorded on, which is what makes the comparison
+paired. Episode seeds come in blocks, the same in every scenario:
+
+| block | episode seeds | read by |
+| --- | --- | --- |
+| ladder | 100 to 109 | the reference's design and the charter's four lines (J1, J3) |
+| scoring | 200 to 209 | the one final scoring run, and the reference's anchor line (J4) |
+| validation | 300 to 349 | every choice of checkpoint, hyperparameter or stopping point |
+
+J2's acceptance seeds come from a hash of the commit, above 1000. Training draws
+its own episodes, from the stream or from seeds outside these blocks.
 
 Thirty is affordable: in JAX, compilation dominates, so a hundred seeds cost
 little more than one (15.8 s against 18.4 s on `Plane3DCircle` in Ajax). Small
@@ -454,16 +438,20 @@ indistinguishable from tabula rasa.
 
 ## 11. Controls
 
-Every environment's table carries two reference rows, so a result is bracketed
-rather than floating:
+Every scored task's page carries the charter's four lines (J3), so a result is
+bracketed rather than floating:
 
-| row | what it establishes |
+| line | what it establishes |
 | --- | --- |
-| **PID** | **the peer** |
-| MPC | the model-based, full-state best known plan |
+| best null policy | that the task has a control problem |
+| **reference** | **the peer, and the headline's anchor** |
+| MPC | the model-based, full-state plan, as context |
+| ceiling | the best known plan with foresight, as context |
 
-These are what `src/target_gym/data/baseline_returns/` records, ten episode seeds each, and
-they are what a learned policy is compared against.
+The reference's anchor line on the scoring seeds, in the task's charter record
+(`data/charter/<task>.json`), is what a learned policy is compared against. The
+shipped PID and MPC rows in `src/target_gym/data/baseline_returns/` are the
+tracking protocol's, ten episode seeds each.
 
 No random-policy floor is recorded: on a setpoint task it is a number everyone
 can predict. The conformance suite already asserts that every PID beats the
@@ -500,7 +488,10 @@ Every run is written through `target_gym.rl_results.record_result`, which stamps
 the environment fingerprint so a result cannot outlive the environment it
 describes. A run whose agent used the expert, in training or at deployment,
 passes `expert_based=True` to stamp the expert fingerprint too, so retuning the
-expert marks it stale. See [docs/rl-baselines.md](rl-baselines.md).
+expert marks it stale. A run on the charter's protocol passes `costs` and `seeds`
+too, each run's cost on each scoring seed of each scenario, which stamps the
+charter's fingerprints of its reference (section 4). See
+[docs/rl-baselines.md](rl-baselines.md).
 
 Tags distinguish the arms: `{algorithm}/{tabula|residual-a0.25|guided}/{budget}`.
 Learning curves are stored alongside the final returns, since section 8 makes

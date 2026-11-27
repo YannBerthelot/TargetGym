@@ -1,4 +1,4 @@
-"""A short PPO run learns on one task of each family.
+"""A short PPO run learns on one task of each family and on every scored task.
 
 The conformance battery shows every task is well formed, and "the PID beats
 the best constant action" shows each can be solved. Neither shows that a
@@ -16,8 +16,14 @@ on ``cstr``, where a constant is a fair baseline. It does not on ``plane`` or
 ``battery``, where a constant crashes the aircraft or drains the pack, so
 staying alive already beats it.
 
-The tasks are one per registry group. The agent's settings are the same on
-each, and a typical run has to clear the bar, so one unlucky seed is not a bug.
+The tasks are one per registry group and the five scored tasks (charter J7; the
+outside review's L4, 2026-11-27). The agent's settings are the same on each, and
+a typical run has to clear the bar, so one unlucky seed is not a bug.
+
+The agent trains on ``info["measured_reward"]``, the reward the protocol trains a
+learner on (docs/rl-protocol.md, section 2: the owner's measurement-noise
+decision 3 of 2026-11-05), and is read on the true reward, as the score is. It is
+read on validation seeds, never the scoring seeds 200 to 209 (review M6).
 
 Ajax needs JAX 0.10 or later, which ``uv.lock`` gives Python 3.14 alone, so
 these run in CI's learning job and skip without the ``learning`` group.
@@ -27,18 +33,44 @@ import itertools
 
 import numpy as np
 import pytest
+from gymnax.wrappers.purerl import GymnaxWrapper
 
 import target_gym as tg
 from target_gym.benchmark import run_policy, task_info
+from target_gym.charter import FLAGSHIP, VALIDATION_SEEDS
 
-TASKS = ("plane", "cstr", "glass_furnace", "battery")
+TASKS = ("plane", "glass_furnace", "battery", *FLAGSHIP)
 TRAINING_SEEDS = (0, 1, 2, 3, 4)
-HELD_OUT_SEEDS = tuple(range(200, 210))
+HELD_OUT_SEEDS = VALIDATION_SEEDS[:10]
 CONSTANT_LEVELS = (-1.0, -0.5, 0.0, 0.5, 1.0)
 # Two policies with the same return differ in the last bits of a float32 sum, so
 # a tie must not read as a win. This is rounding, not a bar: a typical run saves
 # about 90 to 98 % of the constant's cost.
 ROUNDING = 1e-3
+
+
+def _measured(out):
+    """A step's outputs, ``(obs, state, reward, ..., info)``, with the measured
+    reward in the reward's place, whatever flags the layer below returns."""
+    *head, info = out
+    head[2] = info["measured_reward"]
+    return (*head, info)
+
+
+class MeasuredReward(GymnaxWrapper):
+    """The env with ``info["measured_reward"]`` as its reward. Ajax slides its own
+    auto-reset under this layer, and copies it before ``_env`` is set."""
+
+    def __getattr__(self, name):
+        if name == "_env" or name.startswith("__"):
+            raise AttributeError(name)
+        return getattr(self._env, name)
+
+    def step_env(self, key, state, action, params):
+        return _measured(self._env.step_env(key, state, action, params))
+
+    def step(self, key, state, action, params=None):
+        return _measured(self._env.step(key, state, action, params))
 
 
 class Trained:
@@ -93,7 +125,7 @@ def test_a_short_ppo_run_beats_the_best_constant_action(name):
     ppo = pytest.importorskip("ajax").PPO
     env, params = tg.make(name)
     agent = ppo(
-        env,
+        MeasuredReward(env),
         env_params=params,
         n_envs=16,
         n_steps=64,

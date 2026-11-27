@@ -2,10 +2,10 @@
 task's judgement holds, one JSON per task in ``data/charter/<task>.json``.
 
 ``scripts/record_charter.py`` fills the parts; this module holds the schema, the
-pure rules (J2's seeds and verdict, J3's lines, J4's anchor), validation and
-staleness. It is in no fingerprint (``target_gym.provenance`` hashes the env
-packages, the shared physics, ``experts/pid.py``, ``experts/mpc.py`` and
-``oracles/``), so editing it never stales a record.
+pure rules (J2's seeds and verdict, J3's lines, J4's anchor and tie tolerance),
+validation and staleness. It is in no fingerprint (``target_gym.provenance``
+hashes the env packages, the shared physics, ``experts/pid.py``,
+``experts/mpc.py`` and ``oracles/``), so editing it never stales a record.
 
 A record has one block per part, each with its own ``fingerprint``:
 
@@ -33,8 +33,6 @@ import json
 import math
 import pathlib
 
-import numpy as np
-
 PKG = pathlib.Path(__file__).resolve().parent
 REPO = PKG.parents[1]
 DATA = PKG / "data" / "charter"
@@ -53,11 +51,17 @@ TRIPS_PER = 30
 #: J2's hash seeds are drawn at or above this, apart from the ladder's 100-109 and
 #: the scoring seeds.
 J2_SEED_FLOOR = 1000
-#: J4's scoring seeds, the same in every scenario, set at the tag.
+#: J4's scoring seeds, the same in every scenario, set at the tag, read once by the
+#: one final scoring run (owner, 2026-11-27, "Fixed seeds, run-level bootstrap": no
+#: stop rule adds seeds after a look).
 ANCHOR_SEEDS = tuple(range(200, 210))
-#: The scoring seeds' stop rule (owner, 2026-11-24): blocks of this many from 200,
-#: up to this many seeds in all; resamples of the paired bootstrap, on a fixed seed.
-STOP_BLOCK, STOP_MAX, STOP_RESAMPLES = 10, 50, 5000
+#: The validation block, the same in every scenario: checkpoints and
+#: hyperparameters are chosen here, never on the scoring seeds (the review's M6).
+VALIDATION_SEEDS = tuple(range(300, 350))
+#: Each scored task's noise floor, one file per task (``noise_floor``).
+NOISE = DATA / "noise_floor"
+#: The tie tolerance where no floor is measured: float32 rounding over an episode.
+DEFAULT_TIE = 1e-3
 #: Rows in ladder_rows that are test fixtures, not tasks.
 FIXTURES = ("first_order",)
 #: Tasks whose reference is the shipped expert (reference_ladder ``--expert``).
@@ -682,7 +686,8 @@ def current(task: str) -> dict:
     )
     j2 = _digest(ref, nulls, sweep, J2_TOTAL, J2_PER_SCENARIO, TRIPS_PER)
     fps = {"reference": ref, "nulls": nulls, "mpc": mpc, "ceiling": ceiling}
-    fps |= {"j2": j2, "anchor": _digest(ref, ANCHOR_SEEDS)}
+    # the anchor's line records the actuators' travel and reversals (review M8)
+    fps |= {"j2": j2, "anchor": _digest(ref, ANCHOR_SEEDS, "travel")}
     out = {
         "version": {"env": f"{task}-v{spec.version}", "stamp": stamp},
         "fingerprints": fps,
@@ -710,38 +715,22 @@ def stale_report(tasks=FLAGSHIP) -> dict:
     return {t: parts for t, parts in report.items() if parts}
 
 
-def _weighted(costs: dict, weights: dict, picks: dict | None = None):
-    """J = sum over scenarios of w_s times the mean over that scenario's seeds; with
-    ``picks``, over each scenario's resampled indices, one row per resample."""
-    if picks is None:
-        return sum(w * float(np.mean(costs[s])) for s, w in weights.items())
-    return sum(w * np.asarray(costs[s])[picks[s]].mean(-1) for s, w in weights.items())
+# --- J4's tie tolerance ------------------------------------------------------
 
 
-def paired_interval(a: dict, b: dict, weights: dict) -> tuple:
-    """``(J_a / J_b, [low, high])``: the ratio and its 95 % interval by a paired
-    bootstrap that resamples seeds within each scenario (J4), on a fixed seed."""
-    rng = np.random.default_rng(0)
-    picks = {
-        s: rng.integers(0, len(a[s]), (STOP_RESAMPLES, len(a[s]))) for s in weights
-    }
-    ratios = _weighted(a, weights, picks) / _weighted(b, weights, picks)
-    low, high = np.percentile(ratios, [2.5, 97.5])
-    return _weighted(a, weights) / _weighted(b, weights), [float(low), float(high)]
+def noise_floor(task: str, root: pathlib.Path = NOISE):
+    """``task``'s noise floor (the outside review's H3, owner 2026-11-27), or
+    ``NOT_MEASURED``: one controller run through two code paths on the scoring seeds
+    of every scenario (``scripts/record_charter.py --noise-floor``). ``per_scenario``
+    holds each seed's relative gap ``|x / b - 1|`` and ``floor`` the largest; the
+    file carries the plant's ``stamp`` and the controller's ``expert_fingerprint``."""
+    p = root / f"{task}.json"
+    return json.loads(p.read_text()) if p.exists() else NOT_MEASURED
 
 
-def stop_seeds(measure, weights: dict, threshold: float = 1.0) -> dict:
-    """The scoring seeds' stop rule (owner, 2026-11-24, written before any result).
-    ``measure(seeds)`` gives two paired runs on ``seeds``, each ``{scenario: costs
-    per seed}``. Seeds come in blocks of ``STOP_BLOCK`` from 200; the run stops at
-    the first block whose 95 % interval on ``J_a / J_b`` excludes ``threshold``, or
-    at ``STOP_MAX`` seeds, undecided. Returns the seeds, the ratio, its interval and
-    whether it was decided."""
-    for n in range(STOP_BLOCK, STOP_MAX + 1, STOP_BLOCK):
-        seeds = tuple(range(ANCHOR_SEEDS[0], ANCHOR_SEEDS[0] + n))
-        a, b = measure(seeds)
-        ratio, (low, high) = paired_interval(a, b, weights)
-        decided = low > threshold or high < threshold
-        if decided:
-            break
-    return {"seeds": seeds, "ratio": ratio, "interval": [low, high], "decided": decided}
+def tie_tolerance(task: str) -> float:
+    """The relative tolerance within which a seed is a tie, never a win (J4's
+    probability of improvement, ``scoring``'s win rates): ``task``'s noise floor,
+    or ``DEFAULT_TIE`` where none is measured."""
+    floor = noise_floor(task)
+    return DEFAULT_TIE if floor == NOT_MEASURED else float(floor["floor"])

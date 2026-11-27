@@ -42,6 +42,13 @@ stamps the provenance:
         config={"n_envs": 64, "lr": 3e-4, ...},
     )
 
+A result on the charter's protocol (docs/rl-protocol.md, section 4) also passes
+``costs``, each scenario's cost per step on each of ``seeds`` (the scoring seeds),
+one row per training run. It is stamped with the charter's fingerprints of the
+reference it is read against (``charter.current``: the env version and the anchor
+part's fingerprint), so a re-record of the reference marks it stale too, and
+``scoring.headline`` reads it against the record's anchor line.
+
 ``config`` is free-form and is stored verbatim. It is not fingerprinted: two
 runs of the same agent at different learning rates are different *results*, not
 stale ones, and both are worth keeping. What the fingerprint protects is the
@@ -101,6 +108,8 @@ def record_result(
     tag: str | None = None,
     notes: str | None = None,
     expert_based: bool = False,
+    costs: dict[str, list[list[float]]] | None = None,
+    seeds: list[int] | None = None,
 ) -> dict:
     """Stamp a measured result with its provenance and store it.
 
@@ -112,6 +121,10 @@ def record_result(
     ``expert_based`` says the agent ran the expert, in training or at
     deployment, and stamps ``expert_fingerprint`` so a retune marks the record
     stale. A driver must set it: left at False, the retune goes unnoticed.
+
+    ``costs`` and ``seeds``, the charter's protocol: every scenario of the task,
+    each run's cost on each seed. ``ValueError`` for another scenario set or a
+    run without a cost per seed.
     """
     from target_gym.registry import REGISTRY
 
@@ -144,6 +157,9 @@ def record_result(
         "recorded": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
     }
 
+    if costs is not None:
+        record |= _charter_costs(env, costs, seeds)
+
     results = load_results()
     results[result_key(env, algorithm, tag)] = record
     results["_meta"] = {
@@ -159,13 +175,42 @@ def record_result(
     return record
 
 
+def _charter_stamp(env: str) -> dict:
+    from target_gym import charter
+
+    now = charter.current(env)
+    return {"version": now["version"], "anchor": now["fingerprints"]["anchor"]}
+
+
+def _charter_costs(env: str, costs: dict, seeds) -> dict:
+    """The protocol's fields of a record, checked against the task's scenarios."""
+    from target_gym import scenarios, scoring_runs
+    from target_gym.registry import REGISTRY
+
+    if env in scoring_runs.PROTOCOLS:
+        names = set(scoring_runs.weights(env))
+    else:
+        names = set(scenarios.weights(REGISTRY[env]))
+    seeds = [int(s) for s in seeds or ()]
+    if set(costs) != names:
+        raise ValueError(f"{env}: costs cover {sorted(costs)}, not {sorted(names)}")
+    rows = {s: [[float(c) for c in run] for run in v] for s, v in costs.items()}
+    if not seeds or any(len(r) != len(seeds) for v in rows.values() for r in v):
+        raise ValueError(f"{env}: every run needs one cost per seed of {seeds}")
+    return {"costs": rows, "seeds": seeds, "charter": _charter_stamp(env)}
+
+
 def is_current(record: dict) -> bool:
-    """Whether a record still describes the environment as it stands now and,
-    if its agent ran the expert, that expert."""
+    """Whether a record still describes the environment as it stands now, if its
+    agent ran the expert, that expert, and, on the charter's protocol, the
+    reference it is read against."""
     from target_gym.registry import REGISTRY
 
     spec = REGISTRY.get(record["env"])
     if spec is None or record["env_fingerprint"] != environment_fingerprint(spec):
         return False
     expert = record.get("expert_fingerprint")
-    return expert is None or expert == expert_fingerprint(spec)
+    if expert is not None and expert != expert_fingerprint(spec):
+        return False
+    stamp = record.get("charter")
+    return stamp is None or stamp == _charter_stamp(record["env"])
