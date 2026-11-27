@@ -70,6 +70,24 @@ MPC_NOT_MEASURED: dict[str, str] = {
         "MPC line is recorded when that lands"
     ),
 }
+#: Per task, the scenarios J2's sweep (B7) does not hold the reference to, with
+#: the written exception the owner accepted. A null may beat the kept rung's
+#: median there on any draw; every other scenario is held as before, and the
+#: task's page says the scenario is not held and why. Kept outside every
+#: fingerprint, like ``null_policies.EXCEPTIONS``: it decides the verdict from
+#: the draws, not what is measured.
+J2_EXCEPTIONS: dict[str, dict[str, str]] = {
+    "cstr": {
+        "feed_buildup": (
+            "the reference moves only the cooling water, so it cannot act on a "
+            "build-up of feed, and hold reset's 0.6 % edge there (median 0.705 "
+            "against the PI's 0.709) comes from where the PI's set point is "
+            "placed; a feed cut on the water valve, tuned by S13's rule or "
+            "SIMC's, wins the build-up only by losing the cooling loss to the "
+            "nulls (accepted 2026-11-27)"
+        ),
+    },
+}
 #: Keys of a data file that only describe its run.
 _RUN_KEYS = frozenset({"generated", "cpu", "seconds"})
 
@@ -225,12 +243,27 @@ def verdict(n_seeds: int, reference_trips: int, wins: dict, sweep) -> dict:
     return {"accepted": not reasons, "reasons": reasons}
 
 
-def sweep_result(draws):
+def sweep_result(draws, task: str | None = None):
     """B7's outcome for J2: ``NOT_MEASURED`` without a sweep (``draws`` None),
-    else whether the property held on every draw."""
+    else whether the property held on every draw. A draw of a task with a J2
+    exception (``J2_EXCEPTIONS``) holds when its kept rung's median beats every
+    null's in every scenario the exception does not name."""
     if draws is None:
         return NOT_MEASURED
-    return all(d["holds"] for d in draws)
+    excepted = set(J2_EXCEPTIONS.get(task, {}))
+    return all(d["holds"] or (excepted and _holds_outside(d, excepted)) for d in draws)
+
+
+def _holds_outside(draw: dict, excepted: set) -> bool:
+    if draw.get("kept") is None or not draw.get("nulls"):
+        return False
+    kept = draw["rungs"][draw["kept"]]
+    return all(
+        kept[s] < null[s]
+        for null in draw["nulls"].values()
+        for s in null
+        if s not in excepted
+    )
 
 
 # --- J3 and J4 --------------------------------------------------------------

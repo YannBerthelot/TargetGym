@@ -403,6 +403,7 @@ def charter_section(record: dict, stale=(), reads=()) -> str:
             *rows,
             "",
             " ".join([*reasons, said]),
+            *_not_held(record.get("task")),
             *(
                 [
                     "",
@@ -415,6 +416,17 @@ def charter_section(record: dict, stale=(), reads=()) -> str:
             ),
         ]
     )
+
+
+def _not_held(task) -> list[str]:
+    """The scenarios acceptance (J2) does not hold ``task``'s reference to, each
+    with the owner's written exception (``charter.J2_EXCEPTIONS``)."""
+    return [
+        f"\n`{scenario}` is not held: acceptance (J2) does not require the "
+        f"reference to beat the null policies there. The owner accepted this "
+        f"exception because {why}."
+        for scenario, why in charter.J2_EXCEPTIONS.get(task, {}).items()
+    ]
 
 
 def _baseline_section(spec, row: dict | None, scored: bool, fps: dict) -> str:

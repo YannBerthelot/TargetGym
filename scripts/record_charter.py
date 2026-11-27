@@ -260,7 +260,7 @@ def part_j2(t: Task) -> dict:
 
     table = family_sweep.table(t.name)
     draws = None if table is None else family_sweep.run(t.name, table)
-    sweep = charter.sweep_result(draws)
+    sweep = charter.sweep_result(draws, t.name)
     return {
         "commit": commit,
         "dirty": dirty,
@@ -276,6 +276,7 @@ def part_j2(t: Task) -> dict:
         "broken": broken,
         "sweep": sweep,
         "sweep_draws": draws,
+        "not_held": charter.J2_EXCEPTIONS.get(t.name, {}),
         **charter.verdict(n, trips, wins, sweep),
     }
 
