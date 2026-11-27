@@ -68,6 +68,7 @@ class Episode:
     terms: dict = field(default_factory=dict)  # name -> per-step array
     actions: np.ndarray | None = None  # (T, n_act), as fractions of each span
     lead: int = 0  # steps before each target change left out of the hold
+    read_state: bool = False  # the policy was given the true state (FullState)
 
 
 def _cycles(ep: Episode):
@@ -567,7 +568,8 @@ def run_episode(spec, params, policy, seed: int = 0, band=None, record=None) -> 
     """One episode of a registered environment as an ``Episode`` record: the
     benchmark's one-episode run on ``PRNGKey(seed)`` (``runners.one_episode``).
 
-    ``policy`` is ``policy(obs)`` or ``policy(obs, state)``. The cost is
+    ``policy`` is ``policy(obs)``, or ``policy(obs, state)`` wrapped as a
+    ``target_gym.FullState``, which the episode's ``read_state`` records. The cost is
     ``-reward``; the terms come from ``env.reward_terms`` when the environment
     provides one. ``band`` is a per-output error tolerance for the
     time-in-band KPI, in the observation's units (defaults to the task's own,
@@ -584,7 +586,8 @@ def run_episode(spec, params, policy, seed: int = 0, band=None, record=None) -> 
         e_floor = np.broadcast_to(np.asarray(band, float), task.e_floor.shape)
         task = dataclasses.replace(task, e_floor=e_floor.copy())
     rollout = one_episode(spec, params, policy, seed, task=task, record=record)
-    return episodes_of(rollout)[0]
+    episode = episodes_of(rollout)[0]
+    return dataclasses.replace(episode, read_state=rollout["read_state"])
 
 
 def evaluate_controller(name: str, kind: str = "pid", seeds: int = 3, params=None):
