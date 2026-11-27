@@ -21,7 +21,7 @@ Gymnasium ID; (9) frozen as `TargetGym/<task>-v1` with a CI guard.
 |---|---|---|
 | `reactor` | Build to v1 | Item 7: score 2-day runs instead of 7-day ones (S), or read item 7 per episode in a batch (no change) |
 | `ph_neutralization` | Build to v1 | Item 2: charge the reagent the tanks lost by the episode's end, as hvac's store is charged (M) |
-| `compressor_surge` | Build to v1 once its MPC line is in | Item 5: finish the MPC line already running on bob (S); if it trips or loses, park |
+| `compressor_surge` | Build to v1 if an MPC holding the reference's surge margin beats the expert; otherwise park | Item 5: give the MPC the reference's 10 % control line as its surge limit and record it (S). The run on bob plans on the true line, like the last record that tripped 19 of 20 approach episodes |
 | `hvac` | Build to v1 only if a re-run MPC beats the reference; otherwise park | Item 5: re-run the MPC line on the fixed code (S); if it loses, one M attempt at a planner that reads the forecast, then park |
 | `first_order` | Freeze as the labelled, unscored debugging task | None |
 
@@ -38,7 +38,7 @@ applicable to an unscored task).
 | `reactor` | pass | pass | pass | fail | pass, stale | pass | fail | fail | fail |
 | `hvac` | pass | fail (pass with PR 306) | pass | fail | n.m. (last record failed) | pass | pass | fail | fail |
 | `compressor_surge` | pass | pass | pass | fail | n.m. | pass | pass | fail | fail |
-| `ph_neutralization` | pass | fail | pass | fail | pass, stale | fail (pass with PR 306) | pass | fail | fail |
+| `ph_neutralization` | pass | fail | pass | fail | pass, stale | pass (finding 3) | pass | fail | fail |
 | `first_order` | n.a. | n.a. | pass | fail | n.a. | pass | pass | fail | fail |
 
 Item 3 passes on all four scored tasks with one step owed: the frozen files in
@@ -63,22 +63,140 @@ frozen again once, on the final tree (shared step W2).
   hvac's do, since its edge charge changes. Every number from it is marked
   "stale" and is re-recorded once (W2).
 - **My runs** (flanders, two cores, JAX 0.11.2, a code copy of 874f5fb3): one
-  scored episode timed per task, and end-of-episode probes on the reactor,
-  compressor_surge and pH. Scripts and outputs are in flanders
-  `~/scratch/2026-11-27-tg-v1-pages/` and in the shared notes folder under
-  `v1-task-pages-2026-11-27/`.
+  scored episode timed per task; end-of-episode probes on the reactor,
+  compressor_surge and pH; and each reference's cost split by term. Scripts and
+  outputs are in flanders `~/scratch/2026-11-27-tg-v1-pages/` and in the shared
+  notes folder under `v1-task-pages-2026-11-27/`.
+
+## What checking the figures found
+
+The owner asked that no figure be taken as given. I traced each one the pages
+lean on to its source, and re-measured where that was cheap. Prices enter
+neither the dynamics nor any observation, so a reference's cost can be split by
+term by rerunning the same episodes with all prices but one at zero (scoring
+seeds 200 to 209, as `tg.score` runs them). The findings that change or qualify
+a page:
+
+1. **The compressor's MPC is built to trip.** Its surge limit is the machine's
+   true line, read from the state (`compressor_surge/oracle.py:192`), with no
+   margin (`oracle.py:197`); only the pressure zone is backed off. The reference
+   holds the vendors' 10 % control line. The planner reads the demand's schedule
+   but plans its random deviation on the mean (`demand_sigma` is its only noise
+   field, `registry.py:1383`), so sitting on the line it surges at the first
+   unplanned dip, which fits the last record's 19 trips in 20 approach episodes.
+   The run on bob uses the same code. This, not the reference, decides item 5
+   here.
+2. **The invented prices never charge the process references.** The compressor's
+   reference pays recycle energy alone on normal (0.805 kJ a step) and
+   slow_approach (11.28), and 98 % energy on fast_approach (12.05 of 12.29, the
+   zone 0.24), with no surge and no trip. pH's pays reagent alone in all three
+   scenarios. So the zone, surge, excursion and trip prices, all ours, bound what
+   a policy may risk; they do not set the number it is compared with.
+3. **pH's trip charge was fitted to a test that misses how a trip happens.** A
+   violation needs one excursion past 3,600 s (`ph_neutralization/env.py:531`),
+   and every second outside costs 1.667 L (`PHYSICS.md:90`), so any trip costs at
+   least 6,000 L before its lump. The basin route is slower: 236 L at about
+   39 mL/s net takes about 100 min. Tripping therefore cannot pay at 9 L a step
+   either (at least 6,000 + 6,480 L, against the worst random survivor's
+   8,879 L). `tests/test_failure_cost_bound.py` compares the lump alone with
+   random actions' worst survivor, so it under-counts a trip by those 6,000 L.
+   PR 306's rise to 13 L answers that test, not the property. The test's premise
+   also fails against a worse-than-random policy: two excursions of 59 min each,
+   just short of a violation, cost about 11,800 L with no trip, above 9,360 L.
+4. **The reactor's headline rests on output, its baseload and krsko_slow numbers
+   on an invented price.** By term, the reference's J on the scoring seeds is 66 % output the
+   turbine did not take from the dispatch plan (priced at spot, $80/MWh,
+   sourced) and 32 % effluent ($0.0628/kg, ours: the energy to boil a kg at
+   $100/MWh, `reactor/env.py:406-408`). Tavg off program and rod wear make 0.8 %
+   each, and the offset's derate almost nothing (0.04 $ a step on fast_return, 0
+   elsewhere; the derate only enters the cost, `reactor/env.py:1425`, so lifting
+   its allowances split it out). Effluent is 92 % of the reference's cost on
+   baseload days and 98 % on krsko_slow, so the per-scenario savings there are a
+   trade between two prices of ours, effluent against rod wear. The output the
+   reference leaves ranges from 0 to 14.6 $ a step across seeds on edf_daily,
+   which the practitioner review traced to the drawn cycle point.
+5. **The reactor's MPC plans to the run's end with no terminal charge**
+   (`scoring_runs.py:141-143`), so it may spend stock the next days would need,
+   such as Tavg inside its free 1.6 K band or boron owed for burnup. The
+   reference gains 0.3 to 0.9 % on baseload days from such moves (item 2's
+   probe). How much of the MPC's 12.9 % baseload saving is the same is not
+   measured. Its headline room comes mostly from load-follow days' output, which
+   this does not touch.
+6. **Lines and headline read different seeds.** The charter lines run on seeds
+   100 to 109 (`evaluation.py:24`, `scoring_runs.py:54`; hvac's on 100 to 104),
+   and `tg.score` on 200 to 209. On hvac and the reactor a line's seeds also grow,
+   by five and ten, when the reference-over-ceiling interval contains 1
+   (`scripts/record_charter.py:168-184`, `scoring_runs.needs_more`). That is a
+   second look, keyed on a line the protocol makes context. W2 should record
+   every line once, on the scoring seeds.
+7. **The compressor page's job sentence is wrong twice.** The set point is
+   constant
+   (`tests/compressor_surge/test_compressor_surge_reality.py::test_the_header_setpoint_is_constant`,
+   from [C3], p. 4), and one surge does not trip the plant: three within the
+   window do
+   (`::test_one_short_surge_does_not_trip_and_three_in_the_window_do`). The
+   card must fix both.
+8. **The learned agents will lose to doing nothing.** The learning check's
+   diagnosis (shared notes, `local_cf39d86f…/j7-diagnosis.md`): at 200k steps
+   Ajax's default PPO loses to the best constant on all four scored tasks, with
+   its mean parked on the action bounds on up to 95 % of steps. The reactor's
+   runs trip 1.9 to 8.5 times an episode, and a squashed policy rescues only pH.
+   So W3 will most likely publish four losses to doing nothing, which item 4
+   allows. Item 5's "or the learned agent" route is closed in practice, and item
+   5 rests on the MPC alone.
+
+Two of the brief's known inputs need a qualifier. "PPO loses to a constant on
+all 8 tasks" holds for the median run; on pH, 2 or 3 runs of 5 beat the constant.
+"A static decoupling did not remove compressor_surge's limit cycle" is true of
+the shipped `make_expert` pair, not of the v1 expert, whose frozen rung has no
+margin loop on the valve.
+
+## Items that need a reading
+
+- **Item 5, "an MPC on the true model".** Every MPC here reads the true state,
+  hidden parts included (`api.py:253`: "It reads the true simulator state,
+  including what the observation withholds"). Where a task hides state, the room
+  it shows mixes control with information. On pH that is the buffer flow and the
+  acid strength (`pc_gym/ph_neutralization/oracle.py:10-14`): most of its 16 %
+  is set-point placement only that knowledge allows. On compressor_surge it is
+  the surge line's hidden shift, and on the reactor xenon and iodine. (Foresight
+  of what comes next adds little on the reactor: its ceiling sits 0.3 % under
+  the MPC.) As adopted, item 5 passes on that. If it should mean room a deployed
+  controller can reach, it needs an MPC on the observation with an estimator (M
+  per task), which no task has.
+- **Item 6, "tripping never pays".** The test is a lower bound drawn from random
+  and constant actions. It is empty on hvac, where nothing trips, and on pH the
+  property holds through the excursion rule whatever the charge (finding 3). For
+  the reactor and the compressor the test is the only evidence.
+- **Item 7, "under a second".** Read at batch 1, the reactor fails; read per
+  episode in a batch, it passes. Only the owner's reading decides it.
+- **Item 3, "one expert".** The ladder keeps the cheapest rung on its seeds. On
+  pH and hvac the two cheapest rungs differ by 0.02 and 0.05 % (pi 0.068675
+  against feedforward 0.068692, and 0.006155 against 0.006158; RL review H5),
+  inside seed noise, and pH's set point was placed on 10 seeds. Freezing makes
+  it one expert; the card should say the rung was picked by cost.
+- **Item 2, "the job's own units".** The units are real, but the prices that
+  trade one goal against another are ours: pH's excursion (1.667 L/s) and trip,
+  the compressor's zone (1,000 kJ/s), surge and trip, and the reactor's effluent
+  and rod wear. For pH and the compressor the references never pay them
+  (finding 2). For the reactor, effluent carries 32 % of the reference's J.
+- **Item 1 for pH.** The plant is Henson and Seborg's bench rig (two 20 L stages,
+  16.6 mL/s of influent) in an industrial permit's frame. Its residence time, 20
+  min a stage, is a plant's; its litres are not. Quote its saving as a
+  percentage.
 
 ## Shared work, done once for every task
 
 These close items 4, 8 and 9 everywhere. None needs a task to change.
 
-- **W1. Land PRs 306 and 312** (in flight). PR 306 fixes hvac's item 2 and pH's
-  trip charge in item 6.
+- **W1. Land PRs 306 and 312** (in flight). PR 306 fixes hvac's item 2; its
+  pH trip charge answers a test rather than the property (finding 3).
 - **W2. Re-freeze and record once on the final tree** (S per task, plus
   compute): `scripts/reference_ladder.py --freeze`, then the nulls, reference
-  and MPC lines with `scripts/record_charter.py`. The ceiling can be kept as
-  context, as the protocol says. The compressor's MPC line alone takes more than
-  a day on bob.
+  and MPC lines with `scripts/record_charter.py`, every line on the scoring
+  seeds 200 to 209 that `tg.score` reads and with no seed extension (finding
+  6). The ceiling can be kept as context, as the protocol says. The compressor's
+  MPC line alone takes more than a day on bob.
 - **W3. PPO and SAC at one budget** (M, once): one script trains Ajax's PPO (the
   learning check's settings) and Ajax's SAC (`ajax/agents/SAC`) with shipped
   settings, 30 training seeds each, at one budget such as the learning check's
@@ -132,10 +250,10 @@ own episode is one day, 2880 steps; the scored episode is 20,160 steps.
 | Item | Status | Evidence |
 |---|---|---|
 | 1 | pass | `docs/environments/reactor.md:5` |
-| 2 | pass | Dollars, a fixed 7-day run. My probe: boron off for the run's last 20 min saves 0.055 % [0.001, 0.104] of the score, the same stop mid-run costs 0.068 %, and both are under the task's noise floor of 0.11 %. Off for the last 2 h costs 9.5 %. On baseload days alone the stop saves 0.3 % (20 min) and 0.9 % (2 h): a small end effect that the headline does not show. |
+| 2 | pass | Dollars, a fixed 7-day run. Output at spot and Tavg at the Carnot slope are sourced; effluent and rod wear are priced by the project, and effluent is 32 % of the reference's J (finding 4). My probe: boron off for the run's last 20 min saves 0.055 % [0.001, 0.104] of the score, the same stop mid-run costs 0.068 %, and both are under the task's noise floor of 0.11 %. Off for the last 2 h costs 9.5 %. On baseload days alone the stop saves 0.3 % (20 min) and 0.9 % (2 h): a small end effect that the headline does not show. |
 | 3 | pass | The Westinghouse rod program on the average temperature, from the NRC's training manual (HRTD 8.1 and 5.0), with boron from the operator's curve book (`reactor/experts.py:17-30`). Frozen in `data/reference/reactor.json`; re-freeze owed (W2). |
 | 4 | fail | Nulls, expert and MPC exist in the dry run (stale): best null 55.97 (rod integrator), reference 0.2674, MPC 0.1032, no trips. No PPO or SAC (W3). |
-| 5 | pass, stale | The MPC saves 61.4 % [27.0, 68.6] over the reference, with no trip and every solve converged (dry run, seeds 100 to 109, the repository's `scoring.headline`). |
+| 5 | pass, stale | The MPC saves 61.4 % [27.0, 68.6] over the reference, with no trip and every solve converged (dry run, seeds 100 to 109, the repository's `scoring.headline`). Most of it is load-follow output the reference leaves untaken (finding 4). The MPC plans to the run's end with no terminal charge, so part of its baseload saving may be stock left at the end (finding 5). |
 | 6 | pass | Figure: `tests/reactor/test_reactor_axial.py::test_full_power_mode_is_a_damped_oscillation_near_the_published_figures` (Ringhals-4's axial mode). Trips: `tests/test_failure_cost_bound.py`. Expert over doing nothing: 0.267 against 55.97 at best. Determinism, `jit` and `vmap`: `tests/test_env_conformance.py`. All pass on int's CI. |
 | 7 | fail | The 7-day scored run takes 2.80 s with the reference at batch 1 (1.80 s with a zero action). One day takes about 0.40 s, by proportion. Read per episode in a batch of 256, the 7-day run costs about 0.2 s (the RL review's 0.090 M steps a second, keeping observations and rewards). |
 | 8 | fail | W4, W5 |
@@ -158,7 +276,7 @@ own episode is one day, 2880 steps; the scored episode is 20,160 steps.
 through the cycle; the xenon peak after a scram (1,419 pcm against a 1,800 to
 3,200 test band); load-follow days drawn from real unit output; cycle points
 stratified across the seeds (closed PR 313); an MPC that reads the observation,
-not the true state; and the baseload end effect above.
+not the true state; a sourced effluent price; and the baseload end effect above.
 
 ---
 
@@ -194,7 +312,8 @@ shoulder_season 0.42, cold_snap 0.08. Nothing trips.
   still loses, one M attempt: the planner models the weather as its
   mean-reverting deviation (`hvac/oracle.py:116-120`), while the observation's
   forecast also carries the regime's level (`hvac/env.py:418-428`), so the
-  planner can be given the forecast the policy reads. If the MPC still loses
+  planner can be given the forecast the policy reads. Its horizon is not the
+  cause: 930 steps, 9.7 days (`data/oracle_horizons/hvac.json`). If the MPC still loses
   after that, park hvac: no line then shows room, since the ceiling only counts
   as context.
 
@@ -218,22 +337,25 @@ fast_approach 0.05.
 
 | Item | Status | Evidence |
 |---|---|---|
-| 1 | pass | `docs/environments/compressor_surge.md:5` |
+| 1 | pass | `docs/environments/compressor_surge.md:5`, whose sentence needs two fixes: the set point is constant, and one surge does not trip (finding 7) |
 | 2 | pass | kJ, a fixed 2-minute episode. My probe: the speed at its minimum for the last 1 s saves 0.010 % of the score, and for the last 3 s costs 36 % (mid-episode: 0.14 % and 214 %). The recycle shut for the last 1 s costs 2.3 % (normal day +0.6 %, against +0.4 % mid-episode); shut for 3 s or more it trips the approach episodes wherever it is placed. Nothing pays at the end that does not pay mid-episode. |
 | 3 | pass | The ladder's feedforward rung: an SIMC PI on the pressure through the speed, and the recycle set by the steady balance at the vendors' 10 % control line from the metered delivered flow (`reference/rows/compressor_surge.py:24-80`), frozen in `data/reference/compressor_surge.json`. It has no margin loop on the valve. The limit cycle both reviews describe needs that loop (it survives with the speed loop frozen, PR 313's probe), so it belongs to the shipped `make_expert` pair (`compressor_surge/PHYSICS.md:737-752`), not to this expert. Re-freeze owed (W2). |
 | 4 | fail | Nulls and expert in the dry run (stale): reference 2.997, best null 111.1 (constant 0.5). The MPC line has been running on bob since 2026-11-26 21:52 (`pipe_compressor_surge`). The last stored MPC line tripped 19 of 20 approach episodes (J 492,035, 2026-11-17). No PPO or SAC. |
-| 5 | n.m. | The MPC line is not finished. Indirect only: on the default configuration the MPC beat the shipped expert on 10 of 10 seeds with no trip (hold 4.41 against 6.39, flanders, 2026-11-27), but the shipped expert costs about 47 % more than the reference (RL review, C1), so this says nothing about the reference. |
+| 5 | n.m. | The MPC line is not finished, and its design plans on the true surge line with no margin (finding 1), as the last record's did when it tripped 19 of 20 approach episodes. Indirect only: on the default configuration the MPC beat the shipped expert on 10 of 10 seeds with no trip (hold 4.41 against 6.39, flanders, 2026-11-27), but the shipped expert costs about 47 % more than the reference (RL review, C1), so this says nothing about the reference. The reference pays recycle energy alone (finding 2), so the room is recycle saved by running nearer a line the policy cannot see. |
 | 6 | pass | Figure: `tests/compressor_surge/test_compressor_surge_physics.py::test_gravdahl_fig_2_8_deep_surge_orbit`. Trips: `tests/test_failure_cost_bound.py`. Expert over doing nothing: 2.997 against 111.1. Deterministic: identical sums on the Mac and flanders across JAX 0.6.2 and 0.11.2 (RL review probe); `jit`, `vmap`: conformance tests. |
 | 7 | pass | 0.153 s at batch 1 |
 | 8 | fail | W4, W5 |
 | 9 | fail | W6 |
 
 **Smallest changes.**
-- Item 5: let bob's MPC line finish, then read its saving over the reference
-  with `scoring.headline` (S). If the MPC trips or loses, park the task: no
-  other line shows room, and PPO loses to a constant here too. The tie tolerance
-  must come from the reference's own noise floor (W7): the 0.19 on file is the
-  limit-cycling pair's.
+- Item 5 (S): give the MPC the reference's control line, 10 % of surge flow at
+  speed (`CONTROL_MARGIN`, `reference/rows/compressor_surge.py:24-26`, from
+  [C6]), as its surge limit in place of the line itself (`oracle.py:197`). Then
+  record it on the scoring seeds and read its saving over the reference. If it
+  still trips or loses, park the task: no other line shows room, and PPO loses
+  to a constant here too (finding 8). The run on bob shows the current design
+  meanwhile. The tie tolerance must come from the reference's own noise floor
+  (W7): the 0.19 on file is the limit-cycling pair's.
 - The paused decoupling work is not needed for v1, since the frozen reference has
   no anti-surge PI to decouple.
 
@@ -264,7 +386,7 @@ normal 0.80, bad_day 0.15, buffer_loss 0.05.
 | 3 | pass | The ladder's feedforward rung: a PI on each stage, set point 6.45, with the reagent fed forward from the metered influent and the trim resting shut (`reference/rows/ph_neutralization.py:74-82`), frozen in `data/reference/ph_neutralization.json`. On the new placement seeds 6.45 holds (the comparison session's note). Re-freeze owed (W2). |
 | 4 | fail | Nulls, expert and MPC in the dry run (stale): best null 0.809 (table), reference 0.0687, MPC 0.0577, no trips. No PPO or SAC; in the learning check PPO trained on the measured reward beats the best constant on 2 of 5 runs (report-only). |
 | 5 | pass, stale | The MPC saves 16.0 % [13.9, 18.3] over the reference with no trip (dry run, seeds 100 to 109). Two caveats for the card: the MPC reads the hidden buffer flow and acid strength from the true state, so most of this room is set-point placement, which the owner accepted as fair if said; and the MPC plans to the episode's end, so part of its saving may be the end effect of item 2. Re-record after that fix. |
-| 6 | fail on int; pass with PR 306 | Figure: `tests/pc_gym/ph_neutralization/test_ph_env.py::test_nominal_operating_point_matches_the_benchmark` (Henson and Seborg's pH 7.03 at the published flows). Trips: on the normal day, the default after PR 306, random actions survive at up to 8,879 L, above the old 6,480 L trip, so tripping could pay; PR 306 raises the charge to 13 L a step (9,360 L), a 5 % margin on 8 random seeds. Expert over doing nothing: 0.0687 against 0.809. Deterministic (noise floor 2.2e-7, identical across machines); `jit`, `vmap`: conformance tests. |
+| 6 | pass | Figure: `tests/pc_gym/ph_neutralization/test_ph_env.py::test_nominal_operating_point_matches_the_benchmark` (Henson and Seborg's pH 7.03 at the published flows). Trips: a violation needs an excursion past 3,600 s at 1.667 L a second, so any trip costs at least 6,000 L before its lump, and tripping cannot pay at 9 L a step or at 13 (finding 3). The bound test still fails on the normal day at 9 L, the default after PR 306, because it compares the lump alone with random actions' worst survivor (8,879 L against 6,480 L); PR 306's 13 L a step (9,360 L) answers the test. Expert over doing nothing: 0.0687 against 0.809. Deterministic (noise floor 2.2e-7, identical across machines); `jit`, `vmap`: conformance tests. |
 | 7 | pass | 0.024 s at batch 1 |
 | 8 | fail | W4, W5 |
 | 9 | fail | W6 |
@@ -277,7 +399,9 @@ normal 0.80, bad_day 0.15, buffer_loss 0.05.
   `edge_charge`, needs one unscored step before the window). The MPC's plan
   takes the same charge. Then re-record (W2) and repeat the end probe as a test,
   as PR 306 did for hvac.
-- Item 6: land PR 306 (in flight).
+- Item 6: nothing for the property. For the CI test, either the bound counts the
+  excursion a trip needs and the charge stays at 9 L, or PR 306's 13 L stands
+  (S, the owner's choice; both prices are ours).
 
 **Left for v2.** Valve dead band and stiction (the plant has both knobs, set to
 0); probe drift; a reagent delivery delay; industrial-scale streams; influent
@@ -330,3 +454,8 @@ On flanders, two cores (`taskset`), JAX 0.11.2, from a code copy of int at
 - **Room (item 5):** the MPC's saving over the reference with its interval,
   computed with the repository's `scoring.headline` on the dry run's per-seed
   costs for the reactor and pH.
+- **Cost by term (findings 2 and 4):** each frozen reference on the scoring
+  seeds, rerun once per price with the other prices at zero: the reactor on its
+  pinned 7-day runs (and once more with the offset's allowances lifted, to split
+  its derate from the plan not taken), compressor_surge and pH at each
+  scenario's reference params.
