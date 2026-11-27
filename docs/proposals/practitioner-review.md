@@ -35,7 +35,8 @@ scoring function disagrees with the task pages. The "room" above the reference
 mixes what a controller could achieve with what only a clairvoyant could, and
 no line shows the reachable part. One reference loses to a two-setting retune,
 and there are no learned-policy results at all. All of this can be fixed in
-weeks; the ranked list below says how.
+weeks; the ranked list below says how, and "The path to 10" says what lies
+beyond it.
 
 What already works for a user, and should be kept as it is:
 
@@ -393,6 +394,89 @@ a difference between two seed draws.
   economics.
 - **`battery`, `unstable_cstr`, `four_tank`.** Leave them as Extra, out of the
   headline count.
+
+## The path to 10
+
+A 10 here means a reviewer accepts a result on these tasks without asking
+whether the plant is real, the baseline is fair or the number is current. The
+nine fixes above take the library to about 7.5 in a few weeks. Past that it
+needs months of validation and baselines, and the last point is not the
+project's to give: other groups have to use the tasks and get results that
+hold up.
+
+### Stage 1, weeks: the nine fixes above (to about 7.5)
+
+These lift utility most, from 4 to about 7: frozen and re-recorded tasks
+(issue 1), one `tg.score` (issue 2), a causal MPC line beside the foresight
+ceiling (issue 3), references retuned to good practice (issue 4), sensitivity
+tables for the project's own numbers (issue 5), PPO and SAC learning curves
+(issue 6), task cards (issue 7), real valve faults on pH and real weather on
+hvac (issues 5 and 8), and stratified reactor seeds (issue 9).
+
+### Stage 2, months: what a 9 needs
+
+**Fidelity, 6.5 to 9.**
+
+- **Validate each scored plant end to end, not point by point,** against data
+  or a higher-fidelity model. Replay a published load-follow day on the
+  reactor. Run hvac beside BOPTEST's `bestest_hydronic_heat_pump` on the same
+  weather. Check the compressor against a measured map or a compressible 1D
+  model, pH against Hall and Seborg's experiments, and cstr against PARSEX's
+  logs.
+- **Replace invented economics with public data.** ENTSO-E's transparency
+  platform publishes hourly output per generating unit, reactors included.
+  That gives real load-follow days (how often, how deep, how fast), where
+  today five day types share EDF's 39.5 days a year equally
+  (src/target_gym/reactor/scenarios.py:13-20). Use electricity market prices
+  and archived weather forecasts with their errors. Keep "ours" only where no
+  data exists, and show that it does not change which controller wins.
+- **Close the gaps on each task's named difficulty:** grey rods and axial
+  damping that changes through the fuel cycle on the reactor; reagent delivery
+  delay, valve rangeability and probe coating on pH; drive inertia and a
+  multistage map on the compressor; cooling and a second zone on hvac.
+- **Have an outside engineer from each plant family review its task,** and
+  publish the review beside the contract.
+
+**Utility, 7 to 9.**
+
+- Baselines beyond PPO and SAC: one model-based learner, and an offline
+  dataset per task drawn from the reference and its noisy variants.
+- Suite-level reporting with intervals and performance profiles, in the style
+  of the rliable library, a paper, and a results table with a fixed submission
+  protocol.
+- A stability promise: a scored version never changes, and new versions are
+  added beside it.
+
+**Novelty, 7 to 9.**
+
+- **Score the genuinely new tasks.** Bring `glass_furnace`, `cement_kiln` and
+  `wake_surf` to scored status, make `distillation` the process task, and take
+  `cstr` out of the scored suite.
+- **Make the information split a feature.** Offer each task at three levels:
+  full state, observation, and delayed observation. The suite would then score
+  estimation and control separately, which I found no other benchmark
+  offering.
+- **Document and test gradients through the plants.** Model-based methods can
+  use them, and few benchmarks provide them.
+
+### Stage 3: the last point
+
+This is independent use: other groups' results that reproduce and separate
+methods; a year of stable versions; and ideally one transfer check, a
+controller tuned on a task that also works on a real rig, or on the model the
+task was validated against.
+
+### Per scored task
+
+| Task | Now | Reachable | What it needs |
+|---|---|---|---|
+| `reactor` | 7 | 9 or more | Current causal and foresight lines, stratified cycle points, a grey-rod variant, days drawn from real unit output, a replayed plant day |
+| `compressor_surge` | 6 | 9 | A reference with no limit cycle, an MPC that never trips, drive inertia, longer windows with process upsets, sourced prices |
+| `ph_neutralization` | 6 | 9 | Valve and probe faults, a reagent delay, industrial-scale streams, real influent statistics |
+| `hvac` | 5 | about 8 | Real weather, cooling, a second zone and a BOPTEST cross-check; BOPTEST caps its novelty, so its value is as the fast twin |
+| `cstr` | 4 | about 7 at best | Even with a sourced band and an oracle it stays the field's most common plant; replacing it is cheaper than fixing it |
+
+Five excellent tasks will earn a 10 sooner than twenty-five good ones.
 
 ## What I ran and what I only read
 
