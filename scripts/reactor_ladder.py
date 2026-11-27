@@ -355,10 +355,8 @@ class TrippedDuringTest(RuntimeError):
     """A bump test tripped the plant. The restart would be read as the response."""
 
 
-def closed(env, q, s, act, memory, n):
-    """``n`` steps of ``act`` on ``q`` from ``s``; the states. A trip raises
-    ``TrippedDuringTest``: a test that trips the plant reads its restart, not its
-    response (the v9 sweep's sign flip), so it is refused, never fitted."""
+def _run(env, q, s, act, memory, n):
+    """``n`` steps of ``act`` on ``q`` from ``s``: the states and each step's trip."""
 
     def step(carry, _):
         s, m = carry
@@ -367,10 +365,52 @@ def closed(env, q, s, act, memory, n):
         return (s, m), (s, info["tripped"])
 
     states, tripped = jax.lax.scan(step, (s, memory), None, length=n)[1]
-    if np.any(np.asarray(tripped)):
-        first = int(np.argmax(np.asarray(tripped)))
+    return states, np.asarray(tripped)
+
+
+def _refuse_a_trip(tripped, n):
+    if np.any(tripped):
+        first = int(np.argmax(tripped))
         raise TrippedDuringTest(f"the plant tripped at step {first} of {n}")
+
+
+def closed(env, q, s, act, memory, n):
+    """``n`` steps of ``act`` on ``q`` from ``s``; the states. A trip raises
+    ``TrippedDuringTest``: a test that trips the plant reads its restart, not its
+    response (the v9 sweep's sign flip), so it is refused, never fitted."""
+    states, tripped = _run(env, q, s, act, memory, n)
+    _refuse_a_trip(tripped, n)
     return states
+
+
+#: How often a rod bump that crosses Tavg's floor is halved before it is refused.
+ROD_BUMP_HALVINGS = 3
+
+
+def rod_bump(env, q, s, n=BUMP_STEPS):
+    """The recipe's rod bump, ``ROD_BUMP`` steps in from where the rods sit, boron
+    held, ``n`` steps, open loop: the states and the steps used. Sized by a written
+    rule (owner, 2026-11-27): a bump test must not carry the process past an
+    operating limit (Instrumentation Tools, "Process Control Loop Testing", 2019),
+    so the operator watches Tavg against its floor, ``T_avg_min``. A bump that
+    crosses it is stopped there and repeated from the lined-out plant at half its
+    size, at most ``ROD_BUMP_HALVINGS`` times, then refused. A bump that stays
+    above the floor runs at its full size, so a member far from it reads what it
+    always read. A trip with Tavg above its floor is refused as before."""
+    size = ROD_BUMP
+    for _ in range(ROD_BUMP_HALVINGS + 1):
+        a = jnp.array([1.0 - 2.0 * s.rod_in - 2.0 * size / 228.0, 0.0, 1.0])
+        states, tripped = _run(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), n)
+        crossed = tavg(states) < q.T_avg_min
+        if not np.any(crossed):
+            _refuse_a_trip(tripped, n)
+            return states, size
+        # Stopped at the crossing: a trip after it is never reached.
+        _refuse_a_trip(tripped[: int(np.argmax(crossed))], n)
+        size = size / 2.0
+    raise TrippedDuringTest(
+        f"a rod bump of {2.0 * size} steps still crosses Tavg's floor"
+    )
 
 
 def offset(tr):
@@ -472,9 +512,8 @@ def bumps(env, params):
 
     # Rods on Tavg: ROD_BUMP steps in from where the rods sit, an hour, open loop.
     def rods(q, s):
-        du = -2.0 * ROD_BUMP / 228.0
-        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0, 1.0])
-        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+        tr, size = rod_bump(env, q, s, 120)
+        du = -2.0 * size / 228.0
         k, lag, delay = fopdt(tavg(tr), float(tavg(s)))
         return k / du, lag, delay
 
@@ -525,9 +564,8 @@ def bumps(env, params):
 
     # The procedure's rods: ROD_BUMP steps in, boron held, an hour, on the offset.
     def rods_on_offset(q, s):
-        du = -2.0 * ROD_BUMP / 228.0
-        a = jnp.array([1.0 - 2.0 * s.rod_in + du, 0.0, 1.0])
-        tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), 120)
+        tr, size = rod_bump(env, q, s, 120)
+        du = -2.0 * size / 228.0
         k, lag, delay = fopdt(offset(tr), float(s.delta_I / s.n))
         return k / du, lag, delay
 
@@ -566,7 +604,7 @@ def book_at(env, q, s):
     """The physics tests at power at one point (the kind ANSI/ANS-19.6.1 sets for a
     reload's startup), the rods as the reactivity yardstick: their worth curve is
     the plant's calibration. A dilution bump at fixed rods reads K of Tavg per ppm;
-    ``ROD_BUMP`` steps in at fixed boron, read an hour on against a paired run,
+    the rod bump (``rod_bump``) at fixed boron, read an hour on against a paired run,
     reads the feedback, ``-drho / dT``, since at a fixed power the fuel follows the
     coolant. Then the worth is ``-K x feedback``, and the moderator coefficient the
     feedback less the fuel's Doppler coefficient, which is the core's design value.
@@ -581,8 +619,7 @@ def book_at(env, q, s):
         env, q, s, lambda m, o: (jnp.array([rods, 0.0, 1.0]), m), jnp.asarray(0.0),
         BUMP_STEPS,
     )  # fmt: skip
-    a = jnp.array([rods - 2.0 * ROD_BUMP / 228.0, 0.0, 1.0])
-    tr = closed(env, q, s, lambda m, o: (a, m), jnp.asarray(0.0), BUMP_STEPS)
+    tr, _ = rod_bump(env, q, s)
     dT = float(tavg(tr)[-1] - tavg(still)[-1])
     moved = float(np.asarray(tr.rod_in)[-1])
     drho = float(rod_worth(moved, q) - rod_worth(float(s.rod_in), q))
