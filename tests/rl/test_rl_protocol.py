@@ -11,7 +11,7 @@ from target_gym.registry import REGISTRY, control_step_seconds
 
 PROTOCOL = pathlib.Path(__file__).parents[2] / "docs" / "rl-protocol.md"
 ROW = re.compile(
-    r"^\| (\w+) \| ([\d.]+) s \| (\d+|not finite) \| (\d+|none) \| (\d+|open) "
+    r"^\| (\w+) \| ([\d.]+) s \| (\d+|not measured) \| (\d+|none) \| (\d+|open) "
     r"\| (0\.\d{5}|open) \|$",
     re.MULTILINE,
 )
@@ -21,7 +21,8 @@ def test_the_discount_table_gives_each_scored_tasks_window_and_gamma():
     """Section 6, decided 2026-11-10 (long strata, S4), which retired
     ``gamma = 1 - 1/N``: ``gamma = 1 - 1/(10 T)`` with ``T`` the longer of the
     slow mode ``t_s`` and the longest preview, in the task's control steps. A slow
-    mode that is not finite gives no ``T``: the row says so, never a number."""
+    mode the measurement cannot give leaves ``T`` open: the row says so, never a
+    number."""
     rows = {m[0]: m[1:] for m in ROW.findall(PROTOCOL.read_text())}
     assert set(rows) == set(FLAGSHIP)
     for name, (step, t_s, preview, T, gamma) in rows.items():
@@ -29,7 +30,7 @@ def test_the_discount_table_gives_each_scored_tasks_window_and_gamma():
         assert float(step) == control_step_seconds(
             spec.make_env(), spec.make_test_params()
         )
-        if t_s == "not finite":
+        if t_s == "not measured":
             assert (T, gamma) == ("open", "open"), name
             continue
         assert int(T) == max(int(t_s), 0 if preview == "none" else int(preview)), name

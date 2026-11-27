@@ -155,7 +155,7 @@ scenario (`scripts/record_charter.py --tasks <task> --noise-floor`, stored in
 
 | task | noise floor | median gap per seed |
 | --- | --- | --- |
-| reactor | REACTOR_FLOOR | REACTOR_MEDIAN |
+| reactor | 1.1e-3 | 6e-7 |
 | hvac | 1.1e-6 | 6e-8 |
 | cstr | 2.0e-3 | 3e-8 |
 | compressor_surge | 0.19 | 0.02 |
@@ -262,19 +262,21 @@ A driver takes `T` from this table and computes `gamma` from it:
 
 | task | step | t_s (steps) | longest preview (steps) | T (steps) | gamma |
 | --- | --- | --- | --- | --- | --- |
-REACTOR_ROW
+| reactor | 30 s | not measured | 1250 | open | open |
 | hvac | 900 s | 69 | 96 | 96 | 0.99896 |
-| cstr | 15 s | not finite | none | open | open |
+| cstr | 15 s | not measured | none | open | open |
 | compressor_surge | 0.1 s | 1599 | none | 1599 | 0.99994 |
 | ph_neutralization | 5 s | 197 | none | 197 | 0.99949 |
 
-REACTOR_NOTE cstr's slow mode is not finite: after a 5 % excursion for a
-fifth of a window, its pair never reconverges under the reference, in cost or
-in state (composition, temperature, flows), over ten windows. Its `T` and
-`gamma` stay open until the owner extends the rule to such a plant; a result
-on it states the `gamma` it used. compressor_surge's cost forgets its start
-after 1599 steps while its state never reconverges, as its noise floor
-suggests.
+Two slow modes are not measured. After a 5 % excursion for a fifth of a
+window, the pairs of cstr (over ten windows) and of the reactor (over six)
+never reconverge in state, and the extra cost the excursion leaves flips sign
+instead of decaying, so the rule gives no `T`: cstr's composition, temperature
+and flows, the reactor's boron line. Their `T` and `gamma` stay open until the
+rule is extended to such a plant, and a result on them states the `gamma` it
+used; the reactor's `T` is at least its 1250-step preview. compressor_surge's
+cost forgets its start after 1599 steps while its state never reconverges, as
+its noise floor suggests.
 
 `t_s` here was measured on 2026-11-27, on the plants of `int/amendment3` at
 `dceb2537`, with `scripts/slow_modes.py --bias --offset 0.05 --pre 0.2`; a task
