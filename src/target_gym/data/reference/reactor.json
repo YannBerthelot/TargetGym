@@ -1,0 +1,16 @@
+{
+ "commit": "2235084efe532717ec2a823596669dbc41a36c8f",
+ "dirty": false,
+ "env": "reactor-v10",
+ "expert": "c17d59588026b37b",
+ "fingerprint": "459c3351193caca7",
+ "format": 1,
+ "generated": "2026-11-27T21:01:14+00:00",
+ "kind": "expert",
+ "params": {
+  "sensor_noise_scale": 1.0
+ },
+ "rung": "expert",
+ "stamp": "a3e0a184c8d1ba0a",
+ "task": "reactor"
+}

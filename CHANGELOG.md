@@ -9,6 +9,40 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The charter's reference from an install (2026-11-27)
+
+After the outside review of 2026-11-27 (C1, M3, M5, H1).
+
+- `tg.make_reference(name)` gives a scored task's reference controller: the rung
+  of the reference ladder the charter kept for it, or the reactor's shipped
+  expert. It steps like `tg.make_expert`'s expert, reads the observation only,
+  and is built from package data, `data/reference/<task>.json`, with no bump
+  test. `ref.rung` names it and `ref.params(scenario)` gives the configuration
+  its line runs on. A reference frozen on another plant is refused
+  (`target_gym.reference.StaleReference`). The files are written by the
+  ladder's export command, which checks that the rung rebuilt from the file
+  costs, seed by seed on the scoring seeds, what the ladder's own rung cost:
+
+      uv run python scripts/reference_ladder.py --tasks cstr hvac ph_neutralization compressor_surge --freeze
+      uv run python scripts/reference_ladder.py --expert reactor --freeze
+
+  The files in this tree are a working sample on the plants of this date; the
+  re-record of the scored suite freezes them again with the same command.
+- `tg.make(name, scenario="bad_day")` gives any of a task's scenarios: the
+  scored configuration with that scenario's overrides, then any field given.
+  `tg.list_scenarios(name)` names them with their share of operating time, the
+  weight the score gives each.
+- The reference ladder places a zone's setpoint on seeds 110 to 119, apart from
+  every seed a line is read on (J3's 100 to 109, J4's scoring seeds from 200,
+  J2's hash seeds). The export records the kept rung's placement and its exits
+  on J2's hash seeds. A setpoint placed on the lines' own seeds made the
+  reference's line optimistic there. This can move a task's kept setpoint, so
+  the re-record of the scored suite is a change of the comparator.
+- A policy reads the simulator's true state only when it is wrapped as
+  `tg.FullState(policy)`. The runners decided it from the signature, so a
+  `policy(obs, deterministic=True)` was handed the state as its second argument.
+  An episode's `read_state` says which a policy was.
+
 ### Scaled observations and rewards (2026-11-25)
 
 - `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
@@ -51,6 +85,19 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
+
+- **A policy is given the simulator's true state only when it says so.** The
+  runners (`runners.one_episode`, `eval.run_episode` and the scorers built on
+  them) passed `(obs, state)` to any policy whose signature took two arguments.
+  Upgrade notes:
+  - Wrap a policy that reads the state: `tg.FullState(policy)`, with
+    `policy(obs, state)`. One that needs two arguments and is not wrapped is
+    refused with a `TypeError` that says so.
+  - Every other policy is called as `policy(obs)`, whatever its signature: a
+    second argument with a default keeps its default.
+  - `runners.baseline_policy(spec, "mpc")` returns a `FullState`; the private
+    `runners._wants_state` is gone (`runners.reads_state` says the same, by the
+    wrapper alone).
 
 - **Five tasks are scored, and the other twenty ship registered, not scored.**
   `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
