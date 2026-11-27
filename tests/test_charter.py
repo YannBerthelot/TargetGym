@@ -186,7 +186,9 @@ def _ceiling(capped=0):
         "ceiling_trips": 0,  # noqa: E731
         "solver": {"status": [0, 2], "capped": capped, "fell_back": 0},
     }
-    return {"scenarios": {"normal": sc([1.0, 2.0]), "storm": sc([2.0, 2.0])}}  # fmt: skip
+    # the starts agree: the shared rule's agreement test (2026-11-27) is recorded
+    stop = {"stop_rule": {"converged": True}}
+    return {"scenarios": {"normal": sc([1.0, 2.0]), "storm": sc([2.0, 2.0])}} | stop  # fmt: skip
 
 
 def test_a_stored_ceiling_reads_as_a_line_and_says_if_it_converged():
@@ -361,6 +363,51 @@ def test_a_sweep_that_holds_on_every_draw_lets_j2_judge():
 def test_one_draw_that_fails_fails_the_sweep():
     sweep = charter.sweep_result([{"holds": True}] * 7 + [{"holds": False}])
     assert charter.verdict(30, 0, {"hold": 3}, sweep)["reasons"] == ["sweep fails"]
+
+
+def _draw(kept: dict, null: dict) -> dict:
+    """A ladder draw as ``family_sweep.ladder`` prints it: medians per scenario
+    for the kept rung ``"pi"`` and one null, and B7's own unexcepted verdict."""
+    beats = all(kept[s] < null[s] for s in kept)
+    return {
+        "kept": "pi",
+        "rungs": {"pi": kept | {"trips": 0}},
+        "nulls": {"hold": null},
+        "holds": beats,
+    }
+
+
+_CSTR_KEPT = {"normal": 0.27, "feed_buildup": 0.709, "cooling_loss": 0.488}
+
+
+def test_cstrs_sweep_holds_on_its_0_6_percent_feed_buildup_edge_by_the_margin():
+    """The shared null margin (2026-11-27) in place of cstr's own exception: hold
+    reset's 0.6 % edge on feed_buildup (0.705 against 0.709) is under 1 %, so the
+    sweep holds with feed_buildup not held, and J2 accepts, for any task."""
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.543}
+    draws = [_draw(_CSTR_KEPT, null)] * 8
+    assert charter.verdict(30, 0, {"hold": 3}, charter.sweep_result(draws)) == {
+        "accepted": True,
+        "reasons": [],
+    }
+    assert charter.sweep_not_held(draws) == ["feed_buildup"]
+
+
+def test_a_null_beating_the_reference_by_1_percent_or_more_still_fails_the_sweep():
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.40}
+    assert charter.sweep_result([_draw(_CSTR_KEPT, null)]) is False
+
+
+def test_a_draw_still_needs_a_kept_rung_and_a_null():
+    null = {"normal": 0.568, "feed_buildup": 0.705, "cooling_loss": 0.543}
+    unkept = _draw(_CSTR_KEPT, null) | {"kept": None}
+    no_null = _draw(_CSTR_KEPT, null) | {"nulls": {}}
+    assert charter.sweep_result([unkept]) is False
+    assert charter.sweep_result([no_null]) is False
+
+
+def test_no_task_keeps_a_j2_exception_of_its_own():
+    assert not hasattr(charter, "J2_EXCEPTIONS")
 
 
 def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):

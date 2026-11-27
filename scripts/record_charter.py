@@ -26,6 +26,13 @@ folded, instead of one-day windows; its ceiling part also names the scenarios
 whose room interval contains 1, which take the protocol's extra seeds (the stop
 rule), and its reference and ceiling are then run again on them.
 
+The shared gate rules (owner, 2026-11-27): the ceiling part is the cheapest plan
+known per seed, the MPC line's run against the ceilings file's foresight
+(``charter.best_known``; the foresight line stays on record), its convergence the
+foresight's stop rule; J2 counts a null's win only at ``charter.NULL_MARGIN`` or more
+and reports the rest as not held, in the seeds and in the sweep; and ``nulls`` or
+``j2`` first refits a stale null table (``refresh_artefacts``).
+
 A part whose fingerprint is current is skipped unless ``--force``. Each part run
 is written at once and appended to ``data/charter/log.jsonl``.
 """
@@ -177,7 +184,8 @@ def line_from_pieces(pieces, weights: dict, seeds: dict) -> dict:
     import reactor_ceiling
 
     stored = reactor_ceiling.assemble(pieces, weights, seeds)
-    return charter.ceiling_line(stored, weights)
+    # an MPC line has no foresight starts to agree: its seeds' solves decide
+    return charter.ceiling_line(stored, weights, agreement=False)
 
 
 def part_reference(t: Task) -> dict:
@@ -232,6 +240,14 @@ def part_ceiling(t: Task) -> dict:
 
     stored = charter.load_ceiling(t.name)
     part = charter.ceiling_part(stored, environment_fingerprint(t.spec), t.weights)
+    # The shared rule (2026-11-27): the cheapest plan known per seed, the MPC
+    # line's run against the foresight's; the foresight line stays on record.
+    foresight = part["line"]
+    part["line"] = charter.best_known(
+        foresight, t.record.get("mpc", {}).get("line", NM), t.weights
+    )
+    if foresight != NM:
+        part["foresight"] = {"J": foresight["J"], "converged": foresight["converged"]}
     source = charter.CEILINGS / f"{t.name}.json"
     part |= {"source": str(source.relative_to(charter.REPO)) if stored else None}
     if t.protocol:
@@ -250,10 +266,12 @@ def part_j2(t: Task) -> dict:
         ref = t.L.run_suite(t.name, t.row, t.policy(), seeds=seeds)
     runs, broken = t.nulls(seeds)
     costs = {s: v["costs"] for s, v in ref["scenarios"].items()}
-    wins = {
-        k: charter.null_wins(costs, {s: v["costs"] for s, v in r["scenarios"].items()})
-        for k, r in runs.items()
+    null_costs = {
+        k: {s: v["costs"] for s, v in r["scenarios"].items()} for k, r in runs.items()
     }
+    wins = {k: charter.null_wins(costs, c) for k, c in null_costs.items()}
+    # wins under the null margin are reported, not counted (2026-11-27)
+    not_held = {k: charter.null_not_held(costs, c) for k, c in null_costs.items()}
     n = sum(len(v) for v in seeds.values())
     trips = sum(v["trips"] for v in ref["scenarios"].values())
     import family_sweep
@@ -271,10 +289,12 @@ def part_j2(t: Task) -> dict:
             s: v["trips"] for s, v in ref["scenarios"].items()
         },
         "null_wins": wins,
+        "null_not_held": not_held,
         "null_share": {k: w / n for k, w in wins.items()},
         "null_trips": {k: r["trips"] for k, r in runs.items()},
         "broken": broken,
         "sweep": sweep,
+        "sweep_not_held": charter.sweep_not_held(draws),
         "sweep_draws": draws,
         **charter.verdict(n, trips, wins, sweep),
     }
@@ -309,9 +329,32 @@ def summary(part: str, block: dict) -> dict:
     return {"J": ln["J"], "trips": ln["trips"]} if isinstance(ln, dict) else ln
 
 
+def refresh_artefacts(name: str) -> list[str]:
+    """The shared rule on fresh artefacts (2026-11-27): rebuild by its recipe each
+    stored artefact the gates read that fails its own staleness check
+    (``charter.stale_artefacts``), before they run. A current one is left alone."""
+    from target_gym import records
+    from target_gym.provenance import expert_fingerprint
+    from target_gym.registry import REGISTRY
+
+    spec = REGISTRY[name]
+    stale = charter.stale_artefacts(
+        records.load_row("null_policies", name), expert_fingerprint(spec)
+    )
+    if "null_policies" in stale:
+        import record_credibility
+
+        row = records.stamped(record_credibility.fitted_row(name))
+        records.write("null_policies", name, row)
+        print(f"{name}: null table refitted to the current expert", flush=True)
+    return stale
+
+
 def record(name: str, parts, force: bool, mpc_pieces=()) -> list[str]:
     """Run ``parts`` on ``name``, skipping current ones unless ``force``; returns
     the record's schema errors."""
+    if {"nulls", "j2"} & set(parts):
+        refresh_artefacts(name)
     now = charter.current(name)
     rec = charter.load(name) or {}
     stale = charter.stale_parts(rec, now)

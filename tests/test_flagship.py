@@ -202,6 +202,29 @@ def test_a_scored_page_says_not_measured_for_an_mpc_line_its_record_lacks(monkey
     assert "is 2." in section
 
 
+@pytest.mark.parametrize("not_held", [["feed_buildup"], []])
+def test_a_scored_page_says_which_scenarios_its_reference_does_not_hold(
+    monkeypatch, not_held
+):
+    """The shared null margin (2026-11-27): the page lists the scenarios where a
+    null beats the reference by under 1 % in the sweep, from the record's J2, and
+    says nothing of the kind where there are none."""
+    weights = {"normal": 1.0}
+    line = charter.line({"normal": {"costs": [2.0, 2.0], "trips": 0}}, weights)
+    record = {
+        "task": "cstr",
+        "weights": weights,
+        "reference": {"line": line},
+        "j2": {"sweep_not_held": not_held},
+    }
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    section = _script("generate_env_pages").charter_section(record)
+    assert ("not held" in section) == bool(not_held)
+    for scenario in not_held:
+        assert f"`{scenario}` is not held" in section
+        assert "under 1 %" in section
+
+
 def _table(text: str) -> list[dict]:
     """Every row of every Markdown table in ``text``, keyed by its header."""
     rows, header = [], None

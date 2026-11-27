@@ -43,6 +43,9 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
   family sweep draws it per member, 10 to 30 steps. The expert leads the plan's
   boron, and pulls in its xenon tool's edges, by the dead time its recipe measures
   (`theta`, 660 s on the shipped member), where it led by a fixed 600 s.
+- The reactor recipe halves a rod bump that crosses Tavg's floor, and repeats it,
+  instead of tripping the plant (at most three halvings, then refused). Members
+  whose bumps stay above the floor read the same numbers.
 
 ### Upgrading from 0.7.0
 

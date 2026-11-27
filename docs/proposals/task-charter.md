@@ -254,6 +254,14 @@ more than half the seeds, and the sweep (B7) holds. Every run goes in an append-
 log, with its trip counts. This is a sanity gate, never a statement about plant
 reliability. Other noise levels are reported only.
 
+A null that beats the reference by under 1 % of the reference's cost is reported "not
+held" instead of failing, on a seed's cost where J2 counts null wins and on a
+scenario's median in the sweep; a win of 1 % or more fails as before, and the task's
+page lists the scenarios not held (shared rules, owner, 2026-11-27). Any stored
+artefact a gate reads that fails its own staleness check, such as a null table fitted
+to another expert, is rebuilt by its recipe before the gates run; nothing current is
+touched.
+
 **J3. Room and context.** Every task's page shows four lines: the best null policy, the
 reference, an MPC with the true model and the schedules operators know but no future
 disturbances, and the ceiling. The reference is the headline's anchor (J4); the other
@@ -261,7 +269,12 @@ three are context, never anchors. Where the room is under 1.2, a fifth line says
 it is worth per plant and year, in money and in energy, from sources (J5). Room is
 published per scenario and on `J`, from an
 oracle run on the tagged plant and shown converged. A task whose oracle can't be run says
-"not measured". The MPC line backs its limits off by the oracle smoothing protocol's
+"not measured". The ceiling is the cheapest converged plan known per seed: the
+foresight runs from the hold, the reference and, where the task has an MPC, the MPC's
+moves, and the MPC line's own run. It is converged when its kept plans had no capped
+or failed solve, the two best foresight starts agree within 1 % of the kept `J`, and,
+where the task has a floor, the kept `J` is within 3 % above it. The MPC line joins the
+cheapest-plan choice, not the agreement test (shared rules, owner, 2026-11-27). The MPC line backs its limits off by the oracle smoothing protocol's
 K11: where its plan, blind to the disturbance ahead, would ride a trip level the
 correcting actuator can't defend in time, by the disturbance that builds over that
 actuator's window (K11h, K11a; Amendment 6). Room is reported, never gated, and nothing here estimates what an agent

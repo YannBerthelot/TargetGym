@@ -113,7 +113,7 @@ def assemble(pieces, weights: dict, seeds=SEEDS) -> dict:
             "weight": w,
             "ceiling_costs": list(costs),
             "ceiling_trips": int(sum(trips)),
-            "solver": {"converged": int(sum(ok))},
+            "solver": {"converged": int(sum(ok)), "per_seed_converged": list(ok)},
         }
     return {
         "task": TASK,
