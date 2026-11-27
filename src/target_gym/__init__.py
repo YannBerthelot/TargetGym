@@ -2,12 +2,16 @@ from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _version
 
 from target_gym.api import (
+    FullState,
     list_envs,
+    list_scenarios,
     make,
     make_expert,
     make_gymnasium,
     make_oracle,
+    make_reference,
     make_stream,
+    score,
 )
 from target_gym.boiler_drum.env import BoilerDrumParams
 from target_gym.boiler_drum.env_jax import BoilerDrum
@@ -88,11 +92,16 @@ __all__ = (
     # The front door: every task by its registry name
     "make",
     "make_expert",
+    "make_reference",
     "make_oracle",
     "make_gymnasium",
     "make_stream",
     "list_envs",
+    "list_scenarios",
+    "score",
     "score_policy",
+    # A policy given the simulator's true state, said explicitly
+    "FullState",
     # The scored suite: the five tasks the results and the headline cover
     "FLAGSHIP",
     # Environment and parameter classes

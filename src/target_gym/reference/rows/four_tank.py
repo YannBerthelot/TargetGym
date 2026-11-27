@@ -8,12 +8,12 @@ from __future__ import annotations
 import dataclasses
 
 import numpy as np
-from reference_ladder import (  # noqa: E402
+
+from target_gym.reference.row import (
     Cv,
     Inner,
     Row,
 )
-
 from target_gym.registry import REGISTRY
 
 

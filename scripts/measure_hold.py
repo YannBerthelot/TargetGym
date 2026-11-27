@@ -60,8 +60,8 @@ from target_gym.identification import TrippedDuringTest  # noqa: E402
 from target_gym.registry import REGISTRY, control_step_seconds  # noqa: E402
 from target_gym.runners.runners import (  # noqa: E402
     _as_tuple,
-    _wants_state,
     baseline_policy,
+    reads_state,
 )
 
 # ---------------------------------------------------------------------------
@@ -362,7 +362,7 @@ def _episode(spec, env, params, kind, seed, errors, consumption):
     trips = 0  # a trip never ends the window (``base.failure_kernel``)
     while int(state.time) < int(params.max_steps_in_episode):
         o = np.asarray(obs)
-        a = policy(o, state) if _wants_state(policy) else policy(o)
+        a = policy(o, state) if reads_state(policy) else policy(o)
         obs, state, _r, _term, info = step(
             key, state, jnp.atleast_1d(jnp.asarray(a)), params
         )

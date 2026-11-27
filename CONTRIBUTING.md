@@ -312,6 +312,33 @@ file, so runs recording different environments cannot clobber each other, but
 two runs recording the same environment race, and the last one wins. And gains
 changes invalidate records, so tune first, record second.
 
+### The frozen references
+
+`tg.make_reference(name)` builds a scored task's reference from
+`src/target_gym/data/reference/<task>.json`: the kept rung's numbers, frozen
+from the reference ladder. Freeze them again whenever the ladder would build
+another rung, that is, whenever the charter's reference record goes stale. Run
+it from a git checkout, since the exits it counts are on J2's seeds for the
+commit:
+
+```bash
+uv run python scripts/reference_ladder.py --freeze
+```
+
+With no task named it freezes the scored suite (`charter.FLAGSHIP`): each
+ladder task's kept rung, and the reactor's expert. `--tasks` and `--expert` name
+others.
+
+Each ladder task is one climb, then the kept rung on the scoring seeds twice:
+as the ladder built it, and rebuilt from the file it is about to write. The
+file is written only if the two cost the same on every seed. A file frozen on
+another plant is refused by `make_reference`, and its `records` tests fail.
+
+A re-freeze that changes a task's kept rung or one of its setpoints changes the
+comparator every saving is quoted against, and the command says so. Announce it
+in the CHANGELOG, per task, as a change of the comparator: the old and the new
+rung and setpoints, and the reason (a plant fix, a recipe change, new seeds).
+
 ### Frozen scoring constants
 
 What a score is measured against does not move with the controllers. Each

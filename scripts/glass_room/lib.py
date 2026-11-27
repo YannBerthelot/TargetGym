@@ -4,7 +4,6 @@ any lost glass was a lost mark; ``trace_of`` reads ``lost`` that way.
 The harness: the env's own step on the benchmark's episode
 keys, the ladder's kept rung rebuilt from its logged tuning, and traced rollouts."""
 
-import importlib.util
 import math
 import pathlib
 import sys
@@ -42,11 +41,9 @@ def scenario_params(name, **extra):
 
 
 def ladder_row():
-    path = ROOT / "scripts" / "ladder_rows" / "glass_furnace.py"
-    spec = importlib.util.spec_from_file_location("glass_row", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.row()
+    from target_gym.reference.rows import glass_furnace
+
+    return glass_furnace.row()
 
 
 def _alpha(tf):

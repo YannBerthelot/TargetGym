@@ -8,7 +8,7 @@ row names and kept as tuned where the plant is most sensitive, so adding a less
 sensitive point changes nothing, and adding a more sensitive one tunes as if the plant
 sat there alone.
 
-Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``. A rung's cost
+Each task's row lives in its own module, ``target_gym.reference.rows``. A rung's cost
 on a seed is the task's ``J``: each scenario's mean cost per step, weighted by its share
 of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre, the deviation measured with the
@@ -17,7 +17,8 @@ loop at the centre on the bump-test seeds.
 A zone whose exit the score prices as a violation is placed otherwise (J1, owner,
 2026-11-23): the row names the reward terms charged for leaving it, and the loop holds
 the first setpoint of ``ladder.zone_grid``, from the cheap edge, at which the pi rung
-leaves the zone on none of the ladder's seeds in any scenario. Where the plant's
+leaves the zone on none of its placement seeds (110 to 119, apart from every line's:
+outside review M5) in any scenario. Where the plant's
 reset depends on the setpoint, each candidate's episodes start on it, and so do the
 kept one's from then on. A seed of a scenario that leaves from every candidate does
 not constrain the placement and is reported as unheld; when none can be held from
@@ -149,7 +150,7 @@ def test_tuning_follows_the_most_sensitive_operating_point(ladder, points, alone
 
 
 def test_each_row_lives_in_its_own_file(ladder):
-    rows = ROOT / "scripts" / "ladder_rows"
+    rows = ROOT / "src" / "target_gym" / "reference" / "rows"
     files = {p.stem for p in rows.glob("*.py") if not p.stem.startswith("_")}
     assert set(ladder.ROWS) == files
 
@@ -311,7 +312,8 @@ def test_a_zone_no_seed_can_be_held_in_keeps_its_centre_and_reports_every_seed(
     _, setpoint = row.placed["x on u"]
     assert setpoint == pytest.approx(1.0)
     assert list(row.scans["x on u"]) == pytest.approx(zone_grid(0.5, 1.5, "high"))
-    assert row.unheld["x on u"] == {"normal": list(range(100, 110))}
+    # Placed on its own seeds, apart from the lines' (outside review M5).
+    assert row.unheld["x on u"] == {"normal": list(ladder.PLACEMENT_SEEDS)}
 
 
 def test_each_rung_holds_its_own_setpoint_and_a_loose_one_does_not_set_the_others(
@@ -347,7 +349,7 @@ def test_each_rung_holds_its_own_setpoint_and_a_loose_one_does_not_set_the_other
     # The feedforward: the whole grid run, the centre kept, every seed unheld.
     assert list(forward["exits"]) == pytest.approx(grid)
     assert forward["setpoint"] == pytest.approx(1.0)
-    assert forward["unheld"] == {"normal": list(range(100, 110))}
+    assert forward["unheld"] == {"normal": list(ladder.PLACEMENT_SEEDS)}
     # Kept: the pi rung, which costs nothing; the other pays on every seed.
     results = {k: ladder.run_rung("first_order", row, k, c) for k, c in rungs.items()}
     assert min(results["feedforward"]["costs"]) > 0.0
@@ -842,3 +844,141 @@ def test_the_night_rungs_trim_stops_at_five_kelvin(ladder):
         _, state = _night_supply(night, state)
     capped, _ = _night_supply(night, state)
     assert capped - on == pytest.approx(5.0 * 24.0 / 7.0, abs=1e-3)
+
+
+# A frozen reference (target_gym.reference; outside review C1 and M5, owner's
+# picker 2026-11-27). Contract: a zone priced as a violation is placed on seeds
+# no line is read on (J3's evaluation seeds, J4's scoring seeds, the validation
+# block, J2's hash seeds), and the reference's exits are counted
+# on J2's hash seeds, out of sample. A rung's law, frozen through JSON and rebuilt
+# on a fresh row with no bump test, costs seed by seed what the ladder's rung
+# cost; ``--freeze`` writes only a law that does.
+
+
+def _priced_first_order(ladder):
+    """``first_order`` with its loop on the band ``BAND`` prices as a violation."""
+    import dataclasses
+
+    base = ladder.ROWS["first_order"]()
+    x = dataclasses.replace(
+        base.loops[0], zone=(0.5, 1.5, "high"), exit_terms=("tracking",)
+    )
+    return dataclasses.replace(base, loops=(x,), score=BAND)
+
+
+def test_the_ladder_places_a_zone_on_seeds_no_line_runs_on(ladder):
+    from target_gym import charter, evaluation
+    from target_gym.registry import REGISTRY
+
+    row = _priced_first_order(ladder)
+    ladder.build("first_order", row)
+    scanned = {
+        seed
+        for scan in row.scans.values()
+        for by_scenario in scan.values()
+        for seeds in by_scenario.values()
+        for seed in seeds
+    }
+    assert scanned, "no candidate left the zone, so the scan names no seed"
+    assert scanned <= set(ladder.PLACEMENT_SEEDS)
+    # The scoring seeds, and the validation block agents choose checkpoints on.
+    lines = set(charter.ANCHOR_SEEDS) | set(charter.VALIDATION_SEEDS)
+    for spec in REGISTRY.values():
+        ev = evaluation.of(spec)
+        lines |= set(ev.seeds) | set(ev.extra_seeds)
+    assert not set(ladder.PLACEMENT_SEEDS) & lines
+    assert max(ladder.PLACEMENT_SEEDS) < charter.J2_SEED_FLOOR
+
+
+@pytest.mark.parametrize(
+    "raw, left",
+    # As above: 0.5 rests x on 1.0, inside the band on every seed; 0.9 takes it to
+    # 1.8, outside on every seed.
+    [(0.5, {}), (0.9, {"normal": [1001, 1002, 1003]})],
+)
+def test_the_exits_report_names_the_seeds_leaving_a_priced_zone(ladder, raw, left):
+    row = _priced_first_order(ladder)
+    seeds = {"normal": (1001, 1002, 1003)}
+    report = ladder.exits_report("first_order", row, Constant(raw), seeds)
+    assert report == {
+        "terms": ["tracking"],
+        "seeds": {"normal": [1001, 1002, 1003]},
+        "left": left,
+        "episodes": 3,
+    }
+
+
+def test_a_row_with_no_zone_priced_as_a_violation_reports_no_exits(ladder):
+    row = ladder.ROWS["first_order"]()
+    assert (
+        ladder.exits_report("first_order", row, Constant(0.5), {"normal": (1,)}) is None
+    )
+
+
+def test_every_rung_rebuilt_from_its_frozen_law_runs_as_the_ladder_built_it(ladder):
+    import json
+
+    from target_gym import charter, reference
+
+    row = _priced_first_order(ladder)
+    rungs = ladder.build("first_order", row)
+    assert set(row.frozen) == set(rungs)
+    for label, controller in rungs.items():
+        law = json.loads(json.dumps(row.frozen[label]))
+        again = reference.assemble(_priced_first_order(ladder), law)
+        fresh = ladder.Row(0, None, score=ladder.frozen_params(row, label))
+        seeds = charter.ANCHOR_SEEDS
+        ours = ladder.Reference(label, controller)
+        theirs = ladder.Reference(label, again)
+        want = ladder.run_suite("first_order", row, ours, seeds=seeds)
+        got = ladder.run_suite("first_order", fresh, theirs, seeds=seeds)
+        assert got["scenarios"] == want["scenarios"], label
+
+
+def test_freeze_writes_the_kept_rung_with_its_provenance_and_scoring_costs(
+    ladder, tmp_path
+):
+    from target_gym import charter, reference
+    from target_gym.provenance import environment_fingerprint
+    from target_gym.registry import REGISTRY
+
+    where = ladder.freeze("first_order", tmp_path)
+    frozen = reference.load("first_order", tmp_path)
+    assert where == reference.path("first_order", tmp_path)
+    assert frozen["kind"] == "ladder" and frozen["rung"] in ("pi", "feedforward")
+    assert frozen["stamp"] == environment_fingerprint(REGISTRY["first_order"])
+    now = charter.current("first_order")["fingerprints"]["reference"]
+    assert frozen["fingerprint"] == now
+    assert frozen["anchor"]["seeds"] == list(charter.ANCHOR_SEEDS)
+    assert frozen["exits"] is None  # no zone priced as a violation
+    controller, again = reference.build("first_order", tmp_path)
+    assert again == frozen
+    run = ladder.run_suite(
+        "first_order",
+        ladder.Row(0, None, score=reference.changes(frozen)),
+        ladder.Reference(frozen["rung"], controller),
+        seeds=charter.ANCHOR_SEEDS,
+    )
+    costs = {s: v["costs"] for s, v in run["scenarios"].items()}
+    assert costs == frozen["anchor"]["scenarios"]
+
+
+def test_a_frozen_zone_names_its_placement_and_its_exits_out_of_sample(
+    ladder, tmp_path
+):
+    # The priced band (M5): placed on the placement seeds, every one of them held,
+    # and counted again on J2's hash seeds for the commit, every scenario's own.
+    from target_gym import charter, reference, scenarios
+    from target_gym.registry import REGISTRY
+
+    ladder.freeze("first_order", tmp_path, lambda: _priced_first_order(ladder))
+    frozen = reference.load("first_order", tmp_path)
+    placed = frozen["placement"]["x on u"]
+    assert frozen["placed_on"] == list(ladder.PLACEMENT_SEEDS)
+    assert placed["setpoint"] == frozen["law"]["setpoints"]["x on u"]
+    assert placed["holds"] and placed["unheld"] == {}
+    assert placed["left"][f"{placed['setpoint']:.6g}"] == 0
+    weights = scenarios.weights(REGISTRY["first_order"])
+    seeds = charter.j2_seeds(frozen["commit"], weights)
+    assert frozen["exits"]["seeds"] == {s: list(v) for s, v in seeds.items()}
+    assert frozen["exits"]["episodes"] == sum(len(v) for v in seeds.values())

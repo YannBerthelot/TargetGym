@@ -155,3 +155,52 @@ def test_a_record_older_than_the_expert_fingerprint_stays_current(
 def test_an_environment_change_marks_any_run_stale(tmp_path, monkeypatch, expert_based):
     record = _recorded(tmp_path, monkeypatch, expert_based=expert_based)
     assert not rl_results.is_current({**record, "env_fingerprint": "older"})
+
+
+# The charter's protocol (docs/rl-protocol.md, section 4; the outside review's H4):
+# a result keeps, per scenario, each training run's cost on each scoring seed, and
+# the charter's fingerprints of the reference it is read against, so a re-record
+# of the reference marks it stale as a change of the environment does.
+def _charter_result(tmp_path, monkeypatch, costs):
+    monkeypatch.setattr(rl_results, "RL_RESULTS_PATH", tmp_path / "rl_results.json")
+    return rl_results.record_result(
+        env=TASK,
+        algorithm="PPO",
+        library="ajax",
+        returns=[-1.0, -2.0],
+        episode_steps=150,
+        total_timesteps=1_000,
+        costs=costs,
+        seeds=[200, 201],
+    )
+
+
+def test_a_result_keeps_each_runs_seed_costs_with_the_charters_fingerprints(
+    tmp_path, monkeypatch
+):
+    from target_gym import charter
+
+    costs = {"normal": [[1.0, 2.0], [1.5, 2.5]]}  # two runs, two seeds
+    record = _charter_result(tmp_path, monkeypatch, costs)
+    stored = rl_results.load_results()[rl_results.result_key(TASK, "PPO")]
+    assert stored["costs"] == costs and stored["seeds"] == [200, 201]
+    now = charter.current(TASK)
+    assert stored["charter"] == {
+        "version": now["version"],
+        "anchor": now["fingerprints"]["anchor"],
+    }
+    assert rl_results.is_current(record)
+    moved = {**record, "charter": {**record["charter"], "anchor": "older"}}
+    assert not rl_results.is_current(moved)
+
+
+@pytest.mark.parametrize(
+    "costs",
+    [{"upset": [[1.0, 2.0]]}, {"normal": [[1.0, 2.0, 3.0]]}],
+    ids=["a scenario the task does not have", "a cost per seed missing"],
+)
+def test_a_result_must_cover_the_tasks_scenarios_on_its_seeds(
+    tmp_path, monkeypatch, costs
+):
+    with pytest.raises(ValueError):
+        _charter_result(tmp_path, monkeypatch, costs)

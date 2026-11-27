@@ -9,6 +9,97 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The charter's comparison as one call (2026-11-27)
+
+After the outside review of 2026-11-27 (C1, M1, L2, H5) and the owner's pickers
+the same day.
+
+- `tg.score(name, policy)` runs the charter's protocol on a scored task: every
+  scenario at its share of operating time, on the scoring seeds, each episode
+  read over the scored window with its edge charge, the reactor on its pinned
+  7-day streams, and the frozen reference run beside the policy on the same
+  seeds and worlds. It returns `scoring.headline`'s saving with its interval,
+  one row per scenario beside it, the charter record's reference, best null,
+  MPC and ceiling `J` and the room, the reference's exits out of sample, and
+  whether the policy read the state. On the reactor it reports baseload days
+  and load-following days apart (`days`). A list of policies is one per
+  training run.
+- It runs a policy given as `policy(obs) -> action`, or in the experts' form,
+  compiled once for every seed (`scorecard.rollouts`), where the older scorer
+  stepped one episode at a time on the host. A policy that keeps its own Python
+  memory, any with `jit=False`, and a `FullState` still run on the host.
+- The ladder's rows ship in the package, `target_gym.reference.rows`, with what
+  a row is made of in `target_gym.reference.row`, so `tg.make_reference` and
+  `charter.charter_tasks` work from an install. `reference_ladder.py --freeze`
+  with no task named freezes the scored suite, and says when a re-freeze
+  changes a task's kept rung or setpoint: the CHANGELOG then announces it as a
+  change of the comparator (CONTRIBUTING.md).
+- cstr's frozen reference is gone with cstr from the scored suite.
+
+### Verdict statistics and the RL protocol (2026-11-27)
+
+The outside review's statistics findings (H3, H4, L1, H2, M6, M7, M8, L4, L5),
+under the owner's decision "Fixed seeds, run-level bootstrap".
+
+- **The scoring seeds are fixed.** J4 reads the ten anchor seeds 200 to 209 in
+  every scenario, once. `charter.stop_seeds`, `charter.paired_interval` and the
+  `STOP_*` constants are removed: the stop rule looked up to five times at an
+  unadjusted interval and declared a false win 10 to 11.5 % of the time.
+- **`scoring.headline` has one verdict statistic, the weighted-mean saving.** One
+  policy gets a t interval on its paired per-seed costs (Fieller's); an agent,
+  whose `"policy"` costs hold one row per training run, a two-level bootstrap over
+  runs and then seeds, with `run_savings` beside it. Scenarios with the same seeds
+  are resampled together. Costs may be negative while `J_reference` is above 0.
+  `tie` makes a seed within the task's noise floor a tie (`ties`), and travel and
+  reversals per seed add `travel_ratio` and `reversal_ratio`, reported only.
+- **Each scored task's noise floor is published** in `data/charter/noise_floor/`
+  (`scripts/record_charter.py --noise-floor`), and `charter.tie_tolerance` reads
+  it. `charter.VALIDATION_SEEDS`, 300 to 349, is where agents choose checkpoints
+  and hyperparameters.
+- The charter record's anchor line records each seed's actuator travel and
+  reversals, so its fingerprint moved: the anchor parts are stale until the
+  re-record.
+- `rl_results.record_result` takes `costs` and `seeds`, each run's cost on each
+  scoring seed of each scenario, stamped with the charter's fingerprints of the
+  reference; a re-record of the reference makes the result stale.
+- `docs/rl-protocol.md` sections 2, 4, 5, 6 and 9 follow the charter: train on
+  `info["measured_reward"]`, 30 runs, validation seeds, the discount
+  `gamma = 1 - 1/(10 T)` with each scored task's `T`. The learning check (J7)
+  covers the five scored tasks.
+
+### The charter's reference from an install (2026-11-27)
+
+After the outside review of 2026-11-27 (C1, M3, M5, H1).
+
+- `tg.make_reference(name)` gives a scored task's reference controller: the rung
+  of the reference ladder the charter kept for it, or the reactor's shipped
+  expert. It steps like `tg.make_expert`'s expert, reads the observation only,
+  and is built from package data, `data/reference/<task>.json`, with no bump
+  test. `ref.rung` names it and `ref.params(scenario)` gives the configuration
+  its line runs on. A reference frozen on another plant is refused
+  (`target_gym.reference.StaleReference`). The files are written by the
+  ladder's export command, which checks that the rung rebuilt from the file
+  costs, seed by seed on the scoring seeds, what the ladder's own rung cost:
+
+      uv run python scripts/reference_ladder.py --freeze
+
+  The files in this tree are a working sample on the plants of this date; the
+  re-record of the scored suite freezes them again with the same command.
+- `tg.make(name, scenario="bad_day")` gives any of a task's scenarios: the
+  scored configuration with that scenario's overrides, then any field given.
+  `tg.list_scenarios(name)` names them with their share of operating time, the
+  weight the score gives each.
+- The reference ladder places a zone's setpoint on seeds 110 to 119, apart from
+  every seed a line is read on (J3's 100 to 109, J4's scoring seeds from 200,
+  J2's hash seeds). The export records the kept rung's placement and its exits
+  on J2's hash seeds. A setpoint placed on the lines' own seeds made the
+  reference's line optimistic there. This can move a task's kept setpoint, so
+  the re-record of the scored suite is a change of the comparator.
+- A policy reads the simulator's true state only when it is wrapped as
+  `tg.FullState(policy)`. The runners decided it from the signature, so a
+  `policy(obs, deterministic=True)` was handed the state as its second argument.
+  An episode's `read_state` says which a policy was.
+
 ### Scaled observations and rewards (2026-11-25)
 
 - `target_gym.scaled.ScaledEnv`, an optional gymnax wrapper for training, maps
@@ -52,9 +143,38 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
-- **Five tasks are scored, and the other twenty ship registered, not scored.**
-  `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`, `cstr`,
-  `compressor_surge` and `ph_neutralization`. Upgrade notes:
+- **A win needs more than float noise.** `score_policy`'s `win_rate` and
+  `transient_win_rate` count a seed within the task's tie tolerance as not won
+  (`charter.tie_tolerance`: each scored task's noise floor, 1e-3 elsewhere), so
+  a controller scored against its own expert no longer wins seeds by rounding.
+  pH's `off_spec` share reads its permit, 6 to 9, where it read 6.5 to 8.5.
+- **On a scored task, `score_policy` is the charter's comparison.** With its
+  default arguments on a task of `tg.FLAGSHIP` it returns `tg.score`'s result,
+  on its first `seeds` scoring seeds. Upgrade notes:
+  - Read `saving`, `saving_ci` and `scenarios` where you read `ratio`,
+    `score` and `headroom`: the tracking score is not defined on a task charged
+    in money, and the old fields were NaN or 0 there.
+  - Pass `params` to keep the older protocol against the shipped expert.
+  - The ladder's rows moved from `scripts/ladder_rows/<task>.py` to
+    `target_gym.reference.rows.<task>`, and `Cv`, `Inner`, `Limit`, `Valve`,
+    `Row` and `corners` to `target_gym.reference.row`;
+    `scripts/reference_ladder.py` still offers them by their old names.
+- **A policy is given the simulator's true state only when it says so.** The
+  runners (`runners.one_episode`, `eval.run_episode` and the scorers built on
+  them) passed `(obs, state)` to any policy whose signature took two arguments.
+  Upgrade notes:
+  - Wrap a policy that reads the state: `tg.FullState(policy)`, with
+    `policy(obs, state)`. One that needs two arguments and is not wrapped is
+    refused with a `TypeError` that says so.
+  - Every other policy is called as `policy(obs)`, whatever its signature: a
+    second argument with a default keeps its default.
+  - `runners.baseline_policy(spec, "mpc")` returns a `FullState`; the private
+    `runners._wants_state` is gone (`runners.reads_state` says the same, by the
+    wrapper alone).
+- **Four tasks are scored, and the other twenty-one ship registered, not
+  scored.** `tg.FLAGSHIP` names the scored suite: `reactor`, `hvac`,
+  `compressor_surge` and `ph_neutralization`. `cstr` left it for 0.8.0 (owner,
+  2026-11-27) and ships registered, not scored. Upgrade notes:
   - Every task still runs through `tg.make`, and `tg.list_envs()` still gives
     all 25 names.
   - Results are published for the scored suite only. The page of a task

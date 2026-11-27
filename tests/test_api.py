@@ -207,3 +207,54 @@ def test_old_gymnasium_names_warn_and_still_work():
     assert isinstance(cls(), gym.Env)
     with pytest.warns(DeprecationWarning, match="make_gymnasium"):
         assert isinstance(tg.gym_wrapper_factory(tg.CSTR)(), gym.Env)
+
+
+# ``tg.make(name, scenario=...)`` (owner, picker 2026-11-27, "Heaviest scenario +
+# scenario="). Contract, from ``target_gym.scenarios``: a scenario is a set of
+# parameter overrides on the scored configuration, and its weight is its share of
+# operating time. pH's normal day has no acid upset and no flow swing, its bad day
+# has both at 20 %, and the shares are 0.80, 0.15 and 0.05
+# (pc_gym/ph_neutralization/scenarios.py).
+
+
+def test_make_gives_a_scenario_as_its_overrides_on_the_scored_params():
+    _, normal = tg.make("ph_neutralization", scenario="normal")
+    _, bad = tg.make("ph_neutralization", scenario="bad_day")
+    assert (normal.acid_upset_size, normal.flow_swing) == (0.0, 0.0)
+    assert (bad.acid_upset_size, bad.flow_swing) == (0.2, 0.2)
+
+
+@pytest.mark.parametrize("name", tg.FLAGSHIP)
+def test_make_changes_only_what_each_scenario_overrides(name):
+    from target_gym import scenarios
+
+    spec = registry.get(name)
+    for s in scenarios.suite(spec):
+        env, params = tg.make(name, scenario=s.name)
+        assert env is spec.make_env()
+        chex.assert_trees_all_equal(params, spec.make_test_params(**s.overrides))
+
+
+def test_make_applies_its_own_overrides_after_the_scenarios():
+    _, params = tg.make("ph_neutralization", scenario="bad_day", flow_swing=0.05)
+    assert (params.acid_upset_size, params.flow_swing) == (0.2, 0.05)
+
+
+def test_make_names_the_tasks_scenarios_on_a_typo():
+    with pytest.raises(KeyError, match="bad_day"):
+        tg.make("ph_neutralization", scenario="bad day")
+
+
+def test_list_scenarios_gives_each_scenarios_share_of_operating_time():
+    shares = tg.list_scenarios("ph_neutralization")
+    assert shares == pytest.approx(
+        {"normal": 0.80, "bad_day": 0.15, "buffer_loss": 0.05}
+    )
+    assert list(shares) == ["normal", "bad_day", "buffer_loss"]
+
+
+def test_make_gymnasium_takes_a_scenario():
+    genv = tg.make_gymnasium("ph_neutralization", scenario="bad_day")
+    chex.assert_trees_all_equal(
+        genv.env_params, tg.make("ph_neutralization", scenario="bad_day")[1]
+    )

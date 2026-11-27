@@ -48,9 +48,13 @@ the same seeds.
 The task charter (J4) adds the headline that replaces these as tasks are rebuilt.
 ``headline`` is the saving over the reference on a year of operation: each scenario
 (``target_gym.scenarios``) weighted by its share of operating time, with the
-per-scenario savings and the probability of improvement beside it. ``gap_closed``,
-the share of the reference-to-ceiling gap a policy closes, is reported, never the
-headline.
+per-scenario savings and the probability of improvement beside it. One policy gets
+a t interval on its paired seeds; an agent, its training runs scored on the same
+seeds, a two-level bootstrap over runs and seeds (owner, 2026-11-27, "Fixed seeds,
+run-level bootstrap"; docs/rl-protocol.md, section 4). A seed within the task's
+noise floor is a tie (``charter.tie_tolerance``), in the win rates here too.
+``gap_closed``, the share of the reference-to-ceiling gap a policy closes, is
+reported, never the headline.
 
 ``seed_scores`` is a different number for a different job: one score per
 training seed, on the whole episode with no burn-in, from costs measured
@@ -185,10 +189,12 @@ SPEC_BAND = {
     "patrol_range_bearing": ((3.048,), _SLOT_BAND),
     "wake_surf": ((30.0,), "ours: the box across the wake, a span (patrol/PHYSICS.md)"),
     "formation": ((20.0, 3.048, 3.048), _ALTITUDE_BAND + "; " + _SLOT_BAND),
+    # Read from the params (``spec_band``): half the permit about its centre, which
+    # the observation gives as the target, so the band is the permit itself.
     "ph_neutralization": (
-        (1.0,),
-        "the permit range pH 7 +-1, the example spec of Faanes and Skogestad "
-        "2000 (ph_neutralization/REALITY.md [P7])",
+        "permit",
+        "the discharge permit, permit_low to permit_high: 6.0 to 9.0 at the scored "
+        "params, 40 CFR 133.102(c) (ph_neutralization/REALITY.md [P11])",
     ),
     "glass_furnace": None,  # a zone, fining and canal, that the reward prices
     "reactor": (
@@ -207,11 +213,13 @@ def spec_band(name: str, params=None, env=None) -> np.ndarray | None:
     from target_gym.benchmark import task_info
     from target_gym.registry import REGISTRY
 
-    if name in SPEC_BAND:
-        entry = SPEC_BAND[name]
-        return None if entry is None else np.asarray(entry[0], float)
     spec = REGISTRY[name]
+    entry = SPEC_BAND.get(name, ())
+    if entry is None or (entry and entry[0] != "permit"):
+        return None if entry is None else np.asarray(entry[0], float)
     p = params if params is not None else spec.make_test_params()
+    if entry:
+        return np.array([0.5 * (float(p.permit_high) - float(p.permit_low))])
     e = env if env is not None else spec.make_env()
     return SPEC_RULE_FLOORS * task_info(name, e, p, 1).e_floor[0]
 
@@ -318,38 +326,136 @@ def gap_closed(policy_cost, reference_cost, ceiling_cost) -> np.ndarray:
         return np.where(has_gap, (b - x) / np.where(has_gap, gap, 1.0), np.nan)
 
 
-_N_BOOT = 2000
+#: Replicates of an agent's two-level bootstrap (``headline``), on a fixed seed.
+_N_BOOT = 10_000
 
 
 def _costs(values) -> np.ndarray:
     a = np.atleast_1d(np.asarray(values, dtype=float))
-    if np.isnan(a).any() or (a < 0).any():
-        raise ValueError("costs must be non-negative and not NaN")
+    if np.isnan(a).any():
+        raise ValueError("costs must not be NaN")
     return a
 
 
-def _saving(w, xs, bs) -> float:
-    j_ref = sum(wi * bi.mean() for wi, bi in zip(w, bs))
-    j_policy = sum(wi * xi.mean() for wi, xi in zip(w, xs))
-    return 1.0 - j_policy / j_ref if j_ref > 0 else float("nan")
+def _strata(w, xs, bs):
+    """``(weight, policy, reference)`` per stratum. Scenarios run on the same seeds
+    are one stratum, each seed's weighted cost one draw (the review's L1)."""
+    if len({len(b) for b in bs}) > 1:
+        return list(zip(w, xs, bs))
+    return [
+        (1.0, sum(wi * x for wi, x in zip(w, xs)), sum(wi * b for wi, b in zip(w, bs)))
+    ]
 
 
-def headline(costs, weights) -> dict:
+def _satterthwaite(parts) -> float:
+    """Degrees of freedom of a sum of variances, each ``(variance, its df)``."""
+    total = sum(v for v, _ in parts)
+    spread = sum(v * v / d for v, d in parts if v > 0)
+    return total * total / spread if spread > 0 else math.inf
+
+
+def _t975(df: float) -> float:
+    from scipy import stats
+
+    return float(stats.t.ppf(0.975, df)) if math.isfinite(df) else 1.959964
+
+
+def _fieller(strata) -> tuple:
+    """One policy's 95 % interval on the saving, by Fieller's theorem on its paired
+    per-seed costs: every ``R`` with ``(J_x - R J_b)^2 <= t^2 Var(J_x - R J_b)`` is
+    in it, so it excludes a ratio exactly when a paired t test on ``x - R b`` does."""
+    if any(len(b) < 2 for _, _, b in strata):
+        return (float("nan"), float("nan"))
+    jx = sum(w * x.mean() for w, x, _ in strata)
+    jb = sum(w * b.mean() for w, _, b in strata)
+    S = sum(w * w * np.cov(x, b) / len(b) for w, x, b in strata)
+    ratio = jx / jb
+    df = _satterthwaite(
+        [
+            (w * w * np.var(x - ratio * b, ddof=1) / len(b), len(b) - 1)
+            for w, x, b in strata
+        ]
+    )
+    q = _t975(df) ** 2
+    a2 = jb * jb - q * S[1, 1]
+    if a2 <= 0.0:  # J_reference is not clear of 0: no bound
+        return (-math.inf, math.inf)
+    a1 = jx * jb - q * S[0, 1]
+    disc = q * (jb * jb * S[0, 0] - 2 * jx * jb * S[0, 1] + jx * jx * S[1, 1])
+    root = math.sqrt(max(disc - q * q * (S[0, 0] * S[1, 1] - S[0, 1] ** 2), 0.0))
+    return (1.0 - (a1 + root) / a2, 1.0 - (a1 - root) / a2)
+
+
+def _two_level(strata, n_boot: int = _N_BOOT) -> tuple:
+    """An agent's 95 % interval on the saving of its mean over runs: a bootstrap
+    over the runs, then over the seeds of each stratum. Every run was scored on
+    the same seeds, so one draw of seed indices serves every run and the reference.
+    The percentiles are expanded so that one level reproduces the t interval
+    (Hesterberg 2015, the expanded percentile), the degrees of freedom combining
+    both levels' variances by Satterthwaite."""
+    from scipy import stats
+
+    rng = np.random.default_rng(0)
+    n_runs = strata[0][1].shape[0]
+    picks = rng.multinomial(n_runs, np.full(n_runs, 1.0 / n_runs), n_boot)
+    jb = sum(w * b.mean() for w, _, b in strata)
+    ratio = sum(w * x.mean() for w, x, _ in strata) / jb
+    num = den = 0.0
+    runs = np.zeros(n_runs)
+    parts = []
+    for w, x, b in strata:
+        n = len(b)
+        seeds = rng.multinomial(n, np.full(n, 1.0 / n), n_boot)
+        num = num + w * ((picks @ x) * seeds).sum(1) / (n_runs * n)
+        den = den + w * (seeds @ b) / n
+        z = (x - ratio * b) / jb  # each (run, seed)'s share of the saving
+        runs = runs + w * z.mean(1)
+        parts.append((w * w * z.mean(0).var(ddof=1) / n, n - 1))
+    parts.append((runs.var(ddof=1) / n_runs, n_runs - 1))
+    df = _satterthwaite(parts)
+    z975 = math.sqrt((df + 1) / df) * _t975(df) if math.isfinite(df) else 1.959964
+    tail = 100.0 * float(stats.norm.cdf(-z975))
+    low, high = np.percentile(1.0 - num / den, [tail, 100.0 - tail])
+    return (float(low), float(high))
+
+
+def _ratio_of(costs, names, w, key) -> float:
+    """``key``'s weighted mean on the policy over the reference's (travel)."""
+    pol, ref = (
+        sum(wi * np.mean(costs[n][f"{side}_{key}"]) for wi, n in zip(w, names))
+        for side in ("policy", "reference")
+    )
+    return float(pol / ref) if ref > 0 else float("nan")
+
+
+def headline(costs, weights, tie: float = 0.0) -> dict:
     """A task's headline (charter J4): the frequency-weighted saving over the
     reference.
 
     ``costs`` is ``{scenario: {"policy": ..., "reference": ...}}``, each a cost per
-    step per seed, paired seed for seed. A scenario may add ``"ceiling"`` (per seed
-    or one value) and ``"policy_trips"`` with ``"reference_trips"`` (per seed).
-    ``weights`` is each scenario's share of operating time, at any positive scale.
+    step per scoring seed, paired seed for seed; an agent's ``"policy"`` holds one
+    row per training run, ``(runs, seeds)``. Costs may be negative (an edge credit).
+    A scenario may add ``"ceiling"`` (per seed or one value), ``"policy_trips"``
+    with ``"reference_trips"``, and the actuators' ``"policy_travel"``,
+    ``"reference_travel"``, ``"policy_reversals"`` and ``"reference_reversals"``,
+    each per seed (per run and seed on the policy's side). ``weights`` is each
+    scenario's share of operating time, at any positive scale. ``tie`` is the
+    relative tie tolerance, the task's noise floor (``charter.tie_tolerance``).
 
     ``saving`` is ``1 - J_policy / J_reference``, with ``J = sum_s w_s * mean(cost |
-    s)``; ``saving_ci`` its 95 % interval, resampling seeds within each scenario and
-    keeping the pairs. Beside it: ``per_scenario`` savings, the ``worst`` scenario,
-    and ``probability_of_improvement``, the weighted share of seeds won. With
-    ceilings, ``gap_closed`` per scenario on its means; with trips,
-    ``beats_reference``: the interval above 0 and no more trips in any scenario. A
-    reference that costs nothing leaves the saving NaN, a solved task.
+    s)`` over seeds and runs, defined while ``J_reference`` is above 0. ``saving_ci``
+    is its 95 % interval: for one policy, a t interval on the paired per-seed costs
+    (``_fieller``); for an agent, a two-level bootstrap over runs and then seeds
+    (``_two_level``), with ``run_savings``, each run's own, beside it. Scenarios with
+    the same number of seeds share them and are resampled together. Beside the
+    saving: ``per_scenario`` savings, the ``worst`` scenario,
+    ``probability_of_improvement``, the weighted share of seeds where the policy
+    costs less than the reference by more than ``tie`` of the reference's cost, and
+    ``ties``, the share within it. With ceilings, ``gap_closed`` per scenario on its
+    means; with trips, ``beats_reference``: the interval above 0 and no more trips
+    in any scenario (per run, on average); with travel and reversals,
+    ``travel_ratio`` and ``reversal_ratio``, the policy's weighted mean over the
+    reference's, reported and never part of the verdict.
     """
     names = list(costs)
     if set(weights) != set(names):
@@ -360,46 +466,71 @@ def headline(costs, weights) -> dict:
     w = w / w.sum()
     xs = [_costs(costs[n]["policy"]) for n in names]
     bs = [_costs(costs[n]["reference"]) for n in names]
-    if any(x.shape != b.shape for x, b in zip(xs, bs)):
+    agent = xs[0].ndim == 2
+    if any(
+        b.ndim != 1
+        or x.ndim != xs[0].ndim
+        or x.shape[-1] != len(b)
+        or (agent and len(x) != len(xs[0]))
+        for x, b in zip(xs, bs)
+    ):
         raise ValueError("policy and reference need the same seeds in each scenario")
 
-    point = _saving(w, xs, bs)
+    j_ref = float(sum(wi * b.mean() for wi, b in zip(w, bs)))
+    j_policy = float(sum(wi * x.mean() for wi, x in zip(w, xs)))
+    point = 1.0 - j_policy / j_ref if j_ref > 0 else float("nan")
     ci = (float("nan"), float("nan"))
     if math.isfinite(point):
-        rng = np.random.default_rng(0)
-        boots = []
-        for _ in range(_N_BOOT):
-            picks = [rng.integers(0, len(b), len(b)) for b in bs]
-            resampled_x = [x[i] for x, i in zip(xs, picks)]
-            resampled_b = [b[i] for b, i in zip(bs, picks)]
-            boots.append(_saving(w, resampled_x, resampled_b))
-        lo, hi = np.percentile(boots, [2.5, 97.5])
-        ci = (float(lo), float(hi))
+        strata = _strata(w, xs, bs)
+        ci = (
+            _two_level(strata)
+            if agent and len(xs[0]) > 1
+            else _fieller([(wi, x[0] if agent else x, b) for wi, x, b in strata])
+        )
     per = {
         n: 1.0 - x.mean() / b.mean() if b.mean() > 0 else float("nan")
         for n, x, b in zip(names, xs, bs)
     }
     scored = {n: v for n, v in per.items() if v == v}
+    margin = [tie * np.abs(b) for b in bs]
     out = {
         "saving": point,
-        "saving_ci": ci,
+        "saving_ci": tuple(float(c) for c in ci),
         "per_scenario": per,
         "worst": min(scored, key=scored.get) if scored else None,
         "probability_of_improvement": float(
-            sum(wi * np.mean(x < b) for wi, x, b in zip(w, xs, bs))
+            sum(wi * np.mean(x < b - m) for wi, x, b, m in zip(w, xs, bs, margin))
+        ),
+        "ties": float(
+            sum(
+                wi * np.mean(np.abs(x - b) <= m)
+                for wi, x, b, m in zip(w, xs, bs, margin)
+            )
         ),
     }
+    if agent:
+        each = sum(wi * x.mean(1) for wi, x in zip(w, xs))
+        out["run_savings"] = [float(1.0 - j / j_ref) for j in each]
     if all("ceiling" in costs[n] for n in names):
-        out["gap_closed"] = {
-            n: float(gap_closed(x.mean(), b.mean(), _costs(costs[n]["ceiling"]).mean()))
-            for n, x, b in zip(names, xs, bs)
-        }
+        out["gap_closed"] = {}
+        for n, x, b in zip(names, xs, bs):
+            c = _costs(costs[n]["ceiling"]).mean()
+            gap = b.mean() - c
+            out["gap_closed"][n] = (
+                float((b.mean() - x.mean()) / gap) if gap > 0 else math.nan
+            )
     if all("policy_trips" in costs[n] and "reference_trips" in costs[n] for n in names):
         fewer = all(
-            np.sum(costs[n]["policy_trips"]) <= np.sum(costs[n]["reference_trips"])
+            np.sum(costs[n]["policy_trips"]) / (len(xs[0]) if agent else 1)
+            <= np.sum(costs[n]["reference_trips"])
             for n in names
         )
         out["beats_reference"] = bool(ci[0] > 0 and fewer)
+    for key, label in (("travel", "travel_ratio"), ("reversals", "reversal_ratio")):
+        if all(
+            f"{s}_{key}" in costs[n] for n in names for s in ("policy", "reference")
+        ):
+            out[label] = _ratio_of(costs, names, w, key)
     return out
 
 
@@ -417,12 +548,14 @@ def _ratio_ci(log_ratios: np.ndarray, n_boot: int = 2000) -> tuple[float, float]
     return float(10**lo), float(10**hi)
 
 
-def _paired(b: np.ndarray, x: np.ndarray) -> tuple[float, tuple, float]:
+def _paired(b: np.ndarray, x: np.ndarray, tie: float = 0.0) -> tuple:
     """Per-seed ratios ``b / x`` as an interquartile mean, its interval and
-    the share of seeds where ``x`` costs less. Both sides are floored, so a
-    seed where neither costs anything counts as level, ``_ratio``'s 0 over 0."""
+    the share of seeds where ``x`` costs less than ``b`` by more than ``tie`` of
+    ``b``. Both sides are floored, so a seed where neither costs anything counts
+    as level, ``_ratio``'s 0 over 0."""
     logs = np.log10(np.maximum(b, 1e-300) / np.maximum(x, 1e-300))
-    return float(10 ** _iqm(logs)), _ratio_ci(logs), float(np.mean(x < b))
+    won = float(np.mean(x < b - tie * np.abs(b)))
+    return float(10 ** _iqm(logs)), _ratio_ci(logs), won
 
 
 def _ratio(b: float, x: float) -> float:
@@ -436,18 +569,19 @@ def _ratio(b: float, x: float) -> float:
 
 
 def compare(
-    policy, expert, ceiling: float, burn_in: int, settle: int, band=None
+    policy, expert, ceiling: float, burn_in: int, settle: int, band=None, tie=0.0
 ) -> dict:
     """The three numbers and their companions for ``Episode`` lists run on the
     same seeds, in the same order (module docstring). ``band`` adds the
-    settling ratio."""
+    settling ratio; ``tie`` is the relative tolerance within which a seed is
+    neither won nor lost (``charter.tie_tolerance``)."""
     b = np.array([E.gain([ep], 0)[0] for ep in expert])
     x = np.array([E.gain([ep], 0)[0] for ep in policy])
-    ratio, ratio_ci, win_rate = _paired(b, x)
+    ratio, ratio_ci, win_rate = _paired(b, x, tie)
     expert_trips, policy_trips = E.trip_counts(expert), E.trip_counts(policy)
     moves_b = np.array([E.transient_cost([ep], settle)[0] for ep in expert])
     moves_x = np.array([E.transient_cost([ep], settle)[0] for ep in policy])
-    t_ratio, t_ci, t_win = _paired(moves_b, moves_x)
+    t_ratio, t_ci, t_win = _paired(moves_b, moves_x, tie)
     # A task scored on its job has no tracking term: its hold, and what is
     # read against it, is unknown.
     tracked = "tracking" in expert[0].terms
@@ -585,16 +719,32 @@ def best_known(row: dict) -> dict:
 
 
 def score_policy(name: str, policy, seeds: int = 10, params=None) -> dict:
-    """Run ``policy`` and the expert on seeds ``0 .. seeds - 1`` of the test
-    configuration, ``compare`` them, and add the ``best_known`` moves.
+    """On a scored task (``charter.FLAGSHIP``), the charter's comparison,
+    ``target_gym.score``, on the first ``seeds`` scoring seeds: the saving over
+    the reference with its interval, one row per scenario and the lines. The
+    tracking score and headroom are not returned there (the outside review's
+    M1): a task charged in money has no tracking term to score.
 
-    ``policy(obs) -> action``, or ``policy(obs, state)`` for a full-state
-    controller. One with a ``reset()`` method is reset before each episode.
+    Elsewhere, or with ``params``, the older protocol: ``policy`` and the expert
+    on seeds ``0 .. seeds - 1`` of the test configuration, ``compare``d, with the
+    ``best_known`` moves added.
+
+    ``policy(obs) -> action``, or a ``target_gym.FullState`` given the true
+    state. One with a ``reset()`` method is reset before each episode.
     ``target_gym.make_expert(name)`` works as it is. A factory taking no
-    arguments, the 0.7.0 form, still works and warns.
+    arguments, the 0.7.0 form, still works, on the older protocol, and warns.
     """
+    from target_gym import charter
     from target_gym.api import as_policy
 
+    if (
+        params is None
+        and charter.status(name) == charter.SCORED
+        and not _takes_no_arguments(policy)
+    ):
+        from target_gym.scorecard import score
+
+        return score(name, policy, seeds=charter.ANCHOR_SEEDS[:seeds])
     policy = as_policy(policy)
     if _takes_no_arguments(policy):
         warnings.warn(
@@ -645,6 +795,8 @@ def _score(name: str, make_policy, seeds: int, params) -> dict:
     expert = run(lambda: baseline_policy(spec, "pid", p))
     policy = run(lambda: as_policy(make_policy()))
     burn_in, settle = E.scored_burn_in(name, p), fixed_settle(name)
+    from target_gym.charter import tie_tolerance
+
     m = compare(
         policy,
         expert,
@@ -652,6 +804,7 @@ def _score(name: str, make_policy, seeds: int, params) -> dict:
         burn_in,
         settle,
         band=settle_band(name, p),
+        tie=tie_tolerance(name),
     )
     for side, episodes in (("expert", expert), ("policy", policy)):
         share = E.off_spec_fraction(episodes, burn_in, settle)

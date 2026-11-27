@@ -352,7 +352,7 @@ The score reads the true state.
 
 ## 10. What the reference ladder's row needs
 
-The ladder row, `row()` in `scripts/ladder_rows/battery.py`, needs:
+The ladder row, `row()` in `src/target_gym/reference/rows/battery.py`, needs:
 
 - the action as a baseline in +-0.551 MW for the first period past gate
   closure, not a power;

@@ -705,7 +705,8 @@ def test_every_task_states_a_band_per_tracked_output_or_none(name):
         # owner's choice of airframe (2026-11-10), patrol/PHYSICS.md
         ("patrol", [10.0 * 0.3048]),
         ("formation", [20.0, 10.0 * 0.3048, 10.0 * 0.3048]),  # lead, then wingmen
-        ("ph_neutralization", [1.0]),  # the permit range pH 7 +-1 [P7]
+        # the permit, 6 to 9 about its centre (the outside review's M7)
+        ("ph_neutralization", [1.5]),
     ],
 )
 def test_a_published_tolerance_is_the_band(name, band):
@@ -871,11 +872,13 @@ def test_two_sides_that_cost_nothing_are_level():
 def test_score_policy_scores_a_job_scored_task():
     """hvac has no tracked setpoint (``JOB_SCORED``). Its expert against itself
     on the same seed costs the same, so the ratio is 1 and it does not beat
-    itself; the tracking score is unknown."""
+    itself; the tracking score is unknown. hvac is scored, so this is the older
+    protocol, asked for by its ``params`` (the outside review's M1)."""
     import target_gym as tg
 
     assert "hvac" in scoring.JOB_SCORED
-    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1)
+    params = tg.make("hvac")[1]
+    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1, params=params)
     assert m["ratio"] == pytest.approx(1.0)
     assert not m["beats_expert"]
     assert np.isnan(m["score"]) and np.isnan(m["s_max"])

@@ -12,13 +12,13 @@ from __future__ import annotations
 import math
 
 import jax.numpy as jnp
-from reference_ladder import (  # noqa: E402
+
+from target_gym.experts.pid import Controller
+from target_gym.reference.row import (
     Cv,
     Inner,
     Row,
 )
-
-from target_gym.experts.pid import Controller
 from target_gym.registry import REGISTRY
 
 #: The night charging window, 00:00 to 07:00 (Madrid's night setpoint [14, p. 14]).
