@@ -73,12 +73,12 @@ SCALES = {
     # three spreads of 3 K and the mild fortnight's 12 C mean, 5 K swing and
     # three spreads; the clock's sine and cosine; the tariff 0 to its peak,
     # price_punta 0.263 EUR/kWh; hours to its change 0 to 24. Reward: an
-    # occupied step 1 K outside the band, comfort_price 9.54 EUR/(K h) over
-    # 0.25 h.
+    # occupied step at 20 C, 1 K below the band: 0.25 h of EUR 477 of work at
+    # the published curve's 0.43893 % lost (hvac/env.py ``work_lost``).
     "hvac": Scale(
         low=(15.0, -20.0, -20.0, 15.0, 15.0, 15.0, -1.0, -1.0, 15.0, -20.0, 0.0, 0.0),
         high=(49.0, 30.0, 30.0, 49.0, 49.0, 49.0, 1.0, 1.0, 49.0, 30.0, 0.263, 24.0),
-        reward=2.385,
+        reward=0.5234,
     ),
     # Power and the turbine's load, which rides the frequency wobble above the
     # plan, 0 to n_max 1.09; coolant temperatures (hot leg, Tavg and its

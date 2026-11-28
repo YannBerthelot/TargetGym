@@ -314,6 +314,17 @@ Added by the Amendment 3 fix session, 2026-11-08 (each fetched or read once):
 21. Eurostat news release, 27 March 2024: EU average hourly labour cost EUR
     31.8 in 2023. https://ec.europa.eu/eurostat/web/products-eurostat-news/w/ddn-20240327-2
     (read from a search summary).
+22. O. Seppanen, W.J. Fisk, Q.H. Lei, "Effect of temperature on task
+    performance in office environment", LBNL-60946, July 2006. p. 8, Fig. 2:
+    relative performance P = 0.1647524 T - 0.0058274 T^2 + 0.0000623 T^3 -
+    0.4685328, T the room temperature in C, P relative to the maximum, at 21.75 C;
+    the data span 15 to 35 C (Figs. 1 and 2). Read as page images, 2026-11-28.
+    https://www.osti.gov/servlets/purl/903490
+23. B.W. Olesen, "Indoor environmental input parameters for the design and
+    assessment of energy performance of buildings", REHVA Journal 01/2015, pp.
+    17 to 23, Table 5 (from prEN 16798-1): default floor area 10 m^2 a person in
+    a single office, 15 in a landscaped office. Read once, 2026-11-28.
+    https://rehva.eu/rehva-journal/chapter/indoor-environmental-input-parameters-for-the-design-and-assessment-of-energy-performance-of-buildings-1
 
 Re-confirmation (2026-11-08): every source above was fetched twice. Sources
 1, 4, 16 and 17 (web pages) were re-read and confirmed on the second fetch.

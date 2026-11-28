@@ -12,9 +12,10 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
   the episode's own path for the ceiling (``ceiling_data``), which knows the
   weather ahead as a ceiling may; the clock, sun and gains along the plan;
 - objective: the heat pump's electricity at the tariff and the comfort
-  hinges through epigraph rows on every occupied state (T2): the room below
-  and above the band and the floor above its limit, each linear in
-  kelvin-hours at the work-loss price;
+  hinges through epigraph rows on every occupied state (T2): the room's lost
+  work past each band edge as the published curve's terms in the distance past
+  it (``curve_terms``, ``comfort_rows``; owner, 2026-11-28), and the floor's
+  kelvin-hours above its limit at its price;
 - window (owner, 2026-11-25, the review's finding 1): the registry's oracle
   plans on the task's scored window alone (``scenarios.hvac_evaluation``), as
   the task scores its lines, so the ceiling bounds the scored cost. A step
@@ -61,6 +62,7 @@ import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
 from target_gym.hvac.env import (
+    PERFORMANCE_CURVE,
     WEATHER_OU_THETA,
     drift_over,
     electricity_price,
@@ -119,12 +121,54 @@ def velocity(position, action, time, weather_dev, width, p):
     return jnp.stack([dT_mass, dT_core]), None
 
 
-def expected_excess(d, spread):
-    """E[max(d + spread Z, 0)] for a standard normal Z: the expected excess over a
-    limit of a quantity whose mean exceeds it by ``d`` and whose error has
-    ``spread``. Smooth in ``d``; ``spread`` must be positive."""
+def expected_power(d, spread, power: int):
+    """E[max(d + spread Z, 0) ** power] for a standard normal Z, power 1 to 3:
+    the expected excess over a limit, and its square and cube, of a quantity
+    whose mean exceeds the limit by ``d`` and whose error has ``spread``: the
+    normal's partial moments. Smooth in ``d``; ``spread`` must be positive."""
     z = d / spread
-    return d * jax.scipy.stats.norm.cdf(z) + spread * jax.scipy.stats.norm.pdf(z)
+    up, dens = jax.scipy.stats.norm.cdf(z), spread * jax.scipy.stats.norm.pdf(z)
+    if power == 1:
+        return d * up + dens
+    if power == 2:
+        return (d * d + spread * spread) * up + d * dens
+    if power == 3:
+        return (d**3 + 3.0 * d * spread * spread) * up + (
+            d * d + 2.0 * spread**2
+        ) * dens
+    raise ValueError(f"power is 1, 2 or 3, not {power}")
+
+
+def expected_excess(d, spread):
+    """E[max(d + spread Z, 0)]: ``expected_power`` of the first power."""
+    return expected_power(d, spread, 1)
+
+
+def curve_terms(p) -> tuple[tuple, tuple]:
+    """The reward's lost work past each band edge (``env.work_lost``) as powers
+    of the distance d past it: ``P(edge) - P(edge -+ d) = sum_k w_k d^k``, the
+    curve's Taylor terms at the edge, exact for its cubic. ``(below, above)``,
+    each ``(w_1, w_2, w_3)``, shares of an hour's work per kelvin to the k."""
+    c1, c2, c3, _ = PERFORMANCE_CURVE
+    low, high = float(p.band_low), float(p.band_high)
+
+    def slope(T):
+        return c1 + 2.0 * c2 * T + 3.0 * c3 * T * T
+
+    below = (slope(low), -(c2 + 3.0 * c3 * low), c3)
+    above = (-slope(high), -(c2 + 3.0 * c3 * high), -c3)
+    return below, above
+
+
+def comfort_rows(p) -> tuple[tuple, tuple]:
+    """The planner's hinge weights for the lost work past each edge, from
+    ``curve_terms``: below, the three; above, the first two, since the cubic's
+    term there is negative and a hinge cannot carry it, which overstates the
+    fall by 0.0000623 d^3 of an hour's work, 0.5 % of it 1 K past the edge and
+    1.8 % 2 K past it, a room this heating task never reaches. The span the curve is read on (15 to 35 C) is left out: no plan
+    goes there."""
+    below, above = curve_terms(p)
+    return below, above[:2]
 
 
 def room_spread(p, steps: int):
@@ -182,7 +226,10 @@ def hvac_model(env, p, window=None, start_store=None, spread=None) -> TaskModel:
     that error in place of the hinges on the mean path; the floor's error is the
     room's share of it."""
     hours = p.delta_t / 3600.0
-    weight = float(p.comfort_price * hours)
+    work = float(p.work_price * hours)  # an occupied step's work, euros
+    floor_weight = float(p.comfort_price * hours)
+    below, above = curve_terms(p)
+    rows_below, rows_above = comfort_rows(p)
     # The deviation's mean per step, a plain float whatever the run's precision.
     decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
     price = shortfall_price(p)
@@ -237,12 +284,23 @@ def hvac_model(env, p, window=None, start_store=None, spread=None) -> TaskModel:
         kwh = q / heat_pump_cop(made, p) / 1000.0 * hours
         cost = electricity_price(start + t, p) * kwh
         if spread is None:
-            y = jnp.where(occupied & inside, outside, -1.0)
+            rows = jnp.stack(
+                [outside[0]] * len(rows_below) + [outside[1]] * len(rows_above)
+                + [outside[2]]
+            )  # fmt: skip
+            y = jnp.where(occupied & inside, rows, -1.0)
         else:
             s = spread[jnp.minimum(t, spread.shape[0] - 1)]
             floor_share = slab_conductances(p)["floor_share"]
-            each = jnp.stack([s, s, (1.0 - floor_share) * s])
-            comfort = weight * jnp.sum(expected_excess(outside, each))
+            lost = sum(
+                w * expected_power(outside[0], s, k)
+                for k, w in enumerate(below, start=1)
+            ) + sum(
+                w * expected_power(outside[1], s, k)
+                for k, w in enumerate(above, start=1)
+            )
+            floor = expected_excess(outside[2], (1.0 - floor_share) * s)
+            comfort = work * lost + floor_weight * floor
             cost = cost + jnp.where(occupied, comfort, 0.0)
             y = jnp.zeros((0,), x.dtype)
         x1 = jnp.stack([x1[0], x1[1], held])
@@ -272,17 +330,28 @@ def hvac_model(env, p, window=None, start_store=None, spread=None) -> TaskModel:
         inside = (s.time >= window[0]) & (s.time < window[1])
         return jnp.where(inside, -r, 0.0)
 
-    comfort_rows = () if spread is not None else (Hinge(weight=weight),) * 3
+    hinges = ()
+    if spread is None:
+        hinges = (
+            *(Hinge(weight=work * w, power=k) for k, w in enumerate(rows_below, 1)),
+            *(Hinge(weight=work * w, power=k) for k, w in enumerate(rows_above, 1)),
+            Hinge(weight=floor_weight),
+        )
+    # G10: what an error of half the resolution costs in one step, at the
+    # band's low edge, where the heated room sits: the curve's fall over that
+    # half step, all three of its terms (curve_terms is exact for the cubic).
+    half = 0.5 * float(p.precision_floor)
+    tie = work * sum(w * half**k for k, w in enumerate(below, start=1))
     return TaskModel(
         nx=3, nu=1, step=step, state_x=state_x,
         data=lambda s: (s.time, s.weather_dev, None),
         hold=lambda s: raw_of(s.T_supply, p.T_supply_min, p.T_supply_max)[None],
         tracked=lambda s: s.T_air[None],
         resolution=(float(p.precision_floor),),
-        # The comfort rows at the work-loss price, and the store's shortfall in
+        # The comfort rows at the curve's work price, and the store's shortfall in
         # euros at the dearest heat price.
-        hinges=comfort_rows + (Hinge(weight=1.0, surrogate=True),),
-        tie_budget=weight * 0.5 * float(p.precision_floor),
+        hinges=hinges + (Hinge(weight=1.0, surrogate=True),),
+        tie_budget=tie,
         replay_cost=replay_cost,
     )  # fmt: skip
 

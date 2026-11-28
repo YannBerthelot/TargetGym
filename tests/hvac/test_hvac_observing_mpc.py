@@ -122,3 +122,53 @@ def test_the_window_planner_converges_from_the_experts_states(step):
     oracle.step(obs, state)
     for solve in oracle.certificates:
         assert not solve["capped"] and not solve["failed"], solve
+
+
+# --- The planner prices comfort as the reward does (owner, 2026-11-28) --------
+#
+# The reward's lost work beyond a band edge is the published curve's fall from
+# it, a cubic in the distance d past the edge: its terms are the planner's rows.
+# Below the band the three are hinges of degree 1 to 3; above it the cubic term
+# is negative, which a hinge cannot carry, so the rows stop at degree 2.
+
+
+def _curve(T):
+    T = min(max(T, 15.0), 35.0)
+    return 0.1647524 * T - 0.0058274 * T**2 + 0.0000623 * T**3 - 0.4685328
+
+
+@pytest.mark.parametrize("d", [0.05, 0.4, 1.0, 2.5])
+def test_the_planners_rows_below_the_band_are_the_curves_fall(d):
+    from target_gym.hvac.oracle import comfort_rows
+
+    below, _ = comfort_rows(P)
+    rows = sum(w * d**k for k, w in enumerate(below, start=1))
+    assert rows == pytest.approx(_curve(21.0) - _curve(21.0 - d), rel=1e-9)
+
+
+@pytest.mark.parametrize("d", [0.05, 0.4, 1.0, 2.0])
+def test_the_planners_rows_above_the_band_overstate_the_curve_by_its_cubic_term(d):
+    """Above the band the curve's fall from 26 C is a d + b d^2 - c d^3 with the
+    curve's cubic coefficient c = 0.0000623 (its Taylor terms at the edge): the
+    rows keep the first two, so they overstate the fall by exactly c d^3, 0.5 %
+    of it at 1 K and 1.8 % at 2 K."""
+    from target_gym.hvac.oracle import comfort_rows
+
+    _, above = comfort_rows(P)
+    rows = sum(w * d**k for k, w in enumerate(above, start=1))
+    fall = _curve(26.0) - _curve(26.0 + d)
+    assert rows - fall == pytest.approx(0.0000623 * d**3, rel=1e-6, abs=1e-12)
+    assert min(above) > 0.0
+
+
+@pytest.mark.parametrize("power", [1, 2, 3])
+@pytest.mark.parametrize("mean", [-0.4, 0.15, 0.6])
+def test_the_expected_powers_of_the_excess_are_a_normal_errors(power, mean):
+    from target_gym.hvac.oracle import expected_power
+
+    spread = 0.3
+    draws = np.random.default_rng(11).normal(mean, spread, 400_000)
+    moment = np.maximum(draws, 0.0) ** power
+    tol = 4.0 * moment.std() / np.sqrt(draws.size)
+    got = float(expected_power(jnp.asarray(mean), jnp.asarray(spread), power))
+    assert abs(got - moment.mean()) < tol

@@ -648,9 +648,15 @@ def test_the_compressors_plan_backs_its_zone_edge_off_the_band():
         # In the score's dollars: half the 1.7 kW resolution for one 0.25 s
         # step at 60 $/MWh.
         ("wind_turbine", 850.0e-6 * 0.25 / 3600.0 * 60.0),
-        # p = 1, in euros: the work an occupied K h loses, 0.02 x 15 people x
-        # EUR 31.8 = EUR 9.54, for 0.25 h at half the 0.1 K resolution.
-        ("hvac", 9.54 * 0.25 * 0.05),
+        # In euros: the work an occupied 0.25 h step loses with the room half
+        # the 0.1 K resolution below the band's low edge, 21 C, where the heated
+        # room sits. The hour's work is 15 people x EUR 31.8 = EUR 477, and the
+        # share lost is the published curve's fall (LBNL-60946; owner,
+        # 2026-11-28), P(T) = 0.1647524 T - 0.0058274 T^2 + 0.0000623 T^3
+        # - 0.4685328, over that half step: P(21) - P(20.95) = 0.1647524 x 0.05
+        # - 0.0058274 x (441 - 438.9025) + 0.0000623 x (9261 - 9195.007375)
+        # = 0.0001259890375, in 40-digit decimals.
+        ("hvac", 477.0 * 0.25 * 0.0001259890375),
         # The reagent a step's hold needs for 0.005 pH more at the operator's set
         # point, pH 6.45 (owner, 2026-11-25; 6.5 from #232, 7 before), on the
         # nominal streams (PHParams: q1 16.6, q2 0.55 mL/s; Wa1 3e-3, Wb1 0;

@@ -172,12 +172,16 @@ class HVACParams(EnvParams):
     price_valle: float = 0.139
     price_llano: float = 0.184
     price_punta: float = 0.263
-    #: Work lost per kelvin outside the band: 2 % per K above 25 C (Seppanen
-    #: and Fisk 2005, REALITY.md [20]); performance peaks near 21.7 C and falls
-    #: on both sides [20]. Ours below the band, where no per-K figure was read.
+    #: The floor surface's price, the share of an hour's work charged per
+    #: kelvin-hour of floor above its limit: 2 %, as the room lost per K above
+    #: 25 C (Seppanen and Fisk 2005, REALITY.md [20]). Ours for the floor, which
+    #: no controller comes near, so it only has to make crossing it never pay
+    #: (owner, 2026-11-28). The room is priced by the published curve
+    #: (``work_lost``).
     productivity_per_K: float = 0.02
-    #: Office occupants per m^2. Ours, family range 0.07 to 0.12 (8 to 15
-    #: m^2 a person).
+    #: Office occupants per m^2: 10 m^2 a person, a single office's default in
+    #: prEN 16798-1 (Olesen, REHVA Journal 01/2015, Table 5; REALITY.md [23]); a
+    #: landscaped office's 15 m^2 gives 0.067.
     occupants_per_m2: float = 0.10
     #: EU hourly labour cost, 2023 (Eurostat, REALITY.md [21]).
     labour_cost: float = 31.8  # EUR per person-hour
@@ -186,16 +190,19 @@ class HVACParams(EnvParams):
     failure_cost: float = 0.0
 
     @property
+    def work_price(self):
+        """Euros an occupied hour of the occupants' work: occupants_per_m2 x
+        A_floor x labour_cost (15 people x 31.8 = 477 for the member), derived
+        so it follows each of the three. The room loses the share of it the
+        published curve gives outside the band (``work_lost``)."""
+        return self.occupants_per_m2 * self.A_floor * self.labour_cost
+
+    @property
     def comfort_price(self):
-        """Euros per occupied kelvin-hour: the work it loses, productivity_per_K x
-        occupants_per_m2 x A_floor x labour_cost (0.02 x 15 x 31.8 = 9.54 for the
-        member), derived so it follows each of the four."""
-        return (
-            self.productivity_per_K
-            * self.occupants_per_m2
-            * self.A_floor
-            * self.labour_cost
-        )
+        """Euros per occupied kelvin-hour of floor above its limit:
+        productivity_per_K of an hour's work (0.02 x 477 = 9.54 for the member),
+        the project's own price (owner, 2026-11-28)."""
+        return self.productivity_per_K * self.work_price
 
 
 #: Units of the HVACParams fields, for the generated environment pages.
@@ -255,6 +262,7 @@ PARAM_UNITS = {
     "occupants_per_m2": "1/m^2",
     "labour_cost": "EUR/h",
     "comfort_price": "EUR/(K h)",
+    "work_price": "EUR/h",
     "restart_steps": "steps",
     "failure_cost": "EUR per step",
 }
@@ -693,17 +701,45 @@ def check_is_terminal(state: "HVACState", params: HVACParams, xp=jnp):
     return terminated, truncated
 
 
-def comfort_kelvin_hours(state: "HVACState", params: HVACParams, xp=jnp):
-    """Occupied kelvin-hours outside the band and of floor above its limit,
-    one step. Out of hours no work is lost."""
+#: Relative performance at office work against room temperature T in C:
+#: P(T) = c1 T + c2 T^2 + c3 T^3 + c0, the curve fitted with composite weights
+#: across 24 studies, peaking near 21.75 C (Seppanen, Fisk and Lei 2006,
+#: LBNL-60946, p. 8, Fig. 2; REALITY.md [22]); the coefficients as printed.
+PERFORMANCE_CURVE = (0.1647524, -0.0058274, 0.0000623, -0.4685328)
+#: The ends of the curve's data, C (LBNL-60946, Figs. 1 and 2): it is read
+#: between them and held at its value beyond.
+PERFORMANCE_SPAN = (15.0, 35.0)
+
+
+def performance(T_air, xp=jnp):
+    """The share of its best the occupants' work reaches at ``T_air``, by the
+    published curve (``PERFORMANCE_CURVE``), between the ends of its data."""
+    c1, c2, c3, c0 = PERFORMANCE_CURVE
+    T = xp.clip(T_air, *PERFORMANCE_SPAN)
+    return c1 * T + c2 * T * T + c3 * T * T * T + c0
+
+
+def work_lost(T_air, params: HVACParams, xp=jnp):
+    """The share of an hour's work the room loses at ``T_air``: nothing inside
+    the band, and outside it the curve's fall from the band's nearest edge,
+    ``P(edge) - P(T)`` (owner, 2026-11-28, "Published curve")."""
+    p = params
+    below = performance(p.band_low, xp) - performance(xp.minimum(T_air, p.band_low), xp)
+    above = performance(p.band_high, xp) - performance(
+        xp.maximum(T_air, p.band_high), xp
+    )
+    return below + above
+
+
+def comfort_cost(state: "HVACState", params: HVACParams, xp=jnp):
+    """Euros of lost work, one step: the room's share by the curve at an hour's
+    work, and the floor's kelvin-hours above its limit at ``comfort_price``.
+    Out of hours no work is lost."""
     p = params
     hours = p.delta_t / 3600.0
-    outside = xp.maximum(p.band_low - state.T_air, 0.0) + xp.maximum(
-        state.T_air - p.band_high, 0.0
-    )
     floor = xp.maximum(state.T_floor - p.floor_surface_max, 0.0)
-    occupied = is_occupied(state.time, p)
-    return xp.where(occupied, outside + floor, 0.0) * hours
+    lost = p.work_price * work_lost(state.T_air, p, xp) + p.comfort_price * floor
+    return xp.where(is_occupied(state.time, p), lost, 0.0) * hours
 
 
 def electricity_kwh(state: "HVACState", params: HVACParams):
@@ -719,7 +755,7 @@ def compute_reward_terms(state: "HVACState", params: HVACParams, xp=jnp, tripped
     if tripped is None:
         tripped, _ = check_is_terminal(state, p, xp)
     terms = {
-        "comfort": p.comfort_price * comfort_kelvin_hours(state, p, xp),
+        "comfort": comfort_cost(state, p, xp),
         "electricity": electricity_price(state.time - 1, p) * electricity_kwh(state, p),
     }
     return R.with_trip(terms, tripped, R.trip_cost(p), xp)
