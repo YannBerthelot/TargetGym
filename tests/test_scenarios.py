@@ -198,6 +198,19 @@ def test_heat_left_in_the_store_earns_nothing():
     assert evaluation.episode_cost(spec, ep) == pytest.approx(2.0)
 
 
+def test_an_evaluation_that_credits_its_store_counts_a_fuller_store_against_the_cost():
+    # A store whose value is what restoring it costs and what filling it cost
+    # (pH's tanks, v1 task pages, item 2) may be credited: the same episode as
+    # above, the store gaining 6 over the window's 2 steps, credits 3 a step.
+    spec = evaluating(
+        unscored_steps=2, scored_steps=2, edge_charge="store", edge_credit=True
+    )
+    ep = _stored_episode([5, 5, 1, 3, 5], [0, 4, 7, 10, 0])
+    assert evaluation.episode_cost(spec, ep) == pytest.approx(-1.0)
+    lost = _stored_episode([5, 5, 1, 3, 5], [0, 10, 7, 4, 100])
+    assert evaluation.episode_cost(spec, lost) == pytest.approx(5.0)
+
+
 def test_a_window_from_the_first_step_reads_the_store_before_any_step():
     spec = evaluating(scored_steps=2, edge_charge="store")
     with pytest.raises(ValueError):

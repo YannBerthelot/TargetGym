@@ -14,7 +14,12 @@ charter Amendment 3, the job score), run by
   as the CSTR holds its event: a later upset or swing is not seen); the pH by
   ``planner_pH``, the env's value with the titration curve's slope;
 - objective: the reagent both valves use, in litres, the reward's only term with
-  a slope (T2);
+  a slope (T2), on the steps the evaluation scores (all but the first), and the
+  evaluation's charge for the tanks' capacity (``env.stored_value``): its change
+  over each scored step at the reagent's price, which sums to what the window
+  lost, charged, or gained, credited (owner, 2026-11-28, v1 task pages, item 2).
+  The charge is the evaluation's, not the reward's, so K8's replay adds it to the
+  reward's cost (``replay_cost``);
 - limit: the discharge inside the permit on every visited state, elastic at the
   excursion's price per hundredth of a pH (T3), as the ceiling's margin
   (``ceiling_margins``). Inside it neither the excursion, the diversion (the
@@ -55,7 +60,12 @@ from target_gym.pc_gym.ph_neutralization.env import (
     solve_pH,
     staged_velocity,
     steady_base_flow,
+    stored_capacity,
+    stored_value,
     titration_residual,
+)
+from target_gym.pc_gym.ph_neutralization.scenarios import (
+    ph_neutralization_evaluation,
 )
 from target_gym.utils import ou_decay
 
@@ -105,6 +115,17 @@ MM = 1000.0
 INVARIANTS = (0, 1, 2, 3, 5, 6)
 
 
+#: The first step the evaluation scores (``scenarios.ph_neutralization_evaluation``).
+FIRST_SCORED = ph_neutralization_evaluation()["unscored_steps"]
+
+
+class _Tanks:
+    """The two stages' invariants in M, as ``env.stored_value`` reads a state."""
+
+    def __init__(self, x):
+        self.Wa_s1, self.Wb_s1, self.Wa, self.Wb = (x[i] / MM for i in range(4))
+
+
 def ph_step(env, p, x, u, t, task):
     """One step of the planner's model from ``x`` = (stage 1's and stage 2's
     invariants, the basin's litres and invariants, the trim's flow; invariants in
@@ -112,7 +133,7 @@ def ph_step(env, p, x, u, t, task):
     ``(x_next, q3 + q3_trim, the discharge's pH)``, as ``compute_next_state``
     steps the plant with the noise zeroed. ``t`` steps into the plan, the buffer
     is on its mean path from the solve's ``q2``."""
-    q1, Wa1, q2_0 = task
+    q1, Wa1, q2_0 = task[:3]
     q3 = p.q3_min + 0.5 * (u[0] + 1.0) * (p.q3_max - p.q3_min)  # T1
     q3t = 0.5 * (u[1] + 1.0) * p.q3_trim_max
     decay = ou_decay(BUFFER_OU_THETA, float(p.delta_t), xp=math)
@@ -150,7 +171,9 @@ def ph_model(env, p) -> TaskModel:
 
     def step(d, x, u, t):
         x1, reagent, pH = ph_step(env, p, x, u, t, d["task"])
-        cost = R.priced_cost(per_mL_s * reagent, 1.0)
+        scored = d["task"][3] + t >= FIRST_SCORED
+        spent = stored_value(_Tanks(x), p) - stored_value(_Tanks(x1), p)
+        cost = jnp.where(scored, R.priced_cost(per_mL_s * reagent, 1.0) + spent, 0.0)
         # Tracked: what the plant's probe reports, its own bisection (K8 compares
         # it with the replay). The limit keeps the polished root, whose slope the
         # solver needs; the two differ by at most the bisection's half-width,
@@ -163,7 +186,7 @@ def ph_model(env, p) -> TaskModel:
         state_x=lambda s: jnp.stack([
             s.Wa_s1, s.Wb_s1, s.Wa, s.Wb, s.basin, s.Wa_basin, s.Wb_basin, s.q3_trim,
         ]).at[INVARIANTS,].multiply(MM),
-        data=lambda s: (influent_flow(s, p), p.Wa1 * acid_scale(s, p), s.q2),
+        data=lambda s: (influent_flow(s, p), p.Wa1 * acid_scale(s, p), s.q2, s.time),
         hold=lambda s: jnp.stack(
             [raw_of(s.q3, p.q3_min, p.q3_max), raw_of(s.q3_trim, 0.0, p.q3_trim_max)]
         ),
@@ -177,6 +200,10 @@ def ph_model(env, p) -> TaskModel:
         ),
         tie_budget=float(abs(dq3)) * per_mL_s,
         rest=lambda x: x[7] / p.q3_trim_max,
+        replay_cost=lambda s, s1, r: jnp.where(
+            s.time >= FIRST_SCORED,
+            -r + stored_value(s, p) - stored_value(s1, p), 0.0,
+        ),
     )  # fmt: skip
 
 
@@ -247,11 +274,7 @@ def start_inventory(state, params):
     by volume, so a tank whose content has residual ``g`` at the edge holds
     ``V g / g3`` of base beyond what its water needs there, ``g3`` the base stream's
     residual. Negative where a tank starts below the edge."""
-    p, edge = params, params.permit_low
-    g3 = titration_residual(edge, p.Wa3, p.Wb3, p)
-    g1 = titration_residual(edge, state.Wa_s1, state.Wb_s1, p)
-    g2 = titration_residual(edge, state.Wa, state.Wb, p)
-    return float((p.V_s1 * g1 + p.V * g2) / g3) / 1000.0
+    return float(stored_capacity(state, params, params.permit_low))
 
 
 def perfect_hold(env, params, reset_key, step_keys) -> dict:

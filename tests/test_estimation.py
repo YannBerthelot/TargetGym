@@ -394,7 +394,7 @@ def test_a_model_that_still_draws_noise_is_refused():
     """Unzeroed, the inflow's walk would be predicted along one fixed noise
     path, the same in every episode: a bias common to them all."""
     env = Tank()
-    with pytest.raises(ValueError, match="noise_fields"):
+    with pytest.raises(ValueError, match="model"):
         _Estimator(env, env.default_params, ("level", "inflow"), channels=(0,))
 
 
@@ -443,10 +443,15 @@ def test_on_ph_the_hidden_buffer_flow_converges_within_its_stated_spread():
     and that spread is under 0.6 of the prior's (0.45 measured, flanders,
     2026-11-28)."""
     import target_gym as tg
+    from target_gym.experts.mpc import plan_params
+    from target_gym.registry import REGISTRY
 
     env, params = tg.make("ph_neutralization", acid_upset_size=0.0, flow_swing=0.0)
+    plan = plan_params(REGISTRY["ph_neutralization"], params)
     fields = ("Wa", "Wb", "Wa_s1", "Wb_s1", "q2", "pH", "pH_s1", "sensor_history")
-    est = _Estimator(env, params, fields, channels=(0, 4), linearize="secant")
+    est = _Estimator(
+        env, params, fields, channels=(0, 4), linearize="secant", model=plan
+    )
     q2 = est.fields.index("q2")  # the scalars come first, so it is q2's place
 
     def run(seed):
@@ -468,3 +473,47 @@ def test_on_ph_the_hidden_buffer_flow_converges_within_its_stated_spread():
     lo, hi = _chi2_band(1, runs=32)
     assert lo < float(np.mean(np.asarray(err) ** 2 / np.asarray(var))) < hi
     assert float(jnp.sqrt(var[0])) < 0.6 * float(jnp.sqrt(est.prior.cov[q2, q2]))
+
+
+def _imported(path):
+    """The package modules ``path`` imports, function-local imports included."""
+    import ast
+    import pathlib
+
+    src = pathlib.Path(__file__).resolve().parent.parent / "src"
+    found = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            names = [node.module, *(f"{node.module}.{a.name}" for a in node.names)]
+        elif isinstance(node, ast.Import):
+            names = [a.name for a in node.names]
+        else:
+            continue
+        for name in (n for n in names if n.split(".")[0] == "target_gym"):
+            base = src.joinpath(*name.split("."))
+            found |= {
+                f
+                for f in (base.with_suffix(".py"), base / "__init__.py")
+                if f.is_file()
+            }
+    return found
+
+
+def test_the_estimator_reads_no_expert_code():
+    """An oracle builds on it, and an oracle reads no expert code
+    (``tests/oracles/test_process_oracles.py``): every module it imports,
+    followed to the end, is outside experts/ and no experts*.py."""
+    import pathlib
+
+    import target_gym.estimation as module
+
+    todo, seen = [pathlib.Path(module.__file__)], set()
+    while todo:
+        path = todo.pop()
+        if path not in seen:
+            seen.add(path)
+            todo.extend(_imported(path))
+    expert = [
+        p for p in seen if p.parent.name == "experts" or p.name.startswith("experts")
+    ]
+    assert expert == []

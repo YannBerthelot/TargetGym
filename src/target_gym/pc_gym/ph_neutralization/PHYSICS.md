@@ -216,6 +216,30 @@ Inside the permit only reagent counts. Adding no reagent now costs far more
 than holding the band (section 8), where the review measured it within 1.1 to
 1.4 times a perfect hold.
 
+**The tanks' capacity at the window's edges** (owner, 2026-11-28, v1 task pages,
+item 2). The two tanks hold reagent: the base above the pH an episode starts at, in
+litres of the base stream (`env.stored_capacity`, `env.stored_value`). Spent at the
+episode's end it was free: both valves shut for the last 5 min saved 4.1 % on the
+normal day, where the same cut mid-episode cost 344 %. The evaluation scores every
+step but the first, which marks the start, and charges once the capacity the window
+lost, at the reagent's price, crediting at that price what it gained
+(`scenarios.ph_neutralization_evaluation`). The credit is safe here, unlike on hvac:
+near the start's pH the tanks' content leaves with no base above that pH, so
+restoring a litre of capacity takes a litre of reagent and filling one cost a litre,
+and nothing lies between the two to trade. The planner takes the same charge
+(section 11). The reward carries none.
+
+Measured with the frozen reference on the scoring seeds (2026-11-28): every cut of
+5 to 40 min at the end loses on the score (`test_ph_capacity.py`). Cuts of 0.5, 1
+and 2 min change it by -0.0001 %, +0.00005 % and +0.0025 %. On the normal day alone
+the 5 min cut still gains 0.045 %: while the discharge falls below the start's pH in
+the last minutes, the outflow carries less base, as holding a lower pH earns
+anywhere, and the excursion the fall would bring comes after the window. Refilling
+the tanks at the end never paid. A charge with no credit, as hvac's, left 0.1 to
+0.7 %: each run's own end state varies by seed, so a run that would end fuller could
+drain the surplus for nothing. Measured against the permit's low edge rather than
+the start's pH, the capacity moves by up to 2.5 L with the buffer flow's drift.
+
 ---
 
 ## 8. Behaviour tests
@@ -355,7 +379,9 @@ is the bicarbonate a hold on the edge uses that a reference held higher pays for
 The oracle (`oracle.py`, on the shared solver, `oracles.controller.Oracle`) reads
 the true state, the buffer flow and the influent's acid strength included, and
 knows no future: it plans the buffer on its mean path and holds the influent as the
-state carries it (tested). Its objective is the reagent both valves use; the permit
+state carries it (tested). Its objective is the reagent both valves use on the
+scored steps, and the evaluation's charge for the tanks' capacity (section 7): its
+change over each scored step, at the reagent's price; the permit
 is a limit on the planned discharge, backed off by the planner's error over the base
 valve's dead time (`data/oracle_widths/ph_neutralization.json`), and the excursion,
 diversion and trip terms are charged by the replay if a plan leaves the permit. Its
@@ -385,7 +411,10 @@ leaves the permit costs less than the hold less that inventory, and that is the
 ceiling (`perfect_hold(...)["cost"]`; `["hold"]` and `["inventory"]` give the
 parts, `start_inventory` the closed form, tested against counting base in
 `test_ph_ceiling.py`). The oracle reaches it nearly: it doses nothing for the first
-10 min and lets the discharge slide to the edge.
+10 min and lets the discharge slide to the edge. Since 2026-11-28 the evaluation
+charges the capacity a window spends (section 7), so a policy no longer keeps the
+start's inventory, and the hold less the inventory is a looser bound than it was;
+it stays as context.
 
 **The planner reports the probe's pH.** The planner's limit uses the plant's
 bisection polished by Newton, for the slope the solver needs; the output it reports
