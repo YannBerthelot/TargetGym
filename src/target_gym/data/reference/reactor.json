@@ -1,16 +1,16 @@
 {
- "commit": "2235084efe532717ec2a823596669dbc41a36c8f",
+ "commit": "db86f64cb8e10a8ae440afa620b6ee0dbc145744",
  "dirty": false,
  "env": "reactor-v10",
- "expert": "c17d59588026b37b",
- "fingerprint": "459c3351193caca7",
+ "expert": "7b2f7638d67efd07",
+ "fingerprint": "d7cd0f9c6457a7eb",
  "format": 1,
- "generated": "2026-11-27T21:01:14+00:00",
+ "generated": "2026-11-28T00:56:05+00:00",
  "kind": "expert",
  "params": {
   "sensor_noise_scale": 1.0
  },
  "rung": "expert",
- "stamp": "a3e0a184c8d1ba0a",
+ "stamp": "8b10ddad14ad510f",
  "task": "reactor"
 }
