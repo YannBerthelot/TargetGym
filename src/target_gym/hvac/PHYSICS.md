@@ -390,6 +390,26 @@ B6), not a number moved until the test passed.
 - Its horizon must reach across a night to the next occupied day, at least 24
   h (96 steps), for night charging to show; the slab's time constant (150 min
   for its flux) sets how far ahead a supply move pays.
+- **The observation-only MPC** (`oracle.observation_only_mpc`; v1 item 5, the
+  owner's reading of 2026-11-28: room comes from an MPC on the true model that
+  estimates the hidden state from the observation). It is the window planner
+  fed the shared estimator's belief (`estimation.ObservationOnly`) over the
+  mass, the slab core, the room and outdoor air and the weather's deviation,
+  read from the room, outdoor and core sensors and the day-ahead forecast; the
+  forecast is a function of the deviation, so the deviation is all but exact,
+  and the mass is the one state the filter really estimates. One change to the
+  objective: comfort is priced at its expected cost under the weather's
+  forecast error. On the mean path the plan holds the room on the band's edge,
+  where the weather it did not forecast leaves it below half the time, and the
+  slab cannot correct within the day. `oracle.room_spread` carries the plant's
+  own weather innovations to the room through the building at a held supply,
+  open loop: 0.05 K at 1 h, 0.16 K at 6 h, 0.34 K at 24 h, the same in every
+  scenario; `oracle.expected_excess` gives the expected kelvin-hours of a normal
+  error of that spread. This is the chance-constrained MPC of building climate
+  control (Oldewurtel et al., Energy and Buildings 45, 2012, 15-27) written as
+  an expected cost; nothing in it is tuned. The plan's expected comfort is not
+  what the noise-free replay charges, so K8's replay gap measures that risk
+  premium as well as the plan's error.
 
 ---
 
