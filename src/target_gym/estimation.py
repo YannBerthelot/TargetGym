@@ -32,7 +32,19 @@ such as a metered input, with ``known``.
 
 A solve whose JAX derivative is wrong, such as a bisection (pH's), takes
 ``linearize="secant"``: central differences across one standard deviation of
-the belief, in place of ``jax.jacfwd``.
+the belief, in place of ``jax.jacfwd``. A plant that is strongly nonlinear
+where its belief is spread takes ``linearize="cubature"``, the cubature Kalman
+filter (Arasaratnam and Haykin, IEEE Trans. Automatic Control 54(6), 2009): no
+derivative, but 2n points at +-sqrt(n) spreads along the belief's principal
+axes, each stepped through the model and read through the instruments. It is
+exact on a linear model, and a belief that lies on a curve, as pH's reset puts
+it, keeps its points on that curve, where secants along each field leave it.
+
+A Gaussian filter's own error can outgrow a field the plant leaves without
+noise, and the filter then trusts its model over its readings. A task allows
+for it with a ``random_walk`` on that field: pH's four invariants take 1e-5 a
+step, about 5 % of their prior spread (``tests/test_estimation.py``). The plant
+is unchanged.
 """
 
 from __future__ import annotations
@@ -133,7 +145,7 @@ class Estimator:
       expert code, and an oracle may build on it.
     - ``noise_fields``: in place of ``model``, the params fields that carry
       process noise, zeroed in ``params`` with the sensor and actuator noise.
-    - ``linearize``: ``"jax"`` (``jax.jacfwd``) or ``"secant"``.
+    - ``linearize``: ``"jax"`` (``jax.jacfwd``), ``"secant"`` or ``"cubature"``.
     - ``draws``: the samples the prior and the process noise are measured on.
 
     ``prior`` is the belief before any observation, ``process_noise`` and
@@ -154,8 +166,10 @@ class Estimator:
         linearize: str = "jax",
         draws: int = 1024,
     ):
-        if linearize not in ("jax", "secant"):
-            raise ValueError(f"linearize is 'jax' or 'secant', not {linearize!r}")
+        if linearize not in ("jax", "secant", "cubature"):
+            raise ValueError(
+                f"linearize is 'jax', 'secant' or 'cubature', not {linearize!r}"
+            )
         self.env, self.params, self.fields = env, params, tuple(fields)
         self.linearize, self._known = linearize, known
         if model is None:
@@ -235,6 +249,14 @@ class Estimator:
 
         mean, cov = belief
         ahead = step(mean)
+        if self.linearize == "cubature":
+            points = self._points(self.vector(mean), cov)
+            stepped = jax.vmap(lambda x: self.vector(step(self.embed(mean, x))))(points)
+            centre = jnp.mean(stepped, axis=0)
+            spread = self._spread(stepped, centre, stepped, centre)
+            return self._correct(
+                Belief(self.embed(ahead, centre), spread + self.process_noise), obs
+            )
         jac = self._jacobian(
             lambda x: self.vector(step(self.embed(mean, x))), mean, cov
         )
@@ -250,20 +272,55 @@ class Estimator:
             return jnp.ravel(self.env.get_obs(self.embed(mean, x), self.model))[idx]
 
         x = self.vector(mean)
-        h = self._jacobian(observe, mean, cov) * self._scale[None, :]
         r = self._measurement_noise(mean)
         w = jnp.sqrt(jnp.diag(r))
+        y = jnp.ravel(jnp.asarray(obs))[idx]
+        if self.linearize == "cubature":
+            return self._cubature_correct(mean, cov, x, observe, r, w, y)
+        h = self._jacobian(observe, mean, cov) * self._scale[None, :]
         # In units of the prior's spread and of each reading's noise, which
         # keeps float32 well away from its limits on every task.
         hw, rw = h / w[:, None], r / jnp.outer(w, w)
         pz = cov / jnp.outer(self._scale, self._scale)
-        innovation = (jnp.ravel(jnp.asarray(obs))[idx] - observe(x)) / w
+        innovation = (y - observe(x)) / w
         gain = jnp.linalg.solve(hw @ pz @ hw.T + rw, hw @ pz).T
         keep = jnp.eye(x.size, dtype=pz.dtype) - gain @ hw
         pz = keep @ pz @ keep.T + gain @ rw @ gain.T
         pz = 0.5 * (pz + pz.T)
         x = x + self._scale * (gain @ innovation)
         return Belief(self.embed(mean, x), pz * jnp.outer(self._scale, self._scale))
+
+    def _cubature_correct(self, mean, cov, x, observe, r, w, y) -> Belief:
+        """The measurement update on the cubature points, in the prior's
+        scale and each reading's noise."""
+        points = self._points(x, cov)
+        read = jax.vmap(observe)(points)
+        expected = jnp.mean(read, axis=0)
+        dx = (points - x) / self._scale
+        dy = (read - expected) / w
+        pyy = dy.T @ dy / len(points) + r / jnp.outer(w, w)
+        pxy = dx.T @ dy / len(points)
+        gain = jnp.linalg.solve(pyy, pxy.T).T
+        pz = cov / jnp.outer(self._scale, self._scale) - gain @ pyy @ gain.T
+        pz = 0.5 * (pz + pz.T)
+        x = x + self._scale * (gain @ ((y - expected) / w))
+        return Belief(self.embed(mean, x), pz * jnp.outer(self._scale, self._scale))
+
+    def _points(self, x, cov):
+        """The belief's 2n cubature points: ``x`` plus and minus sqrt(n) times
+        each column of a square root of ``cov``, its principal axes."""
+        pz = cov / jnp.outer(self._scale, self._scale)
+        values, vectors = jnp.linalg.eigh(0.5 * (pz + pz.T))
+        root = vectors * jnp.sqrt(jnp.clip(values, 0.0))[None, :]
+        offsets = jnp.sqrt(x.size) * root.T * self._scale[None, :]
+        return jnp.concatenate([x[None, :] + offsets, x[None, :] - offsets])
+
+    def _spread(self, a, a_mean, b, b_mean):
+        """The covariance of the points ``a`` with ``b`` about their means,
+        equally weighted, in physical units."""
+        da = (a - a_mean) / self._scale
+        db = (b - b_mean) / self._scale
+        return (da.T @ db / len(a)) * jnp.outer(self._scale, self._scale)
 
     def _jacobian(self, fn, mean, cov):
         x = self.vector(mean)
