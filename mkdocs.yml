@@ -98,6 +98,7 @@ nav:
   - Task protocol: task-protocol.md
   - User guide:
       - Getting started: getting-started.md
+      - Comparing an agent with the reference: comparing.md
       - Continuing tasks: continuing-tasks.md
       - Using the PIDs: using-the-pids.md
       - Rendering: rendering.md

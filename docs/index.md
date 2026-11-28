@@ -90,8 +90,9 @@ policy has something real to beat. The five without one, `plane`, `plane_energy`
     [Environments](environments.md) ·
     [API reference](api.md)
 
-- **Beat the baselines**
+- **Beat the reference**
 
+    [Comparing an agent with the reference](comparing.md) ·
     [Baseline results](baseline-results.md) ·
     [RL protocol](rl-protocol.md) ·
     [RL results](rl-baselines.md)

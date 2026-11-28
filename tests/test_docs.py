@@ -13,7 +13,10 @@ A fenced block is executed unless its first line is ``# doc: skip`` -- used for
 snippets that write files, install packages, or need a GPU. A block whose first
 line is ``# doc: agent`` needs the opt-in agent group (stable-baselines3 and
 torch): it is marked ``agent``, skips without the group, and CI's agent job
-runs it with the group installed.
+runs it with the group installed. A block whose first line is ``# doc: records``
+builds a scored task's frozen reference (``tg.score``, ``tg.make_reference``):
+it is marked ``records``, so it runs where the records' own tests run, and a
+plant changed since the last freeze fails the records job, not the suite.
 
 The commands the docs show are checked too: every ``make`` target, script,
 script flag and ``python -m`` module they name must exist.
@@ -39,6 +42,7 @@ FENCE = re.compile(r"^```(\w*)\n(.*?)^```", re.MULTILINE | re.DOTALL)
 SHELL = {"bash", "sh", "shell", "text", ""}
 INLINE = re.compile(r"`([^`\n]+)`")
 AGENT = "# doc: agent"
+RECORDS = "# doc: records"
 
 
 def _pages() -> list[pathlib.Path]:
@@ -55,16 +59,30 @@ def _runnable_blocks(path: pathlib.Path) -> list[str]:
     ]
 
 
+def _marks(code: str) -> list:
+    """The tiers a documented example runs in, from its first line."""
+    # An example that saves a video writes a file through ffmpeg.
+    marks = [pytest.mark.medium] if "save_video" in code else []
+    if code.lstrip().startswith(AGENT):
+        marks.append(pytest.mark.agent)
+    if code.lstrip().startswith(RECORDS):
+        marks.append(pytest.mark.records)
+    return marks
+
+
+def test_an_example_on_the_frozen_references_is_a_records_test():
+    marks = _marks("# doc: records -- builds the frozen reference\nimport x\n")
+    assert pytest.mark.records in marks
+    assert pytest.mark.records not in _marks("import target_gym\n")
+
+
 def _doc_cases() -> list[tuple[str, str]]:
     cases = []
     for md in _pages():
         name = md.relative_to(ROOT).as_posix()
         for i, code in enumerate(_runnable_blocks(md)):
             # An example that saves a video writes a file through ffmpeg.
-            marks = [pytest.mark.medium] if "save_video" in code else []
-            if code.lstrip().startswith(AGENT):
-                marks.append(pytest.mark.agent)
-            cases.append(pytest.param(code, id=f"{name}:{i}", marks=marks))
+            cases.append(pytest.param(code, id=f"{name}:{i}", marks=_marks(code)))
     return cases
 
 

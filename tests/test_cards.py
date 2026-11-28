@@ -107,6 +107,68 @@ def test_the_gymnasium_id_appears_once_frozen(recorded, tmp_path):
     assert 'gymnasium.make("TargetGym/compressor_surge-v1")' in after
 
 
+#: The fixture's record has the expert at J = 3 and the MPC at 3 (1 - 0.123) =
+#: 2.631. These terms sum to both, and the MPC's saving of 0.369 is twice the
+#: plan's 0.738 and minus the effluent's -0.369 (it pays more effluent).
+BREAKDOWN = {
+    "source": "a probe on four cores at 0123456789",
+    "terms": {
+        "Plan not taken": {"expert": 2.0, "mpc": 1.262},
+        "Effluent": {"expert": 1.0, "mpc": 1.369},
+    },
+}
+
+
+def test_a_breakdown_shows_each_terms_share_of_the_saving(recorded, tmp_path):
+    plain = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    text = cards.card(
+        TASK,
+        {**INPUTS, "breakdown": BREAKDOWN},
+        records=recorded,
+        manifests=tmp_path / "none",
+    )
+    header = (
+        "| Term | Expert (the frozen reference) | MPC on the observation "
+        "| Share of the saving |"
+    )
+    rows = [
+        header,
+        "|---|---|---|---|",
+        "| Plan not taken | 2 | 1.262 | +200.0 % |",
+        "| Effluent | 1 | 1.369 | -100.0 % |",
+        "| Total | 3 | 2.631 | +100.0 % |",
+    ]
+    assert "\n".join(rows) in text
+    assert BREAKDOWN["source"] in text
+    # Under the baselines, before the prices; a card without one has none.
+    assert text.index("## Baselines") < text.index(header) < text.index("## Prices")
+    assert "Share of the saving" not in plain
+
+
+@pytest.mark.parametrize(
+    "terms, says",
+    [
+        # The MPC's terms sum to 2.7, 2.6 % over its recorded J of 2.631.
+        (
+            {
+                "Plan": {"expert": 2.0, "mpc": 1.262},
+                "Effl": {"expert": 1.0, "mpc": 1.438},
+            },
+            "sum to 2.7",
+        ),
+        ({"Plan": {"expert": 3.0, "sac": 1.0}}, "sac"),  # SAC is not recorded
+        ({"Plan": {"expert": 3.0, "mpc": 2.631, "nothing": 111.0}}, "one other line"),
+    ],
+    ids=["a total the record lacks", "a line the record lacks", "two lines"],
+)
+def test_a_breakdown_the_record_does_not_bear_out_is_refused(
+    recorded, tmp_path, terms, says
+):
+    inputs = {**INPUTS, "breakdown": {"source": "a probe", "terms": terms}}
+    with pytest.raises(SystemExit, match=says):
+        cards.card(TASK, inputs, records=recorded, manifests=tmp_path / "none")
+
+
 def test_a_price_that_is_no_parameter_is_refused(recorded, tmp_path):
     wrong = {**INPUTS, "prices": [{"field": "no_such", "trades": "-", "unit": "-"}]}
     with pytest.raises(SystemExit, match="no_such"):

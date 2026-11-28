@@ -87,6 +87,26 @@ Item 9 of the task protocol. No task is frozen yet.
   source's size and listed no site, so every solve ran at width 0 and about 80 %
   of them hit the iteration cap.
 
+### Docs for comparing an agent, and a beta (2026-11-27)
+
+After the outside review of 2026-11-27 (M2, M4, L3) and the owner's pickers the
+same day.
+
+- 0.8.0 is labelled a beta in the README, as PyPI's classifier says. A new page,
+  [Comparing an agent with the reference](docs/comparing.md), which the README
+  links first, shows how to train on the scenarios, where to choose checkpoints
+  and how to read `tg.score`. The README's examples run on scored tasks.
+- The docs no longer call the MPC an upper bound, or the ceiling a limit: both
+  are achieved costs. The README counts its tasks and their MPCs right.
+- The throughput benchmark (`benchmark_speed`) times gymnax's `step` with its
+  auto-reset on the scored configuration, a key for every environment and step,
+  random actions, and everything `step` returns kept, where it kept only the
+  state with one key and zero actions. `docs/performance.md` is measured again
+  on one named machine, where the old method overstated the rate 1.6 to 19
+  times.
+- The install notes say matplotlib, seaborn and pandas come with gymnax, which
+  requires them; an extra for them would make no install lighter.
+
 ### hvac's window edge and the scored defaults (2026-11-27)
 
 Two findings of the outside RL research review, fixed as the owner decided by

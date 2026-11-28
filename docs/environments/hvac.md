@@ -83,7 +83,7 @@ What an agent is measured against: the expected cost per step over the task's we
 | Best null policy | the cheapest of the simple policies | not current | |
 | Reference | the controller to beat | not current | |
 | MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+| Ceiling | the best known plan with the true model, the true state and the future: an achieved cost, not a bound | not current | |
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 

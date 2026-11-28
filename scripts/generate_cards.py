@@ -14,11 +14,19 @@ say what only the task's session knows, and the session writes them:
         {"field": "zone_price", "trades": "a second outside the pressure zone",
          "unit": "kJ/s", "source": "[C3], p. 4"}
       ],
-      "not_modelled": ["what the task leaves out, one item each"]
+      "not_modelled": ["what the task leaves out, one item each"],
+      "breakdown": {
+        "source": "what produced the figures: the script, its commit, the machine",
+        "terms": {"Plan not taken": {"expert": 1.234, "mpc": 0.456}}
+      }
     }
 
 A price is a parameter that trades one goal against another; its ``source`` is
-where it is published, or null where the price is the project's own. The rest
+where it is published, or null where the price is the project's own. The
+breakdown is optional: each cost term's mean a step, each scenario weighted as J
+weights it, for the expert and one other recorded line. The card shows each
+term's share of the saving and refuses a column that does not sum to its line's
+recorded J, so the figures cannot drift from the record. The rest
 comes from the tree: the scenarios, their weights and the scoring definition
 (``target_gym.v1.manifest``), the baselines (the task's v1 record,
 ``scripts/record_v1.py``), each price's value in the scored configuration, and
@@ -127,6 +135,53 @@ def _baselines(rec: dict | None, unit: str) -> list[str]:
     return out
 
 
+#: How far a breakdown's column may sum from its line's recorded J. The terms are
+#: typed in, each rounded to a few digits, and a run on another machine sums in
+#: another order; a column further off comes from another run than the record's,
+#: and the card would contradict its own baselines table.
+TOTAL_RTOL = 0.005
+
+
+def _breakdown(task: str, breakdown: dict, rec: dict | None, unit: str) -> list[str]:
+    """The saving by cost term: the expert's and one line's mean cost a step,
+    each column checked against its line's recorded J."""
+    terms = breakdown["terms"]
+    lines = set(next(iter(terms.values())))
+    if (
+        "expert" not in lines
+        or len(lines) != 2
+        or any(set(v) != lines for v in terms.values())
+    ):
+        raise SystemExit(
+            f"{task}: each term of the breakdown gives the expert and one other line"
+        )
+    (other,) = lines - {"expert"}
+    recorded = (rec or {}).get("lines", {})
+    totals = {x: sum(v[x] for v in terms.values()) for x in lines}
+    for x in lines:
+        if x not in recorded:
+            raise SystemExit(f"{task}: the breakdown has {x}, which the record lacks")
+        J = recorded[x]["J"]
+        if abs(totals[x] - J) > TOTAL_RTOL * abs(J):
+            raise SystemExit(
+                f"{task}: the breakdown's {x} terms sum to {totals[x]:.4g}, the "
+                f"record's J is {J:.4g}: take the breakdown on the recorded run"
+            )
+    saving = totals["expert"] - totals[other]
+    out = [
+        f"Where the saving comes from: each cost term's mean a step, in {unit}, each "
+        f"scenario weighted as J weights it ({breakdown['source']}). Each column "
+        f"sums to its line's recorded J, to within {100 * TOTAL_RTOL:g} %.",
+        "",
+        f"| Term | {NAMES['expert']} | {NAMES[other]} | Share of the saving |",
+        "|---|---|---|---|",
+    ]
+    for name, v in [*terms.items(), ("Total", totals)]:
+        share = (v["expert"] - v[other]) / saving if saving else None
+        out.append(f"| {name} | {v['expert']:.4g} | {v[other]:.4g} | {_pct(share)} |")
+    return out
+
+
 def _expert(task: str) -> str:
     """Which controller the expert is (item 3, as read on 2026-11-28)."""
     from target_gym import reference
@@ -187,7 +242,10 @@ def card(task: str, inputs: dict, records=v1.RECORDS, manifests=v1.MANIFESTS) ->
     for name, part in scoring["scenarios"].items():
         lines.append(f"| `{name}` | {part['weight']:.3f} | {suite[name].description} |")
     lines += ["", "## Baselines", "", _expert(task), ""]
-    lines += _baselines(v1.record(task, records), inputs["unit"])
+    rec = v1.record(task, records)
+    lines += _baselines(rec, inputs["unit"])
+    if "breakdown" in inputs:
+        lines += ["", *_breakdown(task, inputs["breakdown"], rec, inputs["unit"])]
     lines += ["", ROOM, "", "## Prices", ""]
     lines += _prices(inputs, task)
     lines += ["", "## What it does not model", ""]
