@@ -247,24 +247,22 @@ def observed(params) -> dict:
     return {"known": known, "random_walk": {"upset_levels[0]": walk}}
 
 
-def observation_only_mpc(env, params):
+def observation_only_mpc(env, params, plan):
     """The MPC on the true model that reads the observation only (v1 item 5), the
     line ``scripts/record_v1.py`` records: the registry's planner (``ph_model``)
     fed the shared estimator's belief (``estimation.ObservationOnly``), read
     through the two probes by secants, since the pH solve is a bisection.
-    ``params`` is the scenario's configuration, noise included: the planner plans
-    on it with the noise zeroed (``experts.mpc.plan_params``), the estimator reads
-    its noise. A host policy: ``policy.reset()``, then ``policy(obs)``."""
+    ``params`` is the scenario's configuration, noise included, whose noise the
+    estimator reads; ``plan`` the planner's (its noise zeroed, ``plan_params``),
+    on which it plans and the estimator predicts. A host policy:
+    ``policy.reset()``, then ``policy(obs)``."""
     from target_gym.estimation import Estimator, ObservationOnly
-    from target_gym.experts.mpc import plan_params
-    from target_gym.registry import get
 
-    oracle = make_ph_mpc(env, plan_params(get("ph_neutralization"), params))
     estimator = Estimator(
-        env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS,
+        env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS, model=plan,
         linearize="secant", **observed(params),
     )  # fmt: skip
-    return ObservationOnly(oracle, estimator)
+    return ObservationOnly(make_ph_mpc(env, plan), estimator)
 
 
 #: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
