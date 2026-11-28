@@ -39,6 +39,19 @@ section 5.4), run by ``target_gym.oracles.controller.Oracle``:
 - no limit trips (T3) and no dropped guard (T4).
 
 Frost protection is not planned: the band keeps the room far above it.
+
+The observation-only MPC (``observation_only_mpc``; v1 item 5, as the owner
+read it on 2026-11-28) is this planner fed the shared estimator's belief
+(``estimation.Estimator``) in place of the true state, with one change to its
+objective: comfort is priced at its expected cost under the weather's forecast
+error, not on the mean path. A plan on the mean path holds the room on the band's
+edge, where the weather it did not forecast leaves it below half the time, and the
+slab cannot correct within the day. The room's error at each lead is the plant's
+own weather innovations to come, carried to the room by the building at a held
+supply (``room_spread``); the expected kelvin-hours outside the band are those of
+a normal error of that spread (``expected_excess``). This is the chance-constrained
+MPC of building climate control (Oldewurtel et al., Energy and Buildings 45, 2012,
+15-27) written as an expected cost; nothing in it is tuned.
 """
 
 import math
@@ -62,6 +75,7 @@ from target_gym.hvac.env import (
     solve_air_and_surface,
     source_size,
     split_gains,
+    steady_state,
     stored_heat,
     stored_value,
     zone_conductances,
@@ -78,7 +92,7 @@ from target_gym.oracles.controller import (
     softplus_clip,
 )
 from target_gym.oracles.shooting import Hinge
-from target_gym.utils import ou_decay
+from target_gym.utils import ou_decay, stationary_innovation
 
 
 def heat(T_supply, T_core, p, width):
@@ -105,18 +119,70 @@ def velocity(position, action, time, weather_dev, width, p):
     return jnp.stack([dT_mass, dT_core]), None
 
 
+def expected_excess(d, spread):
+    """E[max(d + spread Z, 0)] for a standard normal Z: the expected excess over a
+    limit of a quantity whose mean exceeds it by ``d`` and whose error has
+    ``spread``. Smooth in ``d``; ``spread`` must be positive."""
+    z = d / spread
+    return d * jax.scipy.stats.norm.cdf(z) + spread * jax.scipy.stats.norm.pdf(z)
+
+
+def room_spread(p, steps: int):
+    """The room temperature's forecast error, K, at each lead of 1 to ``steps``
+    task steps, for a planner on the weather deviation's mean path: the plant's own
+    innovations to come (``WEATHER_OU_THETA``, ``T_out_noise_std``), each decaying
+    as the deviation does, carried to the room by the building at a held supply,
+    open loop. The network is linear at a held supply while the slab is heated, so
+    with ``h(m)`` the room's response m steps after a unit innovation the error at
+    lead k has variance ``eta^2 sum_{m<k} h(m)^2``, ``eta`` the innovation's spread.
+    ``p`` are the plant's params, noise included. The supply is the one that holds
+    the band's low edge at the outdoor mean; at any heating supply the response is
+    the same."""
+    decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
+    eta = stationary_innovation(float(p.T_out_noise_std), decay)
+    T_m, T_c, _, T_sup = steady_state(p, float(p.T_out_mean), float(p.band_low))
+
+    def run(bump):
+        def step(x, t):
+            dev = bump * decay**t
+            x1, _ = integrate_dynamics(
+                positions=x, delta_t=p.delta_t, method="exp_1",
+                compute_velocity=partial(
+                    velocity, action=T_sup, time=t, weather_dev=dev, width=0.0, p=p
+                ),
+                drift=drift_over,
+            )  # fmt: skip
+            now = t + 1
+            phi_ia, phi_st, _ = split_gains(
+                internal_gain(now, p), solar_gain(now, p), p
+            )
+            T_air, _ = solve_air_and_surface(
+                x1[0], x1[1], outdoor_temperature(now, dev, p), phi_st, phi_ia, p
+            )
+            return x1, T_air
+
+        return jax.lax.scan(step, jnp.stack([T_m, T_c]), jnp.arange(steps))[1]
+
+    h = run(1.0) - run(0.0)
+    return eta * jnp.sqrt(jnp.cumsum(h**2))
+
+
 def scored_window() -> tuple[int, int]:
     """The task's scored steps, ``(first, end)``."""
     ev = hvac_evaluation()
     return ev["unscored_steps"], ev["unscored_steps"] + ev["scored_steps"]
 
 
-def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
+def hvac_model(env, p, window=None, start_store=None, spread=None) -> TaskModel:
     """The plan's model; ``window`` ``(first, end)`` costs only the steps in it
     and the store's shortfall at its end (every step and no edge when None).
     ``start_store()`` gives the store's value at the window's start, in euros,
-    for a plan that starts inside the window."""
+    for a plan that starts inside the window. ``spread``, the room's forecast
+    error at each lead (``room_spread``), prices comfort at its expected cost under
+    that error in place of the hinges on the mean path; the floor's error is the
+    room's share of it."""
     hours = p.delta_t / 3600.0
+    weight = float(p.comfort_price * hours)
     # The deviation's mean per step, a plain float whatever the run's precision.
     decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
     price = shortfall_price(p)
@@ -161,12 +227,8 @@ def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
             end = d.get("end")
             last = window[1] if end is None else jnp.minimum(window[1], start + end)
             edge = jnp.where((now == last) & (now > window[0]), held - stored, -1.0)
-        y = jnp.where(
-            occupied & inside,
-            jnp.stack(
-                [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
-            ),
-            -1.0,
+        outside = jnp.stack(
+            [p.band_low - T_air, T_air - p.band_high, T_floor - p.floor_surface_max]
         )
         # The env scores the step's heat on the core it ends at, at the COP of
         # the water the source made (``env.supply_made``).
@@ -174,6 +236,15 @@ def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
         made = jnp.minimum(T_sup, x1[1] + q / slab_conductances(p)["H_water"])
         kwh = q / heat_pump_cop(made, p) / 1000.0 * hours
         cost = electricity_price(start + t, p) * kwh
+        if spread is None:
+            y = jnp.where(occupied & inside, outside, -1.0)
+        else:
+            s = spread[jnp.minimum(t, spread.shape[0] - 1)]
+            floor_share = slab_conductances(p)["floor_share"]
+            each = jnp.stack([s, s, (1.0 - floor_share) * s])
+            comfort = weight * jnp.sum(expected_excess(outside, each))
+            cost = cost + jnp.where(occupied, comfort, 0.0)
+            y = jnp.zeros((0,), x.dtype)
         x1 = jnp.stack([x1[0], x1[1], held])
         y = jnp.concatenate([y, jnp.reshape(edge, (1,))])
         return x1, jnp.where(inside, cost, 0.0), y, T_air[None], ()
@@ -201,7 +272,7 @@ def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
         inside = (s.time >= window[0]) & (s.time < window[1])
         return jnp.where(inside, -r, 0.0)
 
-    weight = float(p.comfort_price * hours)
+    comfort_rows = () if spread is not None else (Hinge(weight=weight),) * 3
     return TaskModel(
         nx=3, nu=1, step=step, state_x=state_x,
         data=lambda s: (s.time, s.weather_dev, None),
@@ -210,7 +281,7 @@ def hvac_model(env, p, window=None, start_store=None) -> TaskModel:
         resolution=(float(p.precision_floor),),
         # The comfort rows at the work-loss price, and the store's shortfall in
         # euros at the dearest heat price.
-        hinges=(Hinge(weight=weight),) * 3 + (Hinge(weight=1.0, surrogate=True),),
+        hinges=comfort_rows + (Hinge(weight=1.0, surrogate=True),),
         tie_budget=weight * 0.5 * float(p.precision_floor),
         replay_cost=replay_cost,
     )  # fmt: skip
@@ -241,11 +312,14 @@ class WindowOracle(Oracle):
     the store's value as the run passes the window's start, so a plan solved
     inside the window charges its end against it (``start_store``)."""
 
-    def __init__(self, env, params, name, window):
+    def __init__(self, env, params, name, window, spread=None):
         self.window, self._start = window, None
 
         def build(env, p):
-            return hvac_model(env, p, window=window, start_store=lambda: self._start)
+            return hvac_model(
+                env, p, window=window, start_store=lambda: self._start,
+                spread=None if spread is None else jnp.asarray(spread, jnp.float64),
+            )  # fmt: skip
 
         super().__init__(env, params, name, build)
 
@@ -264,3 +338,33 @@ def make_hvac_mpc(env, params) -> Oracle:
     """Registry factory: the shared solver's oracle on ``hvac_model``, windowed on
     the task's scored window."""
     return WindowOracle(env, params, "hvac", scored_window())
+
+
+#: What the observation-only MPC's estimator tracks: the building's two nodes, the
+#: room and outdoor air the sensors read, and the weather's deviation, which the
+#: day-ahead forecast shows.
+OBSERVED_FIELDS = ("T_mass", "T_core", "T_air", "T_out", "weather_dev")
+#: The room, outdoor and core sensors and the forecast (``env.get_obs``).
+OBSERVED_CHANNELS = (0, 1, 3, 9)
+
+
+def observation_only_mpc(env, params, plan):
+    """The MPC on the true model that reads the observation only (v1 item 5), the
+    line ``scripts/record_v1.py`` records: the window planner, pricing comfort at
+    its expected cost under the weather's forecast error (``room_spread``), fed the
+    shared estimator's belief (``estimation.ObservationOnly``). ``params`` is the
+    scenario's configuration, noise included, whose noise the estimator and the
+    spread read; ``plan`` the planner's (its noise zeroed, ``plan_params``), on
+    which it plans and the estimator predicts. A host policy:
+    ``policy.reset()``, then ``policy(obs)``."""
+    from target_gym.estimation import Estimator, ObservationOnly
+
+    # The spread at every lead a plan can reach: the episode bounds the horizon.
+    steps = int(params.max_steps_in_episode)
+    oracle = WindowOracle(
+        env, plan, "hvac", scored_window(), spread=room_spread(params, steps)
+    )
+    estimator = Estimator(
+        env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS, model=plan
+    )
+    return ObservationOnly(oracle, estimator)
