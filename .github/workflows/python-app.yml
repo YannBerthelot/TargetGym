@@ -141,18 +141,20 @@ jobs:
         fi
 
   learning:
-    # A short PPO run on one task per group (tests/rl/test_learning.py). Ajax
-    # needs JAX 0.10 or later, which uv.lock gives Python 3.14 alone. The tests
-    # skip without the learning group, so a skip here means it did not install,
-    # and fails the job.
+    # The learning check, charter J7 (tests/rl/test_learning.py): a short PPO
+    # run on one task per group and on the scored tasks, reported beside the
+    # best constant and the expert in the job summary, never gating (owner,
+    # 2026-11-27). It fails only on a return that is not finite. It reads no
+    # record, so a stale one does not stop it: it runs after `records`, whatever
+    # that job found, on every push and on pull requests into main. Ajax needs
+    # JAX 0.10 or later, which uv.lock gives Python 3.14 alone. The tests skip
+    # without the learning group, so a skip here means it did not install, and
+    # fails the job.
     name: learning
     needs: records
-    # Pull requests into the integration branch run lint and docs only. The full
-    # run is its one draft pull request into main, past a stale `records` until
-    # the re-record. Drop this condition when that branch lands.
-    if: ${{ !cancelled() && github.base_ref != 'feat/sensor-noise' && (needs.records.result == 'success' || github.head_ref == 'feat/sensor-noise') }}
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.base_ref == 'main') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       UV_PYTHON: "3.14"
       JAX_PLATFORMS: cpu
@@ -165,7 +167,9 @@ jobs:
         cache-dependency-glob: "uv.lock"
     - name: Install dependencies
       run: uv sync --frozen --group dev --group learning
-    - name: Run the learning tests
+    - name: Run the learning check
+      env:
+        TG_LEARNING_REPORT: ${{ runner.temp }}/learning
       run: |
         set -o pipefail
         uv run pytest -q -n auto -m "learning and not records" -rs | tee "$RUNNER_TEMP/learning.log"
@@ -173,6 +177,15 @@ jobs:
           echo "::error::a learning test skipped, so the learning group is not installed"
           exit 1
         fi
+    - name: Table the learning check
+      if: ${{ !cancelled() }}
+      run: |
+        ls "$RUNNER_TEMP"/learning/*.json > /dev/null 2>&1 || exit 0
+        {
+          echo "| task | PPO median | PPO runs | best constant | at | expert |"
+          echo "| --- | --- | --- | --- | --- | --- |"
+          jq -r '"| \(.task) | \(.median) | \(.runs | map(tostring) | join(", ")) | \(.best_constant.return) | \(.best_constant.action) | \(.expert) |"' "$RUNNER_TEMP"/learning/*.json
+        } >> "$GITHUB_STEP_SUMMARY"
 
   test:
     # Every interpreter in the project's requires-python window. The columns

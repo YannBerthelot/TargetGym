@@ -87,6 +87,25 @@ Item 9 of the task protocol. No task is frozen yet.
   source's size and listed no site, so every solve ran at width 0 and about 80 %
   of them hit the iteration cap.
 
+### The learning check is reported (2026-11-27)
+
+The owner's decision of 2026-11-27, "Report-only", as charter J7 says.
+
+- **`tests/rl/test_learning.py` reports and no longer gates.** It trains five PPO
+  runs through `target_gym.learned.train`, the v1 record's runner, and records
+  their mean returns, the best constant action's and the shipped expert's on
+  validation seeds 300 to 309. `TG_LEARNING_REPORT` names a folder for one JSON
+  file per task, and CI's learning job tables them in its summary. The test fails
+  only on a return that is not finite.
+- **A stale record no longer stops CI's learning job.** It still runs after
+  `records`, whatever that job found, on every push and on pull requests into
+  main, so its numbers stay visible on the integration branch.
+- Why: the 200k-step PPO lost to the best constant on all eight tasks. Each task's
+  result changed with its own plant's rebuild (plane, battery and glass_furnace on
+  2026-11-06), and neither a squashed policy nor 64 times the steps cleared the bar
+  on cstr or battery. glass_furnace turns NaN under a constant full fuel valve on
+  seed 209 (#310).
+
 ### Docs for comparing an agent, and a beta (2026-11-27)
 
 After the outside review of 2026-11-27 (M2, M4, L3) and the owner's pickers the
