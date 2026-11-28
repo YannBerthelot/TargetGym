@@ -95,3 +95,30 @@ def test_the_rooms_forecast_error_is_the_spread_the_plant_draws():
         # A sample standard deviation's standard error is sigma / sqrt(2 (n - 1)).
         tol = 4.0 * drawn / np.sqrt(2.0 * (n - 1))
         assert abs(spread[k - 1] - drawn) < tol, (k, spread[k - 1], drawn)
+
+
+@pytest.mark.medium
+@pytest.mark.parametrize("step", [100, 288])
+def test_the_window_planner_converges_from_the_experts_states(step):
+    """A cold solve of the registry's window planner from the shipped expert's
+    state, before the scored window and at its start, converges: neither capped
+    nor failed. The slab heat's two edges are smoothed at the protocol's width
+    (``data/oracle_widths/hvac.json``); at width 0 every such solve hit the cap
+    (2026-11-28, KKT error near 0.3)."""
+    import target_gym as tg
+    from target_gym.experts.mpc import plan_params
+    from target_gym.hvac.oracle import make_hvac_mpc
+    from target_gym.registry import REGISTRY
+
+    env, params = tg.make("hvac", scenario="normal")
+    expert = tg.make_expert("hvac")
+    key = jax.random.PRNGKey(203)
+    obs, state = env.reset_env(key, params)
+    memory = expert.reset()
+    for k in jax.random.split(key, step):
+        action, memory = expert.step(memory, obs)
+        obs, state, *_ = env.step_env(k, state, action, params)
+    oracle = make_hvac_mpc(env, plan_params(REGISTRY["hvac"], params))
+    oracle.step(obs, state)
+    for solve in oracle.certificates:
+        assert not solve["capped"] and not solve["failed"], solve

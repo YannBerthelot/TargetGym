@@ -24,6 +24,7 @@ import argparse
 import functools
 import importlib
 import json
+import math
 from pathlib import Path
 
 import jax
@@ -495,6 +496,66 @@ def battery_sites(_points) -> tuple[dict, list]:
     }, []  # fmt: skip
 
 
+def hvac_sites(points) -> tuple[dict, list]:
+    """The slab heat's two edges (hvac/env.py ``slab_heat``: heating only, and no
+    more than the source's size), smoothed together by one softplus clip in the
+    planner (hvac/oracle.py ``heat``), whose argument is the supply over the core
+    and whose interval the source's size over the water's conductance spans. K4
+    on the room's temperature, the tracked output: the clip's output moved by
+    ``delta`` kelvin adds ``H_water delta`` watts to the core over one step. No
+    limit: hvac prices its band."""
+    from target_gym.hvac.env import (
+        WEATHER_OU_THETA,
+        drift_over,
+        internal_gain,
+        outdoor_temperature,
+        slab_conductances,
+        solar_gain,
+        solve_air_and_surface,
+        source_size,
+        split_gains,
+    )
+    from target_gym.hvac.oracle import velocity
+    from target_gym.integration import integrate_dynamics
+    from target_gym.utils import ou_decay
+
+    spec = REGISTRY["hvac"]
+    env, p = spec.make_env(), float64(spec.make_test_params())
+    s = slab_conductances(p)
+    scale = float(source_size(p) / s["H_water"])
+    decay = ou_decay(WEATHER_OU_THETA, float(p.delta_t), xp=math)
+
+    @jax.jit
+    def site(probe, delta):
+        state, u = probe
+        T_sup = p.T_supply_min + 0.5 * (u[0] + 1.0) * (p.T_supply_max - p.T_supply_min)
+        dev = state.weather_dev * decay
+
+        def rates(position):
+            v, _ = velocity(position, T_sup, state.time, dev, 0.0, p)
+            return v.at[1].add(s["H_water"] * delta[0] / s["C_slab"]), None
+
+        x1, _ = integrate_dynamics(
+            positions=jnp.stack([state.T_mass, state.T_core]), delta_t=p.delta_t,
+            compute_velocity=rates, method=env.integration_method, drift=drift_over,
+        )  # fmt: skip
+        now = state.time + 1
+        phi_ia, phi_st, _ = split_gains(internal_gain(now, p), solar_gain(now, p), p)
+        T_air, _ = solve_air_and_surface(
+            x1[0], x1[1], outdoor_temperature(now, dev, p), phi_st, phi_ia, p
+        )
+        return T_air[None]
+
+    pts = _plan_moves("hvac", points)
+    width = kink_width(site, scale, pts, [p.precision_floor], 1)
+    return {
+        "slab_heat": {
+            "site": "hvac/env.py slab_heat, hvac/oracle.py heat", "scale": scale,
+            "width": width, "evaluations": 1,
+        }
+    }, []  # fmt: skip
+
+
 def kiln_sites(_points) -> tuple[dict, list]:
     """The burning zone's soft max in the cold limit (env.py:627): it moves no
     tracked output, so K5 takes the ladder's first rung; K3's shift keeps it
@@ -514,6 +575,7 @@ SITES = {
     "battery": battery_sites,
     "cement_kiln": kiln_sites,
     "compressor_surge": compressor_sites,
+    "hvac": hvac_sites,
     "wind_turbine": wind_sites,
 }
 #: Each task's count of smoothed sites, which its planner's ``widths`` hold.
@@ -521,6 +583,7 @@ N_SITES = {
     "battery": 1,
     "cement_kiln": 1,
     "compressor_surge": 2,
+    "hvac": 1,
     "wind_turbine": 5,
 }
 #: A noisy task's planner model, and its deviation's (decay per step, std).
