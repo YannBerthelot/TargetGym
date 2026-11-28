@@ -212,6 +212,61 @@ def make_ph_mpc(env, params) -> Oracle:
     return Oracle(env, params, "ph_neutralization", ph_model)
 
 
+#: What the observation-only MPC's estimator tracks: both stages' invariants, the
+#: buffer flow, the probes' true values and their history (the readings are late
+#: and lagged), and the influent's acid strength.
+OBSERVED_FIELDS = (
+    "Wa", "Wb", "Wa_s1", "Wb_s1", "q2", "pH", "pH_s1", "sensor_history",
+    "upset_levels[0]",
+)  # fmt: skip
+#: The discharge's and stage 1's probes (``env.get_obs``).
+OBSERVED_CHANNELS = (0, 4)
+#: A step beyond any episode: the belief's schedules never move.
+_NEVER = 10**6
+
+
+def observed(params) -> dict:
+    """The estimator's options for pH (``estimation.Estimator``), at the
+    scenario's ``params``: ``known`` writes the metered influent (obs 6) into the
+    belief and holds every schedule the reset drew still, so the acid strength is
+    the walking ``upset_levels[0]``; ``random_walk`` gives that walk the variance
+    the scenario's upsets add over an episode, two of them, each uniform within
+    ``acid_upset_size``, spread over its steps."""
+    p = params
+
+    def known(state, obs):
+        flow = obs[6] / p.q1
+        return state.replace(
+            flow_levels=jnp.full_like(state.flow_levels, flow),
+            flow_times=jnp.full_like(state.flow_times, _NEVER),
+            upset_times=jnp.full_like(state.upset_times, _NEVER),
+        )
+
+    steps = float(p.max_steps_in_episode)
+    walk = math.sqrt(2.0 * float(p.acid_upset_size) ** 2 / 3.0 / steps)
+    return {"known": known, "random_walk": {"upset_levels[0]": walk}}
+
+
+def observation_only_mpc(env, params):
+    """The MPC on the true model that reads the observation only (v1 item 5), the
+    line ``scripts/record_v1.py`` records: the registry's planner (``ph_model``)
+    fed the shared estimator's belief (``estimation.ObservationOnly``), read
+    through the two probes by secants, since the pH solve is a bisection.
+    ``params`` is the scenario's configuration, noise included: the planner plans
+    on it with the noise zeroed (``experts.mpc.plan_params``), the estimator reads
+    its noise. A host policy: ``policy.reset()``, then ``policy(obs)``."""
+    from target_gym.estimation import Estimator, ObservationOnly
+    from target_gym.experts.mpc import plan_params
+    from target_gym.registry import get
+
+    oracle = make_ph_mpc(env, plan_params(get("ph_neutralization"), params))
+    estimator = Estimator(
+        env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS,
+        linearize="secant", **observed(params),
+    )  # fmt: skip
+    return ObservationOnly(oracle, estimator)
+
+
 #: The reward terms the ceiling's solver keeps (``pc_gym.foresight``):
 #: the reagent; ``excursion``, ``diversion`` and the trip are the margins.
 CEILING_TERMS = ("reagent",)
