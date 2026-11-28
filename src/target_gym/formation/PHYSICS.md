@@ -3,12 +3,14 @@
 > **Amendment 4 (2026-11-10): the formation flies F/A-18 Hornets**, as the patrol
 > does (patrol/PHYSICS.md, Amendment 4): its V's ranks are 22 to 45 m out, the
 > separation one Hornet length, and the wingmen's objective AFF's 10 ft one sigma.
-> The expert's lead eases onto each new turn rate over 2 s: taken at once, a
-> reversal rolled it 60 deg in a second, its wingmen fell a step behind and two of
-> them collided. On held-out seeds 200-209 (2026-11-10) the wingmen hold a median
-> 3.9 m and at worst 6.7 m, no seed trips, and the lead stays within 0.7 m of its
-> altitude on average and 1.7 deg of its heading, the easing's cost. The expert is
-> a reference and need not meet the objectives (the owner, 2026-11-10).
+> Until 2026-11-12 the expert's lead eased onto each new turn rate over 2 s: taken
+> at once, a reversal rolled it 60 deg in a second, its wingmen fell a step behind
+> and two of them collided. On held-out seeds 200-209 (2026-11-10) the wingmen held
+> a median 3.9 m and at worst 6.7 m, no seed tripped, and the lead stayed within
+> 0.7 m of its altitude on average and 1.7 deg of its heading, the easing's cost.
+> Since 2026-11-12 the lead rolls at the parade rate, 10 deg/s, to at most 30 deg
+> of bank (section 5), which those figures predate. The expert is a reference and
+> need not meet the objectives (the owner, 2026-11-10).
 
 A lead and two wingmen in a V, every aircraft flown by the learner. The lead
 flies a patrol route, an altitude and a heading that turns onto a new rate
@@ -42,7 +44,8 @@ gust from the step clock. Each wingman meets it a slot depth later, shares what
 its offset from the lead's path leaves shared, and draws the rest, with its own
 rolling gust. Each still gets its own altitude-dependent shear. The lead's wake
 reaches the wingmen as in the patrol (`wake_air`). The V's lateral spacing of at
-least 60 m keeps every wingman outboard of the vortex pair, in its upwash. A
+least 22 m, about two spans, keeps every wingman outboard of the vortex pair, in its
+upwash. A
 wingman's own wake is left out: only the unscored ranks behind it would meet it.
 
 **The slot geometry and each wingman's observation are the patrol's**
@@ -63,8 +66,8 @@ its aircraft.
 when it is odd, at rank `i // 2 + 1`. The V's depth, lateral spacing and
 height are drawn once per episode (`slot_back_range`, `slot_lateral_range`,
 `slot_up_range`), the same for every rank, so the formation is symmetric.
-With at least 60 m of lateral spacing per rank, the two wingmen of a rank
-start at least 120 m apart.
+With at least 22 m of lateral spacing per rank, the two wingmen of a rank
+are assigned slots at least 44 m apart.
 
 **Trips.** The formation trips when any aircraft leaves the 3D tasks' envelope
 (altitude, 60 deg of bank, the load limits, VMO and MMO), any two aircraft come
@@ -108,7 +111,7 @@ spawn noise and trip thresholds from `PatrolParams`
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `slot_lateral_range` | (60, 150) m | Lateral offset of each rank from the lead, drawn per episode; `slot_right_range` is not read |
+| `slot_lateral_range` | (22, 45) m | Lateral offset of each rank from the lead, drawn per episode; `slot_right_range` is not read |
 | `w_track` | 0.6 | Version 1 only: weight of the wingmen's mean slot-keeping |
 | `w_lead` | 0.4 | Version 1 only: weight of the lead's tracking |
 

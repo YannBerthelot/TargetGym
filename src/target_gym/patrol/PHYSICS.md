@@ -237,23 +237,23 @@ Flight parameters are inherited from `PlaneParams3D`; see the
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `slot_back_range` | (150, 300) m | Along-track slot offset, sampled per episode |
-| `slot_right_range` | (−150, 150) m | Cross-track offset |
-| `slot_up_range` | (−60, 60) m | Vertical offset |
-| `slot_tolerance` | 60 m | Version-1 reward only: σ of its slot term |
+| `slot_back_range` | (34, 70) m | Along-track slot offset, sampled per episode |
+| `slot_right_range` | (17, 45) m | Cross-track offset's size; its side is drawn at random |
+| `slot_up_range` | (−10, 0) m | Vertical offset, a step down |
+| `slot_tolerance` | 3.05 m | AFF's 10 ft one sigma: what a test or a report judges station-keeping against; no reward reads it |
 | `heading_tolerance` | 0.5236 rad (30°) | Version-1 reward only: σ of its heading-alignment factor |
-| `min_separation` | 40 m | Collision distance between centres, a trip |
+| `min_separation` | 17.1 m | Collision distance between centres, a trip: one Hornet length, 56 ft [AFF] |
 | `max_slot_error` | 1500 m | Formation lost, a trip |
-| `lead_turn_rate_range` | (−0.03, 0.03) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
+| `lead_turn_rate_range` | (−0.0303, 0.0303) rad/step | Range each route leg's turn rate is drawn from; 0 is straight and level |
 | `lead_leg_seconds` | 60 s | Length of each leg of the lead's route |
 | `wake_strength` | 1 | Scales the lead's wake; 0 turns it off |
 | `wake_core_ratio` | 0.0582 | Burnham core radius over the span |
 | `wake_decay_rate` | 0.2 | The wake's decay per `t0` |
-| `follower_spawn_noise` | 40 m | Isotropic spawn offset, so the episode starts solvable but untrimmed |
+| `follower_spawn_noise` | 10 m | Isotropic spawn offset, one sigma per axis, so the episode starts solvable but off its slot |
 | `delta_t` | 1.0 s | Step size |
 
-The defaults place the follower in a trailing echelon roughly 200 m back and
-120 m to one side. `initial_x_dot` is not read here: both aircraft spawn on the
+The defaults place the follower in the cruise position, 34 to 70 m back and
+17 to 45 m to one side. `initial_x_dot` is not read here: both aircraft spawn on the
 lead's schedule.
 
 ### What each figure rests on

@@ -195,9 +195,10 @@ aircraft flies under the maximum holding airspeed.
 Follow a twisted figure-8 that climbs and descends, with the 3D airliner. The
 bank has to reverse through wings level at every crossover, and the
 observation gives the vector to the nearest point of the path and the path's
-heading there, but not its curvature. The half-width is 34 to 36 km, so the tips,
-of radius a / 3, take 25 deg of bank at 230 m/s and less at the speed flown. They
-used to be 2.7 to 4 km, 46 to 57 deg at 200 m/s. A lap is 183 km, so 1000 steps
+heading there, but not its curvature. The half-width a is 36 to 38 km (Amendment 4,
+below), so the tips, of radius a / 3, 12.0 to 12.7 km, take at most 22.2 deg of bank
+at the schedule's fastest 219 m/s and less at the speed flown. They used to be 2.7
+to 4 km, 46 to 57 deg at 200 m/s. A lap is 5.244 a, 189 to 199 km, so 1000 steps
 reach both tips at the slowest speed the schedule flies.
 
 | obs | meaning |
@@ -269,11 +270,13 @@ suite exists for unmeasurable.
 
 **Cross-track error on the figure-8 is searched, not solved.** There is no
 closed form for the nearest point on the twisted lemniscate, so it is an
-`argmin` over 400 samples of the curve refined by projection onto the two
-adjacent chords. Without that refinement the result is quantised by the sample
-spacing (~100 m), and an aircraft flying the curve exactly is reported up to
-66 m off it; with it the residual is the curve's sagitta over one segment, below
-a millimetre. The circle needs none of this — its distance is analytic.
+`argmin` over 800 samples of the curve (`_N_CURVE_SAMPLES`) refined by projection
+onto the two adjacent chords. Without that refinement the result is quantised by
+the sample spacing, 200 to 300 m on these patterns, and an aircraft flying the
+curve exactly is reported up to half a spacing off it; with it the residual is the
+curve's sagitta over one segment: 0.4 m on average and up to 0.9 m at the tips, so
+the scored path is the 800-sided polygon, not the lemniscate. The circle needs
+none of this — its distance is analytic.
 
 ---
 
@@ -365,7 +368,7 @@ about the step to the optimum. At a fixed 0.05 for 50 iterations that left
 steady offsets, 4.1 to 4.5 m of altitude and 14.3 to 15.5 m of path on the
 circle in its last hold measurement. Since the oracle audit (2026-10) the step
 decays geometrically from 0.05 to 0.002 over each solve, with 200 iterations
-on every task (the settings table in `experts.py`). Under the earlier floors
+on every task (the settings table in `oracle.py`). Under the earlier floors
 the audit measured, on the three protocol seeds, the cost falling from 5.05 to
 0.380 (heading), 9.84 to 0.123 (circle) and 2.10 to 0.031 (figure-8) at 200
 iterations, and from 7.04 to 1.49 (racetrack) at 50, with zero trips. The
