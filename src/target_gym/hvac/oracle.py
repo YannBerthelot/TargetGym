@@ -349,25 +349,22 @@ OBSERVED_FIELDS = ("T_mass", "T_core", "T_air", "T_out", "weather_dev")
 OBSERVED_CHANNELS = (0, 1, 3, 9)
 
 
-def observation_only_mpc(env, params):
+def observation_only_mpc(env, params, plan):
     """The MPC on the true model that reads the observation only (v1 item 5), the
     line ``scripts/record_v1.py`` records: the window planner, pricing comfort at
     its expected cost under the weather's forecast error (``room_spread``), fed the
     shared estimator's belief (``estimation.ObservationOnly``). ``params`` is the
-    scenario's configuration, noise included: the planner plans on it with the
-    noise zeroed (``experts.mpc.plan_params``), the estimator and the spread read
-    its noise. A host policy: ``policy.reset()``, then ``policy(obs)``."""
+    scenario's configuration, noise included, whose noise the estimator and the
+    spread read; ``plan`` the planner's (its noise zeroed, ``plan_params``), on
+    which it plans and the estimator predicts. A host policy:
+    ``policy.reset()``, then ``policy(obs)``."""
     from target_gym.estimation import Estimator, ObservationOnly
-    from target_gym.experts.mpc import plan_params
-    from target_gym.registry import get
 
     horizon = int(records.load_row("oracle_horizons", "hvac")["P"])
     oracle = WindowOracle(
-        env,
-        plan_params(get("hvac"), params),
-        "hvac",
-        scored_window(),
-        spread=room_spread(params, horizon),
+        env, plan, "hvac", scored_window(), spread=room_spread(params, horizon)
     )
-    estimator = Estimator(env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS)
+    estimator = Estimator(
+        env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS, model=plan
+    )
     return ObservationOnly(oracle, estimator)
