@@ -10,7 +10,7 @@ A pressurized water reactor operator follows the day's load plan with the contro
 
 ## The score
 
-The cost is in USD, averaged over a 7-day run of 20160 steps. The score is the saving over the expert, 1 - J / J_expert, where J weights each scenario's mean cost by its share of operating time, on the scoring seeds 200 to 209 (`tg.score`).
+The cost is in USD, averaged over a 7-day run of 20160 steps, charged once for what the store lost and credited for what it gained (`stored_value`). The score is the saving over the expert, 1 - J / J_expert, where J weights each scenario's mean cost by its share of operating time, on the scoring seeds 200 to 209 (`tg.score`).
 
 | Scenario | Weight | What it is |
 |---|---|---|
