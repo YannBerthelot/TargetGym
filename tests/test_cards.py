@@ -140,20 +140,19 @@ def test_a_card_says_the_stores_charge_and_its_credit(
     assert says in text
 
 
-def test_a_card_says_a_runs_end_charge(recorded, tmp_path, monkeypatch):
-    """A task scored on runs whose protocol charges the run's end (PR 329)."""
+def test_a_card_says_a_runs_end_charge(monkeypatch):
+    """A task scored on runs whose protocol charges the run's end, crediting
+    what it gained: the reactor's boron since PR 329, or not."""
     import dataclasses
 
     from target_gym import scoring_runs
 
-    @dataclasses.dataclass(frozen=True)
-    class Charged(scoring_runs.Protocol):
-        edge_charge: str | None = "stored_value"
-        edge_credit: bool = True
-
     base = scoring_runs.PROTOCOLS["reactor"]
-    fields = {f.name: getattr(base, f.name) for f in dataclasses.fields(base)}
-    monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", Charged(**fields))
-    text = cards._scoring_text(v1.manifest("reactor")["scoring"], "$")
-    assert "a 7-day run of 20160 steps" in text
-    assert "credited for what it gained" in text
+    for credit, says in ((True, "credited for what it gained"), (False, "lost (`")):
+        charged = dataclasses.replace(
+            base, edge_charge="stored_value", edge_credit=credit
+        )
+        monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", charged)
+        text = cards._scoring_text(v1.manifest("reactor")["scoring"], "$")
+        assert "a 7-day run of 20160 steps" in text and says in text
+        assert ("credited" in text) == credit
