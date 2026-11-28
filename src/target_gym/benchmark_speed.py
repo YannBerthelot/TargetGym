@@ -5,7 +5,8 @@ loop drives these environments: gymnax's ``step`` with its auto-reset, a key of
 its own for every environment and step, random actions inside the action space,
 and everything ``step`` returns kept (outside review M4, 2026-11-27). A run that
 kept only the state, with one key and zero actions, let the compiler drop the
-observation and the reward, and overstated the rate 6 to 45 times.
+observation and the reward, and overstated the rate 1.6 to 19 times on the
+machine ``docs/performance.md`` names.
 
 Usage
 -----

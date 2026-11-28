@@ -84,7 +84,8 @@ same day.
   auto-reset on the scored configuration, a key for every environment and step,
   random actions, and everything `step` returns kept, where it kept only the
   state with one key and zero actions. `docs/performance.md` is measured again
-  on one named machine.
+  on one named machine, where the old method overstated the rate 1.6 to 19
+  times.
 - The install notes say matplotlib, seaborn and pandas come with gymnax, which
   requires them; an extra for them would make no install lighter.
 

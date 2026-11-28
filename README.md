@@ -44,7 +44,8 @@ controller frozen in the package. To compare an agent with it, start with
   parameter table, published validation targets asserted by tests, and its
   documented approximations.
 - **JAX throughout.** `jit`, `vmap` and `scan` compatible, end-to-end GPU,
-  0.6 M to 700 M steps/s on CPU depending on the plant.
+  7 thousand to 1.5 million steps/s on two CPU cores depending on the plant
+  ([Throughput](docs/performance.md)).
 - **gymnax API**, with a Gymnasium wrapper for non-JAX libraries and a JaxMARL
   interface for the multi-agent formation task.
 
