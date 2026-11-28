@@ -579,7 +579,12 @@ def _theta(module, name):
 
 
 #: Where a task's deviation sits in its model's task data, if not last.
-DEVIATION_AT = {"compressor_surge": 3, "hvac": 1, "wind_turbine": 2}
+DEVIATION_AT = {
+    "compressor_surge": 3,
+    "hvac": 1,
+    "ph_neutralization": 2,
+    "wind_turbine": 2,
+}
 
 
 def _with_deviation(name, task, d):
