@@ -1,0 +1,97 @@
+"""hvac's observation-only MPC (v1 item 5, as the owner read it on 2026-11-28).
+
+Contract:
+
+- The planner reads the observation only, through the shared estimator
+  (``estimation.Estimator``): the room, outdoor and core sensors and the day-ahead
+  forecast, from which it estimates the building's mass, the slab core, the air
+  and the weather's deviation.
+- It prices comfort at its expected cost under the weather's forecast error: the
+  room's error at a lead is the plant's own weather innovations to come, carried
+  to the room by the building at a held supply (``room_spread``), and the expected
+  kelvin-hours outside the band are those of a normal error of that spread
+  (``expected_excess``). Nothing is tuned: the spread is the plant's.
+
+Where the expected values come from, none of them the function under test:
+
+- the expected excess of a normal error at the edge is its spread over sqrt(2 pi),
+  and far inside the band 0, far outside the mean excess; elsewhere a Monte Carlo
+  of normal draws, within its standard error;
+- the room's forecast error: the plant itself, run with its own weather noise from
+  one state at a held supply over many keys; the spread of the room's temperature
+  across them at each lead, within the sampling error of a standard deviation.
+"""
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from target_gym.hvac.env import HVACParams, steady_state
+from target_gym.hvac.env_jax import BuildingHVAC
+
+P = HVACParams()
+
+
+@pytest.mark.parametrize("spread", [0.05, 0.3, 1.0])
+def test_a_room_on_the_edge_expects_its_spread_over_root_two_pi(spread):
+    from target_gym.hvac.oracle import expected_excess
+
+    got = float(expected_excess(jnp.asarray(0.0), jnp.asarray(spread)))
+    assert got == pytest.approx(spread / np.sqrt(2.0 * np.pi), rel=1e-6)
+
+
+def test_far_from_the_edge_the_expected_excess_is_the_plain_one():
+    from target_gym.hvac.oracle import expected_excess
+
+    assert float(expected_excess(jnp.asarray(-3.0), jnp.asarray(0.2))) < 1e-12
+    assert float(expected_excess(jnp.asarray(2.0), jnp.asarray(0.2))) == pytest.approx(
+        2.0, rel=1e-9
+    )
+
+
+@pytest.mark.parametrize("mean", [-0.4, 0.15, 0.6])
+def test_the_expected_excess_is_a_normal_errors_mean_excess(mean):
+    from target_gym.hvac.oracle import expected_excess
+
+    spread = 0.3
+    draws = np.random.default_rng(7).normal(mean, spread, 400_000)
+    excess = np.maximum(draws, 0.0)
+    # Four standard errors of the sample mean.
+    tol = 4.0 * excess.std() / np.sqrt(draws.size)
+    got = float(expected_excess(jnp.asarray(mean), jnp.asarray(spread)))
+    assert abs(got - excess.mean()) < tol
+
+
+@pytest.mark.medium
+def test_the_rooms_forecast_error_is_the_spread_the_plant_draws():
+    from target_gym.hvac.oracle import room_spread
+
+    env = BuildingHVAC()
+    T_m, T_c, _, T_sup = (
+        float(x) for x in steady_state(P, float(P.T_out_mean), float(P.band_low))
+    )
+    _, s0 = env.reset_env(jax.random.PRNGKey(0), P)
+    s0 = s0.replace(
+        T_mass=jnp.float32(T_m), T_core=jnp.float32(T_c), weather_dev=jnp.float32(0.0)
+    )
+    raw = jnp.full(
+        (1,), 2.0 * (T_sup - P.T_supply_min) / (P.T_supply_max - P.T_supply_min) - 1.0
+    )
+    leads = (4, 24, 96)
+
+    def run(key):
+        def step(s, k):
+            _, s1, *_ = env.step_env(k, s, raw, P)
+            return s1, s1.T_air
+
+        return jax.lax.scan(step, s0, jax.random.split(key, max(leads)))[1]
+
+    n = 4096
+    rooms = jax.jit(jax.vmap(run))(jax.random.split(jax.random.PRNGKey(11), n))
+    spread = np.asarray(room_spread(P, max(leads)))
+    for k in leads:
+        drawn = float(np.std(np.asarray(rooms[:, k - 1]), ddof=1))
+        # A sample standard deviation's standard error is sigma / sqrt(2 (n - 1)).
+        tol = 4.0 * drawn / np.sqrt(2.0 * (n - 1))
+        assert abs(spread[k - 1] - drawn) < tol, (k, spread[k - 1], drawn)
