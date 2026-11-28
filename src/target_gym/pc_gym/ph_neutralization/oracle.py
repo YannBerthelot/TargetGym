@@ -223,6 +223,13 @@ OBSERVED_FIELDS = (
 OBSERVED_CHANNELS = (0, 4)
 #: A step beyond any episode: the belief's schedules never move.
 _NEVER = 10**6
+#: A walk a step on each invariant, about 5 % of their prior spread (Wa 1.9e-4,
+#: Wb 3.4e-4): an allowance for the Gaussian filter's own error on fields the plant
+#: leaves noise-free. Without it the filter trusted its model over the probes in
+#: transients (a pH error of 0.15 at a stated 0.004); with it and the cubature
+#: update the error stays within its stated spread (the shared estimator's
+#: ``test_on_ph_a_valve_step_keeps_the_error_within_the_stated_spread``, 2026-11-28).
+INVARIANT_ALLOWANCE = 1e-5
 
 
 def observed(params) -> dict:
@@ -231,7 +238,8 @@ def observed(params) -> dict:
     belief and holds every schedule the reset drew still, so the acid strength is
     the walking ``upset_levels[0]``; ``random_walk`` gives that walk the variance
     the scenario's upsets add over an episode, two of them, each uniform within
-    ``acid_upset_size``, spread over its steps."""
+    ``acid_upset_size``, spread over its steps, and the four invariants the
+    allowance for the filter's own error (``INVARIANT_ALLOWANCE``)."""
     p = params
 
     def known(state, obs):
@@ -244,23 +252,26 @@ def observed(params) -> dict:
 
     steps = float(p.max_steps_in_episode)
     walk = math.sqrt(2.0 * float(p.acid_upset_size) ** 2 / 3.0 / steps)
-    return {"known": known, "random_walk": {"upset_levels[0]": walk}}
+    allowance = dict.fromkeys(("Wa", "Wb", "Wa_s1", "Wb_s1"), INVARIANT_ALLOWANCE)
+    return {"known": known, "random_walk": {"upset_levels[0]": walk, **allowance}}
 
 
 def observation_only_mpc(env, params, plan):
     """The MPC on the true model that reads the observation only (v1 item 5), the
     line ``scripts/record_v1.py`` records: the registry's planner (``ph_model``)
     fed the shared estimator's belief (``estimation.ObservationOnly``), read
-    through the two probes by secants, since the pH solve is a bisection.
+    through the two probes.
     ``params`` is the scenario's configuration, noise included, whose noise the
     estimator reads; ``plan`` the planner's (its noise zeroed, ``plan_params``),
-    on which it plans and the estimator predicts. A host policy:
+    on which it plans and the estimator predicts. The update is the cubature
+    one: the pH solve is a bisection, whose JAX derivative is zero, and secants
+    along each axis leave the titration curve in transients. A host policy:
     ``policy.reset()``, then ``policy(obs)``."""
     from target_gym.estimation import Estimator, ObservationOnly
 
     estimator = Estimator(
         env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS, model=plan,
-        linearize="secant", **observed(params),
+        linearize="cubature", **observed(params),
     )  # fmt: skip
     return ObservationOnly(make_ph_mpc(env, plan), estimator)
 

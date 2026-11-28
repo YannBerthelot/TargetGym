@@ -11,8 +11,9 @@ Contract:
 - The influent's acid strength, which no reading shows and the reset schedules
   unannounced, is estimated as a random walk whose variance over an episode is
   what the scenario's upsets add: two, each uniform within its size, so
-  ``2 size^2 / 3`` spread over the episode's steps (``acid_walk``); none on a day
-  with no upsets.
+  ``2 size^2 / 3`` spread over the episode's steps; none on a day with no upsets.
+- The four invariants walk by an allowance for the filter's own error, the same
+  on each (the shared estimator's pH test sets its size).
 
 Expected values: the meter's reading, and the walk by hand.
 """
@@ -49,3 +50,13 @@ def test_the_acid_walks_by_the_variance_the_scenarios_upsets_add(size, want):
 
     walk = observed(P.replace(acid_upset_size=size))["random_walk"]
     assert walk["upset_levels[0]"] == pytest.approx(want, rel=1e-9, abs=1e-12)
+
+
+def test_the_invariants_carry_one_allowance_for_the_filters_own_error():
+    from target_gym.pc_gym.ph_neutralization.oracle import (
+        INVARIANT_ALLOWANCE,
+        observed,
+    )
+
+    walk = observed(P)["random_walk"]
+    assert {walk[f] for f in ("Wa", "Wb", "Wa_s1", "Wb_s1")} == {INVARIANT_ALLOWANCE}
