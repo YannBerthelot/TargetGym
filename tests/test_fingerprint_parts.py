@@ -6,8 +6,9 @@ only expert rows, and rebuilding an oracle only oracle rows. Both cover the
 environment's own non-controller modules, the shared physics, the parameter
 values, the scored burn-in and the fixed settle. On top, the expert part
 covers experts/pid.py, the task's expert modules and its gains entries; the
-oracle part experts/mpc.py, the task's oracle modules, its noise fields, and
-any expert code or gains the oracle still reads. An oracle on the shared
+oracle part experts/mpc.py, the state estimator (``target_gym.estimation``), the
+task's oracle modules, its noise fields, and any expert code or gains the
+oracle still reads. An oracle on the shared
 solver (``oracle_data``, the build plan's PR C1) has the solver's modules in
 place of experts/mpc.py, and the values of its horizon and widths files. No
 controller edit moves the environment's version stamp.
@@ -63,6 +64,12 @@ def _moved(spec, change) -> set[str]:
         # Oracles that still read expert code: their part moves with it.
         ("patrol", "experts/pid.py", {"expert", "oracle", "stamp"}),
         ("formation", "patrol/oracle.py", {"oracle"}),
+        # The state estimator an observation-only MPC plans from, which a
+        # task's oracle module may import: the oracle part alone, on the
+        # shared solver or not.
+        ("hvac", "estimation.py", {"oracle"}),
+        ("ph_neutralization", "estimation.py", {"oracle"}),
+        ("plane3d_circle", "estimation.py", {"oracle"}),
     ],
 )
 def test_an_edit_stales_only_the_parts_that_read_the_file(
