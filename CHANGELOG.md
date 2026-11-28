@@ -9,6 +9,27 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### Frozen tasks: `TargetGym/<task>-v1` (2026-11-28)
+
+Item 9 of the task protocol. No task is frozen yet.
+
+- A task with the protocol's nine items is frozen once, by
+  `scripts/freeze_v1.py <task>`. Its manifest, `src/target_gym/data/v1/<task>.json`,
+  fingerprints three parts. The plant is the environment's code, the shared physics
+  and the scored parameters. The scoring is each scenario's weight and parameters,
+  the scoring seeds, the scored window and its edge charge, the run length and the
+  tie tolerance. The reference is the frozen reference's law and the code that
+  builds it. `tests/test_v1_freeze.py` fails when any part moves. A change to a
+  frozen task becomes `<task>-v2` beside it.
+- `import target_gym` registers every frozen task with Gymnasium.
+  `gymnasium.make("TargetGym/<task>-v1")` gives the episode its score runs: the
+  heaviest scenario by default, another with `scenario=`. The reactor's is its
+  scored 7-day run.
+- The version stamps the environments carry today (`reactor-v10`, `hvac-v6` and
+  the rest) become development stamps. They keep counting changes to the code,
+  re-stamps in place included; a published result cites a frozen ID instead. Each
+  manifest records the development stamp its task froze at.
+
 ### compressor_surge's MPC holds the reference's control line (2026-11-28)
 
 - The MPC's surge limit is the vendors' 10 % control line on the map, the line the
