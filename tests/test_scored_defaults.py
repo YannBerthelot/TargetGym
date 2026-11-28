@@ -91,15 +91,20 @@ PINNED = {
         "slow_approach": ("c6076fb46d24096b", "c6076fb46d24096b"),
         "fast_approach": ("e72586c986ea62a3", "e72586c986ea62a3"),
     },
+    # Re-pinned 2026-11-28 (the owner's picks of 2026-11-28): rod_step_price 1 to 0
+    # and Tavg's lost output at spot (imbalance_multiple, rho_floor and
+    # rho_floor_tracking at 1 x in place of 1.25 x spot) in every reactor scenario.
+    # With those four at their old values the rows hash as before (baseload:
+    # c916a62102471145, 63508e0d4fdc3dca).
     "reactor": {
-        "edf_daily": ("b1ff395380b9e0b1", "63508e0d4fdc3dca"),
-        "edf_short_hold": ("9e882df6578751b9", "99bc4d905cd59246"),
-        "krsko_slow": ("b6ccf708822e4a67", "1a7afda15cdf5c2d"),
-        "krsko_shallow": ("bd6d9c474163938c", "f21fc40c012f251f"),
-        "fast_return": ("d3600d4fe276bd77", "783c3ca71a976545"),
+        "edf_daily": ("6a226206a25b055c", "8ab7c7a7703c7224"),
+        "edf_short_hold": ("d49a2f211541824f", "ecdf493618727c7a"),
+        "krsko_slow": ("da88fbb263d19f64", "25fbc5bc9645682d"),
+        "krsko_shallow": ("5eced93bc50a7787", "5cb049755f912641"),
+        "fast_return": ("8d9c2fd7e11cf221", "37338561f3d7e673"),
         # In a stream a load-follow day is an event, so baseload's regime has the
         # params of edf_daily's: they differ by their rate of days alone.
-        "baseload": ("c916a62102471145", "63508e0d4fdc3dca"),
+        "baseload": ("05183a66127c1f78", "8ab7c7a7703c7224"),
     },
 }
 

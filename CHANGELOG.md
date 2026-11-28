@@ -9,6 +9,66 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The reactor's score: an end charge, and every trade-off price sourced (2026-11-28)
+
+The owner's three picks of 2026-11-28 (v1 task protocol, items 2 and 3).
+
+- A scored run is charged what its core's stock lost from the reset to its last
+  step, and credited what it gained, spread over the run's steps (`scoring_runs`,
+  the reactor's protocol). The stock is the boron the core owes
+  (`reactor.env.owed_dilution`): the dilution that brings Tavg back on its program
+  with the rods at their park, at the core's own coefficients, less the boron the
+  line already carries, valued at the effluent it takes (`reactor.env.stored_value`). Without it the MPC stopped
+  diluting on a run's last day for 75 % of its 12.85 % baseload saving; with it,
+  knowing the end no longer pays: 9.39 % against 9.99 % for the planner that plans
+  past it (seeds 100 to 109). The reward carries no such charge.
+- Rods cost nothing to move (`rod_step_price` 0): no published price for a rod step
+  was found. Their travel is still counted (`rod_moved`).
+- Tavg off its program is priced as lost output at spot, $184/h per K
+  (`imbalance_multiple` 0.0023), as every other lost output is; it was 1.25 x spot,
+  ours. The floor costs follow ($0.0767 a step).
+- The effluent's $0.0628/kg is sourced: EPRI 1011728 (2005) puts US plants' liquid
+  radwaste processing at $0.040 to $0.159 a kg.
+- The day planner plans past a run's end, which the end charge prices, and its cold
+  solve's second start prices a rod step at $100 (`DEAR_ROD_STEP`), whatever the
+  task's own price.
+- reactor-v10 is re-stamped in place: it shipped in no release. Every reactor
+  record is stale until it is recorded again.
+
+### Frozen tasks: `TargetGym/<task>-v1` (2026-11-28)
+
+Item 9 of the task protocol. No task is frozen yet.
+
+- A task with the protocol's nine items is frozen once, by
+  `scripts/freeze_v1.py <task>`. Its manifest, `src/target_gym/data/v1/<task>.json`,
+  fingerprints three parts. The plant is the environment's code, the shared physics
+  and the scored parameters. The scoring is each scenario's weight and parameters,
+  the scoring seeds, the scored window and its edge charge, the run length and the
+  tie tolerance. The reference is the frozen reference's law and the code that
+  builds it. `tests/test_v1_freeze.py` fails when any part moves. A change to a
+  frozen task becomes `<task>-v2` beside it.
+- `import target_gym` registers every frozen task with Gymnasium.
+  `gymnasium.make("TargetGym/<task>-v1")` gives the episode its score runs: the
+  heaviest scenario by default, another with `scenario=`. The reactor's is its
+  scored 7-day run.
+- The version stamps the environments carry today (`reactor-v10`, `hvac-v6` and
+  the rest) become development stamps. They keep counting changes to the code,
+  re-stamps in place included; a published result cites a frozen ID instead. Each
+  manifest records the development stamp its task froze at.
+
+### compressor_surge's MPC holds the reference's control line (2026-11-28)
+
+- The MPC's surge limit is the vendors' 10 % control line on the map, the line the
+  reference holds (`compressor_surge.oracle.control_line`), in place of the
+  machine's true line, which the observation hides. Planned on the true line, the
+  last recorded MPC line tripped 19 of 20 approach episodes (v1 task pages, finding
+  1; owner, 2026-11-28). The step's soft minimum of Phi is compared with the line
+  less its steady allowance, so a plant resting on the line meets it as the
+  reference's does. The MPC's record is stale until it is recorded again.
+- The task's sentence says what the job is: the header pressure is held inside its
+  zone about a constant setpoint at the least recycle energy, each surge is
+  charged, and three within 15 s trip the plant (finding 7).
+
 ### Docs for comparing an agent, and a beta (2026-11-27)
 
 After the outside review of 2026-11-27 (M2, M4, L3) and the owner's pickers the

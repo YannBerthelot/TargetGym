@@ -4,18 +4,20 @@ Contract, written before the runs.
 
 - A knot's cost is the env's, by hand: the turbine 10 % of rated load under its
   plan through a knot loses 0.1 x 1 GWe x 80 $/MWh x 300 s = 666.67 $; ten rod
-  steps of travel cost 10 $; a knot of full dilution arriving is 10 kg/s x 300 s
+  steps of travel cost 10 $ at $1 a step, a price a user may set (the task's is
+  $0, owner 2026-11-28); a knot of full dilution arriving is 10 kg/s x 300 s
   of effluent at 0.0628 $/kg, 188.40 $, of full boration 3 kg/s, 56.52 $. (Tavg's
   band is set wide for these, so its term is out of the way.)
-- And Tavg past its free band is charged as the env charges it, 0.0639 $/s a
-  kelvin, 19.17 $ a knot: a plant lined out on its program pays nothing; with
-  10 ppm more boron its Tavg sits 10 x 8 / 15 = 5.33 K under its program at the
-  start of the cycle, 3.73 K past the band, 71.56 $. (A quiet plant, its xenon
+- And Tavg past its free band is charged as the env charges it, at spot (owner,
+  2026-11-28), 0.0511 $/s a kelvin, 15.33 $ a knot: a plant lined out on its
+  program pays nothing; with 10 ppm more boron its Tavg sits 10 x 8 / 15 = 5.33 K
+  under its program at the start of the cycle, 3.73 K past the band, 57.24 $. (A
+  quiet plant, its xenon
   balanced with full load: a drawn reset sits a few tenths of a kelvin off.)
   Under the load's wobble, 0.5 % of rated, Tavg's error wobbles by 0.005 x (15.4
   + 3 x 471.2 / 15) = 0.548 K, so a plan with 3 ppm more boron, its Tavg on the
   band's edge (3 x 8 / 15 = 1.6 K), pays the mean crossing, 0.548 / sqrt(2 pi) =
-  0.2187 K, 4.19 $.
+  0.2187 K, 3.35 $.
 - Tavg's room is the plant's own. The plant's turbine stops loading with Tavg
   10 F, 5.556 K, under its program (the loading stop), so a plan keeps Tavg no
   further under it than that less the planner's back-off on Tavg, 0.8 K:
@@ -74,8 +76,8 @@ from target_gym.reactor.oracle import (
 from target_gym.registry import REGISTRY
 
 START = ReactorParams(cycle_range=(0.0, 0.0))
-#: The same with Tavg's free band out of the way.
-NO_BAND = ReactorParams(cycle_range=(0.0, 0.0), e_tol=50.0)
+#: The same with Tavg's free band out of the way, and a rod step at $1.
+NO_BAND = ReactorParams(cycle_range=(0.0, 0.0), e_tol=50.0, rod_step_price=1.0)
 #: A plant that resets lined out on its program at full load, and stays there.
 QUIET = ReactorParams(
     cycle_range=(0.0, 0.0),
@@ -117,7 +119,7 @@ def test_a_knot_costs_what_the_env_charges(move, size, dollars):
 
 
 @pytest.mark.parametrize(
-    "ppm, wobble, dollars", [(0.0, 0.0, 0.0), (10.0, 0.0, 71.56), (3.0, 0.005, 4.19)]
+    "ppm, wobble, dollars", [(0.0, 0.0, 0.0), (10.0, 0.0, 57.24), (3.0, 0.005, 3.35)]
 )
 def test_a_knot_charges_tavg_past_its_free_band(ppm, wobble, dollars):
     quiet = _reset(p=QUIET)  # in the scored run's float32, as the env resets
@@ -324,9 +326,9 @@ def test_the_oracle_halves_the_references_cost_late_in_the_cycle():
 @pytest.mark.medium
 def test_dearer_rods_never_make_the_first_plan_cheaper():
     """The cheapest plan cannot get cheaper when one of its prices rises. A plan
-    found with rods a hundred times dearer moves none of them (a single step
-    would cost $100), so it is a plan of the task's own problem at the same
-    cost, and the task's plan may not cost more.
+    found with a rod step at $100 moves none of them, so it is a plan of the task's
+    own problem (rods free since 2026-11-28) at the same cost, and the task's plan
+    may not cost more.
 
     The day: baseload from xenon balanced with 80 % of load, which burns off for
     four hours and builds back. On such days the planner absorbed the dip with
@@ -354,5 +356,32 @@ def test_dearer_rods_never_make_the_first_plan_cheaper():
         assert not applied["failed"] and not applied["capped"]
         return applied["cost"]
 
-    dear = first_plan(p.replace(rod_step_price=100.0 * float(p.rod_step_price)))
+    dear = first_plan(p.replace(rod_step_price=100.0))
     assert first_plan(p) <= dear + 0.5
+
+
+@pytest.mark.medium
+def test_the_planner_plans_past_the_runs_end():
+    """A run is a cut in a plant that runs on, and the score charges the boron the
+    core owes at the cut (owner, 2026-11-28), so the planner never shrinks its
+    look-ahead toward it: half an hour before a day's run ends, from a core a day's
+    burnup behind its dilution, it moves as it would with two more days to go.
+    Planned to the cut, it stopped diluting on a run's last day (v1 item 2's probe,
+    75 % of its baseload saving)."""
+    from target_gym import scoring_runs as S
+
+    spec, env = REGISTRY["reactor"], Reactor()
+    p = S.run_params("reactor", "baseload", steps=2880)
+    _, state = env.reset_env(jax.random.PRNGKey(5), p)
+    late = 2880 - 60
+    state = state.replace(time=jnp.asarray(late, state.time.dtype))
+    state = state.replace(
+        physics_time=jnp.asarray(late * env.control_period, state.physics_time.dtype)
+    )
+    moves = []
+    for steps in (2880, 3 * 2880):
+        oracle = DayOracle(
+            env, plan_params(spec, p.replace(max_steps_in_episode=steps))
+        )
+        moves.append(np.asarray(oracle.step(None, state), float))
+    np.testing.assert_allclose(moves[0], moves[1], atol=1e-6)

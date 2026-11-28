@@ -588,6 +588,34 @@ def compute_reward(state: PHState, params: PHParams, xp=jnp):
     )
 
 
+def stored_capacity(state: PHState, params: PHParams, pH=None):
+    """The base the two stages hold above ``pH`` (the permit's low edge by
+    default), in litres of the base stream: what a policy can spend before the
+    tanks fall to that pH. Negative where they sit below it.
+
+    At a fixed pH the charge balance is affine in the invariants, and the
+    invariants mix by volume, so a stage of volume V whose content has residual
+    ``g`` there holds ``V g / g3`` of base beyond what its water needs, ``g3``
+    the base stream's residual."""
+    p = params
+    ref = p.permit_low if pH is None else pH
+    g3 = titration_residual(ref, p.Wa3, p.Wb3, p)
+    g1 = titration_residual(ref, state.Wa_s1, state.Wb_s1, p)
+    g2 = titration_residual(ref, state.Wa, state.Wb, p)
+    return (p.V_s1 * g1 + p.V * g2) / g3 / 1000.0
+
+
+def stored_value(state: PHState, params: PHParams):
+    """The capacity the tanks hold above the pH an episode starts at
+    (``setpoint_pH``), at the reagent's price: what the evaluation charges for the
+    capacity a scored window lost and credits for what it gained
+    (``evaluation.Evaluation.edge_charge``; owner, 2026-11-28, v1 task pages, item
+    2). Near that pH the content leaves in the outflow with no base above it, so
+    restoring a litre of capacity takes a litre of reagent, and filling one cost a
+    litre: the price is both."""
+    return params.reagent_price * stored_capacity(state, params, params.setpoint_pH)
+
+
 def steady_state_invariants(q3, q2, params: PHParams):
     """Invariants a given pair of flows settles to -- used for reset and tests."""
     p = params

@@ -14,8 +14,11 @@ in PHYSICS.md section 3, not from the code:
   program's slowest speed overshoots its dead band.
 * Rods move at 72 steps/min both ways, over a 228-step stroke of the 1500 pcm bank:
   7.89 pcm/s. The jacks have one speed.
-* Wear charges rods that moved, not rods that were asked to.
-* Tavg off program costs lost output, 0.23 %/K of 1 GWe at $100/MWh: $230/h per K.
+* Wear charges rods that moved, not rods that were asked to, at ``rod_step_price``:
+  $0 in the task, since no published price for a rod step was found (owner,
+  2026-11-28), so the wear tests set $1 a step to read the travel it charges.
+* Tavg off program costs lost output, 0.23 %/K of 1 GWe at spot, $80/MWh: $184/h
+  per K (owner, 2026-11-28; it was $230 at an imbalance price of 1.25 x spot).
 """
 
 import jax
@@ -204,9 +207,10 @@ def test_rods_move_at_72_steps_a_minute_both_ways(raw, sign):
 
 def test_wear_charges_travel_and_not_a_command_the_rods_cannot_reach():
     """Asked for the far end of the bank, rods still move 72 steps/min: 6 steps in
-    the 5 s sub-step, $6, however far off the command is. Past their stop they
-    move nothing, so it costs nothing."""
+    the 5 s sub-step, $6 at $1 a step, however far off the command is. Past their
+    stop they move nothing, so it costs nothing."""
     state, params = _lined_out(0.8)
+    params = params.replace(rod_step_price=1.0)
     state = state.replace(rod_in=jnp.float32(0.5))
     new, _ = compute_next_state(jnp.array([1.0, 0.0, 1.0]), state, params)
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(
@@ -217,29 +221,34 @@ def test_wear_charges_travel_and_not_a_command_the_rods_cannot_reach():
     assert float(compute_reward_terms(new, params)["running"]) == pytest.approx(0.0)
 
 
-def test_a_rod_step_costs_its_price():
-    """One step of the 228-step stroke at $1 a step."""
+def test_a_rod_step_costs_its_price_and_nothing_in_the_task():
+    """One step of the 228-step stroke costs ``rod_step_price``: $1 where a user
+    sets $1, and nothing at the task's own price (owner, 2026-11-28)."""
     state, params = _lined_out(0.8)
     moved = state.replace(rod_moved=jnp.float32(1.0 / 228.0))
-    assert float(compute_reward_terms(moved, params)["running"]) == pytest.approx(
+    priced = params.replace(rod_step_price=1.0)
+    assert float(compute_reward_terms(moved, priced)["running"]) == pytest.approx(
         1.0, rel=1e-3
     )
+    assert float(compute_reward_terms(moved, params)["running"]) == 0.0
 
 
 def test_one_kelvin_past_the_dead_band_costs_its_lost_output():
-    """$230/h per K past the rods' 1.6 K dead band, over the 5 s sub-step: $0.319.
+    """$184/h per K past the rods' 1.6 K dead band, over the 5 s sub-step: $0.2556.
     The owner moved the charge outside the dead band on 2026-11-08 (EDF practice),
     and to Tavg under its program only (rule 15, Amendment 3)."""
     state, params = _lined_out(0.8)
     off = state.replace(T_coolant=state.T_coolant - 5.2)  # Tavg down 2.6 K
     cost = float(compute_reward_terms(off, params)["tracking"])
     on = float(compute_reward_terms(state, params)["tracking"])
-    assert cost - on == pytest.approx(230.0 * 5.0 / 3600.0, rel=0.01)
+    assert cost - on == pytest.approx(184.0 * 5.0 / 3600.0, rel=0.01)
 
 
 def test_a_step_sums_the_sub_steps_of_a_moving_rod():
-    """A full-speed step moves 72 / 2 = 36 rod steps in 30 s, so $36 of wear."""
+    """A full-speed step moves 72 / 2 = 36 rod steps in 30 s, so $36 of wear at $1
+    a step."""
     state, params = _lined_out(0.8)
+    params = params.replace(rod_step_price=1.0)
     state = state.replace(rod_in=jnp.float32(0.5))
     _, _, _, _, info = ENV.step_env(
         jax.random.PRNGKey(0), state, jnp.array([1.0, 0.0, 1.0]), params

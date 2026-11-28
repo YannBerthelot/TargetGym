@@ -6,9 +6,11 @@ behaviour or change which controller looks better"). A task with a
 :data:`PROTOCOLS` entry is scored on the scenarios it keeps, a dropped scenario's
 weight going to the twin named for it; each seed is one run of the stream pinned
 to the scenario, from the reset as it is, scored over ``days`` from its first
-step; a seed's cost is its mean cost per step over the run (J4). Ten seeds, and
-ten more for a scenario whose room interval contains 1, once (:func:`needs_more`),
-set before any result.
+step; a seed's cost is its mean cost per step over the run (J4), and with an
+``edge_charge`` the plant's stock lost from the reset to the run's last step, spread
+over its steps, less what it gained with ``edge_credit`` (the reactor: the boron its
+core owes, owner, 2026-11-28). Ten seeds, and ten more for a scenario whose room
+interval contains 1, once (:func:`needs_more`), set before any result.
 
 No burn-in: on the reactor the slowest thing the reference leaves is the phase of
 its calm-day boron cycle, about 8 days, which never decays, so a burn-in would
@@ -29,6 +31,7 @@ import numpy as np
 __all__ = [
     "PROTOCOLS",
     "Protocol",
+    "edge",
     "needs_more",
     "policy",
     "run",
@@ -45,7 +48,11 @@ __all__ = [
 class Protocol:
     """``days`` scored a run, ``seeds`` a scenario and ``more`` once where the
     stop rule asks; ``folds`` maps a dropped scenario to the kept twin that takes
-    its weight; ``first`` is the first seed."""
+    its weight; ``first`` is the first seed. ``edge_charge`` names the plant's
+    method that values its stock (``stored_value(state, params)``): a run is
+    charged the value lost from its reset to its last step, spread over its steps,
+    and with ``edge_credit`` credited the value gained (``evaluation.Evaluation``'s
+    edge charge, read from the reset since a run has no unscored step)."""
 
     days: float
     seeds: int = 10
@@ -53,6 +60,8 @@ class Protocol:
     folds: dict = field(default_factory=dict)
     first: int = 100
     source: str = ""
+    edge_charge: str | None = None
+    edge_credit: bool = False
 
 
 PROTOCOLS = {
@@ -60,7 +69,10 @@ PROTOCOLS = {
         days=7.0,
         folds={"edf_short_hold": "edf_daily", "krsko_shallow": "krsko_slow"},
         source="owner, 2026-11-24: 7 days; the source's standard day of each twin "
-        "pair (EDF's 3 to 8 h hold, Krsko's day 1); no priced end",
+        "pair (EDF's 3 to 8 h hold, Krsko's day 1); owner, 2026-11-28: the boron "
+        "the core owes at the end against the reset's, charged and credited",
+        edge_charge="stored_value",
+        edge_credit=True,
     ),
 }
 
@@ -187,6 +199,26 @@ def policy(name: str, scenario: str, kind: str, steps=None, params=None):
     return CallablePolicy(make, name=kind, oracle=True)
 
 
+def edge(name: str, before, after, steps: int):
+    """Each run's end charge per step: the plant's stock valued ``before`` (at the
+    reset) less ``after`` (at the last step), over ``steps``; a gain counts only
+    where the protocol credits it, and nothing where it names no stock."""
+    p = PROTOCOLS[name]
+    if p.edge_charge is None:
+        return np.zeros(np.shape(before))
+    lost = np.asarray(before, float) - np.asarray(after, float)
+    return (lost if p.edge_credit else np.maximum(lost, 0.0)) / steps
+
+
+def _value(name: str, env):
+    """The plant's stock function on a run's state, or None (``edge_charge``)."""
+    method = PROTOCOLS[name].edge_charge
+    if method is None:
+        return None
+    of = getattr(env.env, method)
+    return lambda state, params: of(state.env, params)
+
+
 def run(
     name, scenario, kind_or_policy, seeds, steps=None, terms=False, params=None
 ) -> dict:
@@ -204,10 +236,16 @@ def run(
     n = len(seeds)
     T = scored_steps(name) if steps is None else int(steps)
     task = task_info(name, s.env, params, n)
-    roll = run_policy(pol, s, params, task, seeds=list(seeds), n_steps=T)
+    value = _value(name, s)
+    record = None if value is None else {"stock": lambda st, p, _: value(st, p)}
+    roll = run_policy(pol, s, params, task, seeds=list(seeds), n_steps=T, record=record)
+    cost = -roll["reward"].mean(axis=1)
+    if value is not None:
+        cost = cost + edge(name, _reset_values(s, params, seeds, value),
+                           roll["records"]["stock"][:, -1], T)  # fmt: skip
     out = {
         "seeds": [int(x) for x in seeds],
-        "costs": [float(c) for c in -roll["reward"].mean(axis=1)],
+        "costs": [float(c) for c in cost],
         "trips": [int(np.any(t)) for t in roll["tripped"]],
     }
     if terms:
@@ -215,6 +253,20 @@ def run(
             {k: [float(x) for x in v.mean(axis=1)] for k, v in roll["terms"].items()}
         )
     return out
+
+
+def _reset_values(stream, params, seeds, value) -> np.ndarray:
+    """The stock at each seed's reset, as ``run_policy`` resets it."""
+    import jax
+
+    from target_gym.benchmark import episode_keys
+
+    keys = jax.numpy.stack(
+        [episode_keys(jax.random.PRNGKey(int(x)), 1, 1)[0][0] for x in seeds]
+    )
+    # Reset as run_policy resets, under jit and vmap, so float32 agrees with it.
+    at = jax.jit(jax.vmap(lambda k: value(stream.reset_env(k, params)[1], params)))
+    return np.asarray(at(keys), float)
 
 
 def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) -> dict:
@@ -232,8 +284,11 @@ def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) 
         [episode_keys(jax.random.PRNGKey(int(x)), 1, 1)[0][0] for x in seeds]
     )
 
+    value = _value(name, s)
+
     def one(key):
         obs, state = s.reset_env(key, params)
+        before = jnp.float32(0.0) if value is None else value(state, params)
 
         def step(carry, _):
             obs, state, m = carry
@@ -241,12 +296,16 @@ def run_functional(name, scenario, act, memory, seeds, steps=None, params=None) 
             obs, state, r, _, info = s.step_env(None, state, u, params)
             return (obs, state, m), (-r, info["tripped"])
 
-        _, (cost, tripped) = jax.lax.scan(step, (obs, state, memory), None, length=T)
-        return cost.mean(), tripped.any()
+        (_, last, _), (cost, tripped) = jax.lax.scan(
+            step, (obs, state, memory), None, length=T
+        )
+        after = jnp.float32(0.0) if value is None else value(last, params)
+        return cost.mean(), tripped.any(), before, after
 
-    cost, tripped = jax.jit(jax.vmap(one))(keys)
+    cost, tripped, before, after = jax.jit(jax.vmap(one))(keys)
+    cost = np.asarray(cost, float) + edge(name, before, after, T)
     return {
         "seeds": [int(x) for x in seeds],
-        "costs": [float(c) for c in np.asarray(cost)],
+        "costs": [float(c) for c in cost],
         "trips": [int(t) for t in np.asarray(tripped)],
     }
