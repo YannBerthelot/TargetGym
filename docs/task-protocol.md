@@ -63,8 +63,10 @@ Three commands, which the task's session runs in this order (added
    baselines into `src/target_gym/data/v1_records/<task>.json`, each scored by
    `tg.score` on the scoring seeds: doing nothing, the expert, the
    observation-only MPC, and PPO and SAC at 30 runs of 204,800 steps. The MPC is
-   the task's `observation_only_mpc(env, params)` in its `oracle.py`: an MPC on
-   the true model, planning from `target_gym.estimation.Estimator`'s belief.
+   the task's `observation_only_mpc(env, params, plan)` in its `oracle.py`: an
+   MPC on the true model, planning from `target_gym.estimation.Estimator`'s
+   belief. It gets each scenario's configuration and the planner's, noise
+   zeroed.
 2. `scripts/generate_cards.py`. It writes the task's card, `docs/cards/<task>.md`,
    from its inputs in `docs/cards/<task>.json` and from the record. The inputs
    hold the job, the decision, the score's unit, the prices with their sources,
