@@ -53,6 +53,10 @@ from target_gym.plane3d.env_jax import (
 from target_gym.reactor.env import ReactorParams
 from target_gym.reactor.env_jax import Reactor
 from target_gym.scoring import score_policy
+from target_gym.v1 import register as _register_frozen
+
+# Every frozen task, as gymnasium.make("TargetGym/<task>-v1") finds it.
+_register_frozen()
 
 try:
     __version__ = _version("target-gym")
