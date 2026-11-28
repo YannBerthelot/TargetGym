@@ -52,13 +52,13 @@
   ],
   "trips": 0
  },
- "commit": "2235084efe532717ec2a823596669dbc41a36c8f",
+ "commit": "8e0cc2078e2702c21c56e3eb6e74169f1addb962",
  "dirty": false,
  "env": "compressor_surge-v5",
  "exits": null,
- "fingerprint": "0d3e36366b1fdf93",
+ "fingerprint": "fcfef242987481cc",
  "format": 1,
- "generated": "2026-11-27T21:02:46+00:00",
+ "generated": "2026-11-28T00:13:50+00:00",
  "kind": "ladder",
  "law": {
   "bias": "balance",
@@ -93,6 +93,6 @@
   "sensor_noise_scale": 1.0
  },
  "rung": "feedforward",
- "stamp": "ddf55431599f1116",
+ "stamp": "245b88d68b068113",
  "task": "compressor_surge"
 }
