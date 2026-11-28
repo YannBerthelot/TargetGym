@@ -65,6 +65,9 @@ _ORACLE_SOURCES = (_ROOT / "experts" / "mpc.py",)
 #: The shared solver (``target_gym.oracles``), in place of experts/mpc.py in
 #: the oracle part of every task whose oracle stands on it (``oracle_data``).
 _SOLVER_SOURCES = tuple(sorted((_ROOT / "oracles").glob("*.py")))
+#: The state estimator an observation-only MPC plans from, which a task's
+#: oracle module may import: in every oracle part, on the shared solver or not.
+_ESTIMATOR_SOURCES = (_ROOT / "estimation.py",)
 #: The keys of a gains entry that describe it, which a level need not repeat.
 _NOT_GAINS = frozenset({"note", "tuning_rule"})
 #: The keys of a data file that only describe the run that wrote it.
@@ -231,9 +234,9 @@ def expert_sources(spec) -> list[pathlib.Path]:
 def oracle_sources(spec) -> list[pathlib.Path]:
     """The files the oracle part depends on: the environment's non-controller
     modules, the shared physics, the shared machinery (experts/mpc.py, or the
-    shared solver's modules for a task with ``oracle_data``), the task's
-    oracle modules, and the expert code its oracle still reads
-    (``spec.oracle_reads``)."""
+    shared solver's modules for a task with ``oracle_data``), the state
+    estimator, the task's oracle modules, and the expert code its oracle still
+    reads (``spec.oracle_reads``)."""
     own = [p for p in _env_sources(spec) if _side(p) == "oracle"]
     reads = []
     for rel in spec.oracle_reads:
@@ -242,7 +245,8 @@ def oracle_sources(spec) -> list[pathlib.Path]:
         reads.append(_ROOT / rel)
     return sorted(
         {*_env_sources(spec, controllers=False), *_PHYSICS_SOURCES}
-        | {*(_SOLVER_SOURCES if spec.oracle_data else _ORACLE_SOURCES), *own, *reads},
+        | {*(_SOLVER_SOURCES if spec.oracle_data else _ORACLE_SOURCES), *own, *reads}
+        | set(_ESTIMATOR_SOURCES),
         key=str,
     )
 

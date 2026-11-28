@@ -249,6 +249,9 @@ _CONTROLLER_MODULES = {
     "target_gym.experts.pid",
     "target_gym.experts.mpc",
 }
+#: And, in oracle*.py only, the state estimator an observation-only MPC plans
+#: from, which every oracle part covers (``provenance._ESTIMATOR_SOURCES``).
+_ORACLE_MODULES = {"target_gym.estimation"}
 #: The shared solver: in the oracle fingerprint of a task with ``oracle_data``.
 _SOLVER_MODULES = {
     "target_gym.oracles",
@@ -307,6 +310,8 @@ def test_imports_stay_inside_the_fingerprint():
             allowed = _SHARED_MODULES | declared
             if is_experts:
                 allowed |= _CONTROLLER_MODULES
+            if path.name.startswith("oracle"):
+                allowed |= _ORACLE_MODULES
             if path.name.startswith("oracle") and s.oracle_data:
                 allowed |= _SOLVER_MODULES
             for node, in_function in _imports(ast.parse(path.read_text())):
