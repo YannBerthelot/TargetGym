@@ -60,7 +60,6 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial as partial
 
-from target_gym import records
 from target_gym.hvac.env import (
     WEATHER_OU_THETA,
     drift_over,
@@ -360,9 +359,10 @@ def observation_only_mpc(env, params, plan):
     ``policy.reset()``, then ``policy(obs)``."""
     from target_gym.estimation import Estimator, ObservationOnly
 
-    horizon = int(records.load_row("oracle_horizons", "hvac")["P"])
+    # The spread at every lead a plan can reach: the episode bounds the horizon.
+    steps = int(params.max_steps_in_episode)
     oracle = WindowOracle(
-        env, plan, "hvac", scored_window(), spread=room_spread(params, horizon)
+        env, plan, "hvac", scored_window(), spread=room_spread(params, steps)
     )
     estimator = Estimator(
         env, params, OBSERVED_FIELDS, channels=OBSERVED_CHANNELS, model=plan
