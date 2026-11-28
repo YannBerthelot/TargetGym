@@ -15,6 +15,7 @@ Contract, from the protocol's item 9 and W5 and W6 of the v1 task pages:
 folder: it is the cheapest task, and the real manifests are never touched.
 """
 
+import dataclasses
 import json
 
 import gymnasium
@@ -149,3 +150,42 @@ def test_a_scored_task_is_made_on_the_episode_its_score_runs(task, tmp_path):
         expected = tg.make(task, scenario=heaviest, **changed)[1]
         assert vars(env.env_params) == vars(expected)
     check_env(env, skip_render_check=True)
+
+
+def test_crediting_the_window_edge_moves_the_scoring_alone(
+    frozen_first_order, monkeypatch
+):
+    """The edge charge's credit (``Evaluation.edge_credit``, pH's since PR 320)
+    is part of how a task is scored."""
+    from target_gym import evaluation
+
+    declared = evaluation.of(REGISTRY["first_order"])
+    credited = dataclasses.replace(declared, edge_credit=not declared.edge_credit)
+    monkeypatch.setattr(evaluation, "of", lambda spec: credited)
+    assert v1.changes("first_order", frozen_first_order) == ["scoring"]
+
+
+def test_every_field_of_a_runs_protocol_but_its_line_seeds_is_scoring(monkeypatch):
+    """A task scored on runs, the reactor: a field its protocol gains (an end
+    charge, PR 329) moves the scoring, and so does each it has; the charter
+    lines' seed counts and the source's text do not."""
+    from target_gym import scoring_runs
+
+    @dataclasses.dataclass(frozen=True)
+    class Charged(scoring_runs.Protocol):
+        edge_credit: bool = False
+
+    base = scoring_runs.PROTOCOLS["reactor"]
+    plain = Charged(**{f.name: getattr(base, f.name) for f in dataclasses.fields(base)})
+
+    def scoring(protocol):
+        monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", protocol)
+        return v1.manifest("reactor")["parts"]["scoring"]
+
+    before = scoring(plain)
+    assert scoring(dataclasses.replace(plain, edge_credit=True)) != before
+    assert scoring(dataclasses.replace(plain, days=plain.days + 1)) != before
+    for line in ("seeds", "more", "first"):
+        moved = dataclasses.replace(plain, **{line: getattr(plain, line) + 1})
+        assert scoring(moved) == before, line
+    assert scoring(dataclasses.replace(plain, source="another")) == before

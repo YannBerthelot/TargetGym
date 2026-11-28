@@ -61,20 +61,26 @@ def _pct(x) -> str:
 
 
 def _scoring_text(scoring: dict, unit: str) -> str:
-    window = scoring["window"]
-    if scoring["run"] is not None:
-        span = (
-            f"a {scoring['run']['days']:g}-day run of {scoring['run']['steps']} steps"
-        )
-    elif window["scored"] is not None:
-        start = window["unscored"]
-        span = f"steps {start} to {start + window['scored']} of each episode"
+    ev, run = scoring["evaluation"], scoring["run"]
+    if run is not None:
+        span = f"a {run['days']:g}-day run of {run['steps']} steps"
+    elif ev["scored_steps"] is not None:
+        start = ev["unscored_steps"]
+        span = f"steps {start} to {start + ev['scored_steps']} of each episode"
     else:
         span = "each whole episode"
-    edge = scoring["edge_charge"]
-    charge = (
-        f", with a once-off charge for what the store lost ({edge})" if edge else ""
-    )
+    # A run's protocol charges its end; an evaluation, its window's edges.
+    edges = run if run is not None and run.get("edge_charge") else ev
+    store, credit = edges.get("edge_charge"), edges.get("edge_credit", False)
+    if not store:
+        charge = ""
+    elif credit:
+        charge = (
+            ", charged once for what the store lost and credited for what it "
+            f"gained (`{store}`)"
+        )
+    else:
+        charge = f", charged once for what the store lost (`{store}`)"
     seeds = scoring["seeds"]
     return (
         f"The cost is in {unit}, averaged over {span}{charge}. The score is the "
