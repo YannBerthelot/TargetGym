@@ -166,26 +166,22 @@ def test_crediting_the_window_edge_moves_the_scoring_alone(
 
 
 def test_every_field_of_a_runs_protocol_but_its_line_seeds_is_scoring(monkeypatch):
-    """A task scored on runs, the reactor: a field its protocol gains (an end
-    charge, PR 329) moves the scoring, and so does each it has; the charter
+    """A task scored on runs, the reactor: each field of its protocol moves the
+    scoring, its end charge and its credit (PR 329) included, but the charter
     lines' seed counts and the source's text do not."""
     from target_gym import scoring_runs
 
-    @dataclasses.dataclass(frozen=True)
-    class Charged(scoring_runs.Protocol):
-        edge_credit: bool = False
-
     base = scoring_runs.PROTOCOLS["reactor"]
-    plain = Charged(**{f.name: getattr(base, f.name) for f in dataclasses.fields(base)})
 
-    def scoring(protocol):
+    def scoring(**changed):
+        protocol = dataclasses.replace(base, **changed)
         monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", protocol)
         return v1.manifest("reactor")["parts"]["scoring"]
 
-    before = scoring(plain)
-    assert scoring(dataclasses.replace(plain, edge_credit=True)) != before
-    assert scoring(dataclasses.replace(plain, days=plain.days + 1)) != before
+    before = scoring()
+    assert scoring(edge_credit=not base.edge_credit) != before
+    assert scoring(edge_charge=None if base.edge_charge else "stored_value") != before
+    assert scoring(days=base.days + 1) != before
     for line in ("seeds", "more", "first"):
-        moved = dataclasses.replace(plain, **{line: getattr(plain, line) + 1})
-        assert scoring(moved) == before, line
-    assert scoring(dataclasses.replace(plain, source="another")) == before
+        assert scoring(**{line: getattr(base, line) + 1}) == before, line
+    assert scoring(source="another") == before
