@@ -124,7 +124,7 @@ def test_the_record_scores_doing_nothing_and_the_expert(stand_in_reference, tmp_
     )
     assert nothing["read_state"] and nothing["J"] > expert["J"]  # item 6
     assert rec["parts"] == v1.manifest("ph_neutralization")["parts"]
-    assert expert["commit"] == record_v1._git("rev-parse", "HEAD")
+    assert expert["commit"] == (record_v1._git("rev-parse", "HEAD") or None)
     again = v1.record("ph_neutralization", tmp_path / "rec")
     assert again["lines"].keys() == {"nothing", "expert"}
     assert "mpc not recorded" in v1.ready(again, rec["parts"])
