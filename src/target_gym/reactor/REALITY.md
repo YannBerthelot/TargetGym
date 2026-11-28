@@ -132,8 +132,17 @@ achieve, as flexibility can be limited by the core control system" [S2, section 
 - Lost production at $80 to $100/MWh on 1 GWe [owner's range].
 - A scram's restart: Doel-3 ran 18 h at reduced power after a 6 h scram [S15];
   APR1400 restart windows run 22 to 70 h with dilution rate and burnup [S16].
-- Rod wear, effluent treatment: no family figure found; the task's prices are ours
-  and their weight on the room is reported (docs/proposals/reactor-axial.md).
+- Effluent treatment: US plants paid $0.15 to $0.60 a gallon to process liquid
+  radwaste in 2005, typically under $0.25 all included (EPRI 1011728, pp. 3-4 and
+  3-15), $0.040 to $0.159 per kg; the task's $0.0628 is inside.
+- Rod wear: no price per rod step found, only the mechanisms' design lives
+  (AP1000's 9 million steps, from a search summary; the U.S. EPR's prototype tests
+  ran 3 million steps and 6 million more, FSAR Tier 2 section 3.9.4.4). The owner
+  dropped the price on 2026-11-28.
+- Lost output's price: PJM's 2022 real-time load-weighted average, $80.14/MWh,
+  against $75.35 to $75.44 day-ahead (IMM report to the Members Committee, January
+  2023, slides 12 and 13); Germany's day-ahead averaged EUR 78.51/MWh in 2024 and
+  EUR 95.18 in 2023 (Bundesnetzagentur, 3 January 2025).
 
 ## 6. A day of load follow
 

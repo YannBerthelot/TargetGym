@@ -296,9 +296,10 @@ cycle, with control rods, soluble boron and the turbine's loading rate, knowing 
 day's load plan: take as much of the plan as the core can carry, hold the average
 coolant temperature within 1.6 K of its program on either side and the flux
 difference within 5 % of its target, keep the rods above their insertion limit, and
-dilute for the fuel's burnup, at the least cost in lost output, rod wear and
-effluent. Six scenarios weigh baseload days against five kinds of load-follow day
-(REALITY.md sections 6 and 7).
+dilute for the fuel's burnup, at the least cost in lost output and effluent. A
+scored run is charged at its end the boron its core then owes, against what it owed
+at the reset. Six scenarios weigh baseload days against five kinds of load-follow
+day (REALITY.md sections 6 and 7).
 
 Each episode starts with the core at a point of its cycle drawn evenly from 0 to
 0.9 (observation 13), with that point's boron, moderator coefficient and boron worth
@@ -778,15 +779,15 @@ which is what the recorded baselines use.
 | `e_floor` | 0.05 K | the RTD reading's resolution, about its 0.045 K scatter: a documented minimum, not a certified floor |
 | `e_tol` | 1.6 K | the black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA NP-T-3.23, annex II-5.1). CEA's papers on Mode G's R group give 0.8 C with slow motion up to 1.7 C |
 | `tracking_exponent` | 1 | linear, as lost output is |
-| `imbalance_multiple` | 1.25 x 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | **ours.** Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At the one imbalance price of the priced plants, $100/MWh (1.25 x the $80 spot), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 100 x 1000 x 0.0023 = $230/h per K, so **$1.917 per K over a 30 s step**. It prices a hot plant as a cold one, which the slope does not say: the band is a procedure band both cited procedures keep on either side (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), priced like the offset band by the output it costs (physics review, finding 1, owner 2026-11-10, reversing Amendment 3 decision 7) |
-| `rod_step_price` | $1 per step | **ours,** kept by the owner on 2026-11-07. Rod travel, as the steps the rods actually moved |
+| `imbalance_multiple` | 0.0023 per K of `spot_price_per_MWh` on `P_electric_GW` | Off program, steam conditions cost output. The relative Carnot slope at 547 K steam and 305 K condenser is 305 / (547 x 242) = 0.23 %/K. At spot, $80/MWh (PJM's 2022 real-time load-weighted average was $80.14, its IMM report of January 2023), on `P_electric_GW` = 1.0 GW, a third of the 3 GW thermal, that is 80 x 1000 x 0.0023 = $184/h per K, so **$1.533 per K over a 30 s step**, priced as every other lost output is. It was 1.25 x spot, an imbalance price of ours, until the owner moved it to spot on 2026-11-28 (PJM's real-time ran 1.01 to 1.06 of its day-ahead in 2022). It prices a hot plant as a cold one, which the slope does not say: the band is a procedure band both cited procedures keep on either side (IAEA NP-T-3.23 annex II-5.1; NRC HRTD 8.1), priced like the offset band by the output it costs (physics review, finding 1, owner 2026-11-10, reversing Amendment 3 decision 7) |
+| `rod_step_price` | $0 per step | no published price for a rod step was found, only the mechanisms' design lives (AP1000's 9 million steps), so the owner dropped it on 2026-11-28; it was $1, ours. Rod travel, the steps the rods actually moved, is still counted (`rod_moved`), and the card reports it |
 | `ao_band`, `ao_ref` | 0.05, 0 | the target band: 5 % of rated delta I either side of the target at every power (EDF's 0.05, IAEA NP-T-3.23, annex II-4.3; Krsko's 5 %; NUREG-1431's figure draws the band 10 % wide at every power). The target is the offset at full power, xenon balanced, rods out, times the power: 0 in this core |
 | `ao_allowed`, `ao_half_power`, `ao_free_power`, `derate_to`, `derate_price_per_MWh` | 3600 s, 0.5, 0.15, 0.5, $80/MWh | the penalty clock: a second a second at 50 % of rated power and above, half a second from 15 % to 50 %, none below; 1 h in 24 h, then a reduction to 50 %, its lost output priced at $80/MWh (inside the family's $80 to $100) on `P_electric_GW` (NUREG-1431 Rev. 3.0, B 3.2.3A, Notes 2 and 3, Required Action C.1) |
 | `ao_strict_power`, `ao_strict_allowed` | 0.9, 1800 s | at 90 % and above the flux difference must be in its band: 15 min to restore it and 15 min to be under 90 %, then that reduction's lost output (the same bases, Required Actions A.1 and B.1) |
 | `ao_limit_high`, `ao_limit_low`, `ao_limit_allowed` | 0.11, 0.31, 1800 s | the acceptable operation limits between 50 and 90 %: 11 % of rated delta I at 90 % power to 31 % at 50 %, read off Figure B 3.2.3A-1, which is "for illustration only"; outside them 30 min without a break, then a reduction to 50 % (C.1's completion time) |
 | `turbine_rate` | 5 %/min | the third action's full scale; the plan the turbine does not take is lost output at `derate_price_per_MWh`, $666.67 per step per unit of rated load, the trip's own price |
 | `ril_full`, `ril_half`, `ril_restore`, `ril_allowed` | 0.22, 0.78, 7200 s, 28800 s | the rod insertion limit, a straight line in power (KAIST's lead), 2 h to restore, then 6 h to shut down (STS 3.1.6 Conditions B and D, ML21259A155) |
-| `effluent_price` | $0.0628 per kg injected | **ours.** Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh |
+| `effluent_price` | $0.0628 per kg injected | Every kg injected displaces a kg to treat (OAPS). Boiling it off takes 2.26 MJ/kg, 0.628 kWh, at $100/MWh: inside what US plants paid to process liquid radwaste, $0.15 a gallon at one station's contract to $0.60 for a filter and demineralizer system, typically under $0.25 all included (EPRI 1011728, 2005, pp. 3-4 and 3-15), $0.040 to $0.159 per kg |
 | `failure_cost` | 666.67 $ per step | a step of lost production: 1 GWe at $80/MWh, inside the family's $80 to $100 |
 | `restart_steps` | 5760 (48 h) | a scram's dead time, **ours,** inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the restart (KNS 20A-065). The reload after it is played out and charged in tracking |
 | `standby_steps` | 720 (6 h) | hot standby's dead time after a timed limit's overrun: Doel-3's time down (INIS 1ypr9-dk595). It was 15 h, Doel-3's 6 h down and its 18 h reduced, until the reload was played out (owner, 2026-11-12) |
@@ -794,8 +795,25 @@ which is what the recorded baselines use.
 | `reload_knee`, `reload_rate` | 0.5, 3 %/h | the turbine's reload above 50 % of rated power: KEPCO NF's fuel conditioning guideline, 3 %/h above a 50 % threshold, 2 to 4 %/h tested (KNS 15A-200); 3 %/h above the threshold at most plants (EPRI, REALITY.md [ST2], [ST3]) |
 | `reload_fast_rate` | 15 %/h | the reload below the knee: Exelon's practice of about 15 %/h below its threshold (REALITY.md [ST3]); KNS 15A-200 finds the rate there does not matter to the fuel (5 to 50 %/h tested). From 15 % the reload takes 19 h, Doel-3's 18 h. It was first 50 %/h, **ours,** the "no limit" KNS 15A-200 simulates; the expert then re-tripped on Tavg's floor after every scram, the turbine loading faster than boron can follow, so the owner took the practice rate (2026-11-12) |
 
-A step at the floor costs `rho_floor_tracking`, $0.0958: the price per K over the 30
+A step at the floor costs `rho_floor_tracking`, $0.0767: the price per K over the 30
 s step, times `e_floor`.
+
+**The end charge.** A scored run (`scoring_runs`) is charged what its core's stock
+lost from the reset to its last step, and credited what it gained, spread over the
+run's steps (owner, 2026-11-28). The stock is the boron the core owes
+(`env.owed_dilution`): the dilution that brings Tavg back on its program with the
+rods at their park, at the core's own coefficients (the fuel's and the moderator's
+together, since at a held power the fuel's temperature moves with the coolant's)
+and boron worth, valued
+at the effluent that dilution takes, `primary_mass` ln(B / (B - owed)) kg at
+`effluent_price` (`env.stored_value`). Tavg under its program inside its free band
+holds reactivity on loan; rods in below their park hold a reserve; a flow paid for
+at its injection that has not reached the core moves the boron it will move. Xenon
+is left out: the day's plan sets it. Without the charge the planner stopped diluting on a
+run's last day for 75 % of its baseload saving (v1 item 2's probe); with it, the
+planner that knows the end does no better than one that plans past it (9.39 % against
+9.99 % on seeds 100 to 109).
+The reward carries no such charge.
 
 `rho_floor_tracking` is the oracle's best hold for tracking -- the lowest per-seed
 hold cost the reference controller demonstrated, in the reward's units, which
