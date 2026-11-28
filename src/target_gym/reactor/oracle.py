@@ -647,3 +647,62 @@ class DayOracle:
 def make_reactor_mpc(env, params, seed=None, **kwargs) -> DayOracle:
     """The oracle for one episode: with ``seed``, the wobble it draws foreseen."""
     return DayOracle(env, params, seed=seed, **kwargs)
+
+
+#: The fields the observation-only MPC's filter estimates (``estimation.Estimator``):
+#: the plant's state that the observation reads through noisy or late instruments,
+#: or not at all, and the boronmeter's history, since its reading is 20 min late.
+#: Every other field the filter's model carries from the reset's mean, or
+#: ``_known`` writes it from the observation.
+FILTERED = (
+    "n", "C", "T_fuel", "T_coolant", "T_cold", "T_sg", "I_hat", "Xe_hat",
+    "I_tilt", "Xe_tilt", "boron", "delta_I", "boron_meter", "burn_rate", "cycle0",
+)  # fmt: skip
+
+
+def _known(params):
+    """What an operator reads exactly (``env.get_obs``), written into the filter's
+    mean before each correction: the rods' position, the turbine's load, Tref, the
+    day's program (its ramps' hours, rate and minimum), the power the starting
+    xenon is balanced with and the offset's penalty time; and the load's wobble, the
+    load less the turbine's own part of it, the plan or its reload. Times go on the
+    filter's own plan clock, which a stream's rebasing of the plant's does not move,
+    so the day's ramps fall where the observation says."""
+    dt = float(params.delta_t)
+
+    def known(state, obs):
+        now = (state.physics_time - state.plan_t0) * dt
+        down = jnp.where(obs[8] > 0.0, now + obs[8] * 3600.0, state.ramp_down_at)
+        up = jnp.where(obs[9] > 0.0, now + obs[9] * 3600.0, state.ramp_up_at)
+        turbine = jnp.minimum(obs[14], state.pickup)
+        return state.replace(
+            rod_in=0.5 * (1.0 - obs[2]), target_n=obs[3], T_ref=obs[5],
+            ramp_down_at=down, ramp_up_at=up, xenon_power=obs[10],
+            plan_rate=obs[11] / 6000.0, plan_depth=1.0 - obs[12],
+            ao_outside=obs[15] * 3600.0, load_wobble=obs[3] - turbine,
+        )  # fmt: skip
+
+    return known
+
+
+#: The iteration cap of a solve's segment on the MPC's recorded line: 600, as the
+#: owner set it for the reactor's MPC line on 2026-11-26 ("Cap 600 for the MPC line
+#: too"). At ``SEGMENT``'s 150 a load-follow run's capped solves (19 on edf_daily
+#: seed 205) left its plan in a basin that cost 43 $ a step against 3.1 $ when the
+#: same run converged.
+LINE_SEGMENT = 600
+
+
+def observation_only_mpc(env, params, plan, segment=LINE_SEGMENT, **kwargs):
+    """The MPC on the observation (v1 item 5, as the owner read it on
+    2026-11-28): the day planner on ``plan``, the planner's params, fed the shared
+    estimator's belief in place of the true state (``estimation.ObservationOnly``).
+    ``params`` is the run's own configuration, noise included, which the filter
+    reads its noise from; the record command builds one per scenario. Its solves run
+    in segments of ``LINE_SEGMENT`` iterations. It returns a policy with ``reset()``
+    and ``__call__(obs)``."""
+    from target_gym.estimation import Estimator, ObservationOnly
+
+    estimator = Estimator(env, params, FILTERED, known=_known(params), model=plan)
+    planner = make_reactor_mpc(env, plan, segment=segment, **kwargs)
+    return ObservationOnly(planner, estimator)
