@@ -11,8 +11,8 @@ Contract, from the sources the plant check cites:
 - Tavg under the criticality floor is a limit with a time to act: the run ends only
   once it has lasted ``floor_allowed``.
 
-Prices by hand: Tavg, 1.25 x 0.0023 x $80/MWh x 1000 MW = $230/h per K, $0.3194 per K
-over a 5 s sub-step.
+Prices by hand: Tavg at spot (owner, 2026-11-28), 0.0023 x $80/MWh x 1000 MW = $184/h
+per K, $0.2556 per K over a 5 s sub-step.
 """
 
 import jax
@@ -56,7 +56,7 @@ def tavg_off_by(s, kelvin):
 
 @pytest.mark.parametrize(
     "off, expected",
-    [(1.0, 0.0), (1.59, 0.0), (2.6, 0.31944), (-1.59, 0.0), (-2.6, 0.31944)],
+    [(1.0, 0.0), (1.59, 0.0), (2.6, 0.25556), (-1.59, 0.0), (-2.6, 0.25556)],
 )  # negative: hot, charged alike (the physics review's finding 1)
 def test_tavg_costs_only_past_the_rods_dead_band(off, expected):
     env, p, obs, s = reset()

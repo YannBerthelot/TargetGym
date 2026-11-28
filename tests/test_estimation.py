@@ -47,6 +47,9 @@ from target_gym.base import (
 from target_gym.estimation import Belief
 from target_gym.estimation import Estimator as _Estimator
 
+#: The linearisation pH's filter takes: its pH solve is a bisection, whose JAX
+#: derivative is 0, and its belief lies on a curve (the transient test).
+PH_LINEARIZE = "cubature"
 LEAK = 0.1  # the level loses a tenth of itself each step
 LEVEL_SIGMA = 0.05  # the level gauge's scatter
 INFLOW_SIGMA = 0.02  # the hidden inflow's random walk, per step
@@ -210,7 +213,8 @@ def walking():
     return env, params, Estimator(env, params, ("level", "inflow"), channels=(0,))
 
 
-def test_the_covariance_converges_to_the_kalman_steady_state():
+@pytest.mark.parametrize("linearize", ["jax", "cubature"])
+def test_the_covariance_converges_to_the_kalman_steady_state(linearize):
     """With the inflow's walk stated (``random_walk``) and none in the plant,
     the process noise is exactly diag(0, 0.02^2) and the reading's 0.05^2, so
     after 300 steps the filter's covariance is the Riccati equation's."""
@@ -222,6 +226,7 @@ def test_the_covariance_converges_to_the_kalman_steady_state():
         ("level", "inflow"),
         channels=(0,),
         random_walk={"inflow": INFLOW_SIGMA},
+        linearize=linearize,
     )
     _, _, beliefs = jax.jit(_episode(est, env, params, 300))(0)
     expected = _steady_posterior(
@@ -231,7 +236,8 @@ def test_the_covariance_converges_to_the_kalman_steady_state():
     np.testing.assert_allclose(beliefs.cov[-1], expected, rtol=1e-3, atol=1e-8)
 
 
-def test_the_mean_is_the_textbook_kalman_filters():
+@pytest.mark.parametrize("linearize", ["jax", "cubature"])
+def test_the_mean_is_the_textbook_kalman_filters(linearize):
     """The same observations through a NumPy Kalman filter written from the
     textbook, started from the filter's own prior, give the same means."""
     env = Tank()
@@ -242,6 +248,7 @@ def test_the_mean_is_the_textbook_kalman_filters():
         ("level", "inflow"),
         channels=(0,),
         random_walk={"inflow": INFLOW_SIGMA},
+        linearize=linearize,
     )
     obs, _, beliefs = jax.jit(_episode(est, env, params, 60, action=0.3))(3)
     q = np.diag([0.0, INFLOW_SIGMA**2])
@@ -344,14 +351,15 @@ def test_the_error_is_consistent_with_the_stated_covariance(reading, fields):
     assert lo < _nees(est, env, params, ("level", "inflow")) < hi
 
 
-def test_a_solve_with_no_jax_derivative_is_filtered_by_secants():
+@pytest.mark.parametrize("linearize", ["secant", "cubature"])
+def test_a_solve_with_no_jax_derivative_is_filtered_by_secants(linearize):
     """The second reading is of a field solved by bisection, whose JAX
     derivative is zero, as pH's is. Read alone, through secants across the
     belief's spread, it still gives a consistent filter."""
     env = Tank(readings=(FieldReading("root", sigma=LEVEL_SIGMA),))
     params = env.default_params
     est = Estimator(
-        env, params, ("level", "inflow", "root"), channels=(1,), linearize="secant"
+        env, params, ("level", "inflow", "root"), channels=(1,), linearize=linearize
     )
     lo, hi = _chi2_band(2)
     assert lo < _nees(est, env, params, ("level", "inflow")) < hi
@@ -517,3 +525,83 @@ def test_the_estimator_reads_no_expert_code():
         p for p in seen if p.parent.name == "experts" or p.name.startswith("experts")
     ]
     assert expert == []
+
+
+@pytest.mark.medium
+def test_on_ph_a_valve_step_keeps_the_error_within_the_stated_spread():
+    """The pH session's filter on the scored normal day, its upsets on: the
+    metered influent written in, the acid's level a random walk, both probes
+    read. The plant holds its reset valves for a minute, then the stage-1
+    valve drops by 30 % of its range, as an MPC's start-up descent does. At 1,
+    2, 5 and 10 minutes after the drop, the error on pH and on the buffer flow
+    stays within three stated spreads, RMS over 20 episodes. A consistent
+    filter has an RMS of 1.
+
+    Measured on flanders, 2026-11-28, 20 episodes, a 30 % drop: secants across
+    the belief's spread gave 60 to 620 on pH, since the reset puts pH on its set
+    point and the belief on one curve, which axis-wise secants leave; cubature
+    alone gave 2 to 31 (a pH error of 0.15 at a stated 0.004, the same with the
+    upsets held still). The filter's own Gaussian approximation is the cause, so
+    it is allowed for: a walk of 1e-5 a step on the four invariants, about 5 %
+    of their prior spread, which the plant does not have. With it the pH error
+    stays at 0.013 to 0.027 and its RMS z at 0.25 to 0.42, q2's at 1.3 to 1.5."""
+    import target_gym as tg
+    from target_gym.experts.mpc import plan_params
+    from target_gym.registry import REGISTRY
+
+    env, params = tg.make("ph_neutralization", scenario="normal")
+    plan = plan_params(REGISTRY["ph_neutralization"], params)
+    steps = int(params.max_steps_in_episode)
+    later = 10 * steps  # a schedule time past the episode
+
+    def known(state, obs):
+        """The meter's influent, and the acid at the level the filter holds."""
+        return state.replace(
+            flow_levels=jnp.full_like(state.flow_levels, obs[6] / params.q1),
+            flow_times=jnp.full_like(state.flow_times, later),
+            upset_times=jnp.full_like(state.upset_times, later),
+            upset_levels=jnp.full_like(state.upset_levels, state.upset_levels[0]),
+        )
+
+    fields = ("Wa", "Wb", "Wa_s1", "Wb_s1", "q2", "pH", "pH_s1", "sensor_history")
+    fields += ("upset_levels[0]",)
+    # Two upsets of up to +-size an episode: a walk with that variance by its end.
+    walk = float(np.sqrt(2.0 * params.acid_upset_size**2 / 3.0 / steps))
+    # The allowance for the filter's own error on the invariants (docstring).
+    allowance = dict.fromkeys(("Wa", "Wb", "Wa_s1", "Wb_s1"), 1e-5)
+    est = _Estimator(
+        env,
+        params,
+        fields,
+        channels=(0, 4),
+        random_walk={"upset_levels[0]": walk, **allowance},
+        known=known,
+        model=plan,
+        linearize=PH_LINEARIZE,
+    )
+    at = [est.fields.index(f) for f in ("pH", "q2")]  # scalars come first
+    hold_steps = 12  # a minute of 5 s steps
+
+    def run(seed):
+        key = jax.random.PRNGKey(seed)
+        obs, state = env.reset_env(key, params)
+        hold = env.initial_action(state, params)
+        drop = hold.at[0].set(jnp.clip(hold[0] - 0.6, -1.0, 1.0))
+
+        def step(carry, t):
+            state, belief = carry
+            u = jnp.where(t < hold_steps, hold, drop)
+            obs, state, *_ = env.step_env(key, state, u, params)
+            belief = est.update(belief, u, obs)
+            true = jnp.stack([state.pH, state.q2])
+            mean = jnp.stack([belief.state.pH, belief.state.q2])
+            spread = jnp.sqrt(jnp.diag(belief.cov)[jnp.asarray(at)])
+            return (state, belief), (true - mean) / spread
+
+        _, z = jax.lax.scan(step, (state, est.reset(obs)), jnp.arange(132))
+        return z
+
+    z = np.asarray(jax.jit(jax.vmap(run))(jnp.arange(300, 320)))
+    for minutes in (1, 2, 5, 10):
+        rms = np.sqrt(np.mean(z[:, hold_steps + 12 * minutes - 1] ** 2, axis=0))
+        assert (rms < 3.0).all(), (minutes, rms)

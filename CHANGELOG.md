@@ -9,6 +9,32 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The reactor's score: an end charge, and every trade-off price sourced (2026-11-28)
+
+The owner's three picks of 2026-11-28 (v1 task protocol, items 2 and 3).
+
+- A scored run is charged what its core's stock lost from the reset to its last
+  step, and credited what it gained, spread over the run's steps (`scoring_runs`,
+  the reactor's protocol). The stock is the boron the core owes
+  (`reactor.env.owed_dilution`): the dilution that brings Tavg back on its program
+  with the rods at their park, at the core's own coefficients, less the boron the
+  line already carries, valued at the effluent it takes (`reactor.env.stored_value`). Without it the MPC stopped
+  diluting on a run's last day for 75 % of its 12.85 % baseload saving; with it,
+  knowing the end no longer pays: 9.39 % against 9.99 % for the planner that plans
+  past it (seeds 100 to 109). The reward carries no such charge.
+- Rods cost nothing to move (`rod_step_price` 0): no published price for a rod step
+  was found. Their travel is still counted (`rod_moved`).
+- Tavg off its program is priced as lost output at spot, $184/h per K
+  (`imbalance_multiple` 0.0023), as every other lost output is; it was 1.25 x spot,
+  ours. The floor costs follow ($0.0767 a step).
+- The effluent's $0.0628/kg is sourced: EPRI 1011728 (2005) puts US plants' liquid
+  radwaste processing at $0.040 to $0.159 a kg.
+- The day planner plans past a run's end, which the end charge prices, and its cold
+  solve's second start prices a rod step at $100 (`DEAR_ROD_STEP`), whatever the
+  task's own price.
+- reactor-v10 is re-stamped in place: it shipped in no release. Every reactor
+  record is stale until it is recorded again.
+
 ### Frozen tasks: `TargetGym/<task>-v1` (2026-11-28)
 
 Item 9 of the task protocol. No task is frozen yet.
@@ -30,6 +56,19 @@ Item 9 of the task protocol. No task is frozen yet.
   re-stamps in place included; a published result cites a frozen ID instead. Each
   manifest records the development stamp its task froze at.
 
+### compressor_surge's MPC holds the reference's control line (2026-11-28)
+
+- The MPC's surge limit is the vendors' 10 % control line on the map, the line the
+  reference holds (`compressor_surge.oracle.control_line`), in place of the
+  machine's true line, which the observation hides. Planned on the true line, the
+  last recorded MPC line tripped 19 of 20 approach episodes (v1 task pages, finding
+  1; owner, 2026-11-28). The step's soft minimum of Phi is compared with the line
+  less its steady allowance, so a plant resting on the line meets it as the
+  reference's does. The MPC's record is stale until it is recorded again.
+- The task's sentence says what the job is: the header pressure is held inside its
+  zone about a constant setpoint at the least recycle energy, each surge is
+  charged, and three within 15 s trip the plant (finding 7).
+
 ### hvac: an observation-only MPC, and the reference frozen again (2026-11-28)
 
 - hvac's reference was frozen again on the plant PR 306 re-stamped
@@ -43,6 +82,10 @@ Item 9 of the task protocol. No task is frozen yet.
   estimator's belief, pricing comfort at its expected cost under the weather's
   forecast error (`oracle.room_spread`, `oracle.expected_excess`). The registry's
   full-state MPC is unchanged.
+- The planner smooths the slab heat's two edges at the smoothing protocol's
+  width, 0.38 K (`data/oracle_widths/hvac.json`): the file predated the heat
+  source's size and listed no site, so every solve ran at width 0 and about 80 %
+  of them hit the iteration cap.
 
 ### hvac's window edge and the scored defaults (2026-11-27)
 

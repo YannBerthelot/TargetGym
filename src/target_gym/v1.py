@@ -6,9 +6,10 @@ fingerprint of each part its score depends on:
 
 - ``plant``: the environment's own modules, the shared physics and the scored
   parameters' values (``provenance.environment_fingerprint``);
-- ``scoring``: each scenario's weight and parameters, the scoring seeds, the
-  scored window and its edge charge, the run length of a task scored on runs,
-  and the tie tolerance;
+- ``scoring``: each scenario's weight and parameters, the scoring seeds, every
+  field of the task's evaluation (its scored window, edge charge and credit)
+  and of a run's protocol (its length, folds and end charge), but the charter
+  lines' seeds, and the tie tolerance;
 - ``reference``: the frozen reference's law and the code that builds it, or the
   shipped expert's gains and code for a task with no frozen reference.
 
@@ -26,6 +27,7 @@ Kept out of every fingerprint: it records what a task is, and is no part of it.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 import hashlib
 import json
@@ -100,18 +102,29 @@ def _scoring(task: str) -> dict:
             for name in weights
         },
         "seeds": list(charter.ANCHOR_SEEDS),
-        "window": {"unscored": ev.unscored_steps, "scored": ev.scored_steps},
-        "edge_charge": ev.edge_charge,
+        "evaluation": _fields(ev, _LINE_FIELDS),
         "run": None,
         "tie": charter.tie_tolerance(task),
     }
     if protocol is not None:
-        out["run"] = {
-            "days": protocol.days,
-            "steps": scoring_runs.scored_steps(task),
-            "folds": dict(protocol.folds),
-        }
+        run = _fields(protocol, (*_LINE_FIELDS, "source"))
+        out["run"] = {**run, "steps": scoring_runs.scored_steps(task)}
     return out
+
+
+#: The fields of an evaluation or a run's protocol that set the charter's line
+#: seeds, which ``tg.score`` does not read: it runs the scoring seeds.
+_LINE_FIELDS = ("seeds", "extra_seeds", "more", "first")
+
+
+def _fields(declared, skipped) -> dict:
+    """Every field of dataclass ``declared`` but ``skipped``, so a field it
+    gains later is part of the scoring without a change here."""
+    return {
+        f.name: getattr(declared, f.name)
+        for f in dataclasses.fields(declared)
+        if f.name not in skipped
+    }
 
 
 def _reference(task: str) -> dict:

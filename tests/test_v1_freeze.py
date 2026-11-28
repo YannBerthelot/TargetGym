@@ -15,6 +15,7 @@ Contract, from the protocol's item 9 and W5 and W6 of the v1 task pages:
 folder: it is the cheapest task, and the real manifests are never touched.
 """
 
+import dataclasses
 import json
 
 import gymnasium
@@ -149,3 +150,38 @@ def test_a_scored_task_is_made_on_the_episode_its_score_runs(task, tmp_path):
         expected = tg.make(task, scenario=heaviest, **changed)[1]
         assert vars(env.env_params) == vars(expected)
     check_env(env, skip_render_check=True)
+
+
+def test_crediting_the_window_edge_moves_the_scoring_alone(
+    frozen_first_order, monkeypatch
+):
+    """The edge charge's credit (``Evaluation.edge_credit``, pH's since PR 320)
+    is part of how a task is scored."""
+    from target_gym import evaluation
+
+    declared = evaluation.of(REGISTRY["first_order"])
+    credited = dataclasses.replace(declared, edge_credit=not declared.edge_credit)
+    monkeypatch.setattr(evaluation, "of", lambda spec: credited)
+    assert v1.changes("first_order", frozen_first_order) == ["scoring"]
+
+
+def test_every_field_of_a_runs_protocol_but_its_line_seeds_is_scoring(monkeypatch):
+    """A task scored on runs, the reactor: each field of its protocol moves the
+    scoring, its end charge and its credit (PR 329) included, but the charter
+    lines' seed counts and the source's text do not."""
+    from target_gym import scoring_runs
+
+    base = scoring_runs.PROTOCOLS["reactor"]
+
+    def scoring(**changed):
+        protocol = dataclasses.replace(base, **changed)
+        monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", protocol)
+        return v1.manifest("reactor")["parts"]["scoring"]
+
+    before = scoring()
+    assert scoring(edge_credit=not base.edge_credit) != before
+    assert scoring(edge_charge=None if base.edge_charge else "stored_value") != before
+    assert scoring(days=base.days + 1) != before
+    for line in ("seeds", "more", "first"):
+        assert scoring(**{line: getattr(base, line) + 1}) == before, line
+    assert scoring(source="another") == before

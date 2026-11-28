@@ -119,3 +119,40 @@ def test_every_card_is_current(source):
     assert (
         source.with_suffix(".md").read_text() == text
     ), "run scripts/generate_cards.py"
+
+
+@pytest.mark.parametrize(
+    "credit, says",
+    [
+        (False, "charged once for what the store lost (`stored_value`)"),
+        (True, "charged once for what the store lost and credited for what it gained"),
+    ],
+)
+def test_a_card_says_the_stores_charge_and_its_credit(
+    recorded, tmp_path, monkeypatch, credit, says
+):
+    """A task whose evaluation charges a store's edges, crediting it or not."""
+    from target_gym import evaluation
+
+    charged = evaluation.Evaluation(edge_charge="stored_value", edge_credit=credit)
+    monkeypatch.setattr(evaluation, "of", lambda spec: charged)
+    text = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    assert says in text
+
+
+def test_a_card_says_a_runs_end_charge(monkeypatch):
+    """A task scored on runs whose protocol charges the run's end, crediting
+    what it gained: the reactor's boron since PR 329, or not."""
+    import dataclasses
+
+    from target_gym import scoring_runs
+
+    base = scoring_runs.PROTOCOLS["reactor"]
+    for credit, says in ((True, "credited for what it gained"), (False, "lost (`")):
+        charged = dataclasses.replace(
+            base, edge_charge="stored_value", edge_credit=credit
+        )
+        monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", charged)
+        text = cards._scoring_text(v1.manifest("reactor")["scoring"], "$")
+        assert "a 7-day run of 20160 steps" in text and says in text
+        assert ("credited" in text) == credit
