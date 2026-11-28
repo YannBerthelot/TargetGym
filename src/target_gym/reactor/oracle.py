@@ -685,14 +685,24 @@ def _known(params):
     return known
 
 
-def observation_only_mpc(env, params, plan, **kwargs):
+#: The iteration cap of a solve's segment on the MPC's recorded line: 600, as the
+#: owner set it for the reactor's MPC line on 2026-11-26 ("Cap 600 for the MPC line
+#: too"). At ``SEGMENT``'s 150 a load-follow run's capped solves (19 on edf_daily
+#: seed 205) left its plan in a basin that cost 43 $ a step against 3.1 $ when the
+#: same run converged.
+LINE_SEGMENT = 600
+
+
+def observation_only_mpc(env, params, plan, segment=LINE_SEGMENT, **kwargs):
     """The MPC on the observation (v1 item 5, as the owner read it on
     2026-11-28): the day planner on ``plan``, the planner's params, fed the shared
     estimator's belief in place of the true state (``estimation.ObservationOnly``).
     ``params`` is the run's own configuration, noise included, which the filter
-    reads its noise from; the record command builds one per scenario. It returns a
-    policy with ``reset()`` and ``__call__(obs)``."""
+    reads its noise from; the record command builds one per scenario. Its solves run
+    in segments of ``LINE_SEGMENT`` iterations. It returns a policy with ``reset()``
+    and ``__call__(obs)``."""
     from target_gym.estimation import Estimator, ObservationOnly
 
     estimator = Estimator(env, params, FILTERED, known=_known(params), model=plan)
-    return ObservationOnly(make_reactor_mpc(env, plan, **kwargs), estimator)
+    planner = make_reactor_mpc(env, plan, segment=segment, **kwargs)
+    return ObservationOnly(planner, estimator)
