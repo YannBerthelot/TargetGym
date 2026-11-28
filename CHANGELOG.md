@@ -30,6 +30,20 @@ Item 9 of the task protocol. No task is frozen yet.
   re-stamps in place included; a published result cites a frozen ID instead. Each
   manifest records the development stamp its task froze at.
 
+### hvac: an observation-only MPC, and the reference frozen again (2026-11-28)
+
+- hvac's reference was frozen again on the plant PR 306 re-stamped
+  (`scripts/reference_ladder.py --freeze`, int at caaf3cd0, Python 3.13 and JAX
+  0.6.2 from the lock). **The comparator changed: the ladder now keeps the PI rung,
+  not the feedforward rung**, on the room at 22.0 C as before. Under the shortfall
+  charge the two cost 0.006577 and 0.006607 EUR a step on the ladder's seeds, 0.45 %
+  apart. Every saving on hvac is quoted against the PI rung from this change on.
+- `hvac.oracle.observation_only_mpc(env, params, plan)`, the line
+  `scripts/record_v1.py` records for item 5: the window planner fed the shared
+  estimator's belief, pricing comfort at its expected cost under the weather's
+  forecast error (`oracle.room_spread`, `oracle.expected_excess`). The registry's
+  full-state MPC is unchanged.
+
 ### hvac's window edge and the scored defaults (2026-11-27)
 
 Two findings of the outside RL research review, fixed as the owner decided by
