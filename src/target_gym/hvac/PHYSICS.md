@@ -4,7 +4,7 @@ Version 6: the plant rebuilt as version 5 on 2026-11-08 under charter
 Amendments 1 to 3, with the stream of 2026-11-11 (section 5), and the heat
 source's size and the reset that meets the band of 2026-11-23. The plant
 record is `REALITY.md`, and its cold review `COLD_REVIEW.md`. Source numbers
-[1] to [21] are REALITY.md's. Under Amendment 3 the task represents the
+[1] to [23] are REALITY.md's. Under Amendment 3 the task represents the
 family of slab-heated offices, not one building: numbers outside the record
 are labelled "ours" with the family's range. Nothing here is compared with an earlier version
 of the task (rule 11).
@@ -99,8 +99,8 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `cop_carnot_fraction` | 0.52 | - | Ours, family range 0.50 to 0.57: brine heat pump datasheets give COP 4.4 to 5.0 at B0/W35 and 2.7 to 3.2 at B0/W55 [18]; the model gives 4.58 and 3.10 |
 | `T_brine` | 0 | C | Ours, family range -5 to 5 C: the EN 14511 rating point B0 [18] |
 | `price_valle`, `price_llano`, `price_punta` | 0.139, 0.184, 0.263 | EUR/kWh | [19]: one Spanish 2.0TD offer, valle 00 to 08 h, punta 10 to 14 and 18 to 22 h; Madrid charges its slabs on the night tariff [14] |
-| `productivity_per_K` | 0.02 | 1/K | [20]: 2 % of work per K above 25 C; ours below 21 C, where [20] shows a loss but no per-K figure was read |
-| `occupants_per_m2` | 0.10 | 1/m^2 | Ours, family range 0.07 to 0.12 (8 to 15 m^2 a person) |
+| `productivity_per_K` | 0.02 | 1/K | The floor's price only, 2 % of an hour's work per kelvin-hour above 29 C, as [20] gives above 25 C: ours, a bound that never binds (owner, 2026-11-28) |
+| `occupants_per_m2` | 0.10 | 1/m^2 | [23]: 10 m^2 a person, a single office's default (prEN 16798-1); a landscaped office's 15 m^2 gives 0.067 |
 | `labour_cost` | 31.8 | EUR/h | [21]: EU hourly labour cost, 2023 |
 | `occupied_start_h`, `occupied_end_h` | 8, 18 | h | [6, p. 3]: an office's day |
 | `frost_on`, `frost_off` | 4.4, 7.2 | C | [1]: below 40 F the zones go to setback until above 45 F |
@@ -109,7 +109,8 @@ supply is 27.7 C and the floor surface 22.2 C (test 8).
 | `comfort_tolerance` | 2.5 | K | Half the band, read only by the time-in-band KPI tables |
 | `precision_floor` | 0.1 | K | The BMS step, ours (Readings) |
 | `max_steps_in_episode` | 1152 | steps | Twelve days: three burned in, seven scored of the two weeks a curve change is judged over [11, p. 1], two of the ceiling's tail (section 5) |
-| `comfort_price` | 9.54 | EUR/(K h) | Derived: `productivity_per_K` x `occupants_per_m2` x `A_floor` x `labour_cost`, 0.02 x 15 occupants x 31.8: the work an occupied kelvin-hour outside the band loses |
+| `work_price` | 477 | EUR/h | Derived: `occupants_per_m2` x `A_floor` x `labour_cost`, 15 occupants x 31.8: an occupied hour of work, of which the room loses the share the published curve gives outside the band ([22], `env.work_lost`) |
+| `comfort_price` | 9.54 | EUR/(K h) | Derived: `productivity_per_K` x `work_price`: an occupied kelvin-hour of floor above 29 C |
 | `restart_steps`, `failure_cost` | 0, 0.0 | - | No limit trips this plant |
 | `delta_t` | 900 | s | Ours: the standard building-simulation step |
 
@@ -228,13 +229,19 @@ a front coming. In a window nothing changes: a scored window is bit-identical to
 what it was.
 
 **Score** (rule 15, Amendment 3), in euros: the heat pump's electricity, the
-slab's heat over its COP at the supply temperature, at the tariff; and each
-occupied kelvin-hour of room outside the band, or of floor above 29 C, at the
-work it loses. Every term is a cost, as the shared reward contract asks. Night
-charging pays twice: the night tariff is 0.53 of the peak's, and the slab
-carries the heat into the day. Inside the band being
-nearer its middle earns nothing (rule 15; [20]'s loss inside 21 to 26 C is
-small and is not counted). The floor of the score, in closed form: a room held
+slab's heat over its COP at the supply temperature, at the tariff; and the
+occupants' work lost while occupied. Outside the band the room loses the share
+of an hour's work the published curve of performance against temperature gives,
+P(edge) - P(T) from the band's nearer edge ([22], read between its 15 and 35 C
+ends; owner, 2026-11-28, "Published curve"): 0.44 % at 20 C, 1.30 % at 19 C,
+1.28 % at 27 C. The floor above 29 C costs 2 % of an hour's work per kelvin-hour,
+a price of ours that no controller comes near (owner, 2026-11-28). Before
+2026-11-28 the room cost 2 % per kelvin-hour on both sides, the figure [20]
+gives above 25 C, which overstated the loss below the band 3 to 4 times. Every
+term is a cost, as the shared reward contract asks. Night charging pays twice:
+the night tariff is 0.53 of the peak's, and the slab carries the heat into the
+day. Inside the band being nearer its middle earns nothing (rule 15; [22]'s loss
+inside 21 to 26 C, under 3 %, is not counted). The floor of the score, in closed form: a room held
 in the band costs only its electricity.
 
 **What is scored, and how it differs from the reward.** The reward is minus the

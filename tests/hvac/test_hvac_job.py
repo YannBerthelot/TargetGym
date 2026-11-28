@@ -13,9 +13,15 @@ Contract:
 - Score (rule 15, Amendment 3), euros: the heat pump's electricity, slab heat
   over COP = 0.52 T_sup / (T_sup - T_brine) in kelvin with brine at 0 C, at a
   three-period tariff (valle 0.139 00-08 h, llano 0.184, punta 0.263 10-14 and
-  18-22 h, [19]); and lost office work while occupied (08:00 to 18:00 [6]),
-  0.02 x 15 people x EUR 31.8 = EUR 9.54 per kelvin-hour of room outside 21 to
-  26 C [9, p. 5] or of floor above 29 C [5] [20, 21].
+  18-22 h, [19]); and lost office work while occupied (08:00 to 18:00 [6]).
+  Outside the 21 to 26 C band [9, p. 5] the room loses the work the published
+  curve of performance against temperature gives (Seppanen, Fisk and Lei 2006,
+  LBNL-60946, Fig. 2, [22]): an hour of the occupants' work, 15 people x EUR 31.8
+  [21] (10 m^2 a person, a single office's default [23]), times P(edge) - P(T),
+  P the curve, held at its value at the ends of its data, 15 and 35 C (owner,
+  2026-11-28, "Published curve"). The floor above 29 C [5] is charged 0.02 of an
+  hour's work per kelvin-hour, EUR 9.54, the project's own price: no controller
+  comes near it, so it only has to make crossing it never pay (owner, 2026-11-28).
 - Observation (rule 16): the room, outdoor and its 24 h mean [9, 13], the
   slab core [7], the return water [12], the supply, the clock, the band, the
   next 24 h's forecast mean outdoor temperature, and the tariff now with the
@@ -185,13 +191,42 @@ def test_inside_the_band_only_the_electricity_is_paid(env):
     assert float(-compute_reward(inside, PARAMS)) == pytest.approx(0.025026, rel=1e-4)
 
 
+def _performance(T):
+    """LBNL-60946, p. 8: relative performance at room temperature T (C), the
+    coefficients as printed, used between the ends of the curve's data."""
+    T = min(max(T, 15.0), 35.0)
+    return 0.1647524 * T - 0.0058274 * T**2 + 0.0000623 * T**3 - 0.4685328
+
+
+#: An hour of the occupants' work: 0.10 people a m^2 x 150 m^2 x EUR 31.8.
+WORK = 0.10 * 150.0 * 31.8  # EUR 477 an hour
+
+
+def _lost(T_air):
+    """The share of an hour's work the room loses at T_air, by the curve."""
+    if T_air < 21.0:
+        return _performance(21.0) - _performance(T_air)
+    if T_air > 26.0:
+        return _performance(26.0) - _performance(T_air)
+    return 0.0
+
+
 @pytest.mark.parametrize(
-    "T_air, T_floor, kelvin",
-    [(20.0, 22.0, 1.0), (27.5, 28.0, 1.5), (23.0, 30.0, 1.0), (19.0, 30.0, 3.0)],
+    "T_air, T_floor",
+    [
+        (20.0, 22.0),
+        (19.0, 24.0),
+        (27.5, 28.0),
+        (23.0, 30.0),
+        (19.0, 30.5),
+        (12.0, 22.0),
+    ],
 )
-def test_occupied_discomfort_is_priced_as_lost_work(env, T_air, T_floor, kelvin):
-    """K outside 21 to 26 C plus K of floor above 29 C, for a quarter hour at
-    12:00, at EUR 9.54 per Kh, with no heat."""
+def test_occupied_discomfort_is_priced_as_the_work_the_curve_says_is_lost(
+    env, T_air, T_floor
+):
+    """A quarter hour at 12:00 with no heat: the room's lost work by the
+    published curve, and EUR 9.54 per kelvin-hour of floor above 29 C."""
     _, state = _reset(env)
     out = state.replace(
         time=48,
@@ -199,25 +234,44 @@ def test_occupied_discomfort_is_priced_as_lost_work(env, T_air, T_floor, kelvin)
         T_floor=jnp.asarray(T_floor),
         Q_slab=jnp.asarray(0.0),
     )
-    assert float(-compute_reward(out, PARAMS)) == pytest.approx(
-        9.54 * kelvin * 0.25, rel=1e-5
+    want = 0.25 * (WORK * _lost(T_air) + 9.54 * max(T_floor - 29.0, 0.0))
+    assert float(-compute_reward(out, PARAMS)) == pytest.approx(want, rel=1e-4)
+
+
+def test_a_degree_below_the_band_now_costs_less_than_the_old_two_percent():
+    """By the curve, 20 C loses 0.44 % of the work, a fifth of the 2 % a kelvin
+    the task charged before (owner, 2026-11-28)."""
+    assert _lost(20.0) == pytest.approx(0.0043893, rel=1e-4)
+    assert _lost(19.0) == pytest.approx(0.0129574, rel=1e-4)
+
+
+@pytest.mark.parametrize("T_air", [21.0, 23.5, 26.0])
+def test_inside_the_band_no_work_is_lost(env, T_air):
+    _, state = _reset(env)
+    out = state.replace(
+        time=48,
+        T_air=jnp.asarray(T_air),
+        T_floor=jnp.asarray(25.0),
+        Q_slab=jnp.asarray(0.0),
     )
+    assert float(compute_reward(out, PARAMS)) == 0.0
 
 
 @pytest.mark.parametrize(
-    "change, price",
+    "change, work",
     [
-        # Lost work = productivity per K x occupants per m^2 x floor x labour cost
-        # (env.py, the comfort_price note), by hand from each changed number.
-        ({"occupants_per_m2": 0.07}, 0.02 * 0.07 * 150.0 * 31.8),  # 6.678
-        ({"labour_cost": 40.0}, 0.02 * 0.10 * 150.0 * 40.0),  # 12.0
-        ({"productivity_per_K": 0.03}, 0.03 * 0.10 * 150.0 * 31.8),  # 14.31
-        ({"A_floor": 200.0}, 0.02 * 0.10 * 200.0 * 31.8),  # 12.72
+        # An hour of work = occupants per m^2 x floor x labour cost, by hand from
+        # each changed number; the curve's share does not depend on them.
+        ({"occupants_per_m2": 0.07}, 0.07 * 150.0 * 31.8),
+        ({"labour_cost": 40.0}, 0.10 * 150.0 * 40.0),
+        ({"A_floor": 200.0}, 0.10 * 200.0 * 31.8),
+        ({"productivity_per_K": 0.03}, 0.10 * 150.0 * 31.8),
     ],
 )
-def test_lost_work_follows_the_occupants_their_pay_and_the_floor(env, change, price):
-    """One occupied kelvin-hour below the band, with no heat, at the changed
-    building's price: the price is derived from its four numbers, not fixed."""
+def test_lost_work_follows_the_occupants_their_pay_and_the_floor(env, change, work):
+    """An occupied quarter hour at 20 C with no heat, at the changed building's
+    hour of work: the price is derived from its numbers, not fixed. The per-K
+    share prices only the floor now, so it leaves the room's charge alone."""
     _, state = _reset(env)
     out = state.replace(
         time=48,
@@ -226,7 +280,7 @@ def test_lost_work_follows_the_occupants_their_pay_and_the_floor(env, change, pr
         Q_slab=jnp.asarray(0.0),
     )
     assert float(-compute_reward(out, PARAMS.replace(**change))) == pytest.approx(
-        price * 1.0 * 0.25, rel=1e-5
+        0.25 * work * _lost(20.0), rel=1e-4
     )
 
 
