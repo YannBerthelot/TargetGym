@@ -11,8 +11,10 @@ scoring seeds 200 to 209 of every scenario, and read with its statistic
 - ``nothing``: the actuators held where the reset left them;
 - ``expert``: the frozen reference, ``tg.make_reference``;
 - ``mpc``: the task's observation-only MPC, ``observation_only_mpc(env,
-  params)`` in its package's ``oracle`` module, built on each scenario's
-  configuration (``target_gym.estimation.ObservationOnly`` makes one);
+  params, plan)`` in its package's ``oracle`` module, built on each scenario's
+  configuration ``params`` and the planner's ``plan``, its noise zeroed
+  (``experts.mpc.plan_params``), as ``make_mpc`` is handed them
+  (``target_gym.estimation.ObservationOnly`` makes one);
 - ``ppo``, ``sac``: 30 runs each at 204,800 steps (``target_gym.learned``),
   which need the ``learning`` group; their training wall-clock is recorded with
   the machine.
@@ -88,17 +90,25 @@ def nothing(task: str):
 
 
 def mpc(task: str):
-    """The task's observation-only MPC, one per scenario's configuration."""
-    module = type(registry.get(task).make_env()).__module__.rsplit(".", 1)[0]
+    """The task's observation-only MPC, one per scenario's configuration, with
+    the planner's params beside it, so the oracle module imports no expert code
+    for them."""
+    from target_gym.experts.mpc import plan_params
+
+    spec = registry.get(task)
+    module = type(spec.make_env()).__module__.rsplit(".", 1)[0]
     oracle = importlib.import_module(f"{module}.oracle")
     build = getattr(oracle, "observation_only_mpc", None)
     if build is None:
         raise LookupError(
             f"{task} has no observation-only MPC yet: add "
-            f"observation_only_mpc(env, params) to {module}.oracle"
+            f"observation_only_mpc(env, params, plan) to {module}.oracle"
         )
-    env = registry.get(task).make_env()
-    return {s: build(env, scenario_params(task, s)) for s in v1.scenario_names(task)}
+    env, out = spec.make_env(), {}
+    for s in v1.scenario_names(task):
+        params = scenario_params(task, s)
+        out[s] = build(env, params, plan_params(spec, params))
+    return out
 
 
 def summary(result: dict, seconds: float) -> dict:
