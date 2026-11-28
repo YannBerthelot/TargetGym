@@ -18,16 +18,17 @@ constant from 2026-11-04 until then.
 The tasks are one per registry group and the scored tasks (charter J7; the
 outside review's L4, 2026-11-27). The agent's settings are the same on each.
 
-The agent trains on ``info["measured_reward"]``, the reward the protocol trains a
+The runs are ``target_gym.learned.train``'s, the runner of the v1 record's PPO
+line, at its budget and settings: training seeds 0 to 4 on ``tg.make``'s
+configuration and ``info["measured_reward"]``, the reward the protocol trains a
 learner on (docs/rl-protocol.md, section 2: the owner's measurement-noise
-decision 3 of 2026-11-05), and is read on the true reward, as the score is. It is
-read on validation seeds, never the scoring seeds 200 to 209 (review M6).
+decision 3 of 2026-11-05). They are read on the true reward, as the score is,
+on validation seeds, never the scoring seeds 200 to 209 (review M6).
 
 Ajax needs JAX 0.10 or later, which ``uv.lock`` gives Python 3.14 alone, so
 these run in CI's learning job and skip without the ``learning`` group.
 """
 
-import importlib.metadata
 import itertools
 import json
 import os
@@ -35,41 +36,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from gymnax.wrappers.purerl import GymnaxWrapper
 
 import target_gym as tg
 from target_gym.benchmark import Unsupported, run_policy, shipped_policy, task_info
 from target_gym.charter import FLAGSHIP, VALIDATION_SEEDS
+from target_gym.learned import train
 
 TASKS = tuple(dict.fromkeys(("plane", "cstr", "glass_furnace", "battery", *FLAGSHIP)))
-TRAINING_SEEDS = (0, 1, 2, 3, 4)
+RUNS = 5
 HELD_OUT_SEEDS = VALIDATION_SEEDS[:10]
 CONSTANT_LEVELS = (-1.0, -0.5, 0.0, 0.5, 1.0)
-TIMESTEPS = 16 * 64 * 200
-
-
-def _measured(out):
-    """A step's outputs, ``(obs, state, reward, ..., info)``, with the measured
-    reward in the reward's place, whatever flags the layer below returns."""
-    *head, info = out
-    head[2] = info["measured_reward"]
-    return (*head, info)
-
-
-class MeasuredReward(GymnaxWrapper):
-    """The env with ``info["measured_reward"]`` as its reward. Ajax slides its own
-    auto-reset under this layer, and copies it before ``_env`` is set."""
-
-    def __getattr__(self, name):
-        if name == "_env" or name.startswith("__"):
-            raise AttributeError(name)
-        return getattr(self._env, name)
-
-    def step_env(self, key, state, action, params):
-        return _measured(self._env.step_env(key, state, action, params))
-
-    def step(self, key, state, action, params=None):
-        return _measured(self._env.step(key, state, action, params))
 
 
 class Trained:
@@ -132,33 +108,19 @@ def _expert(name):
 @pytest.mark.learning
 @pytest.mark.parametrize("name", TASKS)
 def test_a_short_ppo_run_is_reported_beside_the_constant_and_the_expert(name):
-    ajax = pytest.importorskip("ajax")
-    env, params = tg.make(name)
-    agent = ajax.PPO(
-        MeasuredReward(env),
-        env_params=params,
-        n_envs=16,
-        n_steps=64,
-        batch_size=256,
-        n_epochs=4,
-        normalize_observations=True,
-        normalize_rewards=True,
-    )
-    state, _ = agent.train(seed=list(TRAINING_SEEDS), n_timesteps=TIMESTEPS)
+    pytest.importorskip("ajax")
+    policies, run = train(name, "PPO", runs=RUNS)
     runs = [
-        float(
-            _returns(
-                name, Trained(agent.policy(state, seed_index=i)), HELD_OUT_SEEDS
-            ).mean()
-        )
-        for i in range(len(TRAINING_SEEDS))
+        float(_returns(name, Trained(p.policy), HELD_OUT_SEEDS).mean())
+        for p in policies
     ]
     action, constant = _best_constant(name)
     expert = _expert(name)
     report = {
         "task": name,
-        "ajax": importlib.metadata.version("ajax-rl"),
-        "timesteps": TIMESTEPS,
+        "ajax": run["version"],
+        "timesteps": run["steps"],
+        "training_seconds": run["training_seconds"],
         "seeds": [HELD_OUT_SEEDS[0], HELD_OUT_SEEDS[-1]],
         "runs": runs,
         "median": float(np.median(runs)),
