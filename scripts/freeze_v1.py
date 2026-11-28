@@ -3,7 +3,9 @@
     uv run python scripts/freeze_v1.py reactor
 
 Run once per task, on a clean checkout of the commit it freezes at, when the
-task has the protocol's nine items. It writes ``src/target_gym/data/v1/<task>.json``,
+task has the protocol's nine items. A scored task needs its v1 record
+(``scripts/record_v1.py``) on this tree, with every baseline and the room
+(``target_gym.v1.ready``). It writes ``src/target_gym/data/v1/<task>.json``,
 the manifest that registers the Gymnasium ID and arms the guard
 (``tests/test_v1_freeze.py``). Commit that file on its own. A task already
 frozen is refused: a change to it becomes ``<task>-v2`` beside it.
@@ -39,7 +41,13 @@ def main(argv=None) -> int:
     if _git("status", "--porcelain", "--untracked-files=no"):
         print("refused: the tree has uncommitted changes; freeze a commit")
         return 1
-    entry = v1.freeze(args.task, commit=_git("rev-parse", "HEAD"))
+    from target_gym.reference import StaleReference
+
+    try:
+        entry = v1.freeze(args.task, commit=_git("rev-parse", "HEAD"))
+    except (FileExistsError, StaleReference, v1.NotReady) as refused:
+        print(f"refused: {refused}")
+        return 1
     print(f"froze {entry['id']} at {entry['commit'][:10]} ({entry['stamp']})")
     for part, value in entry["parts"].items():
         print(f"  {part}: {value}")
