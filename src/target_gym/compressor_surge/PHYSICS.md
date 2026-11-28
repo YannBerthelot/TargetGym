@@ -68,7 +68,9 @@ transmitters' response, with the disturbance's speed. The plant now has both.
   controller reads, 4.8 % from it at the largest shift.
 - **The transmitters.** The flow and pressure readings lag first order, 0.15 s and
   0.3 s [C10, pp. 29-30]. The score reads the true state.
-- **The oracle and the ceiling** know the machine: their limit is its true line.
+- **The ceiling** knows the machine: its limit is the true line. **The MPC** holds
+  the reference's control line, 10 % right of the map's line, which reads no
+  shift (owner, 2026-11-28).
 
 ### Limits (rule 14)
 
@@ -350,7 +352,7 @@ run with `xp=np` (float64); the velocity, its Jacobian and the step run under
 | Damping near the line, 24 kPa, recycle shut | falls as the margin shrinks | zeta 0.619 at an 8 % margin to 0.105 on the line, monotone over 41 margins (derived) | `test_damping_collapses_toward_the_line` | ✅ |
 | Stability boundaries over the action box | none at or right of the line | 107 (speed, recycle) families reach the peak with opening in [0.2, 1]; the trace on the peak is at most -1.58 /s; the Hopf point sits 0.70 % (105 %, recycle 0.30) to 3.77 % (70 %, recycle shut) left of the peak in the 105 families that meet one (derived) | `test_boundaries_lie_left_of_the_peak` | ✅ |
 | Fan laws | flow as N, pressure as N^2 (exact) | to 1e-5 at 70, 87.5 and 105 %, no static head, recycle shut | `test_fan_laws` | ✅ |
-| Surge line | dp = K m^2, K = 215.51 Pa/(kg/s)^2 (derived) | Phi = 2W, the peak at every speed (`surge_constant`, derived) | no test of the parabola since version 4; `test_the_compressors_planned_surge_limit_is_the_surge_line` checks the oracle's limit is Phi = 2W | ⚠️ |
+| Surge line | dp = K m^2, K = 215.51 Pa/(kg/s)^2 (derived) | Phi = 2W, the peak at every speed (`surge_constant`, derived) | no test of the parabola since version 4; `test_the_compressors_planned_surge_limit_is_the_references_control_line` checks the oracle's limit is the control line, Phi = 2W (1 + 0.10) | ⚠️ |
 | Plenum mass balance | V_p / a01^2 (dp_end - dp_0) = integral of m_c | agrees to 0.1 % of the integral of \|m_c\| over a 2 s fill into deep surge, valves sealed, a01 from the ISA table | `test_plenum_mass_balance_closes` | ✅ |
 | Reset | right of the line, converged | six Newton steps equal a bisection root to 1e-6 in float32; Phi 0.530 to 0.728 over openings 0.2 to 1.0 (derived) | `test_reset_is_surge_safe_and_converged` | ✅ |
 | Integrator | `rk4_10` against `rk4_40` | section 1 | `test_integrator_is_converged` | ✅ |
@@ -455,11 +457,13 @@ All derived from the parameter table (`--section params` and
 
 ### Task: `compressor_surge`
 
-Hold the header pressure of a variable-speed compressor on a ramped setpoint
-while the consumers' demand ramps between levels, with the drive speed and an
-anti-surge recycle valve. Flow below the surge line trips the plant, and
-neither the reward nor any observation reads the surge margin directly, so the
-policy has to learn to keep it from the flows it does observe.
+Hold the header pressure of a variable-speed compressor inside its zone about a
+constant setpoint while the consumers' demand ramps between levels, with the
+drive speed and an anti-surge recycle valve, at the least recycle energy. Each
+surge is charged and three within 15 s trip the plant; the machine's true surge
+line sits a hidden few percent off the map the controller reads, and neither
+the reward nor any observation reads the margin to it, so the policy has to keep
+it from the flows it does observe.
 
 | obs | meaning |
 |---|---|
@@ -951,12 +955,12 @@ value. The rewrites, by the smoothing protocol's inventory:
 - the tracking term is written as (e / e_floor)^2, the reward itself since
   e_tol is 0 and p is 2, and the running cost max(P_rc - c_hold, 0) / c_hold and
   the wear term through epigraph rows on every planned step, also exact (T2);
-- the trip, phi_min below the episode's line, is a hard limit on every planned step, elastic
-  at the trip cost per unit of Phi (T3), planned 0.0040 inside the line
-  (K11): the smoothing's gap bound on phi_min, 6.7e-5, and the 1 % quantile of
-  one innovation of the demand deviation, 0.0039, at the pair's states, plus
-  the solver's tolerance. Planned on the line, the plant tripped, even
-  without noise;
+- the surge limit is the reference's control line, read on the map as the
+  reference reads it: phi_min at least 2W (1 + 0.10) on every planned step,
+  less the soft minimum's allowance on a steady step (T ln 10 = 2.3e-3, so a
+  plant resting on the line meets it), elastic at the trip cost per unit of
+  Phi (T3; owner, 2026-11-28). Planned on the machine's true line, the MPC
+  tripped 19 of 20 approach episodes (the record of 2026-11-17);
 - the characteristic's switch to its tangent past `phi_join` is left as it
   is, and each plan's substep Phi is checked against it (T4, K9);
 - each command lies within the travel its actuator covers over the step,

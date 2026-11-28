@@ -31,11 +31,19 @@ import hashlib
 import json
 import pathlib
 
-__all__ = ["FrozenTaskChanged", "changes", "freeze", "frozen", "gym_id", "make"]
-__all__ += ["manifest", "register", "scenario_names"]
+__all__ = ["FrozenTaskChanged", "NotReady", "changes", "freeze", "frozen", "gym_id"]
+__all__ += ["make"]
+__all__ += ["manifest", "ready", "record", "register", "scenario_names", "LINES"]
 
 NAMESPACE = "TargetGym"
 MANIFESTS = pathlib.Path(__file__).resolve().parent / "data" / "v1"
+#: Each task's baselines (``scripts/record_v1.py``), the record a freeze reads.
+RECORDS = MANIFESTS.parent / "v1_records"
+#: The baselines of item 4: doing nothing, the expert, the observation-only
+#: MPC, and PPO and SAC at one cheap budget.
+LINES = ("nothing", "expert", "mpc", "ppo", "sac")
+#: The lines item 5's room may come from: the MPC or a learned agent.
+ROOM_LINES = ("mpc", "ppo", "sac")
 #: The frozen reference's keys that decide its actions; the rest describe the
 #: run that froze it.
 _REFERENCE_KEYS = ("task", "kind", "rung", "law", "params", "stamp", "expert")
@@ -148,6 +156,36 @@ def manifest(task: str) -> dict:
     }
 
 
+def record(task: str, root: pathlib.Path = RECORDS) -> dict | None:
+    """``task``'s v1 record, None if it has none."""
+    path = pathlib.Path(root) / f"{task}.json"
+    return json.loads(path.read_text()) if path.is_file() else None
+
+
+def ready(rec: dict | None, parts: dict) -> list[str]:
+    """What keeps a task with v1 record ``rec`` from freezing on a tree whose
+    parts are ``parts`` (:func:`manifest`'s), as far as its record can say:
+    item 4, every baseline recorded on these parts, and item 5, a room line
+    whose interval is above zero. Empty when nothing does."""
+    if rec is None:
+        return ["no v1 record: run scripts/record_v1.py"]
+    out = [
+        f"{p} changed since the record"
+        for p in parts
+        if rec["parts"].get(p) != parts[p]
+    ]
+    lines = rec.get("lines", {})
+    out += [f"{line} not recorded" for line in LINES if line not in lines]
+    beats = [
+        line
+        for line in ROOM_LINES
+        if line in lines and lines[line]["saving_ci"][0] > 0.0
+    ]
+    if not beats:
+        out.append("no room: neither the MPC nor a learned agent beats the expert")
+    return out
+
+
 def frozen(root: pathlib.Path = MANIFESTS) -> dict[str, dict]:
     """Every frozen task's manifest, by task."""
     root = pathlib.Path(root)
@@ -162,11 +200,21 @@ def changes(task: str, root: pathlib.Path = MANIFESTS) -> list[str]:
     return [part for part in stored if now.get(part) != stored[part]]
 
 
-def freeze(task: str, root: pathlib.Path = MANIFESTS, commit: str | None = None):
+class NotReady(RuntimeError):
+    """A scored task whose record does not show items 4 and 5 (:func:`ready`)."""
+
+
+def freeze(
+    task: str,
+    root: pathlib.Path = MANIFESTS,
+    commit: str | None = None,
+    records: pathlib.Path = RECORDS,
+):
     """Write ``task``'s manifest, once: a frozen task is never frozen again. A
     task whose frozen reference no longer describes its plant or its expert is
-    refused (``reference.StaleReference``): freeze the reference first."""
-    from target_gym import reference
+    refused (``reference.StaleReference``): freeze the reference first. So is a
+    scored task its record does not show ready (:func:`ready`, ``NotReady``)."""
+    from target_gym import charter, reference
 
     root = pathlib.Path(root)
     path = root / f"{task}.json"
@@ -178,6 +226,10 @@ def freeze(task: str, root: pathlib.Path = MANIFESTS, commit: str | None = None)
     if reference.load(task) is not None:
         reference.build(task)
     entry = manifest(task)
+    if charter.status(task) == charter.SCORED:
+        missing = ready(record(task, records), entry["parts"])
+        if missing:
+            raise NotReady(f"{task} is not ready to freeze: {'; '.join(missing)}")
     entry["frozen"] = _dt.date.today().isoformat()
     entry["commit"] = commit
     root.mkdir(parents=True, exist_ok=True)

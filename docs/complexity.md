@@ -73,7 +73,7 @@ are the observation and action lengths, and the episode is the scored one.
 | [Building HVAC](environments/hvac.md) | `hvac` | Scored | Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. | 12 | 1 | 1152 steps, 12 days |
 | [Cement Kiln](environments/cement_kiln.md) | `cement_kiln` | Under review, not scored | Hold the free lime in the clinker leaving a 3000 t/day rotary kiln with fuel and kiln speed. | 8 | 2 | 700 steps, 5.83 h |
 | [Boiler Drum](environments/boiler_drum.md) | `boiler_drum` | Extra, never scored | Keep a boiler's drum water level between its low and high trip levels while the load moves, using the feedwater and the firing, and deliver the steam the load plan asks for. | 12 | 2 | 1800 steps, 60 min |
-| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Scored | Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. | 8 | 2 | 1200 steps, 2 min |
+| [Compressor Surge](environments/compressor_surge.md) | `compressor_surge` | Scored | Hold the header pressure of a variable-speed compressor inside its zone about a constant setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve, at the least recycle energy. | 8 | 2 | 1200 steps, 2 min |
 
 ### Renewable Energy
 
