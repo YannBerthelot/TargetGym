@@ -159,12 +159,14 @@ def test_scenario_costs_read_the_tasks_window():
     np.testing.assert_allclose(out["normal"], [2.0])
 
 
-# Contract (owner, 2026-11-25, the hvac review's P1 as amended): a task whose plant
-# stores what it buys may name, as ``edge_charge``, an episode quantity holding the
+# Contract (owner, 2026-11-25, the hvac review's P1 as amended; 2026-11-27, the RL
+# research review's H2, "No credit, charge a shortfall"): a task whose plant stores
+# what it buys may name, as ``edge_charge``, an episode quantity holding the
 # store's value after each step. An evaluation charges, once, the value the store
 # lost across the scored window (its value after the step before the window less
 # its value after the window's last step), spread over the scored steps like any
-# other cost; the reward itself carries no such charge.
+# other cost, and nothing for a store left fuller; the reward itself carries no
+# such charge.
 
 
 def _stored_episode(cost, store):
@@ -188,11 +190,25 @@ def test_the_edge_charge_prices_what_the_store_lost_across_the_window():
     np.testing.assert_allclose(evaluation.costs({"n": [ep]}, spec)["n"], [5.0])
 
 
-def test_heat_left_in_the_store_is_credited():
+def test_heat_left_in_the_store_earns_nothing():
     spec = evaluating(unscored_steps=2, scored_steps=2, edge_charge="store")
-    # Store after step 1 is 4, after step 3 is 10: it gained 6, a credit of 3.
+    # Store after step 1 is 4, after step 3 is 10: it gained 6, which earns
+    # nothing, so the window's mean cost of 2 stands (it was a credit of 3).
+    ep = _stored_episode([5, 5, 1, 3, 5], [0, 4, 7, 10, 0])
+    assert evaluation.episode_cost(spec, ep) == pytest.approx(2.0)
+
+
+def test_an_evaluation_that_credits_its_store_counts_a_fuller_store_against_the_cost():
+    # A store whose value is what restoring it costs and what filling it cost
+    # (pH's tanks, v1 task pages, item 2) may be credited: the same episode as
+    # above, the store gaining 6 over the window's 2 steps, credits 3 a step.
+    spec = evaluating(
+        unscored_steps=2, scored_steps=2, edge_charge="store", edge_credit=True
+    )
     ep = _stored_episode([5, 5, 1, 3, 5], [0, 4, 7, 10, 0])
     assert evaluation.episode_cost(spec, ep) == pytest.approx(-1.0)
+    lost = _stored_episode([5, 5, 1, 3, 5], [0, 10, 7, 4, 100])
+    assert evaluation.episode_cost(spec, lost) == pytest.approx(5.0)
 
 
 def test_a_window_from_the_first_step_reads_the_store_before_any_step():

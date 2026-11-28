@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/hvac/pid_output.gif" width="480px"/></p>
 
-Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, each occupied kelvin-hour of room outside the band or of floor above its limit. The evaluation also charges, once, the heat the building's store lost across the scored days, at the cheapest price heat can be stored at. Nothing trips.
+Heat an office through a concrete slab by choosing the supply water temperature, so the room stays in its 21 to 26 C comfort band during occupied hours at the least electricity cost. The slab takes hours to respond, so the policy has to act ahead: it reads the room, slab and water temperatures, the outdoor temperature with its last-24 h mean and next-24 h forecast, the clock, and the tariff with the hours to its next change. Each step is charged, in euros, the heat pump's electricity at the tariff, each occupied kelvin-hour of room outside the band or of floor above its limit. The evaluation also charges, once, any heat the building's store is short at the end of the scored days against their start, at the dearest price heat can cost; a fuller store earns nothing. Nothing trips.
 
 ```python
 import target_gym as tg
@@ -83,7 +83,7 @@ What an agent is measured against: the expected cost per step over the task's we
 | Best null policy | the cheapest of the simple policies | not current | |
 | Reference | the controller to beat | not current | |
 | MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+| Ceiling | the best known plan with the true model, the true state and the future: an achieved cost, not a bound | not current | |
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
@@ -158,7 +158,6 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `price_valle` | 0.139 | EUR/kWh |
 | `price_llano` | 0.184 | EUR/kWh |
 | `price_punta` | 0.263 | EUR/kWh |
-| `T_out_design` | -10 | degC |
 | `productivity_per_K` | 0.02 | 1/K |
 | `occupants_per_m2` | 0.1 | 1/m^2 |
 | `labour_cost` | 31.8 | EUR/h |

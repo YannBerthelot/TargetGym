@@ -411,10 +411,10 @@ def test_no_task_keeps_a_j2_exception_of_its_own():
 
 
 def test_charter_tasks_say_so_where_there_is_no_checkout(tmp_path):
-    """The ladder rows live in the repository's ``scripts/``, which an installed
-    package does not have. Asked there, the list is not silently the
-    expert-reference tasks alone."""
-    with pytest.raises(FileNotFoundError, match="source checkout"):
+    """The ladder rows ship in the package (``target_gym.reference.rows``, the
+    outside review's C1), so an install has them. Asked where they are absent,
+    the list is not silently the expert-reference tasks alone."""
+    with pytest.raises(FileNotFoundError, match="absent"):
         charter.charter_tasks(tmp_path / "absent")
 
 

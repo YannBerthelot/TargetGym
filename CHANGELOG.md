@@ -9,6 +9,84 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The reactor's score: an end charge, and every trade-off price sourced (2026-11-28)
+
+The owner's three picks of 2026-11-28 (v1 task protocol, items 2 and 3).
+
+- A scored run is charged what its core's stock lost from the reset to its last
+  step, and credited what it gained, spread over the run's steps (`scoring_runs`,
+  the reactor's protocol). The stock is the boron the core owes
+  (`reactor.env.owed_dilution`): the dilution that brings Tavg back on its program
+  with the rods at their park, at the core's own coefficients, less the boron the
+  line already carries, valued at the effluent it takes (`reactor.env.stored_value`). Without it the MPC stopped
+  diluting on a run's last day for 75 % of its 12.85 % baseload saving; with it,
+  knowing the end no longer pays: 9.39 % against 9.99 % for the planner that plans
+  past it (seeds 100 to 109). The reward carries no such charge.
+- Rods cost nothing to move (`rod_step_price` 0): no published price for a rod step
+  was found. Their travel is still counted (`rod_moved`).
+- Tavg off its program is priced as lost output at spot, $184/h per K
+  (`imbalance_multiple` 0.0023), as every other lost output is; it was 1.25 x spot,
+  ours. The floor costs follow ($0.0767 a step).
+- The effluent's $0.0628/kg is sourced: EPRI 1011728 (2005) puts US plants' liquid
+  radwaste processing at $0.040 to $0.159 a kg.
+- The day planner plans past a run's end, which the end charge prices, and its cold
+  solve's second start prices a rod step at $100 (`DEAR_ROD_STEP`), whatever the
+  task's own price.
+- reactor-v10 is re-stamped in place: it shipped in no release. Every reactor
+  record is stale until it is recorded again.
+
+### Frozen tasks: `TargetGym/<task>-v1` (2026-11-28)
+
+Item 9 of the task protocol. No task is frozen yet.
+
+- A task with the protocol's nine items is frozen once, by
+  `scripts/freeze_v1.py <task>`. Its manifest, `src/target_gym/data/v1/<task>.json`,
+  fingerprints three parts. The plant is the environment's code, the shared physics
+  and the scored parameters. The scoring is each scenario's weight and parameters,
+  the scoring seeds, the scored window and its edge charge, the run length and the
+  tie tolerance. The reference is the frozen reference's law and the code that
+  builds it. `tests/test_v1_freeze.py` fails when any part moves. A change to a
+  frozen task becomes `<task>-v2` beside it.
+- `import target_gym` registers every frozen task with Gymnasium.
+  `gymnasium.make("TargetGym/<task>-v1")` gives the episode its score runs: the
+  heaviest scenario by default, another with `scenario=`. The reactor's is its
+  scored 7-day run.
+- The version stamps the environments carry today (`reactor-v10`, `hvac-v6` and
+  the rest) become development stamps. They keep counting changes to the code,
+  re-stamps in place included; a published result cites a frozen ID instead. Each
+  manifest records the development stamp its task froze at.
+
+### compressor_surge's MPC holds the reference's control line (2026-11-28)
+
+- The MPC's surge limit is the vendors' 10 % control line on the map, the line the
+  reference holds (`compressor_surge.oracle.control_line`), in place of the
+  machine's true line, which the observation hides. Planned on the true line, the
+  last recorded MPC line tripped 19 of 20 approach episodes (v1 task pages, finding
+  1; owner, 2026-11-28). The step's soft minimum of Phi is compared with the line
+  less its steady allowance, so a plant resting on the line meets it as the
+  reference's does. The MPC's record is stale until it is recorded again.
+- The task's sentence says what the job is: the header pressure is held inside its
+  zone about a constant setpoint at the least recycle energy, each surge is
+  charged, and three within 15 s trip the plant (finding 7).
+
+### hvac: an observation-only MPC, and the reference frozen again (2026-11-28)
+
+- hvac's reference was frozen again on the plant PR 306 re-stamped
+  (`scripts/reference_ladder.py --freeze`, int at caaf3cd0, Python 3.13 and JAX
+  0.6.2 from the lock). **The comparator changed: the ladder now keeps the PI rung,
+  not the feedforward rung**, on the room at 22.0 C as before. Under the shortfall
+  charge the two cost 0.006577 and 0.006607 EUR a step on the ladder's seeds, 0.45 %
+  apart. Every saving on hvac is quoted against the PI rung from this change on.
+- `hvac.oracle.observation_only_mpc(env, params, plan)`, the line
+  `scripts/record_v1.py` records for item 5: the window planner fed the shared
+  estimator's belief, pricing comfort at its expected cost under the weather's
+  forecast error (`oracle.room_spread`, `oracle.expected_excess`). The registry's
+  full-state MPC is unchanged.
+- The planner smooths the slab heat's two edges at the smoothing protocol's
+  width, 0.38 K (`data/oracle_widths/hvac.json`): the file predated the heat
+  source's size and listed no site, so every solve ran at width 0 and about 80 %
+  of them hit the iteration cap.
+
 ### The learning check is reported (2026-11-27)
 
 The owner's decision of 2026-11-27, "Report-only", as charter J7 says.
@@ -26,6 +104,90 @@ The owner's decision of 2026-11-27, "Report-only", as charter J7 says.
   2026-11-06), and neither a squashed policy nor 64 times the steps cleared the bar
   on cstr or battery. glass_furnace turns NaN under a constant full fuel valve on
   seed 209 (#310).
+
+### Docs for comparing an agent, and a beta (2026-11-27)
+
+After the outside review of 2026-11-27 (M2, M4, L3) and the owner's pickers the
+same day.
+
+- 0.8.0 is labelled a beta in the README, as PyPI's classifier says. A new page,
+  [Comparing an agent with the reference](docs/comparing.md), which the README
+  links first, shows how to train on the scenarios, where to choose checkpoints
+  and how to read `tg.score`. The README's examples run on scored tasks.
+- The docs no longer call the MPC an upper bound, or the ceiling a limit: both
+  are achieved costs. The README counts its tasks and their MPCs right.
+- The throughput benchmark (`benchmark_speed`) times gymnax's `step` with its
+  auto-reset on the scored configuration, a key for every environment and step,
+  random actions, and everything `step` returns kept, where it kept only the
+  state with one key and zero actions. `docs/performance.md` is measured again
+  on one named machine, where the old method overstated the rate 1.6 to 19
+  times.
+- The install notes say matplotlib, seaborn and pandas come with gymnax, which
+  requires them; an extra for them would make no install lighter.
+
+### hvac's window edge and the scored defaults (2026-11-27)
+
+Two findings of the outside RL research review, fixed as the owner decided by
+picker on 2026-11-27.
+
+- hvac's evaluation no longer credits a store left fuller at the end of the scored
+  days (H2, "No credit, charge a shortfall"). A store left emptier than it began is
+  charged its shortfall once, at the dearest price heat can cost the plant: the
+  punta tariff over the heat pump's COP at the valve's top supply, EUR 0.0769 per
+  kWh of heat (`hvac.env.shortfall_price`). Ending at the start level is neutral.
+  The old charge, at the night tariff over the design supply's COP, both ways, paid
+  an agent for a night at full supply on the last scored day (0.9 % under the
+  expert) and for the supply shut after 08:00 on that day (4.8 % under it), and its
+  credit made one shoulder-season seed's cost negative. The rule is
+  `evaluation.Evaluation`'s, so any task that names an edge charge has it. The
+  training reward is unchanged and still carries no edge charge (hvac's
+  `PHYSICS.md` section 5 says how the two differ).
+- hvac's oracle plans the same objective: the store's shortfall at the window's end
+  is a fourth hinge, paid once, with the store's value at the window's start
+  carried as a third planned state (`hvac.oracle.WindowOracle`).
+- `tg.make(name)` gives each scored task's heaviest scenario (H1, "Heaviest
+  scenario"): `normal` for `ph_neutralization` and `compressor_surge` (as for
+  `hvac` and `cstr` already), `baseload` for the `reactor`. Every scenario resolves
+  to exactly the parameters it resolved to before, so only a run on the defaults
+  moves (`tests/test_scored_defaults.py`). The reference ladder's pH row reads its
+  bump tests' upset sizes from the bad day, where it read them from the default.
+- Two checks that read only the default now read the heaviest scenarios, and the
+  owner settled what they found (picker, 2026-11-27). On pH's normal day random
+  actions survive an episode at 8879 L, above the 6480 L a trip charged, so
+  `failure_cost` rises from 9 to 13 L a step: a trip charges 9360 L and never
+  pays. At the reactor's baseload with no input the axial offset drifts from the
+  reset's xenon tilt, so the conformance check lists the reactor as open-loop
+  unstable, an uncontrolled axial xenon transient, until the 0.10.0 realism batch
+  reviews axial damping across the fuel cycle.
+- `hvac-v6`, `ph_neutralization-v6`, `compressor_surge-v5` and `reactor-v10`, which
+  no release shipped, are re-stamped in place.
+
+### The charter's comparison as one call (2026-11-27)
+
+After the outside review of 2026-11-27 (C1, M1, L2, H5) and the owner's pickers
+the same day.
+
+- `tg.score(name, policy)` runs the charter's protocol on a scored task: every
+  scenario at its share of operating time, on the scoring seeds, each episode
+  read over the scored window with its edge charge, the reactor on its pinned
+  7-day streams, and the frozen reference run beside the policy on the same
+  seeds and worlds. It returns `scoring.headline`'s saving with its interval,
+  one row per scenario beside it, the charter record's reference, best null,
+  MPC and ceiling `J` and the room, the reference's exits out of sample, and
+  whether the policy read the state. On the reactor it reports baseload days
+  and load-following days apart (`days`). A list of policies is one per
+  training run.
+- It runs a policy given as `policy(obs) -> action`, or in the experts' form,
+  compiled once for every seed (`scorecard.rollouts`), where the older scorer
+  stepped one episode at a time on the host. A policy that keeps its own Python
+  memory, any with `jit=False`, and a `FullState` still run on the host.
+- The ladder's rows ship in the package, `target_gym.reference.rows`, with what
+  a row is made of in `target_gym.reference.row`, so `tg.make_reference` and
+  `charter.charter_tasks` work from an install. `reference_ladder.py --freeze`
+  with no task named freezes the scored suite, and says when a re-freeze
+  changes a task's kept rung or setpoint: the CHANGELOG then announces it as a
+  change of the comparator (CONTRIBUTING.md).
+- cstr's frozen reference is gone with cstr from the scored suite.
 
 ### Verdict statistics and the RL protocol (2026-11-27)
 
@@ -72,8 +234,7 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
   ladder's export command, which checks that the rung rebuilt from the file
   costs, seed by seed on the scoring seeds, what the ladder's own rung cost:
 
-      uv run python scripts/reference_ladder.py --tasks cstr hvac ph_neutralization compressor_surge --freeze
-      uv run python scripts/reference_ladder.py --expert reactor --freeze
+      uv run python scripts/reference_ladder.py --freeze
 
   The files in this tree are a working sample on the plants of this date; the
   re-record of the scored suite freezes them again with the same command.
@@ -135,11 +296,47 @@ After the outside review of 2026-11-27 (C1, M3, M5, H1).
 The next release is 0.8.0, because these changes break code written for
 0.7.0:
 
+- **The scored tasks' defaults are their heaviest scenarios** (2026-11-27). A
+  changed default changes what `tg.make(name)` and `env.default_params` give.
+  Upgrade notes:
+  - `ph_neutralization`: `acid_upset_size` and `flow_swing` default to 0, the
+    normal day. The old default, both at 0.2, is the bad day:
+    `tg.make("ph_neutralization", scenario="bad_day")`.
+  - `ph_neutralization`: a trip now charges 13 L of reagent a step for its
+    720-step restart, where it charged 9, so episodes with a trip cost more.
+  - `compressor_surge`: `demand_range` defaults to (0.7, 0.95), the normal day.
+    The old (0.35, 0.95) was the dropped load swings' range, which no scenario
+    scores; pass `demand_range=(0.35, 0.95)` to run it.
+  - `reactor`: `ramp_down_range` defaults to (1e6, 1e6), a baseload day whose ramp
+    never comes. The old default, an EDF daily load follow, is
+    `ramp_down_range=(1800.0, 7200.0)`; each load-follow scenario now sets it.
+  - Every scenario's parameters are unchanged, so nothing scored through
+    `scenarios.params_for` or a stream moves.
+- **hvac's evaluation charges a shortfall and credits nothing at the window's
+  edge** (2026-11-27). Upgrade notes:
+  - A store left fuller at the end of the scored days earns nothing; one left
+    emptier pays its shortfall at `hvac.env.shortfall_price`, EUR 2.137e-8 per J.
+    hvac's scored costs move, and can no longer be negative.
+  - `HVACParams.T_out_design` is gone: it priced the stored heat and nothing else.
+    `hvac.env.stored_heat_price` is replaced by `shortfall_price`, and
+    `hvac.env.stored_heat_cost` is gone.
+  - `env.stored_value` prices the store at the shortfall price.
 - **A win needs more than float noise.** `score_policy`'s `win_rate` and
   `transient_win_rate` count a seed within the task's tie tolerance as not won
   (`charter.tie_tolerance`: each scored task's noise floor, 1e-3 elsewhere), so
   a controller scored against its own expert no longer wins seeds by rounding.
   pH's `off_spec` share reads its permit, 6 to 9, where it read 6.5 to 8.5.
+- **On a scored task, `score_policy` is the charter's comparison.** With its
+  default arguments on a task of `tg.FLAGSHIP` it returns `tg.score`'s result,
+  on its first `seeds` scoring seeds. Upgrade notes:
+  - Read `saving`, `saving_ci` and `scenarios` where you read `ratio`,
+    `score` and `headroom`: the tracking score is not defined on a task charged
+    in money, and the old fields were NaN or 0 there.
+  - Pass `params` to keep the older protocol against the shipped expert.
+  - The ladder's rows moved from `scripts/ladder_rows/<task>.py` to
+    `target_gym.reference.rows.<task>`, and `Cv`, `Inner`, `Limit`, `Valve`,
+    `Row` and `corners` to `target_gym.reference.row`;
+    `scripts/reference_ladder.py` still offers them by their old names.
 - **A policy is given the simulator's true state only when it says so.** The
   runners (`runners.one_episode`, `eval.run_episode` and the scorers built on
   them) passed `(obs, state)` to any policy whose signature took two arguments.

@@ -81,8 +81,10 @@ def hvac_evaluation() -> dict:
     ceiling's tail: charged in its plan, read by no line, so it cannot spend the
     slab's charge on the last scored night (day 14 held 11 % of the gap). Lines run
     on five seeds, and five more where the saving interval touches 0. The heat the
-    slab and the mass lost across the scored days is charged once, at the env's
-    ``stored_value`` (owner, 2026-11-25)."""
+    slab and the mass are short at the end of the scored days against their start
+    is charged once, at the env's ``stored_value``, the dearest price heat can
+    cost; a fuller store earns nothing (owner, 2026-11-25 and 2026-11-27, the RL
+    research review's H2)."""
     return dict(
         unscored_steps=3 * _DAY,
         scored_steps=7 * _DAY,

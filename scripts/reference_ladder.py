@@ -10,8 +10,8 @@ operating time. Nothing here reads a score to set a number: the gains come from 
 tests, and the rows hold only what the plant's datasheet and balances say, plus each
 test's step size and length.
 
-Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``, defining
-``row()``. A loop on a zone (``Cv.zone``) holds a setpoint ``k = 2`` standard deviations
+Each task's row lives in its own module, ``target_gym.reference.rows.<task>``,
+defining ``row()``. A loop on a zone (``Cv.zone``) holds a setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre (``ladder.zone_setpoint``). The
 deviation is the controlled variable's, with the pi rung holding it on the bump-test
 seeds in the scored normal day, over the second half of each episode: first at the
@@ -39,8 +39,7 @@ A rung a task doesn't have is reported with the reason from its row.
 from __future__ import annotations
 
 import argparse
-import dataclasses
-import importlib.util
+import importlib
 import json
 import math
 import pathlib
@@ -88,13 +87,21 @@ from target_gym.identification import (  # noqa: E402
     single_run,
 )
 from target_gym.reference.frozen import assemble, constant  # noqa: E402
+from target_gym.reference.row import (  # noqa: E402,F401  (the rows' names)
+    Cv,
+    Inner,
+    Limit,
+    Row,
+    Valve,
+    corners,
+)
 from target_gym.registry import REGISTRY  # noqa: E402
 
 SEEDS = tuple(range(100, 110))
 #: The seeds a zone's setpoint is placed on (outside review M5, 2026-11-27): apart
-#: from the ladder's 100 to 109 the J3 lines run on, the scoring seeds from 200 and
-#: J2's hash seeds from 1000, so no line is read on the seeds its reference was
-#: placed on.
+#: from the ladder's 100 to 109 the J3 lines run on, the scoring seeds 200 to 209,
+#: the validation block 300 to 349 and J2's hash seeds from 1000, so no line is
+#: read on the seeds its reference was placed on.
 PLACEMENT_SEEDS = tuple(range(110, 120))
 NOISE = 1.0
 RAW_BAND = DEAD_BAND * 2.0  # a valve's dead band on an action spanning 2
@@ -105,137 +112,6 @@ FREE = (-np.inf, np.inf)
 #: Skogestad, IFAC ADCHEM 2018, p. 438). On the cstr production prototype one dead time
 #: asks a gain of 8.2 and six of ten normal-day seeds leave the band at every set point.
 VALVE_TAU_C = 30.0
-
-
-@dataclasses.dataclass(frozen=True)
-class Cv:
-    """A loop: ``read`` on MV ``mv``, to ``target``, each ``f(obs, xp)``. ``du`` and
-    ``window`` size its bump test, on the reading named ``inst``. ``valve`` says the
-    MV has a valve's dead band. ``room`` replaces the plant's own limit. ``zone`` is
-    ``(low, high, cheap)`` for a loop kept inside a zone: ``target`` is then unused,
-    and the loop holds the setpoint the module docstring describes. ``exit_terms``
-    names the reward terms the score charges for leaving the zone: with any, the
-    setpoint is the first of the zone's grid that never leaves, not 2 sigma.
-    ``established(setpoint)`` gives the scored parameters that start an episode on
-    that setpoint, for a plant whose reset depends on it."""
-
-    name: str
-    mv: int
-    read: object
-    target: object
-    inst: str
-    du: float
-    window: int
-    model: str = "fopdt"
-    valve: bool = True
-    room: float | None = None
-    zone: tuple | None = None
-    exit_terms: tuple = ()
-    established: object = None
-
-
-@dataclasses.dataclass(frozen=True)
-class Inner:
-    """A cascade under loop ``loop``: ``read`` rests at ``rest``, or where it settled
-    in the test if None. ``du`` and ``window`` size the inner test, ``du_outer`` and ``window_outer`` the outer one, in the inner
-    reading's units."""
-
-    loop: int
-    name: str
-    read: object
-    rest: object
-    inst: str
-    du: float
-    window: int
-    du_outer: float
-    window_outer: int
-    model: str = "fopdt"
-    valve: bool = True
-
-
-@dataclasses.dataclass(frozen=True)
-class Limit:
-    """An override keeping ``read`` past ``limit``. ``slope`` and ``theta`` are the
-    datasheet's where a bump can't read it; otherwise ``du`` and ``window`` size one."""
-
-    name: str
-    read: object
-    limit: float
-    floor: bool
-    mv: int
-    inst: str = ""
-    du: float = 0.0
-    window: int = 0
-    slope: float | None = None
-    theta: float | None = None
-    seeds: object = None
-
-
-@dataclasses.dataclass(frozen=True)
-class Valve:
-    """A valve position loop (``ladder.ValvePosition``): hold ``read``, a loop's
-    valve, at ``setpoint`` by MV ``mv``. Its bump test steps ``mv`` by ``du`` with
-    every loop of the row closed and reads the valve over ``window`` steps; SIMC
-    then takes ``VALVE_TAU_C`` dead times as its closed-loop time."""
-
-    name: str
-    read: object
-    setpoint: float
-    mv: int
-    du: float
-    window: int
-
-
-@dataclasses.dataclass
-class Row:
-    """What the ladder needs of one task. ``rest`` holds the plant for its tests, on
-    the ``test`` parameters. ``points`` are the other operating points the episode
-    visits, each a change to ``test``: the ends of its drawn targets and loads. Every
-    loop is bump-tested at each and tuned where the plant is most sensitive.
-    ``balance`` is rung 2's bias, None without one. ``why`` gives the reason for each
-    rung left out, and ``points`` for a task with one operating point. ``rest_at``
-    gives the rest at a point's parameters where ``rest`` can't read it. ``build``
-    fills ``placed``: each zone loop's measured deviation (None under the exit rule)
-    and setpoint; ``scans``: under the exit rule, the seeds that left at each
-    candidate it ran, by scenario; and ``unheld``: those no candidate holds, by
-    scenario, which did not constrain the placement. Under the exit rule each rung
-    is placed on its own: ``placements`` holds, per rung and loop, its ``setpoint``,
-    ``exits``, ``unheld`` and whether it ``holds`` every seed it can, and ``starts``
-    the scored parameters its episodes start with; ``placed``, ``scans``, ``unheld``
-    and ``score`` then show the pi rung's until ``keep_rung`` shows the kept one's.
-    ``schedules`` are the practitioner laws that are not loops of PIs, by rung name,
-    each a function of its zone loop's set point giving a ``Controller``; each is
-    placed by the exit rule like the PI rungs (owner, 2026-11-25).
-    ``bumpless`` starts every rung from ``rest`` at the reset
-    (``ladder_controller``'s ``start``), for a task whose reset stands on a steady
-    state its balances can't compute, because something they need is hidden."""
-
-    steps: int
-    rest: object
-    loops: tuple = ()
-    test: dict = dataclasses.field(default_factory=dict)
-    points: tuple = ()
-    rest_at: object = None
-    score: dict = dataclasses.field(default_factory=dict)
-    balance: object = None
-    cascades: tuple = ()
-    limits: tuple = ()
-    valves: tuple = ()
-    decouple: bool = False
-    holds: tuple = ()
-    start: object = None
-    published: object = None
-    why: dict = dataclasses.field(default_factory=dict)
-    placed: dict = dataclasses.field(default_factory=dict)
-    scans: dict = dataclasses.field(default_factory=dict)
-    unheld: dict = dataclasses.field(default_factory=dict)
-    placements: dict = dataclasses.field(default_factory=dict)
-    starts: dict = dataclasses.field(default_factory=dict)
-    bumpless: bool = False
-    schedules: dict = dataclasses.field(default_factory=dict)
-    #: Each rung's law as ``build`` made it (``target_gym.reference.frozen``), by
-    #: rung: what ``--freeze`` writes for the kept one.
-    frozen: dict = dataclasses.field(default_factory=dict)
 
 
 def scheduled(name, row, spec, label, law):
@@ -272,16 +148,6 @@ def scheduled(name, row, spec, label, law):
     row.frozen[label] = {"rung": label, "schedule": setpoint}
     print(f"    {label}, {c.name}: kept setpoint {setpoint:.4g}", flush=True)
     return assemble(row, row.frozen[label], spec)
-
-
-def corners(**ranges) -> tuple:
-    """The operating points at the ends of drawn ranges, every combination of ends,
-    each range pinned to one end: ``corners(a=(0, 1))`` is ``a=(0, 0)``, ``a=(1, 1)``.
-    """
-    points = [{}]
-    for name, (low, high) in ranges.items():
-        points = [{**q, name: (end, end)} for q in points for end in (low, high)]
-    return tuple(points)
 
 
 def manual(hold):
@@ -1103,6 +969,33 @@ def placement_report(row, rung: str) -> dict:
     return out
 
 
+def comparator_change(name: str, old: dict | None, new: dict) -> str | None:
+    """What a re-freeze changed of ``name``'s comparator: its kept rung or a
+    zone's setpoint, as one line to announce in the CHANGELOG (the outside
+    review's H5); None where neither moved or there was nothing before."""
+    if old is None:
+        return None
+
+    def held(frozen):
+        return frozen["rung"], frozen.get("law", {}).get("setpoints", {})
+
+    (r0, s0), (r1, s1) = held(old), held(new)
+    if (r0, s0) == (r1, s1):
+        return None
+
+    def at(setpoints, loop):
+        return f"{setpoints[loop]:.6g}" if loop in setpoints else "none"
+
+    loops = sorted(k for k in set(s0) | set(s1) if s0.get(k) != s1.get(k))
+    moves = ", ".join(f"{k} {at(s0, k)} -> {at(s1, k)}" for k in loops)
+    return (
+        f"{name}: the comparator changed, {r0} -> {r1}"
+        + (f" ({moves})" if moves else "")
+        + ": say so in the CHANGELOG, as a change of the reference every saving "
+        "is quoted against"
+    )
+
+
 def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
     """Charter J1's kept rung of ``name`` as package data (``target_gym.reference``):
     its law, the parameters its episodes run on, and its provenance. Before it is
@@ -1156,8 +1049,11 @@ def freeze(name: str, root=None, make_row=None) -> pathlib.Path:
             f"{name}: the {kept} rung rebuilt from its law does not run as the "
             "ladder's: nothing written"
         )
+    said = comparator_change(name, R.load(name, root or R.FROZEN), frozen)
     where = R.write(name, frozen, root or R.FROZEN)
     print(f"  froze {kept} in {where}", flush=True)
+    if said:
+        print(f"  {said}", flush=True)
     return where
 
 
@@ -1262,17 +1158,15 @@ def expert_reference(name: str) -> dict:
     return {"reference": reference, "nulls": check_nulls(name, row, reference)}
 
 
-#: The rows, one file per task in ``scripts/ladder_rows``, each defining ``row()``.
-ROWS_DIR = pathlib.Path(__file__).resolve().parent / "ladder_rows"
+#: The rows, one module per task in ``target_gym.reference.rows``, each defining
+#: ``row()``.
+ROWS_DIR = pathlib.Path(__file__).resolve().parent.parent / "src" / "target_gym"
+ROWS_DIR = ROWS_DIR / "reference" / "rows"
 
 
 def _row_of(path: pathlib.Path):
     def make() -> Row:
-        # A row file imports this module by name, also when it runs as a script.
-        sys.modules.setdefault("reference_ladder", sys.modules[__name__])
-        spec = importlib.util.spec_from_file_location(f"ladder_rows.{path.stem}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module = importlib.import_module(f"target_gym.reference.rows.{path.stem}")
         return module.row()
 
     return make
@@ -1283,9 +1177,20 @@ ROWS = {
 }
 
 
+def freeze_targets(tasks=None, experts=None) -> tuple[list, list]:
+    """``(ladder tasks, expert tasks)`` that ``--freeze`` freezes: those named, or
+    with none named the scored suite (``charter.FLAGSHIP``), each by its kind."""
+    from target_gym import charter
+
+    if tasks is None and experts is None:
+        experts = [t for t in charter.FLAGSHIP if t in charter.EXPERT_REFERENCE]
+        tasks = [t for t in charter.FLAGSHIP if t not in experts]
+    return list(tasks or []), list(experts or [])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--tasks", nargs="*", default=list(ROWS))
+    parser.add_argument("--tasks", nargs="*", default=None)
     parser.add_argument("--out", type=pathlib.Path, default=None)
     parser.add_argument("--nulls", action="store_true", help="J2 against the kept rung")
     parser.add_argument(
@@ -1298,11 +1203,17 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.freeze:
-        for name in args.expert:
+        named = args.tasks is not None or args.expert
+        tasks, experts = freeze_targets(
+            args.tasks if named else None, args.expert if named else None
+        )
+        for name in experts:
             freeze_expert(name)
-        for name in [] if args.expert and args.tasks == list(ROWS) else args.tasks:
+        for name in tasks:
             freeze(name)
         return
+    if args.tasks is None:
+        args.tasks = list(ROWS)
     for name in args.expert:
         result = expert_reference(name)
         if args.out:

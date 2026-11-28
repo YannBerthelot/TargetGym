@@ -12,11 +12,12 @@ planner's model is exact:
   kg/s off the plan past the meter's 0.047 kg/s;
 - hvac: kelvin-hours outside the band at the work-loss price, 0.25 h *
   0.02 * 0.10 * 150 * 31.8 = EUR 2.385 per K per step, and the electricity.
-  The reward carries no stored heat; the evaluation charges what the store
-  lost across the scored window (owner, 2026-11-25, P1). The planner charges
-  it a step at a time, which sums to the same charge, so each planned step
-  equals the reward's cost plus the store's value the step drew down:
-  ``planned[t] = -r_t + (store[t-1] - store[t])`` (owner, 2026-11-26);
+  The reward carries no stored heat. The evaluation charges, once, what the
+  store is short at the scored window's end against its start, at the dearest
+  heat price, and credits nothing (owner, 2026-11-27, the RL research review's
+  H2). A windowed plan pays each step's reward cost inside the window, and the
+  shortfall once at its end, as a surrogate hinge that K8's replay leaves out:
+  ``planned[end] = -r_end + max(store[first - 1] - store[end], 0)``;
 - wind_turbine: lost production and pitch wear (the tower's fatigue is not
   planned, PHYSICS.md; the comparison leaves it out on both sides);
 - battery: the plan is the baselines, and the oracle's cost of them is what
@@ -62,22 +63,12 @@ def plan_and_replay(task, model, data_of, moves, start=lambda s: s, **over):
         for t, u in enumerate(moves):
             u = jnp.asarray(u, jnp.float64)
             a = u if tm.action is None else tm.action(s, u)
-            before = s
             _, s, r, _, info = env.step_env(keys[t], s, a, p64)
             assert not bool(info["tripped"])
-            replayed -= float(r) - drawn(env, before, s, p64)
+            replayed -= float(r)
             for k, v in env.reward_terms(s, p64).items():
                 terms[k] = terms.get(k, 0.0) + float(v)
     return planned, replayed, terms
-
-
-def drawn(env, before, after, params):
-    """The store's value a step drew down, for an env whose evaluation charges
-    its store at the window's edges (hvac); 0 for the others."""
-    stored = getattr(env, "stored_value", None)
-    if stored is None:
-        return 0.0
-    return float(stored(before, params) - stored(after, params))
 
 
 def as_called(fn, *args):
@@ -125,38 +116,110 @@ def test_hvac_plan_costs_what_the_env_charges():
     np.testing.assert_allclose(planned, replayed, rtol=1e-9)
 
 
-def test_hvac_ceiling_plans_on_the_scored_window_alone():
-    """Owner, 2026-11-25 (review finding 1): the ceiling plans on what the task
-    scores, the steps of its scored window with the stored heat charged, and
-    nothing before or after. A window of steps 38 and 39 from a plan at step 36:
-    the plan pays the env's charge on its third and fourth steps only, the
-    reward's cost plus the store's value each step drew down."""
+def _windowed(moves, start=36, start_store=None, **state):
+    """Each step of ``moves`` from the seed-100 reset at step ``start`` with
+    ``state`` set, the plan windowed on steps 38 and 39: what the plan pays,
+    what of it K8's replay compares, the reward's cost of the env's step, and the
+    env's value of the store after it."""
     from target_gym.hvac.oracle import ceiling_data, hvac_model
 
     spec = REGISTRY["hvac"]
     env, p = spec.make_env(), spec.make_test_params()
-    moves = [[1.0], [-1.0], [-0.2], [0.4], [1.0]]
     resets, steps = episode_keys(jax.random.PRNGKey(100), 1, len(moves))
     keys = steps[:, 0]
     with enable_x64():
         p64 = float64(p)
-        st = float64(env.reset_env(resets[0], p)[1]).replace(time=36, T_core=19.5)
-        tm = hvac_model(env, p64, window=(38, 40))
+        st = float64(env.reset_env(resets[0], p)[1]).replace(time=start, **state)
+        tm = hvac_model(env, p64, window=(38, 40), start_store=start_store)
         d = {
             "task": float64(ceiling_data(env, p64, st, keys, run_as=as_called)),
             "widths": jnp.zeros(5),
         }
-        x, planned = tm.state_x(st), []
+        x, planned, compared = tm.state_x(st), [], []
         for t, u in enumerate(moves):
             x, c, y = tm.step(d, x, jnp.asarray(u, jnp.float64), t)[:3]
-            planned.append(float(c + hinge_costs(tm.hinges, jnp.asarray(y))))
-        s, charged = st, []
+            y = jnp.asarray(y)
+            planned.append(float(c + hinge_costs(tm.hinges, y)))
+            compared.append(float(c + hinge_costs(tm.hinges, y, surrogates=False)))
+        s, charged, store = st, [], []
         for t, u in enumerate(moves):
-            before = s
             _, s, r, _, _ = env.step_env(keys[t], s, jnp.asarray(u, jnp.float64), p64)
-            charged.append(-float(r) + drawn(env, before, s, p64))
+            charged.append(-float(r))
+            store.append(float(env.stored_value(s, p64)))
+    return planned, compared, charged, store
+
+
+def test_hvac_ceiling_plans_on_the_scored_window_alone():
+    """Owner, 2026-11-25 (review finding 1): the ceiling plans on what the task
+    scores, the steps of its scored window, and nothing before or after; a store
+    left fuller earns nothing (2026-11-27, H2). A window of steps 38 and 39 from a
+    plan at step 36, full supply into a cold slab: the plan pays the reward's
+    cost on its third and fourth steps only."""
+    planned, _, charged, store = _windowed([[1.0]] * 5, T_core=19.5)
+    assert store[3] > store[1]  # the store ends the window fuller
     assert planned[:2] == [0.0, 0.0] and planned[4] == 0.0
     np.testing.assert_allclose(planned[2:4], charged[2:4], rtol=1e-9)
+
+
+def test_hvac_plan_pays_the_stores_shortfall_once_at_the_windows_end():
+    """The evaluation's edge charge (2026-11-27, H2): the store's value at the
+    dearest heat price after step 37 less its value after step 39, the window's
+    last, when that is positive, paid on that step; K8's replay compares the
+    reward's cost alone. The supply shut on a warm slab drains the store."""
+    planned, compared, charged, store = _windowed([[-1.0]] * 5, T_core=30.0)
+    shortfall = store[1] - store[3]
+    # The store ends the window emptier, by EUR 0.008 (0.37 MJ) over its 30 min:
+    # the morning's gains cover most of the building's loss.
+    assert shortfall > 1e-3
+    np.testing.assert_allclose(planned[2], charged[2], rtol=1e-9)
+    np.testing.assert_allclose(planned[3], charged[3] + shortfall, rtol=1e-9)
+    np.testing.assert_allclose(compared[2:4], charged[2:4], rtol=1e-9)
+
+
+@pytest.mark.parametrize("window_start", [10.0, 90.0])
+def test_hvac_plan_started_inside_the_window_pays_against_the_windows_start(
+    window_start,
+):
+    """A receding plan solved inside the window charges its end against the
+    store's value at the window's start, which the oracle read as it passed: a
+    plan from step 39, the window's last, pays the store's drop from that value
+    (EUR 90 is above the slab's EUR 65 at 30 C, EUR 10 below it)."""
+    planned, _, charged, store = _windowed(
+        [[-1.0]], start=39, start_store=lambda: window_start, T_core=30.0
+    )
+    short = max(window_start - store[0], 0.0)
+    np.testing.assert_allclose(planned[0], charged[0] + short, rtol=1e-9)
+
+
+def test_hvac_plan_inside_the_window_needs_the_windows_start():
+    with pytest.raises(ValueError, match="window"):
+        _windowed([[-1.0]], start=39, T_core=30.0)
+
+
+def test_hvac_receding_oracle_reads_the_store_as_it_passes_the_windows_start():
+    """The receding oracle, run on a six-step episode windowed on steps 2 and 3:
+    past the window's start it plans against the store's value there, and every
+    solve converges, its replay on the env matching its plan."""
+    from target_gym.experts.mpc import plan_params
+    from target_gym.hvac.oracle import WindowOracle
+
+    spec = REGISTRY["hvac"]
+    env = spec.make_env()
+    p = spec.make_test_params(max_steps_in_episode=6)
+    oracle = WindowOracle(env, plan_params(spec, p), "hvac", window=(2, 4))
+    obs, s = env.reset_env(jax.random.PRNGKey(100), p)
+    states = []
+    for t in range(6):
+        states.append(s)
+        u = jnp.atleast_1d(jnp.asarray(oracle.step(obs, s), jnp.float32))
+        obs, s, _, _, _ = env.step_env(jax.random.PRNGKey(t), s, u, p)
+    with enable_x64():
+        planned_from = oracle.model.state_x(float64(states[3]))
+        at_start = env.stored_value(float64(states[2]), oracle.params)
+    assert float(planned_from[2]) == pytest.approx(float(at_start), rel=1e-12)
+    report = oracle.solver_report()
+    assert report["solver_failures"] == 0 and report["solver_capped"] == 0
+    assert report["solver_max_replay_gap"] <= 1e-6
 
 
 def test_hvac_oracles_plan_on_the_tasks_scored_window():
@@ -175,13 +238,16 @@ def test_hvac_oracles_plan_on_the_tasks_scored_window():
 
 
 def test_hvac_comfort_hinges_are_priced_at_the_work_loss():
+    """The three comfort rows at the work-loss price, then the store's shortfall,
+    in euros at one euro each, which the env never charges (a surrogate)."""
     from target_gym.hvac.oracle import hvac_model
 
     spec = REGISTRY["hvac"]
     hinges = hvac_model(spec.make_env(), spec.make_test_params()).hinges
     assert [h.weight for h in hinges] == pytest.approx(
-        [0.25 * 0.02 * 0.10 * 150.0 * 31.8] * 3
+        [0.25 * 0.02 * 0.10 * 150.0 * 31.8] * 3 + [1.0]
     )
+    assert [h.surrogate for h in hinges] == [False, False, False, True]
 
 
 def test_wind_plan_costs_what_the_env_charges_bar_the_tower():

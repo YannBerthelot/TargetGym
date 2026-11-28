@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import math
 
-from reference_ladder import (  # noqa: E402
+from target_gym.reference.row import (
     Cv,
     Limit,
     Row,
     Valve,
 )
-
 from target_gym.registry import REGISTRY
 
 

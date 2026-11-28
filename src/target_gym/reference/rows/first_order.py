@@ -5,7 +5,7 @@ What the plant's datasheet and balances say, and nothing read from a score.
 
 from __future__ import annotations
 
-from reference_ladder import (  # noqa: E402
+from target_gym.reference.row import (
     Cv,
     Row,
     corners,

@@ -45,6 +45,7 @@ from target_gym.reactor.env import (
     steady_state_precursors,
     steady_state_temperatures,
     steady_state_xenon,
+    stored_value,
     tavg_program,
     timed_out,
     xenon_after_shutdown,
@@ -129,7 +130,8 @@ class Reactor(
     @property
     def default_params(self) -> ReactorParams:
         # The scored configuration: env steps of 30 s (``control_period``
-        # physics sub-steps each) over the 24 h of a load-follow day.
+        # physics sub-steps each) over the 24 h of a baseload day, the
+        # heaviest scenario (owner, 2026-11-27, the RL research review's H1).
         return ReactorParams()
 
     def compute_reward(self, state, params):
@@ -139,6 +141,11 @@ class Reactor(
         """Cost terms at one physics sub-step. ``step_env`` returns their exact
         sum over the control period in ``info["reward_terms"]``."""
         return compute_reward_terms(state, params, tripped=tripped)
+
+    def stored_value(self, state, params):
+        """The core's stock in dollars (``env.stored_value``), which a scored run
+        charges at its end against its reset."""
+        return stored_value(state, params, CONTROL_PERIOD)
 
     def step_env(
         self,

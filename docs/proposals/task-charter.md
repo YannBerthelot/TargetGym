@@ -1,5 +1,8 @@
 # Task charter
 
+> **2026-11-27:** the [task protocol](../task-protocol.md) replaces this charter's gates
+> for accepting a task. The charter stays as history.
+
 These are the rules every TargetGym task follows, adopted by the owner. They replace
 every earlier task rule, and the docs and tests that enforce them change to match. Where
 each task stands is in [task-status.md](task-status.md). How the rules came about, and

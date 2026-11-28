@@ -191,10 +191,10 @@ def _control_step_tracking(env, state, params) -> float:
 
 def test_a_reactor_step_sums_its_sub_steps_at_the_ceilings_price():
     """Hand-worked, independent of ``scoring``: 0.05 K off program for one 30 s
-    step, at 1.25 x $80/MWh x 0.23 %/K of 1000 MW, is 2.3 $/(K h) x 1000 x 0.05
-    K x 30 / 3600 h = $0.0958."""
+    step, at spot (owner, 2026-11-28), $80/MWh x 0.23 %/K of 1000 MW, is 1.84 $/(K h)
+    x 1000 x 0.05 K x 30 / 3600 h = $0.0767."""
     params = REGISTRY["reactor"].make_test_params()
-    assert scoring.ceiling("reactor", params) == pytest.approx(0.09583, rel=1e-3)
+    assert scoring.ceiling("reactor", params) == pytest.approx(0.07667, rel=1e-3)
 
 
 @pytest.mark.parametrize("name", _VIA_TRACKING_COST)
@@ -872,11 +872,13 @@ def test_two_sides_that_cost_nothing_are_level():
 def test_score_policy_scores_a_job_scored_task():
     """hvac has no tracked setpoint (``JOB_SCORED``). Its expert against itself
     on the same seed costs the same, so the ratio is 1 and it does not beat
-    itself; the tracking score is unknown."""
+    itself; the tracking score is unknown. hvac is scored, so this is the older
+    protocol, asked for by its ``params`` (the outside review's M1)."""
     import target_gym as tg
 
     assert "hvac" in scoring.JOB_SCORED
-    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1)
+    params = tg.make("hvac")[1]
+    m = scoring.score_policy("hvac", tg.make_expert("hvac"), seeds=1, params=params)
     assert m["ratio"] == pytest.approx(1.0)
     assert not m["beats_expert"]
     assert np.isnan(m["score"]) and np.isnan(m["s_max"])

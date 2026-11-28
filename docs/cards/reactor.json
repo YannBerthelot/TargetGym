@@ -1,0 +1,45 @@
+{
+  "job": "A pressurized water reactor operator follows the day's load plan with the control rods, the soluble boron and the turbine's loading rate, taking as much of the plan as the core can carry while the average coolant temperature, the flux difference and the rod insertion stay inside their limits, at the least lost output and effluent.",
+  "decision": "Every 30 s the agent sets the rod demand, the boron flow (a dilution or a boration, which reaches the core 10 min later) and the turbine's loading rate.",
+  "unit": "USD",
+  "prices": [
+    {
+      "field": "derate_price_per_MWh",
+      "trades": "an MWh of the plan the turbine does not take, or that the offset's limits take off",
+      "unit": "USD/MWh",
+      "source": "PJM's 2022 real-time load-weighted average, $80.14/MWh (IMM report to the Members Committee, January 2023, slide 12)"
+    },
+    {
+      "field": "spot_price_per_MWh",
+      "trades": "the output Tavg's steam conditions lose past its 1.6 K free band, 0.23 % of it a kelvin (imbalance_multiple, the Carnot slope at 547 K steam and 305 K condenser)",
+      "unit": "USD/MWh",
+      "source": "PJM's 2022 real-time load-weighted average, $80.14/MWh (IMM report to the Members Committee, January 2023, slide 12)"
+    },
+    {
+      "field": "effluent_price",
+      "trades": "a kg of water or acid injected, which displaces a kg of coolant to treat",
+      "unit": "USD/kg",
+      "source": "EPRI 1011728 (2005), pp. 3-4 and 3-15: liquid radwaste processing at $0.15 to $0.60 a gallon, typically under $0.25, so $0.040 to $0.159 a kg"
+    },
+    {
+      "field": "restart_steps",
+      "trades": "a trip's dead time before the restart, each 30 s step at a step of the plant's whole output (failure_cost)",
+      "unit": "30 s steps",
+      "source": "48 h, inside APR1400's 22 to 70 h from the scram to the rods' withdrawal for the restart (Castro Monteiro et al., KNS Spring 2020, 20A-065)"
+    },
+    {
+      "field": "standby_steps",
+      "trades": "a timed limit's overrun: hot standby before the return, at the trip's step price",
+      "unit": "30 s steps",
+      "source": "6 h, Doel-3's time down before its return (INIS 1ypr9-dk595)"
+    }
+  ],
+  "not_modelled": [
+    "The wear of rod stepping: no published price for a rod step was found, so the rods move free (their travel is still counted).",
+    "Grey-rod operation (EDF's Mode G): one black bank holds the offset and the boron holds Tavg.",
+    "Axial damping that changes through the cycle.",
+    "The xenon peak after a scram: 1,419 pcm, under the 1,800 to 3,200 pcm test band.",
+    "Load-follow days drawn from real units' output: each day is its source's standard shape.",
+    "Xenon in the end charge: the stock a run ends with counts Tavg's place in its band, the rods and the boron line."
+  ]
+}

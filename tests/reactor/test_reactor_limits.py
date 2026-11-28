@@ -166,11 +166,12 @@ def test_a_timed_limits_overrun_costs_hot_standby(field, value):
 # owner reversed on 2026-11-10 (the physics review's finding 1).
 
 
-@pytest.mark.parametrize("hot, expected", [(1.59, 0.0), (3.0, 0.44722)])
+@pytest.mark.parametrize("hot, expected", [(1.59, 0.0), (3.0, 0.35778)])
 def test_tavg_above_its_program_is_charged_past_the_band(hot, expected):
     """Lined out at half load, Tavg ``hot`` K over its program. Past the 1.6 K band,
-    the cold side's price: 1.25 x 0.23 %/K x $80/MWh x 1 GW = $0.0639 per K s, so
-    (3 - 1.6) K x 5 s = $0.44722 per sub-step ($2.68 per 30 s step)."""
+    the cold side's price, at spot (owner, 2026-11-28): 0.23 %/K x $80/MWh x 1 GW =
+    $0.0511 per K s, so (3 - 1.6) K x 5 s = $0.35778 per sub-step ($2.15 per 30 s
+    step)."""
     env, p, obs, s = reset()
     tavg = 0.5 * (s.T_coolant + s.T_cold)
     s = at(s, n=0.5).replace(T_ref=tavg - hot)

@@ -75,8 +75,8 @@ family's documented range, or ours with a reason.
 | `q3_trim_max` | 2.2 | mL/s | ours, family: a tenth of stage 1's, as the 1 and 0.1 GPM final elements of [P4, p. 2] |
 | `q2_noise_std`, `BUFFER_OU_THETA` | 0.35, 2e-3 | mL/s, 1/s | ours: buffering changes are sourced [P1; P2], their size and rate are not |
 | `q2_min`, `q2_max` | 0, 2.5 | mL/s | ours: keeps the buffer flow physical |
-| `acid_upset_size`, `acid_upset_ramp` | 0.2, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not |
-| `flow_swing` | 0.2 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found |
+| `acid_upset_size`, `acid_upset_ramp` | 0, 600 | -, s | ours: large acid changes are sourced [P3, p. 4], their size is not. 0.2 on the bad day; none by default, the normal day, the heaviest scenario (owner, 2026-11-27, the RL research review's H1) |
+| `flow_swing` | 0 | - | ours: influent flow swings (Amendment 3), metered [P3, Figure 2]; size not found. 0.2 on the bad day, none by default |
 | `event_hold` | 2 | h (stream) | ours: how long an influent upset holds before it ramps back, until the producing unit's batch ends; no source gives it; a window never sets it, so its upsets never return |
 | `window_upsets` | 1, 0 | - | the window's own upsets on (1), or off in a stream (0), which starts its own |
 | `permit_low`, `permit_high` | 6, 9 | pH | cited: secondary treatment, "within the limits of 6.0 to 9.0" [P11] (owner, 2026-11-25; was [P7]'s example product spec, pH 7 +- 1) |
@@ -89,7 +89,7 @@ family's documented range, or ours with a reason.
 | `reagent_price` | 1 | L/L | ours: the score is reagent litres, the field plant's metric [P3, p. 9] |
 | `excursion_price` | 1.667 | L/s | ours: no price found; a minute outside costs 100 minutes of hold reagent |
 | `diversion_price` | 2 | L/L | ours: above reagent (Amendment 3): a diverted litre is pumped back and treated again, about 1 L of this dilute base per litre, plus the pumping |
-| `failure_cost` | 9.0 | L | ours: above the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L) |
+| `failure_cost` | 13.0 | L | ours: the 720-step restart's 9360 L is above the worst episode the plant survives, 8879 L on its normal day under random actions (`tests/test_failure_cost_bound.py`; owner, 2026-11-27). 9 L, the worst surviving step (outside, both valves full, diverting at full flow, 8.96 L), held for a step but not for that episode |
 | `restart_steps` | 720 | steps | ours: a violation is charged another hour; no fine found |
 | `e_floor` | 1.5 | pH | cited: the permit's half-width [P11], around its centre, which the observation shows; read by the time-in-band KPI only |
 | `precision_floor`, `pH_min`, `pH_max`, `reagent_cost_weight` | 0.01, 2, 12, 0 | - | the retired version-1 reward only |
@@ -215,6 +215,30 @@ failure   = 720 x 9.0                      on a violation (60 min, or basin over
 Inside the permit only reagent counts. Adding no reagent now costs far more
 than holding the band (section 8), where the review measured it within 1.1 to
 1.4 times a perfect hold.
+
+**The tanks' capacity at the window's edges** (owner, 2026-11-28, v1 task pages,
+item 2). The two tanks hold reagent: the base above the pH an episode starts at, in
+litres of the base stream (`env.stored_capacity`, `env.stored_value`). Spent at the
+episode's end it was free: both valves shut for the last 5 min saved 4.1 % on the
+normal day, where the same cut mid-episode cost 344 %. The evaluation scores every
+step but the first, which marks the start, and charges once the capacity the window
+lost, at the reagent's price, crediting at that price what it gained
+(`scenarios.ph_neutralization_evaluation`). The credit is safe here, unlike on hvac:
+near the start's pH the tanks' content leaves with no base above that pH, so
+restoring a litre of capacity takes a litre of reagent and filling one cost a litre,
+and nothing lies between the two to trade. The planner takes the same charge
+(section 11). The reward carries none.
+
+Measured with the frozen reference on the scoring seeds (2026-11-28): every cut of
+5 to 40 min at the end loses on the score (`test_ph_capacity.py`). Cuts of 0.5, 1
+and 2 min change it by -0.0001 %, +0.00005 % and +0.0025 %. On the normal day alone
+the 5 min cut still gains 0.045 %: while the discharge falls below the start's pH in
+the last minutes, the outflow carries less base, as holding a lower pH earns
+anywhere, and the excursion the fall would bring comes after the window. Refilling
+the tanks at the end never paid. A charge with no credit, as hvac's, left 0.1 to
+0.7 %: each run's own end state varies by seed, so a run that would end fuller could
+drain the surplus for nothing. Measured against the permit's low edge rather than
+the start's pH, the capacity moves by up to 2.5 L with the buffer flow's drift.
 
 ---
 
@@ -355,7 +379,9 @@ is the bicarbonate a hold on the edge uses that a reference held higher pays for
 The oracle (`oracle.py`, on the shared solver, `oracles.controller.Oracle`) reads
 the true state, the buffer flow and the influent's acid strength included, and
 knows no future: it plans the buffer on its mean path and holds the influent as the
-state carries it (tested). Its objective is the reagent both valves use; the permit
+state carries it (tested). Its objective is the reagent both valves use on the
+scored steps, and the evaluation's charge for the tanks' capacity (section 7): its
+change over each scored step, at the reagent's price; the permit
 is a limit on the planned discharge, backed off by the planner's error over the base
 valve's dead time (`data/oracle_widths/ph_neutralization.json`), and the excursion,
 diversion and trip terms are charged by the replay if a plan leaves the permit. Its
@@ -385,7 +411,10 @@ leaves the permit costs less than the hold less that inventory, and that is the
 ceiling (`perfect_hold(...)["cost"]`; `["hold"]` and `["inventory"]` give the
 parts, `start_inventory` the closed form, tested against counting base in
 `test_ph_ceiling.py`). The oracle reaches it nearly: it doses nothing for the first
-10 min and lets the discharge slide to the edge.
+10 min and lets the discharge slide to the edge. Since 2026-11-28 the evaluation
+charges the capacity a window spends (section 7), so a policy no longer keeps the
+start's inventory, and the hold less the inventory is a looser bound than it was;
+it stays as context.
 
 **The planner reports the probe's pH.** The planner's limit uses the plant's
 bisection polished by Newton, for the slope the solver needs; the output it reports

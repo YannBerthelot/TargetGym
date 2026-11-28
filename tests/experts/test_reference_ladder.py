@@ -8,7 +8,7 @@ row names and kept as tuned where the plant is most sensitive, so adding a less
 sensitive point changes nothing, and adding a more sensitive one tunes as if the plant
 sat there alone.
 
-Each task's row lives in its own file, ``scripts/ladder_rows/<task>.py``. A rung's cost
+Each task's row lives in its own module, ``target_gym.reference.rows``. A rung's cost
 on a seed is the task's ``J``: each scenario's mean cost per step, weighted by its share
 of operating time. A loop on a zone holds the setpoint ``k = 2`` standard deviations
 inside the zone's cheap edge, never past its centre, the deviation measured with the
@@ -150,7 +150,7 @@ def test_tuning_follows_the_most_sensitive_operating_point(ladder, points, alone
 
 
 def test_each_row_lives_in_its_own_file(ladder):
-    rows = ROOT / "scripts" / "ladder_rows"
+    rows = ROOT / "src" / "target_gym" / "reference" / "rows"
     files = {p.stem for p in rows.glob("*.py") if not p.stem.startswith("_")}
     assert set(ladder.ROWS) == files
 
@@ -848,8 +848,8 @@ def test_the_night_rungs_trim_stops_at_five_kelvin(ladder):
 
 # A frozen reference (target_gym.reference; outside review C1 and M5, owner's
 # picker 2026-11-27). Contract: a zone priced as a violation is placed on seeds
-# no line is read on (J3's evaluation seeds, J4's scoring seeds and every block
-# the stop rule may add, J2's hash seeds), and the reference's exits are counted
+# no line is read on (J3's evaluation seeds, J4's scoring seeds, the validation
+# block, J2's hash seeds), and the reference's exits are counted
 # on J2's hash seeds, out of sample. A rung's law, frozen through JSON and rebuilt
 # on a fresh row with no bump test, costs seed by seed what the ladder's rung
 # cost; ``--freeze`` writes only a law that does.
@@ -881,8 +881,8 @@ def test_the_ladder_places_a_zone_on_seeds_no_line_runs_on(ladder):
     }
     assert scanned, "no candidate left the zone, so the scan names no seed"
     assert scanned <= set(ladder.PLACEMENT_SEEDS)
-    first = charter.ANCHOR_SEEDS[0]
-    lines = set(range(first, first + charter.STOP_MAX))
+    # The scoring seeds, and the validation block agents choose checkpoints on.
+    lines = set(charter.ANCHOR_SEEDS) | set(charter.VALIDATION_SEEDS)
     for spec in REGISTRY.values():
         ev = evaluation.of(spec)
         lines |= set(ev.seeds) | set(ev.extra_seeds)

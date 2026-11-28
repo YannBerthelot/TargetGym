@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/reactor/pid_output.gif" width="480px"/></p>
 
-Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output, rod wear and effluent. Six scenarios weigh baseload days against five kinds of load-follow day (REALITY.md sections 6 and 7).
+Run a day of a pressurized water reactor somewhere in the first 90 % of its fuel cycle, with control rods, soluble boron and the turbine's loading rate, knowing the day's load plan: take as much of the plan as the core can carry, hold the average coolant temperature within 1.6 K of its program on either side and the flux difference within 5 % of its target, keep the rods above their insertion limit, and dilute for the fuel's burnup, at the least cost in lost output and effluent. A scored run is charged at its end the boron its core then owes, against what it owed at the reset. Six scenarios weigh baseload days against five kinds of load-follow day (REALITY.md sections 6 and 7).
 
 ```python
 import target_gym as tg
@@ -89,7 +89,7 @@ What an agent is measured against: the expected cost per step over the task's we
 | Best null policy | the cheapest of the simple policies | not current | |
 | Reference | the controller to beat | not current | |
 | MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+| Ceiling | the best known plan with the true model, the true state and the future: an achieved cost, not a bound | not current | |
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
@@ -181,8 +181,8 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `e_floor` | 0.05 | K |
 | `e_tol` | 1.6 | K |
 | `tracking_exponent` | 1 | - |
-| `imbalance_multiple` | 0.002875 | 1/K |
-| `rod_step_price` | 1 | $/step |
+| `imbalance_multiple` | 0.0023 | 1/K |
+| `rod_step_price` | 0 | $/step |
 | `ao_band` | 0.05 | - |
 | `ao_ref` | 0 | - |
 | `ao_allowed` | 3600 | s |
@@ -211,6 +211,6 @@ The scored configuration, which `tg.make` returns. A keyword argument changes on
 | `reload_knee` | 0.5 | fraction of rated load |
 | `reload_fast_rate` | 4.16667e-05 | 1/s |
 | `reload_rate` | 8.33333e-06 | 1/s |
-| `rho_floor_tracking` | 0.0958333 | reward |
-| `rho_floor` | 0.0958333 | reward |
+| `rho_floor_tracking` | 0.0766667 | reward |
+| `rho_floor` | 0.0766667 | reward |
 

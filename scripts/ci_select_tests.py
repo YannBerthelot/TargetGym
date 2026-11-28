@@ -105,10 +105,12 @@ def _one(path: str) -> tuple[bool, set, set, bool]:
         if name.startswith("test_") and name.endswith(".py"):
             return False, set(), {path}, False
         return False, set(), set(), True  # pinned data: the cross-task files
+    if path.startswith(SRC + "reference/rows/"):
+        task = {name[:-3]} & set(_tasks())
+        if not task:  # what every row shares
+            return True, set(), set(), True
+        return False, task, set(LADDER), True
     if path.startswith("scripts/"):
-        if path.startswith("scripts/ladder_rows/"):
-            task = {name[:-3]} & set(_tasks())
-            return False, task, set(LADDER), True
         if name == "ci_select_tests.py":
             return True, set(), set(), True
         return False, set(), set(_naming(name)), False

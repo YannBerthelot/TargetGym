@@ -1,0 +1,220 @@
+"""Task cards (task protocol, item 8): one page per task, generated.
+
+Contract, from the brief of 2026-11-28: a card says the job and the decision,
+the score with its scenarios and their weights, the baselines' numbers, which
+prices are sourced and where, what the task does not model, and that the room is
+an upper bound. Its numbers come from the tree (the scoring definition, the v1
+record, the scored configuration), its prose from the inputs the task's session
+writes, and the Gymnasium ID appears once the task is frozen. Every card on disk
+is the one its inputs and the tree give.
+"""
+
+import importlib
+import json
+import pathlib
+import sys
+
+import pytest
+
+import target_gym as tg
+from target_gym import reference, v1
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+cards = importlib.import_module("generate_cards")
+
+TASK = "compressor_surge"
+INPUTS = {
+    "job": "A station operator holds the header pressure with the drive speed.",
+    "decision": "Every 0.1 s, the speed command and the recycle command.",
+    "unit": "kJ",
+    "prices": [
+        {"field": "zone_price", "trades": "a second outside the zone", "unit": "kJ/s"},
+        {
+            "field": "energy_price",
+            "trades": "a kJ of the compressor's work",
+            "unit": "-",
+            "source": "the job's own unit",
+        },
+    ],
+    "not_modelled": ["the drive's inertia", "a multistage map"],
+}
+
+
+def _line(saving, lo, hi, trips=0):
+    return {
+        "J": 3.0 * (1 - saving),
+        "saving": saving,
+        "saving_ci": [lo, hi],
+        "scenarios": [{"policy_trips": trips}],
+    }
+
+
+@pytest.fixture
+def recorded(tmp_path):
+    rec = {
+        "task": TASK,
+        "stamp": "compressor_surge-v5",
+        "commit": "0123456789abcdef",
+        "parts": v1.manifest(TASK)["parts"],
+        "lines": {
+            "nothing": _line(-36.0, -40.0, -32.0),
+            "expert": _line(0.0, 0.0, 0.0),
+            "mpc": _line(0.123, 0.05, 0.2, trips=1),
+        },
+    }
+    (tmp_path / f"{TASK}.json").write_text(json.dumps(rec))
+    return tmp_path
+
+
+def test_a_card_says_the_job_the_score_and_the_baselines(recorded, tmp_path):
+    text = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    assert INPUTS["job"] in text and INPUTS["decision"] in text
+    for name, weight in v1.scenario_names(TASK).items():
+        assert f"| `{name}` | {weight:.3f} |" in text
+    assert "seeds 200 to 209" in text
+    # The MPC's saving of 0.123 within [0.05, 0.2], one trip, as percentages.
+    assert (
+        "| MPC on the observation | 2.631 | +12.3 % | [+5.0 %, +20.0 %] | 1 |" in text
+    )
+    assert "| PPO, 30 runs | not recorded |" in text
+    assert "upper bound" in text
+    rung = reference.load(TASK)["rung"]
+    assert f"the reference ladder's `{rung}` rung" in text
+    for item in INPUTS["not_modelled"]:
+        assert f"- {item}" in text
+
+
+def test_a_card_says_which_prices_are_sourced(recorded, tmp_path):
+    text = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    scored = tg.make(TASK)[1]
+    assert f"| `zone_price` | {scored.zone_price:g} | kJ/s |" in text
+    assert "a second outside the zone | ours, not sourced |" in text
+    assert "| the job's own unit |" in text
+    assert "1 of 2 prices have a published source." in text
+    assert "A task waits until every one does" in text
+
+
+def test_the_gymnasium_id_appears_once_frozen(recorded, tmp_path):
+    before = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    assert "TargetGym/compressor_surge-v1" not in before
+    manifests = tmp_path / "frozen"
+    manifests.mkdir()
+    entry = {**v1.manifest(TASK), "frozen": "2026-12-01", "commit": "fedcba9876"}
+    (manifests / f"{TASK}.json").write_text(json.dumps(entry))
+    after = cards.card(TASK, INPUTS, records=recorded, manifests=manifests)
+    assert "Frozen as `TargetGym/compressor_surge-v1` on 2026-12-01" in after
+    assert 'gymnasium.make("TargetGym/compressor_surge-v1")' in after
+
+
+#: The fixture's record has the expert at J = 3 and the MPC at 3 (1 - 0.123) =
+#: 2.631. These terms sum to both, and the MPC's saving of 0.369 is twice the
+#: plan's 0.738 and minus the effluent's -0.369 (it pays more effluent).
+BREAKDOWN = {
+    "source": "a probe on four cores at 0123456789",
+    "terms": {
+        "Plan not taken": {"expert": 2.0, "mpc": 1.262},
+        "Effluent": {"expert": 1.0, "mpc": 1.369},
+    },
+}
+
+
+def test_a_breakdown_shows_each_terms_share_of_the_saving(recorded, tmp_path):
+    plain = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    text = cards.card(
+        TASK,
+        {**INPUTS, "breakdown": BREAKDOWN},
+        records=recorded,
+        manifests=tmp_path / "none",
+    )
+    header = (
+        "| Term | Expert (the frozen reference) | MPC on the observation "
+        "| Share of the saving |"
+    )
+    rows = [
+        header,
+        "|---|---|---|---|",
+        "| Plan not taken | 2 | 1.262 | +200.0 % |",
+        "| Effluent | 1 | 1.369 | -100.0 % |",
+        "| Total | 3 | 2.631 | +100.0 % |",
+    ]
+    assert "\n".join(rows) in text
+    assert BREAKDOWN["source"] in text
+    # Under the baselines, before the prices; a card without one has none.
+    assert text.index("## Baselines") < text.index(header) < text.index("## Prices")
+    assert "Share of the saving" not in plain
+
+
+@pytest.mark.parametrize(
+    "terms, says",
+    [
+        # The MPC's terms sum to 2.7, 2.6 % over its recorded J of 2.631.
+        (
+            {
+                "Plan": {"expert": 2.0, "mpc": 1.262},
+                "Effl": {"expert": 1.0, "mpc": 1.438},
+            },
+            "sum to 2.7",
+        ),
+        ({"Plan": {"expert": 3.0, "sac": 1.0}}, "sac"),  # SAC is not recorded
+        ({"Plan": {"expert": 3.0, "mpc": 2.631, "nothing": 111.0}}, "one other line"),
+    ],
+    ids=["a total the record lacks", "a line the record lacks", "two lines"],
+)
+def test_a_breakdown_the_record_does_not_bear_out_is_refused(
+    recorded, tmp_path, terms, says
+):
+    inputs = {**INPUTS, "breakdown": {"source": "a probe", "terms": terms}}
+    with pytest.raises(SystemExit, match=says):
+        cards.card(TASK, inputs, records=recorded, manifests=tmp_path / "none")
+
+
+def test_a_price_that_is_no_parameter_is_refused(recorded, tmp_path):
+    wrong = {**INPUTS, "prices": [{"field": "no_such", "trades": "-", "unit": "-"}]}
+    with pytest.raises(SystemExit, match="no_such"):
+        cards.card(TASK, wrong, records=recorded, manifests=tmp_path / "none")
+
+
+@pytest.mark.parametrize("source", sorted(cards.CARDS.glob("*.json")), ids=str)
+def test_every_card_is_current(source):
+    text = cards.card(source.stem, json.loads(source.read_text()))
+    assert (
+        source.with_suffix(".md").read_text() == text
+    ), "run scripts/generate_cards.py"
+
+
+@pytest.mark.parametrize(
+    "credit, says",
+    [
+        (False, "charged once for what the store lost (`stored_value`)"),
+        (True, "charged once for what the store lost and credited for what it gained"),
+    ],
+)
+def test_a_card_says_the_stores_charge_and_its_credit(
+    recorded, tmp_path, monkeypatch, credit, says
+):
+    """A task whose evaluation charges a store's edges, crediting it or not."""
+    from target_gym import evaluation
+
+    charged = evaluation.Evaluation(edge_charge="stored_value", edge_credit=credit)
+    monkeypatch.setattr(evaluation, "of", lambda spec: charged)
+    text = cards.card(TASK, INPUTS, records=recorded, manifests=tmp_path / "none")
+    assert says in text
+
+
+def test_a_card_says_a_runs_end_charge(monkeypatch):
+    """A task scored on runs whose protocol charges the run's end, crediting
+    what it gained: the reactor's boron since PR 329, or not."""
+    import dataclasses
+
+    from target_gym import scoring_runs
+
+    base = scoring_runs.PROTOCOLS["reactor"]
+    for credit, says in ((True, "credited for what it gained"), (False, "lost (`")):
+        charged = dataclasses.replace(
+            base, edge_charge="stored_value", edge_credit=credit
+        )
+        monkeypatch.setitem(scoring_runs.PROTOCOLS, "reactor", charged)
+        text = cards._scoring_text(v1.manifest("reactor")["scoring"], "$")
+        assert "a 7-day run of 20160 steps" in text and says in text
+        assert ("credited" in text) == credit

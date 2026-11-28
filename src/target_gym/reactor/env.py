@@ -271,7 +271,11 @@ class ReactorParams(EnvParams):
     # cycle, with the ramp and the hold drawn at reset inside the URD's 2 to 10 h.
     load_min: float = 0.5
     load_ramp_rate: float = 0.02 / 60.0  # 1/s
-    ramp_down_range: Tuple[float, float] = (1800.0, 7200.0)  # s
+    #: When a window's ramp down starts, s after the reset, drawn at reset. The
+    #: default is the baseload day, the heaviest scenario, whose ramp never comes
+    #: (owner, 2026-11-27, the RL research review's H1); a load-follow scenario
+    #: starts it 0.5 to 2 h in (``scenarios.WINDOW_DAY``).
+    ramp_down_range: Tuple[float, float] = (1.0e6, 1.0e6)  # s
     #: How far ahead the dispatch announces a load-follow day in a stream, where
     #: each day is an event (``Reactor.start_event``): the window's own notice. A
     #: stream sets ``ramp_down_range`` to the past, so it starts with no day.
@@ -328,20 +332,23 @@ class ReactorParams(EnvParams):
 
     # ---- Reward (docs/reward-shaping.md; version 2), in dollars per 30 s step ----
     # Tracking: Tavg against its program, and delta I outside its band. Off program, steam conditions cost
-    # output: ``imbalance_multiple`` is 1.25 x spot x 0.23 %/K, the Carnot slope at
-    # 547 K steam and 305 K condenser, so $100/MWh on 0.23 % of 1 GWe per K is
-    # $230/h per K, linear (p = 1): $1.917 per K over a 30 s step, and
-    # ``rho_floor_tracking`` over a step at the floor. Rod wear: the steps the rods
-    # actually moved at ``rod_step_price``. A trip is charged the restart time at
-    # twice the dearest surviving step.
+    # output: ``imbalance_multiple`` is spot x 0.23 %/K, the Carnot slope at 547 K
+    # steam and 305 K condenser, so $80/MWh on 0.23 % of 1 GWe per K is $184/h per
+    # K, linear (p = 1): $1.533 per K over a 30 s step. It was 1.25 x spot, an
+    # imbalance price of ours; at spot it is priced as every other lost output is
+    # (owner, 2026-11-28; PJM's real-time prices ran 1.01 to 1.06 of its day-ahead
+    # in 2022). Rod wear: the steps the rods actually moved at ``rod_step_price``,
+    # $0 in the task: no published price for a rod step was found (owner,
+    # 2026-11-28), and the card reports their travel. A trip is charged the restart
+    # time at twice the dearest surviving step.
     reward_version: int = 2
     e_floor: float = 0.05  # K, the RTD reading's resolution
     # The black rods' dead band: EDF's rods move only past 1.6 C off program (IAEA
     # NP-T-3.23, annex II-5.1), so Tavg costs nothing inside it.
     e_tol: float = 1.6
     tracking_exponent: float = 1.0
-    imbalance_multiple: float = 1.25 * 0.0023  # of spot, per K
-    rod_step_price: float = 1.0  # $ per rod step, ours
+    imbalance_multiple: float = 0.0023  # of spot, per K
+    rod_step_price: float = 0.0  # $ per rod step: none published (owner, 2026-11-28)
     # The offset's limits, as the standard specification states them for constant
     # axial offset control (NUREG-1431 Rev. 3.0, Bases B 3.2.3A and its figure;
     # REALITY.md section 4; owner, 2026-11-15). The flux difference is delta I, a
@@ -404,7 +411,10 @@ class ReactorParams(EnvParams):
     dnb_allowed: float = 7200.0 + 6.0 * 3600.0  # s, Condition B's end
     mode_2_load: float = 0.05
     # Effluent: every kg injected displaces a kg to treat. Boiling it off is 2.26
-    # MJ/kg, 0.628 kWh, at $100/MWh, ours.
+    # MJ/kg, 0.628 kWh, at $100/MWh: $0.0628, inside what US plants paid to process
+    # liquid radwaste in 2005, $0.15 a gallon at one station's contract to $0.60 for
+    # a filter and demineralizer system, typically under $0.25 all included (EPRI
+    # 1011728, pp. 3-4 and 3-15): $0.040 to $0.159 per kg.
     effluent_price: float = 0.0628  # $/kg
     # A trip is lost production: 1 GWe at spot ($80/MWh, inside the family's $80 to
     # $100) over the restart, $666.67 per 30 s step down.
@@ -432,8 +442,8 @@ class ReactorParams(EnvParams):
     reload_fast_rate: float = 0.15 / 3600.0  # 1/s
     reload_rate: float = 0.03 / 3600.0  # 1/s
     #: Tracking cost per step at the floor, in the reward's units.
-    rho_floor_tracking: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
-    rho_floor: float = 100.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
+    rho_floor_tracking: float = 80.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
+    rho_floor: float = 80.0 * 1000.0 * 0.0023 / 3600.0 * 0.05 * 30.0
     #: True where e_floor is a resolution, not a measured or certified floor.
     floor_is_documented_minimum: bool = True
 
@@ -1442,6 +1452,46 @@ def compute_reward_terms(
     }
     restart = xp.where(timed_out(state, p), p.standby_steps, p.restart_steps)
     return R.with_trip(terms, tripped, restart * p.failure_cost, xp)
+
+
+def owed_dilution(state, params: ReactorParams, period: int, xp=jnp):
+    """The boron the core owes, ppm: what a dilution must take out of it to bring
+    Tavg back on its program with the rods at their park, at the core's own
+    coefficients where it stands in its cycle (``core_at``), both of them, since at
+    a held power the fuel's temperature moves with the coolant's. Tavg under its
+    program holds reactivity on loan, which a dilution must later supply; rods in
+    below their park hold a reserve, which a withdrawal supplies in place of a
+    dilution, so it counts against the debt. The line counts too: the flows paid for
+    at their injection that have not reached the core, ``boron_delay - 1`` commands
+    of a control step (``period`` sub-steps) each, move the boron they will move.
+    Xenon is left out: the day's plan sets it."""
+    p = core_at(cycle_point(state, params), params)
+    T_avg = 0.5 * (state.T_coolant + state.T_cold)
+    loan = (p.alpha_fuel + p.alpha_coolant) * (T_avg - state.T_ref)
+    loan = loan + rod_worth(state.rod_in, p) - rod_worth(p.rod_park, p)
+    # The line, newest first: the command at index i arrives i + 1 steps from now
+    # while i < boron_delay - 1; the one at boron_delay - 1 arrived this step.
+    c, B = state.boron_queue, state.boron
+    held = period * p.delta_t / p.primary_mass  # a step's flow, per kg/s, of the mass
+    dilute = B * xp.expm1(xp.where(c < 0, c * p.dilution_flow, 0.0) * held)
+    borate = (p.boric_acid_ppm - B) * -xp.expm1(
+        -xp.maximum(c, 0.0) * p.boration_flow * held
+    )
+    ahead = xp.arange(c.shape[0]) < state.boron_delay - 1
+    return loan / -p.boron_worth + xp.sum(xp.where(ahead, dilute + borate, 0.0))
+
+
+def stored_value(state, params: ReactorParams, period: int, xp=jnp):
+    """The core's stock in dollars: minus the effluent its owed dilution takes, feed
+    and bleed of pure water through the primary's mass, ``primary_mass`` ln(B / (B -
+    owed)) kg, at ``effluent_price``; a reserve is worth what it spares. A scored run
+    is charged what its core lost from the reset to its last step and credited what
+    it gained (``scoring_runs``; owner, 2026-11-28). The reward carries no such
+    charge."""
+    owed = owed_dilution(state, params, period, xp)
+    # ln(B / (B - owed)), as -log1p(-owed / B): a ratio near 1 keeps its digits.
+    water = -params.primary_mass * xp.log1p(-owed / state.boron)
+    return -params.effluent_price * water
 
 
 def compute_reward_v1(state: ReactorState, params: ReactorParams, xp=jnp):

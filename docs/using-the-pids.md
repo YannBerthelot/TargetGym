@@ -150,8 +150,11 @@ print(f"score {m['score']:.2f}, room {m['headroom']:.2f} decades")
 ```
 
 With the expert itself in the slot, the ratio comes out at 1 and the score at
-0. A score of `nan` means the expert already tracks within the instrument's
-resolution, so the task has no room to score.
+0. A score of `nan` means there is no tracked error to hold: the task is charged
+in money, as cstr's production is, so only the ratio compares. On a scored task
+(`tg.FLAGSHIP`) `score_policy` gives the charter's comparison instead, as
+`tg.score` does: the saving over the reference, with its interval, one row per
+scenario.
 
 ## Using it in learning
 

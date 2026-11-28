@@ -2,7 +2,7 @@
 
 <p align="center"><img src="../../videos/compressor_surge/pid_output.gif" width="480px"/></p>
 
-Hold the header pressure of a variable-speed compressor on a ramped setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve. Flow below the surge line trips the plant, and neither the reward nor any observation reads the surge margin directly, so the policy has to learn to keep it from the flows it does observe.
+Hold the header pressure of a variable-speed compressor inside its zone about a constant setpoint while the consumers' demand ramps between levels, with the drive speed and an anti-surge recycle valve, at the least recycle energy. Each surge is charged and three within 15 s trip the plant; the machine's true surge line sits a hidden few percent off the map the controller reads, and neither the reward nor any observation reads the margin to it, so the policy has to keep it from the flows it does observe.
 
 ```python
 import target_gym as tg
@@ -80,7 +80,7 @@ What an agent is measured against: the expected cost per step over the task's we
 | Best null policy | the cheapest of the simple policies | not current | |
 | Reference | the controller to beat | not current | |
 | MPC | plans with the true model and the schedules operators know, without the disturbances ahead | not current | |
-| Ceiling | the best cost found with the true model, the true state and the future: a limit, not a target | not current | |
+| Ceiling | the best known plan with the true model, the true state and the future: an achieved cost, not a bound | not current | |
 
 Recorded on an earlier version of this task, so not shown: the best null policy, reference, MPC and ceiling lines, which show again once re-recorded. The room shows again with the reference and the ceiling.
 
