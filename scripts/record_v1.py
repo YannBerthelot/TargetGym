@@ -168,7 +168,8 @@ def record(
         except LookupError as missing:  # an MPC the task does not ship yet
             print(f"{line}: {missing}")
             continue
-        rec["commit"] = _git("rev-parse", "HEAD") or None
+        # Each line's own commit: one resumed later may run other controller code.
+        rec["commit"] = rec["lines"][line]["commit"] = _git("rev-parse", "HEAD") or None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(rec, indent=1, sort_keys=True, default=_plain) + "\n"
