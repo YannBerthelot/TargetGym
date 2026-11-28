@@ -439,14 +439,25 @@ def test_a_command_past_the_compressors_reach_moves_it_as_one_at_the_reach(
         )
 
 
-def test_the_compressors_planned_surge_limit_is_the_surge_line():
-    """The surge line is the machine's own, Phi = 2W (1 + shift)
-    (compressor_surge/PHYSICS.md), which the oracle knows. One step from the
-    reset under the held move: the plan's surge margin, its output less the
-    limit's bound, is the env's phi_min over 1 + shift, less 2W, after the same
-    step: zero exactly on the true line. Float32 env against the float64 model
-    on a margin of order 0.1: 1e-5."""
-    env, params, oracle = _oracle("compressor_surge")
+@pytest.mark.parametrize("stratum", [0, 9])
+def test_the_compressors_planned_surge_limit_is_the_references_control_line(stratum):
+    """The planner holds the line the reference holds: the vendors' control
+    line, 10 % of surge flow at speed right of the map's surge line ([C6];
+    ``CONTROL_MARGIN`` of the reference's row), read on the map as the
+    reference reads it, never the machine's hidden true line (owner,
+    2026-11-28, from the v1 task pages: planned on the true line, the MPC
+    tripped 19 of 20 approach episodes). The plan bounds the step's soft
+    minimum of Phi, which on a steady step is Phi less T ln(substeps), T the
+    plant's ``soft_min_temperature``, so its bound is the line less that: a
+    plant resting on the line meets it, as the reference's does. One step from
+    the reset under the held move, on a machine from the lowest and one from
+    the highest tenth of shifts: the plan's surge margin, its output less the
+    limit's bound, is the env's phi_min less 2W (1 + 0.10) - T ln(10) after the
+    same step, whatever the shift. Float32 env against the float64 model on a
+    margin of order 0.1: 1e-5."""
+    from target_gym.reference.rows.compressor_surge import CONTROL_MARGIN
+
+    env, params, oracle = _oracle("compressor_surge", machine_stratum=stratum)
     m, (limit,) = oracle.model, oracle.model.limits
     key = jax.random.PRNGKey(0)
     _, state = env.reset_env(key, params)
@@ -457,11 +468,44 @@ def test_the_compressors_planned_surge_limit_is_the_surge_line():
         d = {"task": m.data(s), "widths": jnp.asarray(oracle.widths)}
         y = m.step(d, m.state_x(s), jnp.asarray(hold, jnp.float64), 0)[2]
     planned = float(y[0]) - limit.lo
-    shift = float(state.line_shift)
-    assert abs(shift) > 1e-3  # a machine off its map
-    assert planned == pytest.approx(
-        float(after.phi_min) / (1.0 + shift) - 2.0 * params.W, abs=1e-5
-    )
+    assert abs(float(state.line_shift)) > 0.03  # a machine well off its map
+    line = 2.0 * params.W * (1.0 + CONTROL_MARGIN)
+    allowance = params.soft_min_temperature * math.log(10)  # rk4_10 substeps
+    assert planned == pytest.approx(float(after.phi_min) - (line - allowance), abs=1e-5)
+
+
+@pytest.mark.medium
+def test_the_compressors_mpc_holds_the_control_line_where_the_true_line_is_cheaper():
+    """Behaviour of the same limit (owner, 2026-11-28). The consumers nearly
+    shut (opening 0.3), so the recycle is open at the reset and closing it pays,
+    on a machine whose true line sits 4 to 5 % left of its map (the lowest
+    tenth of shifts): a planner free to run to that line closes the recycle
+    toward it. Held to the reference's control line, the plant's Phi stays at
+    or right of 2W (1 + 0.10) through 1 s from the reset (10 solves): the
+    step's soft minimum of Phi, which is below every substep's, never under
+    the line by more than its steady allowance, T ln(10) = 2.3e-3 (0.46 % of
+    margin), and float32 rounding, 1e-5. The machine's own line is 4 to 5 %
+    left of the map's, so a plan on it would fall about 15 % of margin under
+    this; on the true line it crossed this one on the third step. The
+    consumers' noise is off, so the plant is the plan's model (K8)."""
+    from target_gym.reference.rows.compressor_surge import CONTROL_MARGIN
+
+    quiet = {"demand_sigma": 0.0, "demand_range": (0.3, 0.3), "machine_stratum": 0}
+    spec = REGISTRY["compressor_surge"]
+    env, run = spec.make_env(), spec.make_test_params(**quiet)
+    _, _, oracle = _oracle("compressor_surge", **quiet)
+    key = jax.random.PRNGKey(0)
+    obs, state = env.reset_env(key, run)
+    assert float(state.line_shift) < -0.04
+    line = 2.0 * float(run.W) * (1.0 + CONTROL_MARGIN)
+    line -= float(run.soft_min_temperature) * math.log(10)  # rk4_10 substeps
+    step, phis, valve = jax.jit(env.step_env), [], [float(state.x)]
+    for _ in range(10):
+        obs, state = step(key, state, oracle.step(obs, state), run)[:2]
+        phis.append(float(state.phi_min))
+        valve.append(float(state.x))
+    assert valve[0] > 0.05  # the recycle was open: closing it would pay
+    assert min(phis) >= line - 1e-5, min(phis) / (2.0 * float(run.W)) - 1.0
 
 
 @pytest.mark.parametrize("ramp_s", [1.0, 15.0])

@@ -23,10 +23,15 @@ section 5.4, and decision S10), run by
 - objective (version 3, charter Amendment 3): the recycle energy in kJ, and
   the header zone as a smooth hinge, the zone price per second past the band
   (T2);
-- limit: the soft minimum of Phi over the step at least the surge line on
-  every visited state, elastic at the trip cost per unit (T3): the oracle
-  never surges, which bounds the counted-surge trip from the safe side. Not
-  re-run since the rebuild;
+- limit: the reference's control line, ``CONTROL_MARGIN`` right of the map's
+  surge line in flow at speed, on every visited state, elastic at the trip
+  cost per unit (T3). Read on the map, as the reference reads it, never on the
+  machine's hidden line (owner, 2026-11-28: planned on the true line, the
+  MPC tripped 19 of 20 approach episodes). The step's soft minimum of Phi is
+  below every substep's by at most ``soft_min_temperature`` ln(substeps), and
+  by exactly that on a steady step, so the bound is the line less that: a
+  plant resting on the line meets it as the reference's does, and no substep
+  falls more than 2.3e-3 in Phi (0.46 % of margin) under it;
 - dropped guard: the characteristic's switch to its tangent past
   ``phi_join`` (T4, K9); every plan's substep Phi is checked against it.
 
@@ -64,6 +69,12 @@ from target_gym.oracles.controller import (
 )
 from target_gym.oracles.shooting import Limit
 from target_gym.reward import trip_cost
+
+#: The reference's anti-surge control line, in flow at speed over the map's
+#: surge flow: about 10 % [C6], the low end of C1's 10 to 15 %, as
+#: ``CONTROL_MARGIN`` of the reference's row, which this must equal
+#: (tests/oracles/test_process_oracles.py).
+CONTROL_MARGIN = 0.10
 
 #: The zone hinge's softplus width, Pa (ours, the owner's pick of 2026-11-11):
 #: a tenth of a kPa against the 1.2 kPa band, so the plan charges about 1e-4
@@ -156,6 +167,14 @@ def compressor_step(env, p, x, u, t, task, widths, deltas=None):
     return jnp.concatenate([jnp.stack(out), cmds[:K]]), phi_min, phis, args
 
 
+def control_line(env, p):
+    """The limit's bound on the step's soft minimum of Phi: the map's control
+    line, 2W (1 + ``CONTROL_MARGIN``), less the soft minimum's allowance on a
+    steady step, ``soft_min_temperature`` ln(substeps)."""
+    n = _substeps(env.integration_method)
+    return 2.0 * p.W * (1.0 + CONTROL_MARGIN) - p.soft_min_temperature * math.log(n)
+
+
 def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
     """The planner problem; the zone's edge is planned ``zone_backoff`` Pa
     inside the band (K11 on the header, ``zone`` in the widths file)."""
@@ -164,7 +183,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
     def step(d, x, u, t):
         w = d["widths"]  # in name order: drive_rate, valve_rate
         x1, phi_min, phis, _ = compressor_step(env, p, x, u, t, d["task"], (w[0], w[1]))
-        setpoints, _, clock, _, _, shift = d["task"]
+        setpoints, _, clock, _, _, _ = d["task"]
         target = scheduled_setpoint(setpoints, 0.0, (clock + t + 1) * p.delta_t, p)
         dp = x1[1]
         power = recycle_flow(dp, x1[4], p) * dp / suction_density(p)
@@ -176,9 +195,8 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         e, w = target - dp, ZONE_WIDTH
         past = jax.nn.softplus((e - band) / w) + jax.nn.softplus((-e - band) / w)
         cost = cost + p.zone_price * p.delta_t * (w / KPA) * past
-        # Against the machine's true line, 2W (1 + shift): scaled so that the
-        # limit's bound stays the map's 2W.
-        y = jnp.stack([phi_min / (1.0 + shift)])
+        # The map's control line, which reads no shift (``control_line``).
+        y = jnp.stack([phi_min])
         return x1, cost, y, (dp / KPA)[None], p.phi_join - phis
 
     K = history(p)
@@ -194,7 +212,7 @@ def compressor_model(env, p, zone_backoff: float = 0.0) -> TaskModel:
         hold=lambda s: jnp.stack([raw_of(s.N_ramp, p.N_min, p.N_max), raw_of(s.x, 0.0, 1.0)]),
         tracked=lambda s: (s.dp / KPA)[None],
         resolution=(float(p.precision_floor),),
-        limits=(Limit(lo=2.0 * p.W, price=float(trip_cost(p))),),
+        limits=(Limit(lo=control_line(env, p), price=float(trip_cost(p))),),
         move_rows=lambda x, u, steps: reach(p, x, u, steps),
         move_scale=lambda steps: reach_scale(p, steps),
     )  # fmt: skip
@@ -238,7 +256,8 @@ def ceiling_margins(state, p):
       minimum of Phi, which is below every substep's, in hundredths. A surge
       is a flow reversal, far left of the line; but left of the line the model
       has no rotating stall (PHYSICS.md, D1), so a plan there costs less than
-      a machine would. The oracle's limit is the same line.
+      a machine would. The MPC's limit is the reference's control line on
+      the map instead (``control_line``).
     - Each command inside its actuator's reach (the oracle's T1r, as a
       margin), in reaches. Past the reach the drive or the valve runs at full
       rate through the step, as at it, so the plan's cost does not see the

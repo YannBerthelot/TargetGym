@@ -30,6 +30,19 @@ Item 9 of the task protocol. No task is frozen yet.
   re-stamps in place included; a published result cites a frozen ID instead. Each
   manifest records the development stamp its task froze at.
 
+### compressor_surge's MPC holds the reference's control line (2026-11-28)
+
+- The MPC's surge limit is the vendors' 10 % control line on the map, the line the
+  reference holds (`compressor_surge.oracle.control_line`), in place of the
+  machine's true line, which the observation hides. Planned on the true line, the
+  last recorded MPC line tripped 19 of 20 approach episodes (v1 task pages, finding
+  1; owner, 2026-11-28). The step's soft minimum of Phi is compared with the line
+  less its steady allowance, so a plant resting on the line meets it as the
+  reference's does. The MPC's record is stale until it is recorded again.
+- The task's sentence says what the job is: the header pressure is held inside its
+  zone about a constant setpoint at the least recycle energy, each surge is
+  charged, and three within 15 s trip the plant (finding 7).
+
 ### hvac's window edge and the scored defaults (2026-11-27)
 
 Two findings of the outside RL research review, fixed as the owner decided by
