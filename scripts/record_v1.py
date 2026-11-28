@@ -21,8 +21,9 @@ The record is ``src/target_gym/data/v1_records/<task>.json``, written after each
 line, so a stopped run resumes with the lines it lacks; ``--again`` records
 the named lines again. It is stamped with the task's parts
 (``target_gym.v1.manifest``); a record of other parts is started afresh. At the
-end it says what keeps the task from freezing (``target_gym.v1.ready``). Run it
-on bob or flanders: the MPC and the learned lines take hours.
+end it says what keeps the task from freezing (``target_gym.v1.ready``) and
+writes the task's card (``scripts/generate_cards.py``). Run it on bob or
+flanders: the MPC and the learned lines take hours.
 """
 
 from __future__ import annotations
@@ -193,6 +194,10 @@ def main(argv=None) -> int:
     rec = record(args.task, lines, args.again)
     missing = v1.ready(rec, v1.manifest(args.task)["parts"])
     print("ready to freeze" if not missing else "not ready: " + "; ".join(missing))
+    import generate_cards
+
+    card = generate_cards.write(args.task)
+    print(f"card: {card}" if card else f"no card inputs: docs/cards/{args.task}.json")
     return 0
 
 

@@ -53,3 +53,25 @@ are read.
 | 5, room | "Observation-only MPC" | The room comes from an MPC on the true model that estimates the hidden state from the observations. An MPC that reads the hidden state does not count; its numbers are context, like the ceiling. |
 | 7, speed | "Per episode in a batch" | The time is one episode's share of a vmapped batch, not one episode run alone. |
 | 2 and 3, score and expert | "Source every price first" | A task waits until every price that trades one goal against another has a published source. The unit a task is scored in is not such a price. Its expert is frozen only after that, since the cost picks the expert's rung. |
+
+## How a task becomes v1
+
+Three commands, which the task's session runs in this order (added
+2026-11-28).
+
+1. `scripts/record_v1.py <task>`, on bob or flanders. It records item 4's
+   baselines into `src/target_gym/data/v1_records/<task>.json`, each scored by
+   `tg.score` on the scoring seeds: doing nothing, the expert, the
+   observation-only MPC, and PPO and SAC at 30 runs of 204,800 steps. The MPC is
+   the task's `observation_only_mpc(env, params)` in its `oracle.py`: an MPC on
+   the true model, planning from `target_gym.estimation.Estimator`'s belief.
+2. `scripts/generate_cards.py`. It writes the task's card, `docs/cards/<task>.md`,
+   from its inputs in `docs/cards/<task>.json` and from the record. The inputs
+   hold the job, the decision, the score's unit, the prices with their sources,
+   and what the task does not model. The record command runs this step too.
+3. `scripts/freeze_v1.py <task>`, on a clean commit. It writes the task's
+   manifest, `src/target_gym/data/v1/<task>.json`, once. That registers
+   `TargetGym/<task>-v1` with Gymnasium and arms the guard,
+   `tests/test_v1_freeze.py`. It refuses a task whose reference is stale, whose
+   record lacks a baseline or was taken on another plant, scoring or reference,
+   or whose record shows no room.
