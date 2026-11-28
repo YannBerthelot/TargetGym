@@ -37,7 +37,10 @@ The planner problem:
   knots it did worse than on its mean path (2026-11-15): it chased a 5 min sample
   of a noise that turns over in 5 min;
 - the tail: a window is a cut in a plant that runs on, so the plan runs
-  ``TAIL_HOURS`` past the cut under the same costs, as the glass furnace's does.
+  ``TAIL_HOURS`` past its look-ahead under the same costs, as the glass furnace's
+  does, and never shrinks toward the cut: the scored run charges the boron the
+  core owes there (``scoring_runs``; owner, 2026-11-28), and a plan that shrank to
+  the cut stopped diluting on the last day for 75 % of its baseload saving.
 
 The horizon protocol's T_c and P (``data/oracle_horizons/reactor.json``) describe
 the rods' loop on Tavg, seconds long. They are kept as the record of that loop;
@@ -119,9 +122,10 @@ WIDTH = 0.1
 #: others, and no time counted. A plan from given knots bounds the best cost
 #: from above.
 DISCOVERY_ROOM = 6.0
-#: What the rods' travel costs in a cold solve's second start, as a multiple of
-#: its price: enough that the plan it finds leaves them parked (``_attempt``).
-DEAR_RODS = 100.0
+#: What a rod step costs in a cold solve's second start, $: enough that the plan
+#: it finds leaves them parked (``_attempt``), whatever the task's own price, which
+#: is 0 (owner, 2026-11-28).
+DEAR_ROD_STEP = 100.0
 #: In percent of rated delta I, so the offset's rows are of order one.
 PERCENT = 100.0
 
@@ -150,7 +154,7 @@ def stage_model(env, p, stages: int) -> StageModel:
         flows = u[DILUTE] * p.dilution_flow + u[BORATE] * p.boration_flow
         cost = (
             per_load * seconds * 0.5 * (x[M.SHORT] + x1[M.SHORT])
-            + rod_price * d.get("rods", 1.0) * (u[ROD_IN] + u[ROD_OUT])
+            + d.get("rods", rod_price) * (u[ROD_IN] + u[ROD_OUT])
             + flow_price * M.planned_flows(d["day"], k) * flows
             + per_K * seconds * M.noisy_excess(error, p.e_tol, spread)
         )
@@ -412,6 +416,9 @@ class DayOracle:
         with enable_x64():
             self.p = p = float64(params)
             n, per = self.S + 1, self.period
+            #: $ per full stroke of the rods' travel: the task's, and its unit.
+            self.stroke = float(p.rod_stroke_steps)
+            self.rod_price = jnp.asarray(float(p.rod_step_price) * self.stroke)
             self.shooting = Shooting(
                 stage_model(env, p, self.S), self.S, M.NX, max_iter=segment
             )
@@ -457,8 +464,7 @@ class DayOracle:
         return float(state.load_wobble) * decay ** np.arange(n)
 
     def _solve(self, state, t: int):
-        left = max(self.knots - t // KNOT, 0)
-        active = min(self.look, left) + self.tail
+        active = self.look + self.tail  # never shrunk toward the run's cut
         wobble = self._wobble(state)
         with enable_x64():
             st = float64(state)
@@ -473,7 +479,7 @@ class DayOracle:
             if cold:
                 self._discover(st, wobble, t, active)
             day = self._day(st, wobble, self._free(t, x0))
-            d = {"day": day, "room": room, "sigma": sigma, "rods": jnp.asarray(1.0)}
+            d = {"day": day, "room": room, "sigma": sigma, "rods": self.rod_price}
             # The free knots are already counted: this plan carries no clock.
             x0 = x0.at[M.CLOCK].set(0.0)
             self._at = (x0, self._at[1])
@@ -513,7 +519,7 @@ class DayOracle:
             "day": self._day(st, wobble),
             "room": jnp.asarray(max(self.room, DISCOVERY_ROOM + TAVG_BACKOFF)),
             "sigma": jnp.asarray(self.sigma),
-            "rods": jnp.asarray(1.0),
+            "rods": self.rod_price,
         }
         plan = self._segments(d, active, COLD_SEGMENTS)
         _, rows = self._roll(d["day"], self._at[0], self.shooting.moves(plan))
@@ -543,12 +549,12 @@ class DayOracle:
         From the first guess the solver ended in the rods' plan on baseload days
         whose xenon dips, $13 dearer in its own model than boron alone (review
         of 2026-11-23). So the cold solve also takes the other road: the plan
-        with the rods' travel ``DEAR_RODS`` times dearer, then the task's own
+        with a rod step at ``DEAR_ROD_STEP``, then the task's own
         problem solved from it. Both are plans of the task's problem at its own
         prices, and the cheaper one is kept."""
         if cold:
             found = [(self._segments(d, active, COLD_SEGMENTS), self._last())]
-            dear = {**d, "rods": jnp.asarray(DEAR_RODS)}
+            dear = {**d, "rods": jnp.asarray(DEAR_ROD_STEP * self.stroke)}
             parked = self._segments(dear, active, COLD_SEGMENTS)
             if not bool(parked.certificate.failed):
                 plan = self._segments(d, active, COLD_SEGMENTS, parked)

@@ -9,10 +9,14 @@ written before the code:
   krsko_slow, the source's standard day of each pair, fixed by name;
 - a run is the stream pinned to one scenario, from the reset as it is, scored over
   7 days of 30 s steps from its first step: no burn-in;
-- a seed's cost is the mean cost per step over the scored part, as J4 reads it;
+- a seed's cost is the mean cost per step over the scored part, as J4 reads it,
+  plus the value the core's stock lost from the reset to the run's last step, less
+  what it gained, over the run's steps (the end charge, owner, 2026-11-28);
 - 10 seeds a scenario; 10 more where the interval of the room on that scenario
   contains 1, once (the stop rule, set before any result);
-- the day planner plans to the run's end, not to the one-day window's.
+- a run's params carry its length, so the core drawn at reset stays inside its
+  range for all of it; the day planner plans past the run's end, which the end
+  charge prices (owner, 2026-11-28).
 
 By hand, the weights: the suite gives each load-follow day 250 h a year over a
 6.333 h day off full load, over 365 days, over 5 scenarios: 0.0216294 each, and
@@ -84,16 +88,17 @@ def test_a_run_starts_scoring_at_its_first_step():
     )
 
 
-def test_the_planner_plans_to_the_runs_end():
+def test_a_runs_params_carry_its_length():
     p = S.run_params("reactor", "edf_daily")
     assert int(p.max_steps_in_episode) == 7 * 2880
 
 
 @pytest.mark.medium
 def test_a_seeds_cost_is_its_mean_cost_per_step_over_the_scored_part():
-    """Two short runs of the reference, read by hand from the stream's own rewards:
-    a run of k steps costs the mean of its k step costs, and the same seed gives
-    the same cost (the stream's world comes from the seed)."""
+    """Two short runs of the reference, read by hand from the stream's own rewards
+    and the core's stock: a run of k steps costs the mean of its k step costs plus
+    the stock's value at the reset less its value after the last step, over k, and
+    the same seed gives the same cost (the stream's world comes from the seed)."""
     import jax
     import numpy as np
 
@@ -107,13 +112,17 @@ def test_a_seeds_cost_is_its_mean_cost_per_step_over_the_scored_part():
 
     key = episode_keys(jax.random.PRNGKey(5), 1, 1)[0][0]
     obs, state = stream.reset(key, params)
+    before = float(stream.env.stored_value(state.env, params))
     pid = baseline_policy(REGISTRY["reactor"], "pid", params)
     costs = []
     for _ in range(steps):
         obs, state, r, _, _ = stream.step_env(None, state, pid(np.asarray(obs)), params)
         costs.append(-float(r))
+    after = float(stream.env.stored_value(state.env, params))
     assert out["seeds"] == [5, 6]
-    assert out["costs"][0] == pytest.approx(np.mean(costs), rel=1e-5)
+    assert out["costs"][0] == pytest.approx(
+        np.mean(costs) + (before - after) / steps, rel=1e-5
+    )
     assert out["trips"] == [0, 0]
     again = S.run("reactor", "baseload", "pid", seeds=[5], steps=steps)
     assert again["costs"][0] == out["costs"][0]
@@ -140,8 +149,12 @@ def test_the_compiled_runner_scores_the_same_runs_as_the_policy_runner():
     )
     slow = S.run("reactor", "edf_daily", "pid", [5, 6], steps=40)
     assert fast["seeds"] == slow["seeds"] and fast["trips"] == slow["trips"]
-    # Float32, one jit against a step at a time: 1e-4 of the cost.
-    assert fast["costs"] == pytest.approx(slow["costs"], rel=1e-4)
+    # Float32, one jit against a step at a time: 1e-4 of the cost, and the end
+    # charge's own rounding (owner, 2026-11-28): it reads Tavg at the reset and the
+    # run's end, held to 6e-5 K in float32 at 580 K, where the two runners'
+    # trajectories part by a few tenths of a mK in 40 steps. At $17 of stock a
+    # kelvin, spread over 40 steps, that is 1.3e-4 $ a step: 3e-4 allowed.
+    assert fast["costs"] == pytest.approx(slow["costs"], rel=1e-4, abs=3e-4)
 
 
 def test_a_runs_core_never_reaches_the_end_of_its_range():

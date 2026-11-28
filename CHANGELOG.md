@@ -9,6 +9,32 @@ Tags before this file were named `vX.Y.Z`, except `0.5.0`; future tags use the
 
 ## [Unreleased]
 
+### The reactor's score: an end charge, and every trade-off price sourced (2026-11-28)
+
+The owner's three picks of 2026-11-28 (v1 task protocol, items 2 and 3).
+
+- A scored run is charged what its core's stock lost from the reset to its last
+  step, and credited what it gained, spread over the run's steps (`scoring_runs`,
+  the reactor's protocol). The stock is the boron the core owes
+  (`reactor.env.owed_dilution`): the dilution that brings Tavg back on its program
+  with the rods at their park, at the core's own coefficients, less the boron the
+  line already carries, valued at the effluent it takes (`reactor.env.stored_value`). Without it the MPC stopped
+  diluting on a run's last day for 75 % of its 12.85 % baseload saving; with it,
+  knowing the end no longer pays: 9.39 % against 9.99 % for the planner that plans
+  past it (seeds 100 to 109). The reward carries no such charge.
+- Rods cost nothing to move (`rod_step_price` 0): no published price for a rod step
+  was found. Their travel is still counted (`rod_moved`).
+- Tavg off its program is priced as lost output at spot, $184/h per K
+  (`imbalance_multiple` 0.0023), as every other lost output is; it was 1.25 x spot,
+  ours. The floor costs follow ($0.0767 a step).
+- The effluent's $0.0628/kg is sourced: EPRI 1011728 (2005) puts US plants' liquid
+  radwaste processing at $0.040 to $0.159 a kg.
+- The day planner plans past a run's end, which the end charge prices, and its cold
+  solve's second start prices a rod step at $100 (`DEAR_ROD_STEP`), whatever the
+  task's own price.
+- reactor-v10 is re-stamped in place: it shipped in no release. Every reactor
+  record is stale until it is recorded again.
+
 ### Frozen tasks: `TargetGym/<task>-v1` (2026-11-28)
 
 Item 9 of the task protocol. No task is frozen yet.

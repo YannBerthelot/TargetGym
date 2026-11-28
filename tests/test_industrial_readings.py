@@ -334,10 +334,10 @@ def test_measured_power_is_the_meters(name, sigma_W):
 
 
 def test_reactor_measured_reward_carries_the_steps_one_reading():
-    """Tracking is linear at $230/h per K, so 30 s of it is $1.917 per K. It charges
-    Tavg under its program only (rule 15), so with Tavg well below program a reading
-    ``d`` above the plant takes ``1.917 * d`` off the step's cost, and ``d`` is what
-    the observation of that step shows."""
+    """Tracking is linear at $184/h per K (spot, owner 2026-11-28), so 30 s of it is
+    $1.533 per K. It charges Tavg under its program only (rule 15), so with Tavg well
+    below program a reading ``d`` above the plant takes ``1.533 * d`` off the step's
+    cost, and ``d`` is what the observation of that step shows."""
     env, params, state = _setup("reactor")
     # At the start of the cycle, where 8 K cold stays cold through the step: later
     # in the cycle the stronger moderator feedback brings Tavg back inside its band
@@ -356,4 +356,4 @@ def test_reactor_measured_reward_carries_the_steps_one_reading():
         d = float(obs[4]) - 0.5 * float(new.T_coolant + new.T_cold)
         assert abs(d) > 0.0
         cost = float(reward) - float(info["measured_reward"])
-        assert cost == pytest.approx(-230.0 * 30.0 / 3600.0 * d, abs=5e-4)
+        assert cost == pytest.approx(-184.0 * 30.0 / 3600.0 * d, abs=5e-4)
