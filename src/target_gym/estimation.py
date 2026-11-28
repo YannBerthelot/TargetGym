@@ -6,10 +6,10 @@ observations, never from one that reads it. This module is that estimator,
 the same for every task: an extended Kalman filter on the task's own JAX
 model.
 
-- **Model.** The env's ``step_env`` predicts, with the process noise zeroed as
-  a planner's is (``spec.noise_fields``, the sensor and actuator noise, and no
-  restart), and its observation, read through its instruments' ages but with
-  no noise, is the measurement.
+- **Model.** The env's ``step_env`` predicts on the planner's params, the
+  process noise zeroed (``experts.mpc.plan_params``), which the caller passes
+  as ``model``, with no restart. Its observation, read through its
+  instruments' ages but with no noise, is the measurement.
 - **Noise.** The measurement noise comes from the env's readings
   (``env.readings``): each reading's ``sigma`` at ``sensor_noise_scale``, its
   rounding's ``step**2 / 12``, and a held reading counted once per update. The
@@ -127,8 +127,12 @@ class Estimator:
       schedule the filter cannot see.
     - ``known(state, obs) -> state``: writes what the controller knows exactly
       into the mean before each correction, for fields it does not estimate.
-    - ``noise_fields``: the params fields that carry process noise, the task's
-      registry entry's by default.
+    - ``model``: the params the filter's model steps on, the planner's with the
+      process noise zeroed (``experts.mpc.plan_params(spec, params)``). The
+      caller passes them, so the filter imports neither the registry nor any
+      expert code, and an oracle may build on it.
+    - ``noise_fields``: in place of ``model``, the params fields that carry
+      process noise, zeroed in ``params`` with the sensor and actuator noise.
     - ``linearize``: ``"jax"`` (``jax.jacfwd``) or ``"secant"``.
     - ``draws``: the samples the prior and the process noise are measured on.
 
@@ -145,7 +149,8 @@ class Estimator:
         channels=None,
         random_walk: dict | None = None,
         known: Callable | None = None,
-        noise_fields=None,
+        model=None,
+        noise_fields=(),
         linearize: str = "jax",
         draws: int = 1024,
     ):
@@ -153,14 +158,12 @@ class Estimator:
             raise ValueError(f"linearize is 'jax' or 'secant', not {linearize!r}")
         self.env, self.params, self.fields = env, params, tuple(fields)
         self.linearize, self._known = linearize, known
-        if noise_fields is None:
-            noise_fields = _registry_noise(env)
-        zeroed = dict.fromkeys(
-            (*noise_fields, "sensor_noise_scale", "action_noise"), 0.0
-        )
+        if model is None:
+            zeroed = (*noise_fields, "sensor_noise_scale", "action_noise")
+            model = params.replace(**dict.fromkeys(zeroed, 0.0))
         #: What the filter's model steps on: the plant without noise, and no
         #: restart, so a predicted trip stays the physics' proposal.
-        self.model = params.replace(**zeroed, continuing=False)
+        self.model = model.replace(continuing=False)
 
         keys = jax.vmap(lambda i: jax.random.fold_in(jax.random.PRNGKey(_PRIOR), i))(
             jnp.arange(draws)
@@ -289,8 +292,9 @@ class Estimator:
         same = jax.tree.map(lambda x, y: bool(jnp.array_equal(x, y)), a, b)
         if not all(jax.tree.leaves(same)):
             raise ValueError(
-                f"{type(self.env).__name__}'s step still draws noise with these "
-                "params zeroed: name its noise's params fields in noise_fields"
+                f"{type(self.env).__name__}'s step still draws noise on the "
+                "filter's model: pass the planner's params as model, or name the "
+                "noise's params fields in noise_fields"
             )
 
     def _step_noise(self, start, keys, draws):
@@ -359,15 +363,6 @@ class Estimator:
             jnp.abs(jnp.ravel(true_obs(self.env, state, self.model))[idx]), 1.0
         )
         return r + jnp.diag((_FLOOR * size) ** 2)
-
-
-def _registry_noise(env) -> tuple:
-    name = getattr(env, "registry_name", None)
-    if not name:
-        return ()
-    from target_gym import registry
-
-    return tuple(getattr(registry.get(name), "noise_fields", ()))
 
 
 class ObservationOnly:
