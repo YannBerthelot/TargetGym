@@ -338,8 +338,10 @@ def hvac_model(env, p, window=None, start_store=None, spread=None) -> TaskModel:
             Hinge(weight=floor_weight),
         )
     # G10: what an error of half the resolution costs in one step, at the
-    # band's low edge, where the curve's slope prices the room.
-    tie = work * below[0] * 0.5 * float(p.precision_floor)
+    # band's low edge, where the heated room sits: the curve's fall over that
+    # half step, all three of its terms (curve_terms is exact for the cubic).
+    half = 0.5 * float(p.precision_floor)
+    tie = work * sum(w * half**k for k, w in enumerate(below, start=1))
     return TaskModel(
         nx=3, nu=1, step=step, state_x=state_x,
         data=lambda s: (s.time, s.weather_dev, None),

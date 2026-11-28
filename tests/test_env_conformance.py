@@ -993,7 +993,12 @@ def test_no_new_write_only_state_fields():
 # three oracles' steps discard the target from their task data: no plant depends
 # on its target, and the cost reads it from ``task[0]`` itself. The reactor's
 # reactivity reads four of its slow states; ``_slow_rates`` takes all six.
+# hvac's oracle prices the lost work P(edge) - P(edge -+ d) by the performance
+# curve's Taylor terms at each edge, and the curve's constant cancels in that
+# difference. The planner's-rows tests in tests/hvac/test_hvac_observing_mpc.py
+# check the terms against the whole curve, constant included.
 KNOWN_DISCARDED_UNPACKS = {
+    ("hvac/oracle.py", "c1, c2, c3, _ = PERFORMANCE_CURVE"),
     ("plane/dynamics.py", "_, z, theta = positions"),
     ("plane/env.py", "_, z, theta = positions"),
     ("plane/oracle.py", "_, z, theta = positions"),
